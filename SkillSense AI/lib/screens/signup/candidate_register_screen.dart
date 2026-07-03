@@ -32,7 +32,6 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _dobController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
 
@@ -63,7 +62,6 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
       _firstNameController,
       _lastNameController,
       _emailController,
-      _dobController,
       _passwordController,
       _confirmController,
     ]) {
@@ -277,33 +275,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
         ),
       );
 
-  // ── Date picker ────────────────────────────────────────────────────────────
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(1995, 1, 1),
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: _green,
-            onPrimary: Colors.white,
-            onSurface: Color(0xFF212121),
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      setState(() {
-        _dobController.text =
-            '${picked.day.toString().padLeft(2, '0')} / '
-            '${picked.month.toString().padLeft(2, '0')} / '
-            '${picked.year}';
-      });
-    }
-  }
+
 
   // ── Prefix icon helper ─────────────────────────────────────────────────────
   Widget _icon(IconData data, {bool focused = false}) => Icon(
@@ -510,79 +482,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Date of Birth
-                            _glow(
-                              focused: false,
-                              child: TextFormField(
-                                controller: _dobController,
-                                readOnly: true,
-                                onTap: _pickDate,
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 14,
-                                  color: const Color(0xFF212121),
-                                ),
-                                decoration: InputDecoration(
-                                  labelText: 'Date of Birth',
-                                  labelStyle: GoogleFonts.publicSans(
-                                    fontSize: 14,
-                                    color: const Color(0xFF9E9E9E),
-                                  ),
-                                  floatingLabelStyle: GoogleFonts.publicSans(
-                                    fontSize: 12,
-                                    color: _green,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                  hintText: 'DD / MM / YYYY',
-                                  hintStyle: GoogleFonts.publicSans(
-                                    fontSize: 13,
-                                    color: const Color(0xFFCFCFCF),
-                                  ),
-                                  floatingLabelBehavior: FloatingLabelBehavior.auto,
-                                  filled: true,
-                                  fillColor: const Color(0xFFF8F9FA),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE8E8E8),
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE8E8E8),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                      color: _green,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  prefixIcon: _icon(Icons.cake_outlined),
-                                  suffixIcon: GestureDetector(
-                                    onTap: _pickDate,
-                                    child: Container(
-                                      margin: const EdgeInsets.all(10),
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: _green.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Icon(
-                                        Icons.calendar_month_rounded,
-                                        size: 16,
-                                        color: _green,
-                                      ),
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 18,
-                                  ),
-                                ),
-                              ),
-                            ),
+
 
                             _divider(),
 

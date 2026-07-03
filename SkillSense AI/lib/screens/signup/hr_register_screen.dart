@@ -32,7 +32,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _dobController = TextEditingController();
+  final _companyNameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
 
@@ -42,6 +42,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
   final _emailFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
+  final _companyNameFocus = FocusNode();
 
   @override
   void initState() {
@@ -52,6 +53,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
       _emailFocus,
       _passwordFocus,
       _confirmFocus,
+      _companyNameFocus,
     ]) {
       n.addListener(() => setState(() {}));
     }
@@ -63,7 +65,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
       _firstNameController,
       _lastNameController,
       _emailController,
-      _dobController,
+      _companyNameController,
       _passwordController,
       _confirmController,
     ]) {
@@ -75,6 +77,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
       _emailFocus,
       _passwordFocus,
       _confirmFocus,
+      _companyNameFocus,
     ]) {
       n.dispose();
     }
@@ -275,33 +278,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
     ),
   );
 
-  // ── Date picker ────────────────────────────────────────────────────────────
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(1995, 1, 1),
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: _blue,
-            onPrimary: Colors.white,
-            onSurface: Color(0xFF212121),
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      setState(() {
-        _dobController.text =
-            '${picked.day.toString().padLeft(2, '0')} / '
-            '${picked.month.toString().padLeft(2, '0')} / '
-            '${picked.year}';
-      });
-    }
-  }
+
 
   // ── Prefix icon helper ─────────────────────────────────────────────────────
   Widget _icon(IconData data, {bool focused = false}) =>
@@ -510,78 +487,30 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Date of Birth
+                            // Company Name
                             _glow(
-                              focused: false,
+                              focused: _companyNameFocus.hasFocus,
                               child: TextFormField(
-                                controller: _dobController,
-                                readOnly: true,
-                                onTap: _pickDate,
+                                controller: _companyNameController,
+                                focusNode: _companyNameFocus,
+                                textCapitalization: TextCapitalization.words,
                                 style: GoogleFonts.publicSans(
                                   fontSize: 14,
                                   color: const Color(0xFF212121),
                                 ),
-                                decoration: InputDecoration(
-                                  labelText: 'Date of Birth',
-                                  labelStyle: GoogleFonts.publicSans(
-                                    fontSize: 14,
-                                    color: const Color(0xFF9E9E9E),
-                                  ),
-                                  floatingLabelStyle: GoogleFonts.publicSans(
-                                    fontSize: 12,
-                                    color: _blue,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                  hintText: 'DD / MM / YYYY',
-                                  hintStyle: GoogleFonts.publicSans(
-                                    fontSize: 13,
-                                    color: const Color(0xFFCFCFCF),
-                                  ),
-                                  floatingLabelBehavior:
-                                      FloatingLabelBehavior.auto,
-                                  filled: true,
-                                  fillColor: const Color(0xFFF8F9FA),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE8E8E8),
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE8E8E8),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                      color: _blue,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  prefixIcon: _icon(Icons.cake_outlined),
-                                  suffixIcon: GestureDetector(
-                                    onTap: _pickDate,
-                                    child: Container(
-                                      margin: const EdgeInsets.all(10),
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: _blue.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Icon(
-                                        Icons.calendar_month_rounded,
-                                        size: 16,
-                                        color: _blue,
-                                      ),
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 18,
+                                decoration: _decor(
+                                  'Company Name',
+                                  'e.g. SkillSense AI',
+                                  focused: _companyNameFocus.hasFocus,
+                                  prefix: _icon(
+                                    Icons.business_rounded,
+                                    focused: _companyNameFocus.hasFocus,
                                   ),
                                 ),
+                                validator: (v) =>
+                                    (v == null || v.trim().isEmpty)
+                                        ? 'Company Name is required'
+                                        : null,
                               ),
                             ),
 
