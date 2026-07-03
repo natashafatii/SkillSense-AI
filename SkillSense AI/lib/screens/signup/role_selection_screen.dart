@@ -3,8 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/gradient_background.dart';
-import '../candidate/candidate_onboarding_screen.dart';
-import '../hr/hr_onboarding_screen.dart';
+import '../candidate/candidate_onboarding_flow.dart';
+import '../hr/hr_onboarding_flow.dart';
 
 /// Role selection screen where users choose between Recruiter/HR and Job Seeker.
 class RoleSelectionScreen extends StatefulWidget {
@@ -171,7 +171,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                                               context,
                                               MaterialPageRoute(
                                                 builder: (_) =>
-                                                    const HrOnboardingScreen(),
+                                                    const HrOnboardingFlow(),
                                               ),
                                             );
                                           } else {
@@ -179,7 +179,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                                               context,
                                               MaterialPageRoute(
                                                 builder: (_) =>
-                                                    const CandidateOnboardingScreen(),
+                                                    const CandidateOnboardingFlow(),
                                               ),
                                             );
                                           }

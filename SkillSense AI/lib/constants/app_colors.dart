@@ -37,4 +37,27 @@ class AppColors {
 
   // General
   static const Color white = Colors.white;
+
+  // Onboarding - Candidate Flow
+  static const Color candidatePrimary = Color(0xFF34C759);
+  static const Color candidateLightGreen = Color(0xFFE8F5E9);
+  static const Color candidateProgressBg = Color(0xFFEEF2FF);
+  static const Color candidateDotInactive = Color(0xFFD1D1D6);
+  static const Color dividerLight = Color(0xFFF0F0F0);
+
+  // Onboarding - HR Flow
+  static const Color hrPrimary = Color(0xFF4376F8);
+  static const Color hrLightBlue = Color(0xFFDEEAFF);
+  static const Color hrLightBlueAlt = Color(0xFFEFF3FF);
+  static const Color hrBackground = Color(0xFFEFF3FA);
+  static const Color hrTextDark = Color(0xFF0F172A);
+  static const Color hrTextGrey = Color(0xFF64748B);
+  static const Color hrTextLight = Color(0xFF94A3B8);
+  static const Color hrTextMedium = Color(0xFF334155);
+  static const Color hrOrange = Color(0xFFF59E0B);
+  static const Color hrLightOrange = Color(0xFFFEF3C7);
+  static const Color hrGreen = Color(0xFF10B981);
+  static const Color hrLightGreen = Color(0xFFD1FAE5);
+  static const Color hrDivider = Color(0xFFE2E8F0);
+  static const Color hrDotInactive = Color(0xFFCBD5E0);
 }
