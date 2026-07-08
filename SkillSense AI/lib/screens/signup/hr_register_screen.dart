@@ -7,6 +7,7 @@ import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/gradient_background.dart';
 import '../login/login_screen.dart';
+import '../../services/auth_service.dart';
 
 const _blue = AppColors.buttonBlue;
 
@@ -21,9 +22,11 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
   // ── Visibility toggles ─────────────────────────────────────────────────────
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  bool _isLoading = false;
 
   // ── Phone length tracker ───────────────────────────────────────────────────
   int _phoneLength = 0;
+  String _phoneNumber = '';
 
   // ── Form ───────────────────────────────────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
@@ -108,6 +111,55 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
     if (_strength <= 0.50) return 'Fair';
     if (_strength <= 0.75) return 'Good';
     return 'Strong';
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          msg,
+          style: GoogleFonts.publicSans(fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: _blue,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> _register() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final recruiterData = {
+        'first_name': _firstNameController.text.trim(),
+        'last_name': _lastNameController.text.trim(),
+        'company_name': _companyNameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone': _phoneNumber,
+        'password': _passwordController.text,
+        'password_confirm': _confirmController.text,
+      };
+      await AuthService.registerRecruiter(recruiterData);
+      _snack('Registration successful! Please login.');
+      // Navigate to login screen
+      if (mounted) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      }
+    } catch (e) {
+      _snack(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   // ── Input decoration (floating label + focus state) ────────────────────────
@@ -625,9 +677,10 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                 FilteringTextInputFormatter.digitsOnly,
                               ],
                               onChanged: (phone) {
-                                setState(
-                                  () => _phoneLength = phone.number.length,
-                                );
+                                setState(() {
+                                  _phoneLength = phone.number.length;
+                                  _phoneNumber = phone.completeNumber;
+                                });
                               },
                               onCountryChanged: (_) {},
                             ),
@@ -804,12 +857,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                 ],
                               ),
                               child: ElevatedButton(
-                                onPressed: () {
-                                  if (_formKey.currentState?.validate() ??
-                                      false) {
-                                    // TODO: Implement HR registration
-                                  }
-                                },
+                                onPressed: _isLoading ? null : _register,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.transparent,
                                   foregroundColor: Colors.white,
@@ -819,14 +867,23 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                 ),
-                                child: Text(
-                                  AppConstants.registerButtonText,
-                                  style: GoogleFonts.publicSans(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : Text(
+                                        AppConstants.registerButtonText,
+                                        style: GoogleFonts.publicSans(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
                               ),
                             ),
 

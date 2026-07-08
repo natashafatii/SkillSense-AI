@@ -6,6 +6,7 @@ import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/gradient_background.dart';
 import '../signup/role_selection_screen.dart';
+import '../../services/auth_service.dart';
 
 /// Login screen for SkillSense AI.
 /// Background: identical gradient to WelcomeScreen & RoleSelectionScreen.
@@ -25,6 +26,10 @@ class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   bool _obscurePassword = true;
   bool _rememberMe = false;
+  bool _isLoading = false;
+
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
@@ -55,7 +60,38 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _ctrl.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _snack('Please enter both email and password.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await AuthService.login(email, password);
+      if (!mounted) return;
+      _snack('Login successful!');
+      // TODO: Navigate to the appropriate dashboard based on the user's role
+    } catch (e) {
+      _snack(e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _snack(String msg) {
@@ -163,6 +199,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                           // ── Email field (standalone on bg) ─────────────
                           TextFormField(
+                            controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             style: GoogleFonts.publicSans(
                               fontSize: 15,
@@ -174,6 +211,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                           // ── Password field ─────────────────────────────
                           TextFormField(
+                            controller: _passwordController,
                             obscureText: _obscurePassword,
                             style: GoogleFonts.publicSans(
                               fontSize: 15,
@@ -201,36 +239,42 @@ class _LoginScreenState extends State<LoginScreen>
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: Checkbox(
-                                      value: _rememberMe,
-                                      activeColor: AppColors.buttonBlue,
-                                      materialTapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                      side: BorderSide(
-                                        color: const Color(0xFFBBBBBB),
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      onChanged: (v) => setState(
-                                        () => _rememberMe = v ?? false,
+                              Flexible(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: Checkbox(
+                                        value: _rememberMe,
+                                        activeColor: AppColors.buttonBlue,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        side: BorderSide(
+                                          color: const Color(0xFFBBBBBB),
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        onChanged: (v) => setState(
+                                          () => _rememberMe = v ?? false,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    AppConstants.rememberMe,
-                                    style: GoogleFonts.publicSans(
-                                      fontSize: 13,
-                                      color: const Color(0xFF555555),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        AppConstants.rememberMe,
+                                        style: GoogleFonts.publicSans(
+                                          fontSize: 13,
+                                          color: const Color(0xFF555555),
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                               TextButton(
                                 onPressed: () =>
@@ -258,7 +302,7 @@ class _LoginScreenState extends State<LoginScreen>
                           SizedBox(
                             height: 56,
                             child: ElevatedButton(
-                              onPressed: () => _snack(AppConstants.logIn),
+                              onPressed: _isLoading ? null : _login,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.buttonBlue,
                                 foregroundColor: Colors.white,
@@ -267,13 +311,22 @@ class _LoginScreenState extends State<LoginScreen>
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                              child: Text(
-                                AppConstants.logIn,
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2.5,
+                                      ),
+                                    )
+                                  : Text(
+                                      AppConstants.logIn,
+                                      style: GoogleFonts.publicSans(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                             ),
                           ),
                           const SizedBox(height: 24),
