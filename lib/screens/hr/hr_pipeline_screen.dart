@@ -9,13 +9,16 @@ import 'analytics_screen.dart';
 import 'settings_screen.dart';
 
 class HrPipelineScreen extends StatefulWidget {
-  const HrPipelineScreen({super.key});
+
+  final String? jobId;
+  const HrPipelineScreen({super.key, this.jobId});
 
   @override
   State<HrPipelineScreen> createState() => _HrPipelineScreenState();
 }
 
 class _HrPipelineScreenState extends State<HrPipelineScreen> {
+
   final TextEditingController _searchController = TextEditingController();
 
   // Stateful candidates list representing the full cohort of 50 applicants

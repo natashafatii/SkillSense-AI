@@ -31,6 +31,19 @@
 
   <title>skillsense_ai</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Passkeys Web SDK (required by flutter_passkeys / Clerk auth) -->
+  <script src="https://github.com/corbado/flutter-passkeys/releases/download/2.4.0/bundle.js"></script>
+
+  <!-- Clerk JS SDK — handles the dev-browser handshake automatically.
+       This is the officially-supported web SDK; the Dart clerk_flutter
+       package is used only for native iOS/Android builds. -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key="pk_test_c3R1bm5pbmctc2x1Zy0xMy5jbGVyay5hY2NvdW50cy5kZXYk"
+    src="https://stunning-slug-13.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js">
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

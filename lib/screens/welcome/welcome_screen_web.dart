@@ -4,8 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../utils/responsive.dart';
-import '../login/role_selection_screen.dart';
 import '../signup/signup_role_selection_screen.dart';
+import '../login/login_screen.dart';
 
 /// Web-only welcome screen: dark left panel with grid overlay + white right panel.
 class WelcomeScreenWeb extends StatelessWidget {
@@ -426,7 +426,7 @@ class WelcomeScreenWeb extends StatelessWidget {
                                           context,
                                           MaterialPageRoute(
                                             builder: (_) =>
-                                                const RoleSelectionScreen(),
+                                                const LoginScreen(),
                                           ),
                                         );
                                       },

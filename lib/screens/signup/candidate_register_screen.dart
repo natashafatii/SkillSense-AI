@@ -9,6 +9,7 @@ import '../../widgets/green_gradient_background.dart';
 import '../login/login_screen.dart';
 import '../../services/auth_service.dart';
 import 'candidate_register_screen_web.dart';
+import 'email_verification_screen.dart';
 
 const _green = Color(0xFF34C759);
 
@@ -114,14 +115,25 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
     return 'Strong';
   }
 
-  void _snack(String msg) {
+  String _cleanErrorMessage(String raw) {
+    var text = raw.replaceAll('Exception: ', '').trim();
+    if (text.contains('Message:')) {
+      final start = text.indexOf('Message:') + 8;
+      final end = text.contains('Status:') ? text.indexOf('Status:') : text.length;
+      text = text.substring(start, end).trim();
+    }
+    return text;
+  }
+
+  void _snack(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          msg,
-          style: GoogleFonts.publicSans(fontWeight: FontWeight.w500),
+          _cleanErrorMessage(msg),
+          style: GoogleFonts.publicSans(fontWeight: FontWeight.w500, color: Colors.white),
         ),
-        backgroundColor: _green,
+        backgroundColor: isError ? const Color(0xFFDC2626) : _green,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -129,8 +141,26 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
     );
   }
 
-  Future<void> _register() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+  Future<void> _register({bool isWeb = false}) async {
+    if (isWeb) {
+      if (_firstNameController.text.trim().isEmpty ||
+          _lastNameController.text.trim().isEmpty ||
+          _emailController.text.trim().isEmpty ||
+          _passwordController.text.isEmpty) {
+        _snack('Please fill in all required fields.', isError: true);
+        return;
+      }
+      if (_passwordController.text.length < 8) {
+        _snack('Password must be at least 8 characters long.', isError: true);
+        return;
+      }
+      if (_passwordController.text != _confirmController.text) {
+        _snack('Passwords do not match.', isError: true);
+        return;
+      }
+    } else {
+      if (!(_formKey.currentState?.validate() ?? false)) return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -145,14 +175,21 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
         'password': _passwordController.text,
         'password_confirm': _confirmController.text,
       };
-      await AuthService.registerCandidate(candidateData);
-      _snack('Registration successful! Please login.');
-      // Navigate to login screen
+      await AuthService.registerCandidate(context, candidateData);
+      _snack('Registration successful! Please verify your email.');
       if (mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EmailVerificationScreen(
+              email: candidateData['email']!,
+              role: 'CANDIDATE',
+            ),
+          ),
+        );
       }
     } catch (e) {
-      _snack(e.toString().replaceAll('Exception: ', ''));
+      _snack(e.toString(), isError: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -372,7 +409,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                 _obscureConfirm = !_obscureConfirm;
               });
             },
-            onRegister: _register,
+            onRegister: () => _register(isWeb: true),
             onGoogleSignIn: () {
               // TODO: Implement Google Sign In
             },

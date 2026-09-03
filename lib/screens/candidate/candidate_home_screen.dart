@@ -11,6 +11,7 @@ import 'candidate_feedback_report_screen.dart';
 import 'candidate_resume_management_screen.dart';
 import 'candidate_interview_history_screen.dart';
 import 'candidate_profile_settings_screen.dart';
+import '../../services/auth_service.dart';
 
 class CandidateHomeScreen extends StatefulWidget {
   const CandidateHomeScreen({super.key});
@@ -1520,11 +1521,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           ),
 
           PopupMenuButton<String>(
-            tooltip: 'Switch Workspace Role',
-            onSelected: (value) {
-              if (value == 'recruiter') {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              } else if (value == 'candidate_home') {
+            tooltip: 'Account Menu',
+            onSelected: (value) async {
+              if (value == 'candidate_home') {
                 Navigator.of(context).pushReplacementNamed('/candidate/home');
               } else if (value == 'candidate_apps') {
                 Navigator.of(
@@ -1534,13 +1533,18 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
                 );
+              } else if (value == 'signout') {
+                await AuthService.signOut(context);
+                if (mounted) {
+                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+                }
               }
             },
             itemBuilder: (context) => [
               PopupMenuItem(
-                value: 'recruiter',
+                value: 'candidate_home',
                 child: Text(
-                  'Recruiter Workspace',
+                  'Candidate Home',
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1575,6 +1579,24 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'signout',
+                child: Row(
+                  children: [
+                    const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Sign Out',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

@@ -11,6 +11,7 @@ import 'candidate_interview_history_screen.dart';
 import 'candidate_resume_management_screen.dart';
 import 'candidate_interview_lobby_screen.dart';
 import 'candidate_feedback_report_screen.dart';
+import '../../services/auth_service.dart';
 
 // Global / Static theme preference so it persists across screen transitions in the prototype
 enum AppThemeMode { daylight, night, auto }
@@ -40,9 +41,13 @@ class _CandidateProfileSettingsScreenState
   bool _feedbackReady = true;
   bool _recruiterViews = false;
 
+  // User profile state
+  Map<String, dynamic>? _userData;
+
   @override
   void initState() {
     super.initState();
+    _loadUserProfile();
     _strengthController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -51,6 +56,15 @@ class _CandidateProfileSettingsScreenState
       CurvedAnimation(parent: _strengthController, curve: Curves.easeOutCubic),
     );
     _strengthController.forward();
+  }
+
+  Future<void> _loadUserProfile() async {
+    final user = await AuthService.fetchCurrentUser();
+    if (mounted) {
+      setState(() {
+        _userData = user;
+      });
+    }
   }
 
   @override
@@ -500,17 +514,30 @@ class _CandidateProfileSettingsScreenState
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
-                          child: Text(
-                            isMobile
-                                ? 'M. Abdul Rehman'
-                                : 'Muhammad Abdul Rehman',
-                            style: GoogleFonts.spaceGrotesk(
-                              color: textPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Builder(
+                            builder: (context) {
+                              String name = 'Candidate User';
+                              if (_userData != null) {
+                                final fn = (_userData!['first_name'] ?? '').toString().trim();
+                                final ln = (_userData!['last_name'] ?? '').toString().trim();
+                                final em = (_userData!['email'] ?? '').toString().trim();
+                                if (fn.isNotEmpty || ln.isNotEmpty) {
+                                  name = '$fn $ln'.trim();
+                                } else if (em.isNotEmpty) {
+                                  name = em.split('@').first;
+                                }
+                              }
+                              return Text(
+                                name,
+                                style: GoogleFonts.spaceGrotesk(
+                                  color: textPrimary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              );
+                            },
                           ),
                         ),
                         OutlinedButton(
@@ -538,13 +565,18 @@ class _CandidateProfileSettingsScreenState
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'abdul@bahria.edu.pk · Lahore · 4.5 yrs',
-                      style: GoogleFonts.inter(
-                        color: textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final email = _userData?['email']?.toString() ?? 'candidate@skillsense.ai';
+                        return Text(
+                          '$email · Candidate Profile',
+                          style: GoogleFonts.inter(
+                            color: textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 12),
 
@@ -1286,13 +1318,11 @@ class _CandidateProfileSettingsScreenState
             ),
           ),
 
-          // Role Switcher
+          // Account Menu
           PopupMenuButton<String>(
-            tooltip: 'Switch Workspace Role',
+            tooltip: 'Account Menu',
             onSelected: (value) {
-              if (value == 'recruiter') {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              } else if (value == 'candidate_home') {
+              if (value == 'candidate_home') {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
                     builder: (_) => const CandidateHomeScreen(),
@@ -1314,9 +1344,9 @@ class _CandidateProfileSettingsScreenState
             },
             itemBuilder: (context) => [
               PopupMenuItem(
-                value: 'recruiter',
+                value: 'candidate_home',
                 child: Text(
-                  'Recruiter Workspace',
+                  'Candidate Home',
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1693,6 +1723,19 @@ class _CandidateProfileSettingsScreenState
                 hasBadge: false,
                 cardBorder: cardBorder,
                 isNightMode: isNightMode,
+              ),
+              const SizedBox(width: 10),
+
+              // Sign Out Button
+              IconButton(
+                tooltip: 'Sign Out',
+                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
+                onPressed: () async {
+                  await AuthService.signOut(context);
+                  if (mounted) {
+                    Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+                  }
+                },
               ),
             ],
           ),

@@ -5,8 +5,18 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter, AppNavState;
 
+import '../../services/resume_service.dart';
+import '../../models/resume_detail.dart';
+
 class CandidateReportScreen extends StatefulWidget {
-  const CandidateReportScreen({super.key});
+  final String? resumeId;
+  final String? applicationId;
+
+  const CandidateReportScreen({
+    super.key,
+    this.resumeId,
+    this.applicationId,
+  });
 
   @override
   State<CandidateReportScreen> createState() => _CandidateReportScreenState();
@@ -16,6 +26,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _scoreAnimation;
+
 
   // Search input controller
   final TextEditingController _searchController = TextEditingController();
@@ -53,6 +64,9 @@ class _CandidateReportScreenState extends State<CandidateReportScreen>
   @override
   void initState() {
     super.initState();
+    if (widget.resumeId != null && widget.resumeId!.isNotEmpty) {
+      _loadResumeDetail();
+    }
     // Configure animation to sweep 0 -> 91 once on mount
     _animationController = AnimationController(
       vsync: this,
@@ -67,6 +81,22 @@ class _CandidateReportScreenState extends State<CandidateReportScreen>
       setState(() {});
     });
   }
+
+  Future<void> _loadResumeDetail() async {
+    setState(() => _isLoadingResume = true);
+    try {
+      final detail = await ResumeService.getResumeDetail(widget.resumeId!);
+      if (mounted) {
+        setState(() {
+          _resumeDetail = detail;
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoadingResume = false);
+    }
+  }
+
 
   @override
   void dispose() {

@@ -243,7 +243,7 @@ class _CandidateOnboardingFlowWebState
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'CV_Muhammad_2026.pdf — Parsed',
+                  'Resume_2026.pdf — Parsed',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

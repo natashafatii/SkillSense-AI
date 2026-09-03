@@ -93,13 +93,14 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      await AuthService.login(email, password);
+      await AuthService.login(context, email, password);
       if (!mounted) return;
       _snack('Login successful!');
-      if (widget.selectedRole == 'job_seeker') {
-        Navigator.pushReplacementNamed(context, '/candidate/home');
-      } else {
+      final userRole = AuthService.getUserRole();
+      if (userRole == 'RECRUITER') {
         Navigator.pushReplacementNamed(context, '/dashboard');
+      } else {
+        Navigator.pushReplacementNamed(context, '/candidate/home');
       }
     } catch (e) {
       if (mounted) {

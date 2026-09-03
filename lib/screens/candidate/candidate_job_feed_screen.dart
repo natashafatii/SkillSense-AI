@@ -24,9 +24,10 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
   String _selectedFilter = 'Best match';
   final TextEditingController _searchController = TextEditingController();
 
-  // Mock Job Data
+  // Mock Job Data with backend Job UUIDs
   final List<Map<String, dynamic>> _jobs = [
     {
+      'id': '108bfa34-2efa-4211-9736-52fa37fa7875',
       'title': 'ML Engineer',
       'company': 'NeuralTech',
       'location': 'Remote',
@@ -39,6 +40,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       'skills': ['PyTorch', 'MLOps', 'Python', '+3'],
     },
     {
+      'id': 'a7fef706-585c-486d-ae7f-f3446a59457b',
       'title': 'Django Developer',
       'company': 'CloudNine',
       'location': 'Lahore',
@@ -51,6 +53,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       'skills': ['Django', 'DRF', 'PostgreSQL'],
     },
     {
+      'id': '4d6baf7e-07e4-4614-93f9-daef1916ca43',
       'title': 'Backend Engineer',
       'company': 'DataFlow',
       'location': 'Hybrid',
@@ -63,6 +66,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       'skills': ['Python', 'Redis', 'Celery'],
     },
     {
+      'id': '4d6baf7e-07e4-4614-93f9-daef1916ca43',
       'title': 'DevOps Engineer',
       'company': 'StackUp',
       'location': 'Remote',
@@ -75,6 +79,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       'skills': ['AWS', 'Docker', 'CI/CD'],
     },
     {
+      'id': 'a7fef706-585c-486d-ae7f-f3446a59457b',
       'title': 'Full Stack Dev',
       'company': 'CodeCraft',
       'location': 'Lahore',
@@ -87,6 +92,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       'skills': ['React', 'Node', 'SQL'],
     },
     {
+      'id': '108bfa34-2efa-4211-9736-52fa37fa7875',
       'title': 'Data Analyst',
       'company': 'InsightIQ',
       'location': 'On-site',
@@ -447,6 +453,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     Color cardBg,
     Color cardBorder,
   ) {
+    final String? jobId = job['id'] as String?;
     final String title = job['title'];
     final String company = job['company'];
     final String location = job['location'];
@@ -468,7 +475,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => _openJobDetail(title),
+        onTap: () => _openJobDetail(title, jobId),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.all(16),
@@ -564,7 +571,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   ),
 
                   // Apply Button (Web Only)
-                  if (!isMobile) _buildApplyButton(title),
+                  if (!isMobile) _buildApplyButton(title, jobId),
                 ],
               ),
               const SizedBox(height: 12),
@@ -601,7 +608,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   ),
 
                   // Apply Button (Mobile Only)
-                  if (isMobile) _buildApplyButton(title),
+                  if (isMobile) _buildApplyButton(title, jobId),
                 ],
               ),
             ],
@@ -611,7 +618,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     );
   }
 
-  Widget _buildApplyButton(String title) {
+  Widget _buildApplyButton(String title, [String? jobId]) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.dashboardTeal,
@@ -620,7 +627,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
-      onPressed: () => _openJobDetail(title),
+      onPressed: () => _openJobDetail(title, jobId),
       child: Text(
         'Apply',
         style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12),
@@ -628,10 +635,10 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     );
   }
 
-  void _openJobDetail(String title) {
+  void _openJobDetail(String title, [String? jobId]) {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => CandidateJobDetailScreen(jobTitle: title),
+        builder: (_) => CandidateJobDetailScreen(jobTitle: title, jobId: jobId),
       ),
     );
   }
@@ -836,13 +843,11 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
             ),
           ),
 
-          // Avatar bottom with Role Switcher
+          // Avatar bottom with Account Menu
           PopupMenuButton<String>(
-            tooltip: 'Switch Workspace Role',
+            tooltip: 'Account Menu',
             onSelected: (value) {
-              if (value == 'recruiter') {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              } else if (value == 'candidate_home') {
+              if (value == 'candidate_home') {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
                     builder: (_) => const CandidateHomeScreen(),
@@ -862,9 +867,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
             },
             itemBuilder: (context) => [
               PopupMenuItem(
-                value: 'recruiter',
+                value: 'candidate_home',
                 child: Text(
-                  'Recruiter Workspace',
+                  'Candidate Home',
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,

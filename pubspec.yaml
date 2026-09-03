@@ -38,10 +38,11 @@ dependencies:
   flutter_svg: ^2.3.0
   intl_phone_field: ^3.2.0
   dio: ^5.10.0
-  flutter_secure_storage: ^10.3.1
-  dio_cookie_manager: ^3.1.1
-  cookie_jar: ^4.0.8
-  path_provider: ^2.1.0
+  clerk_flutter: ^0.0.18-beta
+  clerk_auth: ^0.0.18-beta
+  web: ^1.1.1
+  file_picker: ^8.0.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

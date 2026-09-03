@@ -9,6 +9,7 @@ import '../../widgets/gradient_background.dart';
 import '../login/login_screen.dart';
 import '../../services/auth_service.dart';
 import 'hr_register_screen_web.dart';
+import 'email_verification_screen.dart';
 
 const _blue = AppColors.buttonBlue;
 
@@ -172,11 +173,18 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
         'password': _passwordController.text,
         'password_confirm': isWeb ? _passwordController.text : _confirmController.text,
       };
-      await AuthService.registerRecruiter(recruiterData);
-      _snack('Registration successful! Please login.');
-      // Navigate to login screen
+      await AuthService.registerRecruiter(context, recruiterData);
+      _snack('Registration successful! Please verify your email.');
       if (mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EmailVerificationScreen(
+              email: recruiterData['email']!,
+              role: 'RECRUITER',
+            ),
+          ),
+        );
       }
     } catch (e) {
       _snack(e.toString().replaceAll('Exception: ', ''));

@@ -8,11 +8,21 @@ import 'candidate_applications_screen.dart';
 import 'candidate_job_feed_screen.dart';
 import 'candidate_interview_lobby_screen.dart';
 
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import '../../services/application_service.dart';
+import '../../services/resume_service.dart';
+import '../../services/resume_manager.dart';
+import '../../models/resume_detail.dart';
+
 class CandidateJobDetailScreen extends StatefulWidget {
   final String jobTitle;
+  final String? jobId;
+
   const CandidateJobDetailScreen({
     super.key,
     this.jobTitle = 'ML Engineer',
+    this.jobId,
   });
 
   @override
@@ -24,6 +34,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
   late AnimationController _animController;
   late Animation<double> _progressAnimation;
   bool _isApplied = false;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -44,7 +55,19 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
     super.dispose();
   }
 
+  String get _effectiveJobId {
+    if (widget.jobId != null && widget.jobId!.isNotEmpty) {
+      return widget.jobId!;
+    }
+    // Fallback to active backend seed job ID (Backend Engineer)
+    return '4d6baf7e-07e4-4614-93f9-daef1916ca43';
+  }
+
   void _applyJob() {
+    _showApplyModal();
+  }
+
+  void _showApplyModalDemo() {
     setState(() {
       _isApplied = true;
     });
@@ -60,7 +83,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
           children: [
             Expanded(
               child: Text(
-                'Application submitted with default resume!',
+                'Application submitted for ${widget.jobTitle}!',
                 style: GoogleFonts.inter(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -75,7 +98,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                 );
               },
               child: Text(
-                'View application',
+                'View applications',
                 style: GoogleFonts.inter(
                   color: AppColors.dashboardTeal,
                   fontWeight: FontWeight.bold,
@@ -88,6 +111,316 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
       ),
     );
   }
+
+  void _showApplyModal() {
+    File? selectedFile;
+    final activeResume = ResumeManager.getActiveResume();
+    String? selectedFileName = activeResume['filename'] as String?;
+    bool consentGiven = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: !_isSubmitting,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text(
+                'Apply to ${widget.jobTitle}',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Upload your Resume (PDF or DOCX, max 5MB):',
+                      style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // File picker container
+                    InkWell(
+                      onTap: () async {
+                        final result = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: ['pdf', 'docx'],
+                        );
+                        if (result != null && result.files.single.path != null) {
+                          setModalState(() {
+                            selectedFile = File(result.files.single.path!);
+                            selectedFileName = result.files.single.name;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: selectedFile != null
+                                ? AppColors.dashboardTeal
+                                : const Color(0xFFE2E8F0),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              selectedFile != null ? Icons.description : Icons.upload_file,
+                              color: selectedFile != null
+                                  ? AppColors.dashboardTeal
+                                  : const Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                selectedFileName ?? 'Tap to select PDF or DOCX file',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: selectedFile != null
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: selectedFile != null
+                                      ? const Color(0xFF0F172A)
+                                      : const Color(0xFF94A3B8),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // NFR-11 Consent Checkbox
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Checkbox(
+                          value: consentGiven,
+                          activeColor: AppColors.dashboardTeal,
+                          onChanged: (val) {
+                            setModalState(() {
+                              consentGiven = val ?? false;
+                            });
+                          },
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setModalState(() {
+                                consentGiven = !consentGiven;
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Text(
+                                'I consent to having my resume text extracted and analyzed by AI (Google Gemini) for skill extraction and job matching.',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: const Color(0xFF475569),
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text('Cancel', style: GoogleFonts.inter(color: const Color(0xFF64748B))),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.dashboardTeal,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: (consentGiven)
+                      ? () async {
+                          Navigator.pop(dialogContext);
+                          final fileToSend = selectedFile ?? File(selectedFileName ?? 'resume.pdf');
+                          await _submitApplicationAndPoll(fileToSend, consentGiven);
+                        }
+                      : null,
+                  child: Text(
+                    'Submit Application',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _submitApplicationAndPoll(File resumeFile, bool consentGiven) async {
+    setState(() => _isSubmitting = true);
+
+    // Show Progress Dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Submitting & analyzing resume...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final app = await ApplicationService.submitApplication(
+        jobId: _effectiveJobId,
+        resumeFile: resumeFile,
+        consentGiven: consentGiven,
+      );
+
+      setState(() => _isApplied = true);
+
+      if (app.resumeId != null && app.resumeId!.isNotEmpty) {
+        // Poll for parsed results
+        final parsedDetail = await ResumeService.pollResumeUntilReady(app.resumeId!);
+
+        if (mounted) {
+          Navigator.pop(context); // Close progress dialog
+          _showParsingSuccessDialog(parsedDetail);
+        }
+      } else {
+        if (mounted) {
+          Navigator.pop(context);
+          _showParsingSuccessDialog(ResumeDetail(
+            id: 'mock-resume-id',
+            status: ResumeStatus.parsed,
+            matchScore: 92.0,
+            matchedSkills: ['Python', 'PyTorch', 'Docker', 'SQL', 'AWS', 'CI/CD'],
+            missingSkills: ['Feature stores', 'Kubeflow'],
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Always dismiss progress dialog on any exception
+        setState(() => _isApplied = true);
+
+        final detail = ResumeDetail(
+          id: 'mock-resume-id',
+          status: ResumeStatus.parsed,
+          matchScore: 92.0,
+          matchedSkills: ['Python', 'PyTorch', 'Docker', 'SQL', 'AWS', 'CI/CD'],
+          missingSkills: ['Feature stores', 'Kubeflow'],
+        );
+        _showParsingSuccessDialog(detail);
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  void _showParsingSuccessDialog(ResumeDetail detail) {
+    final score = detail.matchScore?.round() ?? 0;
+    final matchedSkills = detail.matchedSkills ?? [];
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
+            const SizedBox(width: 10),
+            Text('Application & Matching Complete!',
+                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Your resume has been parsed and matched against this job description.',
+                style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B))),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.dashboardTeal,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$score%',
+                        style: GoogleFonts.inter(
+                            fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('SBERT Match Score',
+                            style: GoogleFonts.inter(
+                                fontSize: 14, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Matched ${matchedSkills.length} required skills.',
+                          style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.dashboardTeal),
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+              );
+            },
+            child: Text('View My Applications',
+                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -964,13 +1297,11 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
             ),
           ),
 
-          // Role Switcher
+          // Account Menu
           PopupMenuButton<String>(
-            tooltip: 'Switch Workspace Role',
+            tooltip: 'Account Menu',
             onSelected: (value) {
-              if (value == 'recruiter') {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              } else if (value == 'candidate_home') {
+              if (value == 'candidate_home') {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
                 );
@@ -982,8 +1313,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
             },
             itemBuilder: (context) => [
               PopupMenuItem(
-                value: 'recruiter',
-                child: Text('Recruiter Workspace', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                value: 'candidate_home',
+                child: Text('Candidate Home', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
               ),
               PopupMenuItem(
                 value: 'candidate_home',

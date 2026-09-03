@@ -10,6 +10,7 @@ import '../hr/schedule_interview_screen.dart';
 import '../hr/rankings_screen.dart';
 import '../hr/analytics_screen.dart';
 import '../hr/settings_screen.dart';
+import '../../services/auth_service.dart';
 // Global shared state for badges and notifications
 class AppNavState {
   static int unreadInterviews = 3;
@@ -486,13 +487,18 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
           PopupMenuButton<String>(
             tooltip: 'Switch Workspace Role',
-            onSelected: (value) {
+            onSelected: (value) async {
               if (value == 'recruiter') {
                 Navigator.of(context).pushReplacementNamed('/dashboard');
-              } else if (value == 'candidate_home') {
-                Navigator.of(context).pushReplacementNamed('/candidate/home');
-              } else if (value == 'candidate_apps') {
-                Navigator.of(context).pushReplacementNamed('/candidate/applications');
+              } else if (value == 'org') {
+                Navigator.of(context).pushReplacementNamed('/org');
+              } else if (value == 'settings') {
+                Navigator.of(context).pushReplacementNamed('/settings');
+              } else if (value == 'signout') {
+                await AuthService.signOut(context);
+                if (mounted) {
+                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+                }
               }
             },
             itemBuilder: (context) => [
@@ -501,12 +507,30 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 child: Text('Recruiter Workspace', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
               ),
               PopupMenuItem(
-                value: 'candidate_home',
-                child: Text('Candidate Home', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                value: 'org',
+                child: Text('Organization & Team', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
               ),
               PopupMenuItem(
-                value: 'candidate_apps',
-                child: Text('Candidate Applications', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                value: 'settings',
+                child: Text('Settings', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'signout',
+                child: Row(
+                  children: [
+                    const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Sign Out',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
             child: Container(
@@ -1074,7 +1098,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            'Morning, Abdul.',
+            'Welcome back.',
             style: GoogleFonts.spaceGrotesk(
               color: theme.textPrimary,
               fontSize: 24,

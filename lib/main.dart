@@ -1,85 +1,87 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:skillsense_ai/constants/app_colors.dart';
-import 'package:skillsense_ai/services/auth_events.dart';
-import 'package:skillsense_ai/services/auth_service.dart';
+import 'package:skillsense_ai/constants/env_config.dart';
+
+// Conditional import: picks the web or native platform integration.
+import 'services/platform_app_stub.dart'
+    if (dart.library.js_interop) 'services/platform_app_web.dart'
+    if (dart.library.io) 'services/platform_app_native.dart';
 
 import 'screens/login/login_screen.dart';
-import 'screens/welcome/welcome_screen.dart';
-import 'screens/dashboard/command_deck_screen.dart';
-import 'screens/hr/hr_pipeline_screen.dart';
-import 'screens/hr/candidate_report_screen.dart';
-import 'screens/hr/live_monitor_screen.dart';
-import 'screens/hr/create_role_screen.dart';
-import 'screens/hr/schedule_interview_screen.dart';
-import 'screens/hr/rankings_screen.dart';
-import 'screens/hr/analytics_screen.dart';
-import 'screens/hr/interview_review_screen.dart';
-import 'screens/hr/settings_screen.dart';
-import 'screens/hr/org_team_screen.dart';
-import 'screens/candidate/candidate_home_screen.dart';
+import 'screens/login/role_selection_screen.dart' as login_role;
+import 'screens/signup/signup_role_selection_screen.dart';
+import 'screens/signup/candidate_register_screen.dart';
+import 'screens/signup/hr_register_screen.dart';
+import 'screens/candidate/candidate_onboarding_flow.dart';
+import 'screens/hr/hr_onboarding_flow.dart';
 import 'screens/candidate/candidate_applications_screen.dart';
-import 'screens/candidate/candidate_job_feed_screen.dart';
-import 'screens/candidate/candidate_job_detail_screen.dart';
+import 'screens/candidate/candidate_feedback_report_screen.dart';
+import 'screens/candidate/candidate_home_screen.dart';
+import 'screens/candidate/candidate_interview_history_screen.dart';
 import 'screens/candidate/candidate_interview_lobby_screen.dart';
 import 'screens/candidate/candidate_interview_session_screen.dart';
-import 'screens/candidate/candidate_feedback_report_screen.dart';
-import 'screens/candidate/candidate_resume_management_screen.dart';
-import 'screens/candidate/candidate_interview_history_screen.dart';
+import 'screens/candidate/candidate_job_detail_screen.dart';
+import 'screens/candidate/candidate_job_feed_screen.dart';
 import 'screens/candidate/candidate_profile_settings_screen.dart';
+import 'screens/candidate/candidate_resume_management_screen.dart';
+import 'screens/dashboard/command_deck_screen.dart';
+import 'screens/hr/analytics_screen.dart';
+import 'screens/hr/candidate_report_screen.dart';
+import 'screens/hr/create_role_screen.dart';
+import 'screens/hr/hr_pipeline_screen.dart';
+import 'screens/hr/interview_review_screen.dart';
+import 'screens/hr/live_monitor_screen.dart';
+import 'screens/hr/org_team_screen.dart';
+import 'screens/hr/rankings_screen.dart';
+import 'screens/hr/schedule_interview_screen.dart';
+import 'screens/hr/settings_screen.dart';
 import 'screens/welcome/aperture_splash_screen.dart';
+import 'screens/welcome/welcome_screen.dart';
+import 'widgets/role_guard.dart';
+import 'services/api_client.dart';
+import 'services/auth_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set the status bar style to match the light background
+  // Set the status bar style
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
     statusBarBrightness: Brightness.light,
   ));
 
-  runApp(const SkillSenseApp());
+  // Initialise the platform-specific auth backend.
+  await initializePlatformAuth(EnvConfig.clerkPublishableKey);
+
+  runApp(
+    // On native: wraps in ClerkAuth(...) widget
+    // On web:    returns child directly (clerk-js manages its own state)
+    wrapWithPlatformAuth(
+      publishableKey: EnvConfig.clerkPublishableKey,
+      child: const SkillSenseApp(),
+    ),
+  );
 }
 
-/// Global navigator key — used by [AuthEvents] force-logout to navigate
-/// without a [BuildContext].
+/// Global navigator key — used for programmatic navigation without BuildContext.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-class SkillSenseApp extends StatefulWidget {
+class SkillSenseApp extends StatelessWidget {
   const SkillSenseApp({super.key});
 
   @override
-  State<SkillSenseApp> createState() => _SkillSenseAppState();
-}
-
-class _SkillSenseAppState extends State<SkillSenseApp> {
-  late final StreamSubscription<void> _logoutSub;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Listen for forced-logout events fired by the AuthInterceptor
-    // when a refresh token is rejected / expired.
-    _logoutSub = AuthEvents.onForceLogout.listen((_) {
-      navigatorKey.currentState?.pushNamedAndRemoveUntil(
-        '/login',
-        (route) => false,
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _logoutSub.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    // Configure ApiClient token supplier dynamically from the auth service.
+    ApiClient.setTokenSupplier(() async {
+      try {
+        return await AuthService.instance.getSessionToken();
+      } catch (_) {
+        return null;
+      }
+    });
+
     return MaterialApp(
       title: 'SkillSense AI',
       debugShowCheckedModeBanner: false,
@@ -91,82 +93,177 @@ class _SkillSenseAppState extends State<SkillSenseApp> {
         ),
         useMaterial3: true,
       ),
-      // Start with a splash / auth-check screen
-      home: const ApertureSplashScreen(),
+      // On native: ClerkAuthBuilder (signed-in / signed-out routing)
+      // On web:    StreamBuilder listening to clerk-js auth state
+      home: buildPlatformHome(
+        signedInBuilder: (role) {
+          if (role == EnvConfig.roleRecruiter) {
+            return const CommandDeckScreen();
+          } else {
+            return const CandidateHomeScreen();
+          }
+        },
+        signedOutWidget: const ApertureSplashScreen(),
+      ),
       onGenerateRoute: (settings) {
         Widget builder;
         switch (settings.name) {
+          case '/auth':
           case '/login':
             builder = const LoginScreen();
+            break;
+          case '/login/role':
+            builder = const login_role.RoleSelectionScreen();
+            break;
+          case '/signup':
+          case '/signup/role':
+            builder = const SignupRoleSelectionScreen();
+            break;
+          case '/onboarding/candidate':
+          case '/candidate/onboarding':
+            builder = const CandidateOnboardingFlow();
+            break;
+          case '/onboarding/hr':
+          case '/hr/onboarding':
+            builder = const HrOnboardingFlow();
+            break;
+          case '/signup/candidate':
+            builder = const CandidateRegisterScreen();
+            break;
+          case '/signup/hr':
+            builder = const HrRegisterScreen();
             break;
           case '/welcome':
             builder = const WelcomeScreen();
             break;
           case '/dashboard':
-            builder = const CommandDeckScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: CommandDeckScreen(),
+            );
             break;
           case '/pipeline':
-            builder = const HrPipelineScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: HrPipelineScreen(),
+            );
             break;
           case '/report':
-            builder = const CandidateReportScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: CandidateReportScreen(),
+            );
             break;
           case '/monitor':
-            builder = const LiveMonitorScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: LiveMonitorScreen(),
+            );
             break;
           case '/create-role':
-            builder = const CreateRoleScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: CreateRoleScreen(),
+            );
             break;
           case '/schedule':
-            builder = const ScheduleInterviewScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: ScheduleInterviewScreen(),
+            );
             break;
           case '/rankings':
-            builder = const RankingsScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: RankingsScreen(),
+            );
             break;
           case '/analytics':
-            builder = const AnalyticsScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: AnalyticsScreen(),
+            );
             break;
           case '/review':
-            builder = const InterviewReviewScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: InterviewReviewScreen(),
+            );
             break;
           case '/settings':
-            builder = const SettingsScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: SettingsScreen(),
+            );
             break;
           case '/org':
-            builder = const OrgTeamScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleRecruiter],
+              child: OrgTeamScreen(),
+            );
             break;
           case '/candidate/home':
-            builder = const CandidateHomeScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateHomeScreen(),
+            );
             break;
           case '/candidate/applications':
-            builder = const CandidateApplicationsScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateApplicationsScreen(),
+            );
             break;
           case '/candidate/jobs':
-            builder = const CandidateJobFeedScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateJobFeedScreen(),
+            );
             break;
           case '/candidate/job-detail':
-            builder = const CandidateJobDetailScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateJobDetailScreen(),
+            );
             break;
           case '/candidate/interview-lobby':
-            builder = const CandidateInterviewLobbyScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateInterviewLobbyScreen(),
+            );
             break;
           case '/candidate/interview-session':
-            builder = const CandidateInterviewSessionScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateInterviewSessionScreen(),
+            );
             break;
           case '/candidate/feedback-report':
-            builder = const CandidateFeedbackReportScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateFeedbackReportScreen(),
+            );
             break;
           case '/candidate/resumes':
-            builder = const CandidateResumeManagementScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateResumeManagementScreen(),
+            );
             break;
           case '/candidate/interviews':
-            builder = const CandidateInterviewHistoryScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateInterviewHistoryScreen(),
+            );
             break;
           case '/candidate/profile':
-            builder = const CandidateProfileSettingsScreen();
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateProfileSettingsScreen(),
+            );
             break;
           default:
-            builder = const _AuthGate();
+            builder = const WelcomeScreen();
         }
         return PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => builder,
@@ -175,57 +272,6 @@ class _SkillSenseAppState extends State<SkillSenseApp> {
           reverseTransitionDuration: Duration.zero,
         );
       },
-    );
-  }
-}
-
-/// Checks for an existing valid session on app launch.
-///
-/// - If a valid session exists (access token present or silently refreshed via
-///   the httpOnly cookie), navigates straight to the dashboard.
-/// - Otherwise, shows the welcome / login screen.
-///
-/// On web, the first call to [AuthService.fetchCurrentUser] will 401 (no
-/// in-memory access token after page reload), the [AuthInterceptor] will
-/// silently refresh using the browser's httpOnly cookie, and the retried
-/// request will succeed — all before this widget finishes loading.
-class _AuthGate extends StatefulWidget {
-  const _AuthGate();
-
-  @override
-  State<_AuthGate> createState() => _AuthGateState();
-}
-
-class _AuthGateState extends State<_AuthGate> {
-  @override
-  void initState() {
-    super.initState();
-    _checkAuthState();
-  }
-
-  Future<void> _checkAuthState() async {
-    final user = await AuthService.fetchCurrentUser();
-    if (!mounted) return;
-
-    if (user != null) {
-      // User has a valid session — go to the dashboard.
-      Navigator.of(context).pushReplacementNamed('/dashboard');
-    } else {
-      // No valid session — show the welcome / login flow.
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Simple loading indicator while the auth check runs.
-    return Scaffold(
-      backgroundColor: AppColors.backgroundBase,
-      body: const Center(
-        child: CircularProgressIndicator(),
-      ),
     );
   }
 }

@@ -1090,13 +1090,11 @@ class _CandidateInterviewHistoryScreenState
             ),
           ),
 
-          // Role Switcher
+          // Account Menu
           PopupMenuButton<String>(
-            tooltip: 'Switch Workspace Role',
+            tooltip: 'Account Menu',
             onSelected: (value) {
-              if (value == 'recruiter') {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              } else if (value == 'candidate_home') {
+              if (value == 'candidate_home') {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
                     builder: (_) => const CandidateHomeScreen(),
@@ -1116,9 +1114,9 @@ class _CandidateInterviewHistoryScreenState
             },
             itemBuilder: (context) => [
               PopupMenuItem(
-                value: 'recruiter',
+                value: 'candidate_home',
                 child: Text(
-                  'Recruiter Workspace',
+                  'Candidate Home',
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,

@@ -282,7 +282,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
-                                          'CV_Muhammad_2026.pdf — Pa...',
+                                          'Resume_2026.pdf — Pa...',
                                           style: GoogleFonts.publicSans(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,

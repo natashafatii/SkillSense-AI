@@ -962,11 +962,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
 
           // Role Switcher
           PopupMenuButton<String>(
-            tooltip: 'Switch Workspace Role',
+            tooltip: 'Account Menu',
             onSelected: (value) {
-              if (value == 'recruiter') {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              } else if (value == 'candidate_home') {
+              if (value == 'candidate_home') {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
                 );
@@ -978,8 +976,8 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
             },
             itemBuilder: (context) => [
               PopupMenuItem(
-                value: 'recruiter',
-                child: Text('Recruiter Workspace', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                value: 'candidate_home',
+                child: Text('Candidate Home', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
               ),
               PopupMenuItem(
                 value: 'candidate_home',
