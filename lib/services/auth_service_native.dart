@@ -3,8 +3,7 @@ import 'dart:async';
 import 'package:clerk_auth/clerk_auth.dart' as clerk;
 
 import 'auth_service_interface.dart';
-import 'clerk_config_stub.dart'
-    if (dart.library.io) 'clerk_config_native.dart';
+import 'clerk_config_stub.dart' if (dart.library.io) 'clerk_config_native.dart';
 
 /// Factory called by the conditional import in `auth_service.dart`.
 AuthServiceInterface createAuthService() => AuthServiceNative();
@@ -41,13 +40,54 @@ class AuthServiceNative implements AuthServiceInterface {
   }
 
   @override
-  Future<void> login(String email, String password) async {
+  Future<SignInResult> login(String email, String password) async {
     await _requireAuth.attemptSignIn(
       strategy: clerk.Strategy.password,
       identifier: email,
       password: password,
     );
     _authStreamController.add(true);
+    return const SignInResult.complete();
+  }
+
+  @override
+  Future<void> verifySignInCode(String code) {
+    throw UnsupportedError(
+      'Sign-in verification is not supported by the native auth flow.',
+    );
+  }
+
+  @override
+  Future<void> resendSignInCode() {
+    throw UnsupportedError(
+      'Resending a sign-in code is not supported by the native auth flow.',
+    );
+  }
+
+  @override
+  Future<void> requestPasswordReset(String email) async {
+    await _requireAuth.attemptSignIn(
+      strategy: clerk.Strategy.resetPasswordEmailCode,
+      identifier: email,
+    );
+  }
+
+  @override
+  Future<SignInResult> resetPassword({
+    required String code,
+    required String newPassword,
+  }) async {
+    await _requireAuth.attemptSignIn(
+      strategy: clerk.Strategy.resetPasswordEmailCode,
+      code: code,
+      password: newPassword,
+    );
+    final isComplete = _requireAuth.client.user != null;
+    _authStreamController.add(isComplete);
+    if (!isComplete) {
+      throw Exception('Password reset did not complete. Request a new code.');
+    }
+    return const SignInResult.complete();
   }
 
   @override

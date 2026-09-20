@@ -355,8 +355,7 @@ class LoginScreenWeb extends StatelessWidget {
                                                                 .start,
                                                         children: [
                                                           Text(
-                                                            AppConstants
-                                                                .loginWebErrorTitle,
+                                                            'Authentication Failed',
                                                             style: GoogleFonts.inter(
                                                               fontSize: 13,
                                                               fontWeight:
@@ -367,8 +366,7 @@ class LoginScreenWeb extends StatelessWidget {
                                                           ),
                                                           const SizedBox(height: 3),
                                                           Text(
-                                                            AppConstants
-                                                                .loginWebErrorBody,
+                                                            errorMessage!,
                                                             style: GoogleFonts.inter(
                                                               fontSize: 12.5,
                                                               color: const Color(

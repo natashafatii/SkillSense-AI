@@ -32,17 +32,46 @@
   <title>skillsense_ai</title>
   <link rel="manifest" href="manifest.json">
 
-  <!-- Passkeys Web SDK (required by flutter_passkeys / Clerk auth) -->
+  <!-- Required by clerk_flutter package on web (passkeys support) -->
   <script src="https://github.com/corbado/flutter-passkeys/releases/download/2.4.0/bundle.js"></script>
 
-  <!-- Clerk JS SDK — handles the dev-browser handshake automatically.
-       This is the officially-supported web SDK; the Dart clerk_flutter
-       package is used only for native iOS/Android builds. -->
+  <!-- Clerk JS SDK bootstrap. The publishable key attribute makes the browser
+       bundle create the supported global Clerk singleton. Flutter waits for
+       __clerkReady before using it. -->
+  <script>
+    window.__clerkReady = false;
+    window.__clerkError = null;
+
+    async function initSkillSenseClerk() {
+      try {
+        if (!window.Clerk || typeof window.Clerk.load !== 'function') {
+          throw new Error('Clerk browser bundle loaded without a Clerk instance.');
+        }
+
+        await window.Clerk.load();
+        window.__clerkReady = true;
+        console.info('[SkillSense] Clerk initialized successfully.');
+      } catch (error) {
+        window.__clerkError = error instanceof Error
+          ? error.message
+          : String(error);
+        console.error('[SkillSense] Clerk initialization failed:', error);
+      }
+    }
+
+    function failSkillSenseClerk() {
+      window.__clerkError = 'Unable to download the Clerk JavaScript SDK.';
+      console.error('[SkillSense] Clerk browser bundle failed to download.');
+    }
+  </script>
   <script
-    async
+    defer
     crossorigin="anonymous"
     data-clerk-publishable-key="pk_test_c3R1bm5pbmctc2x1Zy0xMy5jbGVyay5hY2NvdW50cy5kZXYk"
-    src="https://stunning-slug-13.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js">
+    src="https://stunning-slug-13.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
+    onload="initSkillSenseClerk()"
+    onerror="failSkillSenseClerk()"
+    type="text/javascript">
   </script>
 </head>
 <body>

@@ -18,14 +18,31 @@ class AuthServiceWeb implements AuthServiceInterface {
       StreamController<bool>.broadcast();
   bool _initialised = false;
 
+  /// Polls for window.__clerkReady to be set to true by index.html init script
+  /// up to ~20 seconds.
+  Future<ClerkJS> _waitForClerk() async {
+    for (var i = 0; i < 200; i++) {
+      final bootstrapError = clerkBootstrapError;
+      if (bootstrapError != null && bootstrapError.isNotEmpty) {
+        throw StateError('Clerk failed to initialize: $bootstrapError');
+      }
+      if (isClerkReady) {
+        return clerkInstance;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    throw TimeoutException(
+      'Clerk did not finish initializing within 20 seconds.',
+    );
+  }
+
   @override
   Future<void> initialize(String publishableKey) async {
     if (_initialised) return;
 
-    // The global `Clerk` object is installed by the script tag.
-    // Wait briefly if it hasn't appeared yet (async script loading).
+    // Wait until clerk-js script in index.html finishes initialization and sets __clerkReady.
     _clerk = await _waitForClerk();
-    await _clerk.load().toDart;
+
     _initialised = true;
 
     // Listen for auth state changes from clerk-js.
@@ -35,43 +52,195 @@ class AuthServiceWeb implements AuthServiceInterface {
       }).toJS,
     );
 
-    // Seed initial state.
+    // Seed the stream with the current signed-in state.
     _authStreamController.add(_clerk.user != null);
   }
 
-  /// Polls for the global `window.Clerk` object up to ~5 seconds,
-  /// since the script tag loads asynchronously.
-  Future<ClerkJS> _waitForClerk() async {
-    for (var i = 0; i < 50; i++) {
-      try {
-        return clerkInstance;
-      } catch (_) {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+  @override
+  Future<SignInResult> login(String email, String password) async {
+    final client = _clerk.client;
+    if (client == null) {
+      throw Exception('Clerk Client is not initialized yet.');
+    }
+    final signInResource = client.signIn;
+    if (signInResource == null) {
+      throw Exception('Clerk SignIn service is unavailable.');
+    }
+
+    try {
+      final signIn = await signInResource
+          .create(
+            buildSignInCreateParams(identifier: email, password: password),
+          )
+          .toDart;
+
+      if (signIn.status == 'complete') {
+        await _activateCompletedSignIn(signIn);
+        return const SignInResult.complete();
+      }
+
+      if (signIn.status == 'needs_client_trust' ||
+          signIn.status == 'needs_second_factor') {
+        await _prepareEmailCode(signIn);
+        return const SignInResult.verificationRequired();
+      }
+
+      throw Exception('Sign-in cannot continue. Status: ${signIn.status}');
+    } catch (e) {
+      final clean = e
+          .toString()
+          .replaceAll('JavaScriptError: ', '')
+          .replaceAll('Exception: ', '')
+          .trim();
+      throw Exception(clean.isEmpty ? 'Invalid credentials' : clean);
+    }
+  }
+
+  Future<void> _prepareEmailCode(ClerkSignIn signIn) async {
+    final factors = signIn.supportedSecondFactors?.toDart;
+    ClerkSignInSecondFactor? emailFactor;
+    if (factors != null) {
+      for (final factor in factors) {
+        if (factor.strategy == 'email_code' &&
+            factor.emailAddressId != null &&
+            factor.emailAddressId!.isNotEmpty) {
+          emailFactor = factor;
+          break;
+        }
       }
     }
-    return clerkInstance; // Will throw descriptive error.
+
+    if (emailFactor == null) {
+      throw Exception(
+        'This sign-in requires an additional verification method that is not '
+        'available for this account.',
+      );
+    }
+
+    await signIn
+        .prepareSecondFactor(
+          buildPrepareSignInEmailCodeParams(emailFactor.emailAddressId!),
+        )
+        .toDart;
+  }
+
+  Future<void> _activateCompletedSignIn(ClerkSignIn signIn) async {
+    if (signIn.status != 'complete') {
+      throw StateError('Cannot activate an incomplete Clerk sign-in.');
+    }
+    final sessionId = signIn.createdSessionId;
+    if (sessionId == null || sessionId.isEmpty) {
+      throw StateError(
+        'Clerk completed sign-in without returning a session ID.',
+      );
+    }
+    await _clerk.setActive(buildSetActiveParams(sessionId)).toDart;
+    _authStreamController.add(true);
   }
 
   @override
-  Future<void> login(String email, String password) async {
-    final signIn = await _clerk.client.signIn
-        .create(buildSignInCreateParams(
-          identifier: email,
-          password: password,
-        ))
-        .toDart;
+  Future<void> verifySignInCode(String code) async {
+    final signIn = _clerk.client?.signIn;
+    if (signIn == null) {
+      throw StateError('There is no pending sign-in to verify.');
+    }
 
-    if (signIn.status == 'complete') {
-      final sessionId = signIn.createdSessionId;
-      if (sessionId != null) {
-        await _clerk.setActive(buildSetActiveParams(sessionId)).toDart;
+    try {
+      final result = await signIn
+          .attemptSecondFactor(buildAttemptSignInEmailCodeParams(code))
+          .toDart;
+      if (result.status != 'complete') {
+        throw Exception(
+          'Verification did not complete sign-in. Status: ${result.status}',
+        );
       }
-      _authStreamController.add(true);
-    } else {
+      await _activateCompletedSignIn(result);
+    } catch (e) {
+      final clean = e
+          .toString()
+          .replaceAll('JavaScriptError: ', '')
+          .replaceAll('Exception: ', '')
+          .trim();
       throw Exception(
-        'Sign-in did not complete. Status: ${signIn.status}',
+        clean.isEmpty ? 'The verification code is invalid.' : clean,
       );
     }
+  }
+
+  @override
+  Future<void> resendSignInCode() async {
+    final signIn = _clerk.client?.signIn;
+    if (signIn == null) {
+      throw StateError('There is no pending sign-in challenge to resend.');
+    }
+    await _prepareEmailCode(signIn);
+  }
+
+  @override
+  Future<void> requestPasswordReset(String email) async {
+    final signIn = _clerk.client?.signIn;
+    if (signIn == null) {
+      throw StateError('Clerk SignIn service is unavailable.');
+    }
+
+    try {
+      final result = await signIn
+          .create(buildPasswordResetCreateParams(email))
+          .toDart;
+      if (result.status != 'needs_first_factor') {
+        throw Exception(
+          'Password reset could not be started. Status: ${result.status}',
+        );
+      }
+    } catch (e) {
+      throw Exception(_cleanError(e, 'Unable to send the reset code.'));
+    }
+  }
+
+  @override
+  Future<SignInResult> resetPassword({
+    required String code,
+    required String newPassword,
+  }) async {
+    final signIn = _clerk.client?.signIn;
+    if (signIn == null) {
+      throw StateError('There is no pending password reset request.');
+    }
+
+    try {
+      final result = await signIn
+          .attemptFirstFactor(
+            buildPasswordResetAttemptParams(
+              code: code,
+              password: newPassword,
+            ),
+          )
+          .toDart;
+
+      if (result.status == 'complete') {
+        await _activateCompletedSignIn(result);
+        return const SignInResult.complete();
+      }
+      if (result.status == 'needs_client_trust' ||
+          result.status == 'needs_second_factor') {
+        await _prepareEmailCode(result);
+        return const SignInResult.verificationRequired();
+      }
+      throw Exception(
+        'Password reset did not complete. Status: ${result.status}',
+      );
+    } catch (e) {
+      throw Exception(_cleanError(e, 'The reset code is invalid or expired.'));
+    }
+  }
+
+  String _cleanError(Object error, String fallback) {
+    final clean = error
+        .toString()
+        .replaceAll('JavaScriptError: ', '')
+        .replaceAll('Exception: ', '')
+        .trim();
+    return clean.isEmpty ? fallback : clean;
   }
 
   @override
@@ -82,31 +251,38 @@ class AuthServiceWeb implements AuthServiceInterface {
     String? lastName,
     required String role,
   }) async {
-    // Step 1: Create the sign-up.
-    await _clerk.client.signUp
-        .create(buildSignUpCreateParams(
-          emailAddress: email,
-          password: password,
-          firstName: firstName,
-          lastName: lastName,
-          unsafeMetadata: {'role': role},
-        ))
-        .toDart;
+    final client = _clerk.client;
+    if (client == null || client.signUp == null) {
+      throw Exception('Clerk SignUp service is unavailable.');
+    }
 
-    // Step 2: Request email verification code.
-    await _clerk.client.signUp
-        .prepareEmailAddressVerification(
-          buildPrepareEmailVerificationParams(),
+    // Step 1: Create the sign-up.
+    await client.signUp!
+        .create(
+          buildSignUpCreateParams(
+            emailAddress: email,
+            password: password,
+            firstName: firstName,
+            lastName: lastName,
+            unsafeMetadata: {'role': role},
+          ),
         )
         .toDart;
 
-    // The UI must now collect the OTP code from the user and call
-    // verifySignUpCode().
+    // Step 2: Request email verification code.
+    await client.signUp!
+        .prepareEmailAddressVerification(buildPrepareEmailVerificationParams())
+        .toDart;
   }
 
   @override
   Future<void> verifySignUpCode(String code) async {
-    final signUp = await _clerk.client.signUp
+    final client = _clerk.client;
+    if (client == null || client.signUp == null) {
+      throw Exception('Clerk SignUp service is unavailable.');
+    }
+
+    final signUp = await client.signUp!
         .attemptEmailAddressVerification(
           buildAttemptEmailVerificationParams(code),
         )

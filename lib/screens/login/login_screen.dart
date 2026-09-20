@@ -9,6 +9,8 @@ import '../../services/auth_service.dart';
 import 'login_screen_web.dart';
 import 'forgot_password_screen_web.dart';
 import 'check_email_screen_web.dart';
+import 'set_new_password_screen_web.dart';
+import '../signup/email_verification_screen.dart';
 
 /// Login screen for SkillSense AI.
 /// Background: identical gradient to WelcomeScreen & RoleSelectionScreen.
@@ -23,7 +25,6 @@ class LoginScreen extends StatefulWidget {
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
-
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   bool _obscurePassword = true;
@@ -91,8 +92,18 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      await AuthService.login(context, email, password);
+      final result = await AuthService.login(context, email, password);
       if (!mounted) return;
+
+      if (result.status == SignInResultStatus.verificationRequired) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => EmailVerificationScreen.signIn(email: email),
+          ),
+        );
+        return;
+      }
+
       _snack('Login successful!');
       final userRole = AuthService.getUserRole();
       if (userRole == 'RECRUITER') {
@@ -126,6 +137,72 @@ class _LoginScreenState extends State<LoginScreen>
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _openForgotPassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreenWeb(
+          onBack: () => Navigator.pop(context),
+          onSend: (email) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CheckEmailScreenWeb(
+                  email: email,
+                  onContinue: (code) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SetNewPasswordScreenWeb(
+                          email: email,
+                          code: code,
+                          onSetPassword: (result) {
+                            if (result.status ==
+                                SignInResultStatus.verificationRequired) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      EmailVerificationScreen.signIn(
+                                    email: email,
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                            _snack('Password updated successfully.');
+                            final route = AuthService.getUserRole() == 'RECRUITER'
+                                ? '/dashboard'
+                                : '/candidate/home';
+                            Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              route,
+                              (_) => false,
+                            );
+                          },
+                          onIgnore: () {
+                            Navigator.popUntil(context, (route) => route.isFirst);
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  onBackToSignIn: () {
+                    Navigator.popUntil(context, (route) => route.isFirst);
+                  },
+                  onUseDifferentEmail: () {
+                    Navigator.pop(context);
+                    _openForgotPassword();
+                  },
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -182,30 +259,7 @@ class _LoginScreenState extends State<LoginScreen>
               });
             },
             onLogin: _login,
-            onForgotPassword: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ForgotPasswordScreenWeb(
-                    onBack: () => Navigator.pop(context),
-                    onSend: (email) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CheckEmailScreenWeb(
-                            email: email,
-                            onBackToSignIn: () {
-                              Navigator.popUntil(context, (r) => r.isFirst);
-                            },
-                            onUseDifferentEmail: () => Navigator.pop(context),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              );
-            },
+            onForgotPassword: _openForgotPassword,
             onCreateAccount: () {
               Navigator.pushNamed(
                 context,
@@ -354,8 +408,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                               TextButton(
-                                onPressed: () =>
-                                    _snack(AppConstants.forgotPassword),
+                                onPressed: _openForgotPassword,
                                 style: TextButton.styleFrom(
                                   padding: EdgeInsets.zero,
                                   minimumSize: Size.zero,

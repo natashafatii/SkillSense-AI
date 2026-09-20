@@ -13,12 +13,17 @@ import '../login/login_screen.dart';
 class EmailVerificationScreen extends StatefulWidget {
   final String email;
   final String role;
+  final bool isSignIn;
 
   const EmailVerificationScreen({
     super.key,
     required this.email,
     required this.role,
-  });
+  }) : isSignIn = false;
+
+  const EmailVerificationScreen.signIn({super.key, required this.email})
+    : role = '',
+      isSignIn = true;
 
   @override
   State<EmailVerificationScreen> createState() =>
@@ -33,6 +38,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   );
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   bool _isLoading = false;
+  bool _isResending = false;
   String? _error;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -74,6 +80,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   String get _code => _controllers.map((c) => c.text).join();
 
   Future<void> _verify() async {
+    if (_isLoading) return;
     final code = _code;
     if (code.length != 6) {
       setState(() => _error = 'Please enter the full 6-digit code.');
@@ -86,14 +93,22 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     });
 
     try {
-      await AuthService.verifySignUpCode(code);
+      if (widget.isSignIn) {
+        await AuthService.verifySignInCode(code);
+      } else {
+        await AuthService.verifySignUpCode(code);
+      }
       if (!mounted) return;
-      _snack('Email verified! Redirecting…');
+      _snack(
+        widget.isSignIn
+            ? 'Device verified. Signing you in…'
+            : 'Email verified! Redirecting…',
+      );
       // Navigate to the onboarding walkthrough for first-time users.
       // The onboarding flow will navigate to the dashboard/home on
       // completion and mark the user as onboarded.
       Navigator.of(context).pushNamedAndRemoveUntil(
-        _isRecruiter ? '/dashboard' : '/candidate/home',
+        widget.role == 'RECRUITER' ? '/dashboard' : '/candidate/home',
         (_) => false,
       );
     } catch (e) {
@@ -106,6 +121,26 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _resendSignInCode() async {
+    if (_isResending) return;
+    setState(() {
+      _isResending = true;
+      _error = null;
+    });
+    try {
+      await AuthService.resendSignInCode();
+      if (mounted) _snack('A new verification code has been sent.');
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isResending = false);
     }
   }
 
@@ -366,7 +401,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                             ),
                           )
                         : Text(
-                            'Verify Email',
+                            widget.isSignIn
+                                ? 'Verify and Sign In'
+                                : 'Verify Email',
                             style: GoogleFonts.publicSans(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -377,11 +414,25 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                 const SizedBox(height: 20),
 
                 // ── Resend / back link ──────────────────────────────
+                if (widget.isSignIn)
+                  TextButton(
+                    onPressed: _isResending ? null : _resendSignInCode,
+                    child: Text(
+                      _isResending ? 'Sending…' : 'Resend code',
+                      style: GoogleFonts.publicSans(
+                        fontSize: 13,
+                        color: _green,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 TextButton(
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const LoginScreen(),
+                      ),
                     );
                   },
                   child: Text(

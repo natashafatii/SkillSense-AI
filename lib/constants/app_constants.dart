@@ -224,18 +224,18 @@ class AppConstants {
 
   // Web Forgot Password screen
   static const String forgotWebEyebrow = 'ACCOUNT RECOVERY';
-  static const String forgotWebHeadline = 'A reset link, good\nfor one hour.';
+  static const String forgotWebHeadline = 'A secure code, sent\nto your inbox.';
   static const String forgotWebBody =
-      'We send one link to the address on the account. It works once, then expires — requesting a new one cancels the last.';
-  static const String forgotWebPoint1 = 'Link expires 60 minutes after it is sent';
-  static const String forgotWebPoint2 = 'Using it signs out every other device on the account';
+      'We send a one-time code to the address on the account. Use it to choose a new password.';
+  static const String forgotWebPoint1 = 'The code can only be used for this reset';
+  static const String forgotWebPoint2 = 'A new code replaces the previous one';
   static const String forgotWebPoint3 = 'Interviews already scheduled are untouched';
   static const String forgotWebRightTitle = 'Reset your password';
   static const String forgotWebRightSubtitle =
-      'Enter the email on your account and we will send a link to set a new password.';
+      'Enter the email on your account and we will send a code to reset your password.';
   static const String forgotWebEmailLabel = 'Email';
   static const String forgotWebEmailHint = 'm.rehman@gmail.com';
-  static const String forgotWebButton = 'Send reset link';
+  static const String forgotWebButton = 'Send reset code';
   static const String forgotWebBackLink = 'Back to sign in';
   static const String forgotWebRemembered = 'Remembered it? ';
 
@@ -243,15 +243,15 @@ class AppConstants {
   static const String checkEmailWebEyebrow = 'ACCOUNT RECOVERY';
   static const String checkEmailWebHeadline = 'Sent. Now check\nthe inbox.';
   static const String checkEmailWebBody =
-      'If the address belongs to an account, the link is already on its way. Nothing else happens on this screen.';
+      'Enter the six-digit code from the email, then choose your new password.';
   static const String checkEmailWebPoint1 = 'Sender: no-reply@skillsense.ai';
   static const String checkEmailWebPoint2 = 'Delivery is usually under a minute';
   static const String checkEmailWebPoint3 = 'Check spam before requesting another';
-  static const String checkEmailWebBannerLine1 = 'Reset link sent.';
+  static const String checkEmailWebBannerLine1 = 'Reset code sent.';
   static const String checkEmailWebRightTitle = 'Check your email';
   static const String checkEmailWebRightSubtitle =
-      'Nothing in the inbox after a minute? Look in spam, then send another link.';
-  static const String checkEmailWebResendPrefix = 'Resend link in ';
+      'Enter the six-digit code below. If it does not arrive, check spam or request another code.';
+  static const String checkEmailWebResendPrefix = 'Resend code in ';
   static const String checkEmailWebBackButton = 'Back to sign in';
   static const String checkEmailWebWrongAddress = 'Wrong address? ';
   static const String checkEmailWebUseDifferent = 'Use a different email';
@@ -261,7 +261,7 @@ class AppConstants {
   static const String setPasswordWebHeadline = 'Last step. Then\nstraight in.';
   static const String setPasswordWebBody =
       'Setting a password signs out every other device and takes you to your workspace — no second sign-in.';
-  static const String setPasswordWebPoint2 = 'This link expires in 60 minutes';
+  static const String setPasswordWebPoint2 = 'The reset code is time limited';
   static const String setPasswordWebPoint3 = 'Other devices are signed out immediately';
   static const String setPasswordWebRightTitle = 'Set a new password';
   static const String setPasswordWebRightSubtitle =

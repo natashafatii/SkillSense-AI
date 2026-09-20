@@ -6,6 +6,7 @@ import '../models/resume_detail.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
 
+/// Resume parsing and matching results service.
 class ResumeService {
   ResumeService._();
 

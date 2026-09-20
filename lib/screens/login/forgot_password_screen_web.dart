@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
+import '../../services/auth_service.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/web_auth_left_panel.dart';
 
@@ -24,6 +25,11 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
   final TextEditingController _emailController = TextEditingController();
   final FocusNode _emailFocus = FocusNode();
   bool _isLoading = false;
+  String? _errorMessage;
+
+  bool _isValidEmail(String value) {
+    return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value);
+  }
 
   @override
   void initState() {
@@ -38,16 +44,33 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final email = _emailController.text.trim();
-    if (email.isEmpty) return;
-    setState(() => _isLoading = true);
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        widget.onSend(email);
-      }
+    if (email.isEmpty) {
+      setState(() => _errorMessage = 'Enter the email address on your account.');
+      return;
+    }
+    if (!_isValidEmail(email)) {
+      setState(() => _errorMessage = 'Enter a valid email address.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
     });
+    try {
+      await AuthService.requestPasswordReset(email);
+      if (mounted) widget.onSend(email);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -148,6 +171,16 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                           ),
+                                          if (_errorMessage != null) ...[
+                                            const SizedBox(height: 10),
+                                            Text(
+                                              _errorMessage!,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 13,
+                                                color: const Color(0xFFDC2626),
+                                              ),
+                                            ),
+                                          ],
                                           const SizedBox(height: 28),
 
                                           // Send button

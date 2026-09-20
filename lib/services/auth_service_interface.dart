@@ -1,5 +1,18 @@
 import 'dart:async';
 
+enum SignInResultStatus { complete, verificationRequired }
+
+class SignInResult {
+  final SignInResultStatus status;
+
+  const SignInResult._(this.status);
+
+  const SignInResult.complete() : this._(SignInResultStatus.complete);
+
+  const SignInResult.verificationRequired()
+    : this._(SignInResultStatus.verificationRequired);
+}
+
 /// Abstract auth service interface.
 ///
 /// Platform implementations (native via clerk_flutter, web via clerk-js)
@@ -10,7 +23,35 @@ abstract class AuthServiceInterface {
   Future<void> initialize(String publishableKey);
 
   /// Email + password sign-in.
-  Future<void> login(String email, String password);
+  /// Starts an email/password sign-in.
+  ///
+  /// A successful password check can still require an email code when Clerk
+  /// Device Trust sees a new browser. In that case the implementation prepares
+  /// the email-code challenge and returns [SignInResultStatus.verificationRequired].
+  Future<SignInResult> login(String email, String password);
+
+  /// Completes a pending sign-in email-code challenge.
+  Future<void> verifySignInCode(String code) {
+    throw UnsupportedError(
+      'Sign-in verification is not supported on this platform.',
+    );
+  }
+
+  /// Sends a new code for the current pending sign-in challenge.
+  Future<void> resendSignInCode() {
+    throw UnsupportedError(
+      'Resending a sign-in code is not supported on this platform.',
+    );
+  }
+
+  /// Starts Clerk's password-reset flow and sends a code to [email].
+  Future<void> requestPasswordReset(String email);
+
+  /// Verifies the reset [code], changes the password, and completes sign-in.
+  Future<SignInResult> resetPassword({
+    required String code,
+    required String newPassword,
+  });
 
   /// Email + password sign-up with role metadata.
   ///

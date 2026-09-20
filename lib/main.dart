@@ -58,8 +58,19 @@ void main() async {
     ),
   );
 
-  // Initialise the platform-specific auth backend.
-  await initializePlatformAuth(EnvConfig.clerkPublishableKey);
+  Object? authInitializationError;
+  try {
+    // Initialise the platform-specific auth backend before rendering routes
+    // that depend on the current session.
+    await initializePlatformAuth(EnvConfig.clerkPublishableKey);
+  } catch (error) {
+    authInitializationError = error;
+  }
+
+  if (authInitializationError != null) {
+    runApp(AuthInitializationFailure(error: authInitializationError));
+    return;
+  }
 
   runApp(
     // On native: wraps in ClerkAuth(...) widget
@@ -69,6 +80,71 @@ void main() async {
       child: const SkillSenseApp(),
     ),
   );
+}
+
+class AuthInitializationFailure extends StatelessWidget {
+  final Object error;
+
+  const AuthInitializationFailure({super.key, required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    final message = error
+        .toString()
+        .replaceFirst('Bad state: ', '')
+        .replaceFirst('TimeoutException: ', '');
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.cloud_off_rounded,
+                    size: 52,
+                    color: Color(0xFFB91C1C),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Unable to start authentication',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.5,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Check the network connection, then reload this page.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Global navigator key — used for programmatic navigation without BuildContext.
