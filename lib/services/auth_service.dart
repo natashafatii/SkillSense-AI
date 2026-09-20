@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/env_config.dart';
 import 'api_client.dart';
 import 'auth_service_interface.dart';
@@ -17,12 +18,72 @@ class AuthService {
   static final AuthServiceInterface instance = createAuthService();
   static String selectedRole = EnvConfig.roleCandidate;
 
+  /// Centralized reactive user session state listener.
+  static final ValueNotifier<Map<String, dynamic>?> currentUserNotifier =
+      ValueNotifier<Map<String, dynamic>?>(null);
+
+  static Map<String, dynamic>? get currentUserData => currentUserNotifier.value;
+
+  static String get firstName =>
+      currentUserNotifier.value?['first_name']?.toString().trim() ?? '';
+  static String get lastName =>
+      currentUserNotifier.value?['last_name']?.toString().trim() ?? '';
+  static String get email =>
+      currentUserNotifier.value?['email']?.toString().trim() ?? '';
+
+  /// Saves the current user session data to memory & persistent SharedPreferences.
+  static Future<void> saveUserSession(Map<String, dynamic> data) async {
+    final current = Map<String, dynamic>.from(currentUserNotifier.value ?? {});
+    current.addAll(data);
+    currentUserNotifier.value = current;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (current.containsKey('first_name')) {
+        await prefs.setString('user_first_name', current['first_name'].toString());
+      }
+      if (current.containsKey('last_name')) {
+        await prefs.setString('user_last_name', current['last_name'].toString());
+      }
+      if (current.containsKey('email')) {
+        await prefs.setString('user_email', current['email'].toString());
+      }
+      if (current.containsKey('role')) {
+        await prefs.setString('user_role', current['role'].toString());
+      }
+    } catch (_) {}
+  }
+
+  /// Loads cached session data from SharedPreferences.
+  static Future<Map<String, dynamic>?> loadUserSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final fn = prefs.getString('user_first_name');
+      final ln = prefs.getString('user_last_name');
+      final em = prefs.getString('user_email');
+      final role = prefs.getString('user_role');
+
+      if (fn != null || ln != null || em != null || role != null) {
+        final data = {
+          if (fn != null) 'first_name': fn,
+          if (ln != null) 'last_name': ln,
+          if (em != null) 'email': em,
+          if (role != null) 'role': role,
+        };
+        currentUserNotifier.value = data;
+        return data;
+      }
+    } catch (_) {}
+    return currentUserNotifier.value;
+  }
+
   static Future<void> login(
     BuildContext context,
     String email,
     String password,
   ) async {
     await instance.login(email, password);
+    await fetchCurrentUser();
   }
 
   static Future<void> signUp(
@@ -34,6 +95,16 @@ class AuthService {
     required String role,
   }) async {
     selectedRole = role;
+
+    // Immediately record signup user data so UI greets the user without delay
+    final userData = {
+      'first_name': firstName ?? '',
+      'last_name': lastName ?? '',
+      'email': email,
+      'role': role,
+    };
+    await saveUserSession(userData);
+
     await instance.signUp(
       email: email,
       password: password,
@@ -91,13 +162,38 @@ class AuthService {
   }
 
   static Future<Map<String, dynamic>?> fetchCurrentUser() async {
+    if (currentUserNotifier.value == null) {
+      await loadUserSession();
+    }
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.get('/users/me/');
-      return response.data as Map<String, dynamic>;
-    } catch (_) {
-      return null;
-    }
+      if (response.data is Map<String, dynamic>) {
+        final data = response.data as Map<String, dynamic>;
+        await saveUserSession(data);
+        return data;
+      }
+    } catch (_) {}
+    return currentUserNotifier.value;
+  }
+
+  /// Updates user profile details locally and synchronizes to backend.
+  static Future<void> updateUserProfile({
+    String? firstName,
+    String? lastName,
+    String? email,
+  }) async {
+    final current = Map<String, dynamic>.from(currentUserNotifier.value ?? {});
+    if (firstName != null) current['first_name'] = firstName.trim();
+    if (lastName != null) current['last_name'] = lastName.trim();
+    if (email != null) current['email'] = email.trim();
+
+    await saveUserSession(current);
+
+    try {
+      final dio = await ApiClient.getInstance();
+      await dio.patch('/users/me/', data: current);
+    } catch (_) {}
   }
 
   static String getUserRole([dynamic user]) {
@@ -110,6 +206,14 @@ class AuthService {
     await instance.signOut();
     ApiClient.reset();
     ResumeManager.clearCache();
+    currentUserNotifier.value = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_first_name');
+      await prefs.remove('user_last_name');
+      await prefs.remove('user_email');
+      await prefs.remove('user_role');
+    } catch (_) {}
   }
 
   static Exception handleDioException(DioException e) {

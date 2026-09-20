@@ -93,6 +93,13 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
       // If auth check is still running, wait for it
       return;
     }
+    // Only navigate away if ApertureSplashScreen is still the current active route.
+    // If the browser loaded a specific path (e.g. /pipeline, /candidate/jobs),
+    // that screen sits above splash in the navigator stack — do not override it.
+    final modalRoute = ModalRoute.of(context);
+    if (modalRoute != null && !modalRoute.isCurrent) {
+      return;
+    }
     // Navigate to target screen without transitions to avoid visual jump
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(

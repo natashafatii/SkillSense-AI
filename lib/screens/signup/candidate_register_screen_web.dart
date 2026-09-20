@@ -1,9 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../utils/responsive.dart';
+import 'terms_privacy_screen.dart';
 
 /// Signup-specific web HR registration screen.
 class CandidateRegisterScreenWeb extends StatelessWidget {
@@ -179,7 +181,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             style: GoogleFonts.inter(
                                               color: Colors.white,
                                               fontSize: 15,
-                                              fontWeight: FontWeight.w700,
+                                              fontWeight: FontWeight.w600,
                                               letterSpacing: -0.01,
                                             ),
                                             overflow: TextOverflow.ellipsis,
@@ -212,17 +214,12 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             Flexible(
                                               child: Text(
                                                 AppConstants
-                                                    .candidateRegisterEyebrow,
-                                                style: GoogleFonts.inter(
-                                                  color: AppColors.webEyebrow,
-                                                  fontSize:
-                                                      Responsive.getFontSize(
-                                                        context,
-                                                        mobile: 10,
-                                                        desktop: 11.5,
-                                                      ),
-                                                  fontWeight: FontWeight.w700,
-                                                  letterSpacing: 1.4,
+                                                    .candidateRegisterEyebrow.toUpperCase(),
+                                                style: GoogleFonts.jetBrainsMono(
+                                                  color: const Color(0xFF7BA5FF),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 1.8,
                                                 ),
                                               ),
                                             ),
@@ -238,24 +235,26 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           ),
                                           child: RichText(
                                             text: TextSpan(
-                                              style: GoogleFonts.fraunces(
+                                              style: GoogleFonts.inter(
                                                 color: Colors.white,
                                                 fontSize:
                                                     Responsive.getFontSize(
                                                       context,
-                                                      mobile: 32,
-                                                      tablet: 36,
-                                                      desktop: 42,
+                                                      mobile: 30,
+                                                      tablet: 34,
+                                                      desktop: 40,
                                                     ),
-                                                fontWeight: FontWeight.w600,
+                                                fontWeight: FontWeight.w700,
                                                 height: 1.18,
-                                                letterSpacing: -0.01,
+                                                letterSpacing: -1.2,
                                               ),
                                               children: [
                                                 const TextSpan(
                                                   text: 'Your workspace,\nin ',
                                                 ),
                                                 WidgetSpan(
+                                                  alignment: PlaceholderAlignment.baseline,
+                                                  baseline: TextBaseline.alphabetic,
                                                   child: ShaderMask(
                                                     blendMode: BlendMode.srcIn,
                                                     shaderCallback: (bounds) =>
@@ -267,25 +266,24 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                                 .webHeadlineFairlyEnd,
                                                           ],
                                                           begin:
-                                                              Alignment.topLeft,
+                                                              Alignment.centerLeft,
                                                           end: Alignment
-                                                              .bottomRight,
+                                                              .centerRight,
                                                         ).createShader(bounds),
                                                     child: Text(
                                                       'one minute.',
-                                                      style: GoogleFonts.fraunces(
+                                                      style: GoogleFonts.inter(
                                                         fontSize:
                                                             Responsive.getFontSize(
                                                               context,
-                                                              mobile: 32,
-                                                              tablet: 36,
-                                                              desktop: 42,
+                                                              mobile: 30,
+                                                              tablet: 34,
+                                                              desktop: 40,
                                                             ),
                                                         fontWeight:
-                                                            FontWeight.w500,
-                                                        fontStyle:
-                                                            FontStyle.italic,
+                                                            FontWeight.w700,
                                                         height: 1.18,
+                                                        letterSpacing: -1.2,
                                                       ),
                                                     ),
                                                   ),
@@ -306,9 +304,10 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             AppConstants
                                                 .candidateRegisterLeftBody,
                                             style: GoogleFonts.inter(
-                                              color: AppColors.webSubcopy,
-                                              fontSize: 15.5,
-                                              height: 1.75,
+                                              color: const Color(0xFF94A3B8),
+                                              fontSize: 14.5,
+                                              fontWeight: FontWeight.w400,
+                                              height: 1.6,
                                             ),
                                           ),
                                         ),
@@ -333,14 +332,18 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                     ),
 
                                     // Push footer to bottom
-                                    const SizedBox(height: 60),
+                                    const Spacer(),
 
                                     // Footer
-                                    Text(
-                                      '© 2026 SkillSense AI · Bahria University',
-                                      style: GoogleFonts.inter(
-                                        color: AppColors.webFooterText,
-                                        fontSize: 12.5,
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        '© 2026 SkillSense AI',
+                                        style: GoogleFonts.inter(
+                                          color: const Color(0xFF64748B),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w400,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -459,7 +462,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: emailController,
                                             focusNode: emailFocus,
-                                            hintText: 'you@example.com',
+                                            hintText: 'sara.khan@example.com',
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                           ),
@@ -472,7 +475,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: phoneController,
                                             focusNode: phoneFocus,
-                                            hintText: '3XX XXX XXXX',
+                                            hintText: 'e.g. 300 1234567',
                                             keyboardType: TextInputType.phone,
                                           ),
                                           const SizedBox(height: 14),
@@ -484,7 +487,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: passwordController,
                                             focusNode: passwordFocus,
-                                            hintText: 'Min. 8 characters',
+                                            hintText: 'At least 8 characters',
                                             obscureText: obscurePassword,
                                             suffixIcon: GestureDetector(
                                               onTap: onObscureToggle,
@@ -569,14 +572,37 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
 
                                           // Bottom Agreement Text
                                           Center(
-                                            child: Text(
-                                              AppConstants
-                                                  .candidateRegisterAgreement,
+                                            child: RichText(
                                               textAlign: TextAlign.center,
-                                              style: GoogleFonts.inter(
-                                                fontSize: 12,
-                                                color: const Color(0xFF64748B),
-                                                height: 1.5,
+                                              text: TextSpan(
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  color: const Color(0xFF64748B),
+                                                  height: 1.5,
+                                                ),
+                                                children: [
+                                                  const TextSpan(
+                                                    text: 'By continuing you agree to the ',
+                                                  ),
+                                                  TextSpan(
+                                                    text: 'Terms and Privacy Policy',
+                                                    style: GoogleFonts.inter(
+                                                      color: AppColors.webRoleCandidate,
+                                                      fontWeight: FontWeight.w600,
+                                                      decoration: TextDecoration.underline,
+                                                    ),
+                                                    recognizer: TapGestureRecognizer()
+                                                      ..onTap = () {
+                                                        Navigator.push(
+                                                          context,
+                                                          MaterialPageRoute(
+                                                            builder: (_) => const TermsPrivacyScreen(),
+                                                          ),
+                                                        );
+                                                      },
+                                                  ),
+                                                  const TextSpan(text: '.'),
+                                                ],
                                               ),
                                             ),
                                           ),
@@ -584,8 +610,10 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
 
                                           // Already have an account? Sign in
                                           Center(
-                                            child: GestureDetector(
-                                              onTap: onLoginTap,
+                                            child: MouseRegion(
+                                              cursor: SystemMouseCursors.click,
+                                              child: GestureDetector(
+                                                onTap: onLoginTap,
                                               child: RichText(
                                                 text: TextSpan(
                                                   style: GoogleFonts.inter(
@@ -613,6 +641,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                 ),
                                               ),
                                             ),
+                                          ),
                                           ),
                                         ],
                                       ),
@@ -662,9 +691,9 @@ class _BulletPoint extends StatelessWidget {
           child: Text(
             text,
             style: GoogleFonts.inter(
-              color: const Color(0xFFE1E4F5),
-              fontSize: 14.5,
-              height: 1.4,
+              color: const Color(0xFFCBD5E1),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),

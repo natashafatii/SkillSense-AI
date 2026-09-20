@@ -6,10 +6,10 @@ import 'package:intl_phone_field/intl_phone_field.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/green_gradient_background.dart';
-import '../login/login_screen.dart';
 import '../../services/auth_service.dart';
 import 'candidate_register_screen_web.dart';
 import 'email_verification_screen.dart';
+import 'terms_privacy_screen.dart';
 
 const _green = Color(0xFF34C759);
 
@@ -133,7 +133,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
           _cleanErrorMessage(msg),
           style: GoogleFonts.publicSans(fontWeight: FontWeight.w500, color: Colors.white),
         ),
-        backgroundColor: isError ? const Color(0xFFDC2626) : _green,
+        backgroundColor: isError ? const Color(0xFFDC2626) : const Color(0xFF0FB89B),
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -414,10 +414,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
               // TODO: Implement Google Sign In
             },
             onLoginTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
+              Navigator.pushReplacementNamed(context, '/login');
             },
           );
         }
@@ -638,7 +635,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                 ),
                                 decoration: _decor(
                                   'Email Address',
-                                  'you@example.com',
+                                  'sara.khan@example.com',
                                   focused: _emailFocus.hasFocus,
                                   prefix: _icon(
                                     Icons.alternate_email_rounded,
@@ -683,7 +680,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                   color: _green,
                                   fontWeight: FontWeight.w700,
                                 ),
-                                hintText: '3XX XXX XXXX',
+                                hintText: 'e.g. 300 1234567',
                                 hintStyle: GoogleFonts.publicSans(
                                   fontSize: 13,
                                   color: const Color(0xFFCFCFCF),
@@ -756,7 +753,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                 onChanged: (_) => setState(() {}),
                                 decoration: _decor(
                                   'Password',
-                                  'Min. 8 characters',
+                                  'At least 8 characters',
                                   focused: _passwordFocus.hasFocus,
                                   prefix: _icon(
                                     Icons.lock_outline_rounded,
@@ -961,7 +958,12 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                     ),
                                     recognizer: TapGestureRecognizer()
                                       ..onTap = () {
-                                        // TODO: Open Terms
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const TermsPrivacyScreen(),
+                                          ),
+                                        );
                                       },
                                   ),
                                   const TextSpan(text: ' and '),
@@ -975,7 +977,12 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                     ),
                                     recognizer: TapGestureRecognizer()
                                       ..onTap = () {
-                                        // TODO: Open Privacy Policy
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const TermsPrivacyScreen(),
+                                          ),
+                                        );
                                       },
                                   ),
                                   const TextSpan(text: '.'),
@@ -997,13 +1004,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                   ),
                                 ),
                                 GestureDetector(
-                                  onTap: () => Navigator.push(
+                                  onTap: () => Navigator.pushReplacementNamed(
                                     context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const LoginScreen(
-                                        selectedRole: 'jobseeker',
-                                      ),
-                                    ),
+                                    '/login',
                                   ),
                                   child: Text(
                                     AppConstants.loginLinkText,

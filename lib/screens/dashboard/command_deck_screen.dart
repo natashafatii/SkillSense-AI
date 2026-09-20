@@ -5,11 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
-import '../hr/hr_pipeline_screen.dart';
-import '../hr/schedule_interview_screen.dart';
-import '../hr/rankings_screen.dart';
-import '../hr/analytics_screen.dart';
-import '../hr/settings_screen.dart';
 import '../../services/auth_service.dart';
 // Global shared state for badges and notifications
 class AppNavState {
@@ -418,23 +413,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                      AppNavState.unreadInterviews = 0;
                                    });
                                  }
-                                 Widget target;
-                                 if (index == 0) {
-                                   target = const CommandDeckScreen();
-                                 } else if (index == 1) {
-                                   target = const HrPipelineScreen();
-                                 } else if (index == 2) {
-                                   target = const ScheduleInterviewScreen();
-                                 } else if (index == 3) {
-                                   target = const RankingsScreen();
-                                 } else if (index == 4) {
-                                   target = const AnalyticsScreen();
-                                 } else {
-                                   target = const SettingsScreen();
-                                 }
-                                 Navigator.of(context).pushReplacement(
-                                   MaterialPageRoute(builder: (_) => target),
-                                 );
+                                 Navigator.of(context).pushReplacementNamed(item['route']);
                                }
                              },
                             child: AnimatedContainer(

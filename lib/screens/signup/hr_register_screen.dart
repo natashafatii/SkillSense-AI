@@ -6,10 +6,10 @@ import 'package:intl_phone_field/intl_phone_field.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/gradient_background.dart';
-import '../login/login_screen.dart';
 import '../../services/auth_service.dart';
 import 'hr_register_screen_web.dart';
 import 'email_verification_screen.dart';
+import 'terms_privacy_screen.dart';
 
 const _blue = AppColors.buttonBlue;
 
@@ -159,8 +159,12 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
         if (firstName.isEmpty ||
             _companyNameController.text.trim().isEmpty ||
             _emailController.text.trim().isEmpty ||
-            _passwordController.text.isEmpty) {
+            _passwordController.text.isEmpty ||
+            _confirmController.text.isEmpty) {
           throw Exception('Please fill in all fields');
+        }
+        if (_passwordController.text != _confirmController.text) {
+          throw Exception('Passwords do not match');
         }
       }
 
@@ -171,7 +175,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
         'email': _emailController.text.trim(),
         'phone': isWeb && _phoneNumber.isEmpty ? '+923000000000' : _phoneNumber,
         'password': _passwordController.text,
-        'password_confirm': isWeb ? _passwordController.text : _confirmController.text,
+        'password_confirm': _confirmController.text,
       };
       await AuthService.registerRecruiter(context, recruiterData);
       _snack('Registration successful! Please verify your email.');
@@ -382,23 +386,22 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
             emailController: _emailController,
             companyController: _companyNameController,
             passwordController: _passwordController,
+            confirmController: _confirmController,
             nameFocus: _fullNameFocus,
             emailFocus: _emailFocus,
             companyFocus: _companyNameFocus,
             passwordFocus: _passwordFocus,
+            confirmFocus: _confirmFocus,
             obscurePassword: _obscurePassword,
+            obscureConfirm: _obscureConfirm,
             onObscureToggle: () => setState(() => _obscurePassword = !_obscurePassword),
+            onObscureConfirmToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
             onRegister: () => _register(isWeb: true),
             onGoogleSignIn: () {
               // TODO: Google Sign In
             },
             onLoginTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const LoginScreen(selectedRole: 'recruiter'),
-                ),
-              );
+              Navigator.pushReplacementNamed(context, '/login');
             },
           );
         }
@@ -557,7 +560,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                       ),
                                       decoration: _decor(
                                         'First Name',
-                                        'e.g. John',
+                                        'e.g. Sara',
                                         focused: _firstNameFocus.hasFocus,
                                         prefix: _icon(
                                           Icons.badge_outlined,
@@ -586,7 +589,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                       ),
                                       decoration: _decor(
                                         'Last Name',
-                                        'e.g. Doe',
+                                        'e.g. Ahmed',
                                         focused: _lastNameFocus.hasFocus,
                                         prefix: _icon(
                                           Icons.badge_outlined,
@@ -628,7 +631,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                     (v == null || v.trim().isEmpty)
                                         ? 'Company Name is required'
                                         : null,
-                              ),
+                               ),
                             ),
 
                             _divider(),
@@ -652,7 +655,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                 ),
                                 decoration: _decor(
                                   'Email Address',
-                                  'you@example.com',
+                                  'you@company.com',
                                   focused: _emailFocus.hasFocus,
                                   prefix: _icon(
                                     Icons.alternate_email_rounded,
@@ -695,7 +698,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                   color: _blue,
                                   fontWeight: FontWeight.w700,
                                 ),
-                                hintText: '3XX XXX XXXX',
+                                hintText: 'e.g. 300 1234567',
                                 hintStyle: GoogleFonts.publicSans(
                                   fontSize: 13,
                                   color: const Color(0xFFCFCFCF),
@@ -769,7 +772,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                 onChanged: (_) => setState(() {}),
                                 decoration: _decor(
                                   'Password',
-                                  'Min. 8 characters',
+                                  'At least 8 characters',
                                   focused: _passwordFocus.hasFocus,
                                   prefix: _icon(
                                     Icons.lock_outline_rounded,
@@ -977,7 +980,12 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                     ),
                                     recognizer: TapGestureRecognizer()
                                       ..onTap = () {
-                                        // TODO: Open Terms
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const TermsPrivacyScreen(),
+                                          ),
+                                        );
                                       },
                                   ),
                                   const TextSpan(text: ' and '),
@@ -991,7 +999,12 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                     ),
                                     recognizer: TapGestureRecognizer()
                                       ..onTap = () {
-                                        // TODO: Open Privacy Policy
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const TermsPrivacyScreen(),
+                                          ),
+                                        );
                                       },
                                   ),
                                   const TextSpan(text: '.'),
@@ -1013,13 +1026,9 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                   ),
                                 ),
                                 GestureDetector(
-                                  onTap: () => Navigator.push(
+                                  onTap: () => Navigator.pushReplacementNamed(
                                     context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const LoginScreen(
-                                        selectedRole: 'recruiter',
-                                      ),
-                                    ),
+                                    '/login',
                                   ),
                                   child: Text(
                                     AppConstants.loginLinkText,

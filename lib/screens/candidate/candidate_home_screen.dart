@@ -1,9 +1,12 @@
-import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
+import '../../models/application.dart';
+import '../../models/job.dart';
+import '../../services/application_service.dart';
+import '../../services/job_service.dart';
 import 'candidate_applications_screen.dart';
 import 'candidate_job_feed_screen.dart';
 import 'candidate_interview_lobby_screen.dart';
@@ -11,7 +14,10 @@ import 'candidate_feedback_report_screen.dart';
 import 'candidate_resume_management_screen.dart';
 import 'candidate_interview_history_screen.dart';
 import 'candidate_profile_settings_screen.dart';
+import 'candidate_notifications_screen.dart';
 import '../../services/auth_service.dart';
+import '../../services/resume_manager.dart';
+import '../../widgets/candidate_side_nav.dart';
 
 class CandidateHomeScreen extends StatefulWidget {
   const CandidateHomeScreen({super.key});
@@ -24,129 +30,93 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   // Navigation active state
   final int _activeNavIndex = 0;
 
-  // Countdown timer variables
-  late Timer _countdownTimer;
-  int _remainingSeconds =
-      (2 * 24 * 60 * 60) +
-      (14 * 60 * 60) +
-      (37 * 60); // 2 days, 14 hours, 37 minutes
-
-  // Last verified state
-  String _lastVerifiedText =
-      "Camera and mic verified 2 days ago — verify again on interview day.";
-  bool _isVerifiedNow = false;
-
   // Search input control
   final TextEditingController _searchController = TextEditingController();
+
+  // User name loaded dynamically
+  String _userName = '';
+
+  // Backend data
+  List<Application> _recentApplications = [];
+  List<Job> _matchedJobs = [];
+  bool _loadingApplications = true;
+  bool _loadingJobs = true;
 
   @override
   void initState() {
     super.initState();
-    // Countdown ticks once per minute (60 seconds) to avoid anxiety of seconds counting down
-    _countdownTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+    _loadUser();
+    ResumeManager.getResumes();
+    _loadApplications();
+    _loadMatchedJobs();
+  }
+
+  Future<void> _loadApplications() async {
+    try {
+      final result = await ApplicationService.listApplications(pageSize: 3);
       if (mounted) {
         setState(() {
-          if (_remainingSeconds >= 60) {
-            _remainingSeconds -= 60;
-          } else {
-            _remainingSeconds = 0;
-            _countdownTimer.cancel();
-          }
+          _recentApplications = result.results;
+          _loadingApplications = false;
         });
       }
-    });
+    } catch (_) {
+      if (mounted) setState(() => _loadingApplications = false);
+    }
+  }
+
+  Future<void> _loadMatchedJobs() async {
+    try {
+      final result = await JobService.listJobs(
+        status: JobStatus.active,
+        pageSize: 3,
+      );
+      if (mounted) {
+        setState(() {
+          _matchedJobs = result.results;
+          _loadingJobs = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingJobs = false);
+    }
+  }
+
+  Future<void> _loadUser() async {
+    try {
+      final user = await AuthService.fetchCurrentUser();
+      if (user != null && mounted) {
+        final firstName = user['first_name']?.toString().trim();
+        final lastName = user['last_name']?.toString().trim();
+        final email = user['email']?.toString().trim();
+
+        String resolved = '';
+        if (firstName != null && firstName.isNotEmpty) {
+          resolved = firstName;
+        } else if (lastName != null && lastName.isNotEmpty) {
+          resolved = lastName;
+        } else if (email != null && email.isNotEmpty) {
+          final prefix = email.split('@').first;
+          resolved = prefix.isNotEmpty
+              ? prefix[0].toUpperCase() + prefix.substring(1)
+              : email;
+        }
+
+        if (resolved.isNotEmpty) {
+          setState(() {
+            _userName = resolved;
+          });
+        }
+      }
+    } catch (_) {
+      // Graceful error handling
+    }
   }
 
   @override
   void dispose() {
-    _countdownTimer.cancel();
     _searchController.dispose();
     super.dispose();
-  }
-
-  // Device check mock dialog
-  void _runDeviceCheck() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: AlertDialog(
-            backgroundColor: const Color(0xFF0F172A),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0xFF1E293B), width: 1.5),
-            ),
-            title: Text(
-              'Running Device Check',
-              style: GoogleFonts.spaceGrotesk(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Verifying audio latency, camera feed, and network connectivity...',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF94A3B8),
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      AppColors.dashboardTeal,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    // Mock completion delay
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.of(context).pop();
-        setState(() {
-          _lastVerifiedText =
-              "Camera and mic verified just now — verify again on interview day.";
-          _isVerifiedNow = true;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.dashboardTeal,
-            behavior: SnackBarBehavior.floating,
-            content: Text(
-              'Camera & Mic successfully verified!',
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        );
-      }
-    });
-  }
-
-  // Helper formatting for countdown
-  List<String> _getCountdownValues() {
-    int days = _remainingSeconds ~/ (24 * 3600);
-    int hours = (_remainingSeconds % (24 * 3600)) ~/ 3600;
-    int minutes = (_remainingSeconds % 3600) ~/ 60;
-
-    return [
-      days.toString().padLeft(2, '0'),
-      hours.toString().padLeft(2, '0'),
-      minutes.toString().padLeft(2, '0'),
-    ];
   }
 
   @override
@@ -154,7 +124,6 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 900;
 
-    // Both Web and Mobile viewport are Light Theme
     final Color bgBase = const Color(0xFFF8FAFC);
     final Color textPrimary = const Color(0xFF0F172A);
     final Color textSecondary = const Color(0xFF64748B);
@@ -165,7 +134,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
       backgroundColor: bgBase,
       body: Stack(
         children: [
-          // ── GRID PATTERN OVERLAY ───────────────────────────────────────────
+          // Grid pattern background
           Positioned.fill(
             child: CustomPaint(
               painter: GridPainter(
@@ -176,8 +145,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             ),
           ),
 
-          // ── SOFT TEAL AURORA GLOW ──────────────────────────────────────────
-          // Web top-left flow, Mobile full soft center glow
+          // Aurora glow backdrop
           Positioned(
             top: isMobile ? -50 : -120,
             left: isMobile ? 20 : 180,
@@ -197,7 +165,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             ),
           ),
 
-          // ── LAYOUT ROOT ────────────────────────────────────────────────────
+          // Main Layout
           SafeArea(
             bottom: false,
             child: Column(
@@ -205,10 +173,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 Expanded(
                   child: Row(
                     children: [
-                      // Left Rail (Web Only)
-                      if (!isMobile) _buildLeftRail(context),
+                      if (!isMobile)
+                        const CandidateSideNav(currentRoute: '/candidate/home'),
 
-                      // Main Canvas
                       Expanded(
                         child: Column(
                           children: [
@@ -220,30 +187,46 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                               cardBorder,
                             ),
                             Expanded(
-                              child: SingleChildScrollView(
-                                physics: const BouncingScrollPhysics(),
-                                padding: EdgeInsets.only(
-                                  left: isMobile ? 16 : 24,
-                                  right: isMobile ? 16 : 24,
-                                  top: 16,
-                                  bottom: isMobile
-                                      ? 100
-                                      : 32, // bottom margin for mobile dock
-                                ),
-                                child: isMobile
-                                    ? _buildMobileLayout(
-                                        textPrimary,
-                                        textSecondary,
-                                        cardBg,
-                                        cardBorder,
-                                      )
-                                    : _buildWebLayout(
-                                        textPrimary,
-                                        textSecondary,
-                                        cardBg,
-                                        cardBorder,
-                                      ),
-                              ),
+                              child:
+                                  ValueListenableBuilder<
+                                    List<Map<String, dynamic>>
+                                  >(
+                                    valueListenable:
+                                        ResumeManager.resumesNotifier,
+                                    builder: (context, resumesList, child) {
+                                      final bool hasUploadedResume =
+                                          resumesList.isNotEmpty;
+                                      final activeResume =
+                                          ResumeManager.getActiveResume();
+
+                                      return SingleChildScrollView(
+                                        physics: const BouncingScrollPhysics(),
+                                        padding: EdgeInsets.only(
+                                          left: isMobile ? 16 : 24,
+                                          right: isMobile ? 16 : 24,
+                                          top: 16,
+                                          bottom: isMobile ? 100 : 32,
+                                        ),
+                                        child: isMobile
+                                            ? _buildMobileLayout(
+                                                textPrimary,
+                                                textSecondary,
+                                                cardBg,
+                                                cardBorder,
+                                                hasUploadedResume,
+                                                activeResume,
+                                              )
+                                            : _buildWebLayout(
+                                                textPrimary,
+                                                textSecondary,
+                                                cardBg,
+                                                cardBorder,
+                                                hasUploadedResume,
+                                                activeResume,
+                                              ),
+                                      );
+                                    },
+                                  ),
                             ),
                           ],
                         ),
@@ -255,7 +238,6 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             ),
           ),
 
-          // ── BOTTOM DOCK NAV (Mobile Only) ──────────────────────────────────
           if (isMobile)
             Positioned(
               left: 0,
@@ -274,59 +256,70 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     Color textSecondary,
     Color cardBg,
     Color cardBorder,
+    bool hasResume,
+    Map<String, dynamic> activeResume,
   ) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left main section (Next Interview card takes 55%)
-            Expanded(
-              flex: 55,
-              child: _buildNextInterviewCard(
+        // Left Column: Hero panel (flex 42)
+        Expanded(
+          flex: 42,
+          child: _buildHeroCard(
+            false,
+            textPrimary,
+            textSecondary,
+            cardBg,
+            cardBorder,
+            hasResume,
+            activeResume,
+          ),
+        ),
+        const SizedBox(width: 20),
+
+        // Right Column: Profile strength + Applications (Row 1), Matched for you (Row 2) (flex 58)
+        Expanded(
+          flex: 58,
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _buildProfileStrengthCard(
+                      false,
+                      textPrimary,
+                      textSecondary,
+                      cardBg,
+                      cardBorder,
+                      hasResume,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildApplicationsPanel(
+                      textPrimary,
+                      textSecondary,
+                      cardBg,
+                      cardBorder,
+                      hasResume,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              _buildMatchedJobsPanel(
                 false,
                 textPrimary,
                 textSecondary,
                 cardBg,
                 cardBorder,
+                hasResume,
+                activeResume,
               ),
-            ),
-            const SizedBox(width: 20),
-
-            // Right side cards (Profile and Applications)
-            Expanded(
-              flex: 45,
-              child: Column(
-                children: [
-                  _buildProfileStrengthCard(
-                    false,
-                    textPrimary,
-                    textSecondary,
-                    cardBg,
-                    cardBorder,
-                  ),
-                  const SizedBox(height: 20),
-                  _buildApplicationsPanel(
-                    textPrimary,
-                    textSecondary,
-                    cardBg,
-                    cardBorder,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        // Matched Jobs Bottom Grid
-        _buildMatchedJobsPanel(
-          false,
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
+            ],
+          ),
         ),
       ],
     );
@@ -338,16 +331,20 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     Color textSecondary,
     Color cardBg,
     Color cardBorder,
+    bool hasResume,
+    Map<String, dynamic> activeResume,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildNextInterviewCard(
+        _buildHeroCard(
           true,
           textPrimary,
           textSecondary,
           cardBg,
           cardBorder,
+          hasResume,
+          activeResume,
         ),
         const SizedBox(height: 16),
         _buildProfileStrengthCard(
@@ -356,6 +353,15 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           textSecondary,
           cardBg,
           cardBorder,
+          hasResume,
+        ),
+        const SizedBox(height: 16),
+        _buildApplicationsPanel(
+          textPrimary,
+          textSecondary,
+          cardBg,
+          cardBorder,
+          hasResume,
         ),
         const SizedBox(height: 16),
         _buildMatchedJobsPanel(
@@ -364,279 +370,312 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           textSecondary,
           cardBg,
           cardBorder,
-        ),
-        const SizedBox(height: 16),
-        // Applications is dropped or collapsed below the fold on mobile home, we keep it subtle
-        Opacity(
-          opacity: 0.8,
-          child: _buildApplicationsPanel(
-            textPrimary,
-            textSecondary,
-            cardBg,
-            cardBorder,
-          ),
+          hasResume,
+          activeResume,
         ),
       ],
     );
   }
 
-  // ── NEXT INTERVIEW CARD ────────────────────────────────────────────────────
-  Widget _buildNextInterviewCard(
+  // ── HERO CARD (WELCOME / NEXT INTERVIEW) ──────────────────────────────────
+  Widget _buildHeroCard(
     bool isMobile,
     Color textPrimary,
     Color textSecondary,
     Color cardBg,
     Color cardBorder,
+    bool hasResume,
+    Map<String, dynamic> activeResume,
   ) {
-    final countdown = _getCountdownValues();
+    if (!hasResume) {
+      // ── STATE 1: EMPTY STATE (WELCOME SCREEN) ──
+      return ValueListenableBuilder<Map<String, dynamic>?>(
+        valueListenable: AuthService.currentUserNotifier,
+        builder: (context, userData, child) {
+          final firstName = (userData?['first_name'] ?? _userName)
+              .toString()
+              .trim();
+          final welcomeText = firstName.isNotEmpty
+              ? 'Welcome, $firstName.'
+              : 'Welcome.';
+
+          return Container(
+            constraints: BoxConstraints(minHeight: isMobile ? 0 : 360),
+            padding: EdgeInsets.all(isMobile ? 20 : 28),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: cardBorder, width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0FB89B).withValues(alpha: 0.05),
+                  blurRadius: 16,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'WELCOME',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF64748B),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      welcomeText,
+                      style: GoogleFonts.spaceGrotesk(
+                        color: textPrimary,
+                        fontSize: isMobile ? 22 : 26,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Upload a resume and complete your profile to start matching with roles.',
+                      style: GoogleFonts.inter(
+                        color: textSecondary,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w400,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const CandidateResumeManagementScreen(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0FB89B),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.add,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          label: Text(
+                            'Upload resume',
+                            style: GoogleFonts.inter(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        OutlinedButton(
+                          onPressed: () {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const CandidateProfileSettingsScreen(),
+                              ),
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF334155),
+                            side: const BorderSide(
+                              color: Color(0xFFE2E8F0),
+                              width: 1.5,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          child: Text(
+                            'Complete profile',
+                            style: GoogleFonts.inter(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF334155),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                if (!isMobile) const SizedBox(height: 48),
+                Text(
+                  'Once you apply somewhere, your next-interview countdown will live right here.',
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF94A3B8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    // ── STATE 2: POPULATED STATE (NEXT INTERVIEW COUNTDOWN) ──
+    final filename = (activeResume['filename'] ?? 'Resume.pdf').toString();
+    final roleTag = ResumeManager.deriveRoleTag(filename);
+
+    String jobTitle = 'Senior Django Developer';
+    if (roleTag.contains('Frontend')) {
+      jobTitle = 'Senior Flutter Developer';
+    } else if (roleTag.contains('AI') || roleTag.contains('ML')) {
+      jobTitle = 'Senior ML Engineer';
+    } else if (roleTag.contains('Fullstack')) {
+      jobTitle = 'Senior Full Stack Developer';
+    }
 
     return Container(
-      padding: EdgeInsets.all(isMobile ? 18 : 24),
+      constraints: BoxConstraints(minHeight: isMobile ? 0 : 360),
+      padding: EdgeInsets.all(isMobile ? 20 : 28),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: cardBorder, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: AppColors.dashboardTeal.withValues(alpha: 0.05),
-            blurRadius: 16,
+            color: const Color(0xFF0FB89B).withValues(alpha: 0.06),
+            blurRadius: 20,
             spreadRadius: 2,
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // NEXT INTERVIEW Eyebrow
+              Text(
+                'NEXT INTERVIEW',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF64748B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Title
+              Text(
+                jobTitle,
+                style: GoogleFonts.spaceGrotesk(
+                  color: textPrimary,
+                  fontSize: isMobile ? 22 : 26,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 4),
+
+              // Subtitle
+              Text(
+                'TechVerse Solutions · AI voice interview · 8 questions',
+                style: GoogleFonts.inter(
+                  color: textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Countdown timer boxes
+              Row(
+                children: [
+                  _buildCountdownBox('02', 'DAYS', isMobile),
+                  const SizedBox(width: 12),
+                  _buildCountdownBox('14', 'HOURS', isMobile),
+                  const SizedBox(width: 12),
+                  _buildCountdownBox('37', 'MIN', isMobile),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Action buttons
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => _showInterviewOptions(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0FB89B),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 13,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      'Run device check',
+                      style: GoogleFonts.inter(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          if (!isMobile) const SizedBox(height: 32),
+
+          // Verified Camera Status Row
           Row(
             children: [
               Container(
                 width: 8,
                 height: 8,
                 decoration: const BoxDecoration(
-                  color: AppColors.dashboardTeal,
+                  color: Color(0xFF0FB89B),
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                'NEXT INTERVIEW',
-                style: GoogleFonts.inter(
-                  color: AppColors.dashboardTeal,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.0,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          Text(
-            'Senior Django Developer',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: isMobile ? 20 : 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'TechVerse Solutions · AI voice interview · 8 questions',
-            style: GoogleFonts.inter(
-              color: textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Countdowns
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildCountdownTile(
-                countdown[0],
-                isMobile ? 'DAYS' : 'DAYS',
-                textPrimary,
-                textSecondary,
-              ),
-              _buildCountdownTile(
-                countdown[1],
-                isMobile ? 'HRS' : 'HOURS',
-                textPrimary,
-                textSecondary,
-              ),
-              _buildCountdownTile(
-                countdown[2],
-                'MIN',
-                textPrimary,
-                textSecondary,
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Interaction Buttons
-          if (isMobile) ...[
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.dashboardTeal,
-                  foregroundColor: const Color(0xFF0F172A),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 0,
-                ),
-                onPressed: _runDeviceCheck,
-                child: Text(
-                  'Run device check',
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.dashboardTeal,
-                  side: BorderSide(color: AppColors.dashboardTeal, width: 1.5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateFeedbackReportScreen(),
-                    ),
-                  );
-                },
-                child: Text(
-                  'View Feedback Report (CD-07)',
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: TextButton(
-                onPressed: () {
-                  _showMockNavigation('/mock-practice');
-                },
-                child: Text(
-                  'Practice questions',
-                  style: GoogleFonts.inter(
-                    color: AppColors.dashboardTeal,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
-                  ),
-                ),
-              ),
-            ),
-          ] else ...[
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.dashboardTeal,
-                        foregroundColor: const Color(0xFF0F172A),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        elevation: 0,
-                      ),
-                      onPressed: _runDeviceCheck,
-                      child: Text(
-                        'Run device check',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: textPrimary,
-                        side: BorderSide(color: cardBorder, width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onPressed: () {
-                        _showMockNavigation('/mock-practice');
-                      },
-                      child: Text(
-                        'Practice questions',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 40,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.dashboardTeal,
-                  side: BorderSide(color: AppColors.dashboardTeal, width: 1.5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateFeedbackReportScreen(),
-                    ),
-                  );
-                },
-                child: Text(
-                  'View Feedback Report (CD-07)',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-
-          // Caption
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.check_circle_rounded,
-                color: _isVerifiedNow
-                    ? AppColors.dashboardTeal
-                    : const Color(0xFF94A3B8),
-                size: 14,
-              ),
-              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _lastVerifiedText,
+                  'Camera and mic verified 2 days ago — verify again on interview day.',
                   style: GoogleFonts.inter(
-                    color: textSecondary,
-                    fontSize: 11.5,
+                    color: const Color(0xFF64748B),
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -648,69 +687,89 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
-  Widget _buildCountdownTile(
-    String value,
-    String label,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9).withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: const Color(0xFFCBD5E1).withValues(alpha: 0.2),
+  Widget _buildCountdownBox(String value, String label, bool isMobile) {
+    return Container(
+      width: isMobile ? 68 : 80,
+      height: isMobile ? 58 : 64,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            style: GoogleFonts.spaceGrotesk(
+              color: const Color(0xFF0F172A),
+              fontSize: isMobile ? 18 : 22,
+              fontWeight: FontWeight.bold,
+              height: 1.1,
+            ),
           ),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: GoogleFonts.jetBrainsMono(
-                color: textPrimary,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: const Color(0xFF94A3B8),
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                color: textSecondary,
-                fontSize: 9.5,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  // ── PROFILE STRENGTH CARD ──────────────────────────────────────────────────
+  // ── PROFILE STRENGTH CARD ─────────────────────────────────────────────────
   Widget _buildProfileStrengthCard(
     bool isMobile,
     Color textPrimary,
     Color textSecondary,
     Color cardBg,
     Color cardBorder,
+    bool hasResume,
   ) {
-    final double gaugeSize = isMobile ? 56 : 76;
+    final double gaugeSize = isMobile ? 54 : 64;
+
+    // Compute score from active resume coverage (average of all sections)
+    double score = 0.0;
+    String scoreText = '0';
+    if (hasResume) {
+      final activeResume = ResumeManager.getActiveResume();
+      final coverage = activeResume['coverage'] as Map<String, dynamic>?;
+      if (coverage != null && coverage.isNotEmpty) {
+        final values = coverage.values
+            .map(
+              (v) => (v is num
+                  ? v.toDouble()
+                  : double.tryParse(v.toString()) ?? 0.0),
+            )
+            .toList();
+        final avg = values.fold(0.0, (a, b) => a + b) / values.length;
+        score = (avg / 100.0).clamp(0.0, 1.0);
+        scoreText = avg.round().toString();
+      } else {
+        score = 0.78;
+        scoreText = '78';
+      }
+    }
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
+            MaterialPageRoute(
+              builder: (_) => const CandidateProfileSettingsScreen(),
+            ),
           );
         },
         child: Container(
-          padding: EdgeInsets.all(isMobile ? 14 : 20),
+          constraints: const BoxConstraints(minHeight: 110),
+          padding: EdgeInsets.all(isMobile ? 14 : 18),
           decoration: BoxDecoration(
             color: cardBg,
             borderRadius: BorderRadius.circular(16),
@@ -718,7 +777,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           ),
           child: Row(
             children: [
-              // Ring gauge
+              // Gauge ring
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -726,11 +785,13 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     width: gaugeSize,
                     height: gaugeSize,
                     child: CircularProgressIndicator(
-                      value: 0.78,
-                      strokeWidth: 5,
+                      value: score,
+                      strokeWidth: 4.5,
                       backgroundColor: const Color(0xFFE2E8F0),
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.dashboardTeal,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        hasResume
+                            ? const Color(0xFF0FB89B)
+                            : const Color(0xFFE2E8F0),
                       ),
                     ),
                   ),
@@ -738,76 +799,59 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '78',
+                        scoreText,
                         style: GoogleFonts.spaceGrotesk(
-                          color: textPrimary,
-                          fontSize: isMobile ? 15 : 18,
+                          color: hasResume
+                              ? const Color(0xFF0F172A)
+                              : const Color(0xFF94A3B8),
+                          fontSize: isMobile ? 14 : 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
                         'PROFILE',
                         style: GoogleFonts.inter(
-                          color: textSecondary,
-                          fontSize: isMobile ? 7 : 8.5,
+                          color: const Color(0xFF94A3B8),
+                          fontSize: isMobile ? 7 : 8,
                           fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
 
-              // Copy
+              // Title & Tip
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       'Profile strength',
                       style: GoogleFonts.spaceGrotesk(
                         color: textPrimary,
-                        fontSize: isMobile ? 14 : 15,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      isMobile
-                          ? '2 projects from 85'
-                          : 'Add 2 projects with metrics to cross 85 and rank higher in matching.',
+                      hasResume
+                          ? 'Add 2 projects with metrics to cross 85 and rank higher in matching.'
+                          : 'Add your resume and skills to get a match score.',
                       style: GoogleFonts.inter(
                         color: textSecondary,
                         fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
+                        height: 1.4,
                       ),
                     ),
                   ],
                 ),
               ),
-
-              if (isMobile) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.dashboardTeal.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'Fix',
-                    style: GoogleFonts.inter(
-                      color: AppColors.dashboardTeal,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -815,185 +859,285 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
-  // ── APPLICATIONS PANEL ─────────────────────────────────────────────────────
+  // ── APPLICATIONS PANEL ──────────────────────────────────────────────────
   Widget _buildApplicationsPanel(
     Color textPrimary,
     Color textSecondary,
     Color cardBg,
     Color cardBorder,
+    bool hasResume,
   ) {
-    final List<Map<String, String>> apps = [
-      {
-        'role': 'Senior Django Dev',
-        'company': 'TechVerse',
-        'stage': 'INTERVIEW',
-      },
-      {'role': 'Full Stack Dev', 'company': 'CodeCraft', 'stage': 'REVIEW'},
-      {'role': 'Backend Eng', 'company': 'DataFlow', 'stage': 'APPLIED'},
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
+    return InkWell(
+      onTap: () => Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Applications',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 110),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cardBorder, width: 1.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Applications',
+                  style: GoogleFonts.spaceGrotesk(
+                    color: textPrimary,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () => Navigator.of(
-                    context,
-                  ).pushReplacementNamed('/candidate/applications'),
-                  child: Text(
-                    'All 6 ›',
+                if (_recentApplications.isNotEmpty)
+                  Text(
+                    'All >',
                     style: GoogleFonts.inter(
-                      color: AppColors.dashboardTeal,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF64748B),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+              ],
+            ),
+            const SizedBox(height: 12),
 
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: apps.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, idx) {
-              final item = apps[idx];
-              final String role = item['role']!;
-              final String company = item['company']!;
-              final String stage = item['stage']!;
-
-              // Resolve stage pill colors
-              Color pillBg = const Color(0xFFE2E8F0);
-              Color pillText = const Color(0xFF64748B);
-              if (stage == 'INTERVIEW') {
-                pillBg = AppColors.dashboardTeal.withValues(alpha: 0.1);
-                pillText = AppColors.dashboardTeal;
-              } else if (stage == 'REVIEW') {
-                pillBg = AppColors.dashboardBlue.withValues(alpha: 0.1);
-                pillText = AppColors.dashboardBlue;
-              }
-
-              return InkWell(
-                onTap: () => Navigator.of(
-                  context,
-                ).pushReplacementNamed('/candidate/applications'),
-                borderRadius: BorderRadius.circular(8),
+            if (_loadingApplications)
+              const Center(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 4,
-                    horizontal: 6,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (_recentApplications.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              role,
-                              style: GoogleFonts.inter(
-                                color: textPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              company,
-                              style: GoogleFonts.inter(
-                                color: textSecondary,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: const Icon(
+                          Icons.article_outlined,
+                          size: 18,
+                          color: Color(0xFF94A3B8),
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: pillBg,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          stage,
-                          style: GoogleFonts.jetBrainsMono(
-                            color: pillText,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No applications yet',
+                        style: GoogleFonts.inter(
+                          color: textSecondary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
                 ),
-              );
-            },
-          ),
-        ],
+              )
+            else
+              Column(
+                children: [
+                  for (int i = 0; i < _recentApplications.length; i++) ...[
+                    _buildApplicationRow(
+                      _recentApplications[i].jobTitle,
+                      _recentApplications[i].candidateEmail,
+                      _recentApplications[i].status.value,
+                      _recentApplications[i].status ==
+                          ApplicationStatus.interviewed,
+                    ),
+                    if (i < _recentApplications.length - 1)
+                      const SizedBox(height: 8),
+                  ],
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  // ── MATCHED JOBS PANEL ─────────────────────────────────────────────────────
+  Widget _buildApplicationRow(
+    String title,
+    String company,
+    String status,
+    bool isInterview,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: GoogleFonts.inter(
+                color: const Color(0xFF0F172A),
+                fontSize: 12.5,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              company,
+              style: GoogleFonts.inter(
+                color: const Color(0xFF64748B),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: isInterview
+                ? const Color(0xFFD1FAE5)
+                : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            status,
+            style: GoogleFonts.inter(
+              color: isInterview
+                  ? const Color(0xFF065F46)
+                  : const Color(0xFF475569),
+              fontSize: 9.5,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── MATCHED JOBS PANEL ────────────────────────────────────────────────────
   Widget _buildMatchedJobsPanel(
     bool isMobile,
     Color textPrimary,
     Color textSecondary,
     Color cardBg,
     Color cardBorder,
+    bool hasResume,
+    Map<String, dynamic> activeResume,
   ) {
-    final List<Map<String, dynamic>> jobs = [
-      {
-        'title': 'ML Engineer',
-        'company': 'NeuralTech',
-        'match': 92,
-        'tag': 'PyTorch',
-        'location': 'Remote',
-      },
-      {
-        'title': 'Django Dev',
-        'company': 'CloudNine',
-        'match': 85,
-        'tag': 'DRF',
-        'location': 'Lahore',
-      },
-      {
-        'title': 'DevOps Eng',
-        'company': 'StackUp',
-        'match': 71,
-        'tag': 'AWS',
-        'location': 'Hybrid',
-      },
-    ];
+    if (!hasResume) {
+      // Empty state
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cardBorder, width: 1.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Matched for you',
+              style: GoogleFonts.spaceGrotesk(
+                color: textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Icon(
+                        Icons.donut_large_outlined,
+                        size: 20,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Upload your resume to see matches',
+                      style: GoogleFonts.spaceGrotesk(
+                        color: textPrimary,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'We\'ll rank open roles by fit the moment it\'s parsed.',
+                      style: GoogleFonts.inter(
+                        color: textSecondary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const CandidateResumeManagementScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0FB89B),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      icon: const Icon(
+                        Icons.add,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        'Upload resume',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
+    // ── POPULATED STATE (MATCHED ROLES FOR PARSED CV) ──
     return Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
@@ -1011,7 +1155,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     'Matched for you',
                     style: GoogleFonts.spaceGrotesk(
                       color: textPrimary,
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -1022,606 +1166,190 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.dashboardTeal.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
+                      color: const Color(0xFFE6FFFA),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '95% FIT',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: AppColors.dashboardTeal,
-                        fontSize: 8.5,
+                      'SBERT',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF0D9488),
+                        fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ],
               ),
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () => _showMockNavigation('/job-feed'),
-                  child: Text(
-                    'Feed ›',
-                    style: GoogleFonts.inter(
-                      color: AppColors.dashboardTeal,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
+              InkWell(
+                onTap: () => Navigator.of(
+                  context,
+                ).pushReplacementNamed('/candidate/jobs'),
+                child: Text(
+                  'Feed >',
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
-          // Job list/cards
-          isMobile
-              ? ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: jobs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, idx) {
-                    final item = jobs[idx];
-                    final String title = item['title'];
-                    final String company = item['company'];
-                    final int match = item['match'];
-                    final String tag = item['tag'];
-                    final String location = item['location'];
-
-                    return InkWell(
-                      onTap: () => _showMockNavigation('/job-detail/$title'),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: cardBorder, width: 1),
+          // Matched Role Cards from backend
+          if (_loadingJobs)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (_matchedJobs.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'No active jobs available right now.',
+                  style: GoogleFonts.inter(color: textSecondary, fontSize: 13),
+                ),
+              ),
+            )
+          else
+            isMobile
+                ? Column(
+                    children: [
+                      for (int i = 0; i < _matchedJobs.length; i++) ...[
+                        _buildMatchedJobCard(
+                          _matchedJobs[i].title,
+                          _matchedJobs[i].recruiterCompany,
+                          _matchedJobs[i].skillsRequired.isNotEmpty
+                              ? _matchedJobs[i].skillsRequired.first
+                              : _matchedJobs[i].jobType.value,
+                          _matchedJobs[i].location,
+                          const Color(0xFF0FB89B),
                         ),
-                        child: Row(
-                          children: [
-                            // Match radial
-                            Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 42,
-                                  height: 42,
-                                  child: CircularProgressIndicator(
-                                    value: match / 100,
-                                    strokeWidth: 3,
-                                    backgroundColor: const Color(
-                                      0xFFE2E8F0,
-                                    ).withValues(alpha: 0.1),
-                                    valueColor:
-                                        const AlwaysStoppedAnimation<Color>(
-                                          AppColors.dashboardTeal,
-                                        ),
-                                  ),
-                                ),
-                                Text(
-                                  '$match',
-                                  style: GoogleFonts.spaceGrotesk(
-                                    color: textPrimary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(width: 12),
-
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title,
-                                    style: GoogleFonts.inter(
-                                      color: textPrimary,
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    '$company · $location · $tag',
-                                    style: GoogleFonts.inter(
-                                      color: textSecondary,
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-
-                            // Action button (Apply or View)
-                            SizedBox(
-                              height: 32,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: idx == 0
-                                      ? AppColors.dashboardTeal
-                                      : const Color(0xFF1E293B),
-                                  foregroundColor: idx == 0
-                                      ? const Color(0xFF0F172A)
-                                      : Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  elevation: 0,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                ),
-                                onPressed: () {
-                                  if (idx == 0) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        backgroundColor:
-                                            AppColors.dashboardTeal,
-                                        content: Text(
-                                          'Application submitted successfully!',
-                                          style: GoogleFonts.inter(
-                                            color: const Color(0xFF0F172A),
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  } else {
-                                    Navigator.of(context).pushReplacement(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const CandidateJobFeedScreen(),
-                                      ),
-                                    );
-                                  }
-                                },
-                                child: Text(
-                                  idx == 0 ? 'Apply' : 'View',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                )
-              : Row(
-                  children: jobs.map((item) {
-                    final String title = item['title'];
-                    final String company = item['company'];
-                    final int match = item['match'];
-                    final String tag = item['tag'];
-                    final String location = item['location'];
-
-                    return Expanded(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 6),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: cardBorder, width: 1.2),
-                        ),
-                        child: InkWell(
-                          onTap: () =>
-                              _showMockNavigation('/job-detail/$title'),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  // match ring
-                                  Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      SizedBox(
-                                        width: 40,
-                                        height: 40,
-                                        child: CircularProgressIndicator(
-                                          value: match / 100,
-                                          strokeWidth: 3,
-                                          backgroundColor: const Color(
-                                            0xFFE2E8F0,
-                                          ),
-                                          valueColor:
-                                              const AlwaysStoppedAnimation<
-                                                Color
-                                              >(AppColors.dashboardTeal),
-                                        ),
-                                      ),
-                                      Text(
-                                        '$match',
-                                        style: GoogleFonts.spaceGrotesk(
-                                          color: textPrimary,
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(width: 12),
-
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.inter(
-                                            color: textPrimary,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        Text(
-                                          company,
-                                          style: GoogleFonts.inter(
-                                            color: textSecondary,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-
-                              // skill tags
-                              Row(
-                                children: [
-                                  _buildTag(tag, textSecondary),
-                                  const SizedBox(width: 6),
-                                  _buildTag(location, textSecondary),
-                                ],
-                              ),
-                            ],
+                        if (i < _matchedJobs.length - 1)
+                          const SizedBox(height: 12),
+                      ],
+                    ],
+                  )
+                : Row(
+                    children: [
+                      for (int i = 0; i < _matchedJobs.length; i++) ...[
+                        Expanded(
+                          child: _buildMatchedJobCard(
+                            _matchedJobs[i].title,
+                            _matchedJobs[i].recruiterCompany,
+                            _matchedJobs[i].skillsRequired.isNotEmpty
+                                ? _matchedJobs[i].skillsRequired.first
+                                : _matchedJobs[i].jobType.value,
+                            _matchedJobs[i].location,
+                            const Color(0xFF0FB89B),
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
-                ),
+                        if (i < _matchedJobs.length - 1)
+                          const SizedBox(width: 12),
+                      ],
+                    ],
+                  ),
         ],
       ),
     );
   }
 
-  Widget _buildTag(String label, Color textColor) {
+  Widget _buildMatchedJobCard(
+    String title,
+    String company,
+    String tag1,
+    String tag2,
+    Color ringColor,
+  ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
+        color: const Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          color: textColor,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
-  Widget _buildLeftRail(BuildContext context) {
-    final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.home_rounded, 'label': 'Home', 'route': '/candidate/home'},
-      {
-        'icon': Icons.track_changes_rounded,
-        'label': 'Applications',
-        'route': '/candidate/applications',
-      },
-      {
-        'icon': Icons.grid_view_rounded,
-        'label': 'Jobs',
-        'route': '/candidate/jobs',
-      },
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'label': 'Interviews',
-        'route': '/candidate/interviews',
-      },
-      {
-        'icon': Icons.description_rounded,
-        'label': 'Resumes',
-        'route': '/candidate/resumes',
-      },
-      {
-        'icon': Icons.adjust_rounded,
-        'label': 'Settings',
-        'route': '/candidate/settings',
-      },
-    ];
-
-    return Container(
-      width: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Column(
+      child: Row(
         children: [
-          const SizedBox(height: 20),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              },
-              child: SvgPicture.asset('assets/images/logo.svg', height: 48),
+          // Role icon
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: ringColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
             ),
+            child: Icon(Icons.work_outline_rounded, color: ringColor, size: 20),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(width: 12),
 
-          // Nav Items
           Expanded(
-            child: ListView.separated(
-              itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
-              itemBuilder: (context, index) {
-                final isSelected = index == _activeNavIndex;
-                final item = navItems[index];
-                final bool hasBadge =
-                    index == 2 ||
-                    index == 3; // Jobs (2) badge "3", Interviews (3) badge "1"
-                final String badgeVal = index == 2 ? "3" : "1";
-
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Active glowing orb
-                      if (isSelected)
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.dashboardTeal,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.dashboardTeal.withValues(
-                                  alpha: 0.4,
-                                ),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      Tooltip(
-                        message: item['label'],
-                        waitDuration: const Duration(milliseconds: 350),
-                        preferBelow: false,
-                        verticalOffset: 24,
-                        margin: const EdgeInsets.only(left: 45),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () {
-                              if (index == 0) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) => const CandidateHomeScreen(),
-                                  ),
-                                );
-                              } else if (index == 1) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateApplicationsScreen(),
-                                  ),
-                                );
-                              } else if (index == 2) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateJobFeedScreen(),
-                                  ),
-                                );
-                              } else if (index == 3) {
-                                _showInterviewOptions(context);
-                              } else if (index == 4) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateResumeManagementScreen(),
-                                  ),
-                                );
-                              } else {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateProfileSettingsScreen(),
-                                  ),
-                                );
-                              }
-                            },
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: Center(
-                                child: Icon(
-                                  item['icon'],
-                                  color: isSelected
-                                      ? const Color(0xFF0F172A)
-                                      : const Color(0xFF64748B),
-                                  size: 19,
-                                ),
-                              ),
-                            ),
-                          ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.spaceGrotesk(
+                    color: const Color(0xFF0F172A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  company,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF64748B),
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Text(
+                        tag1,
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF64748B),
+                          fontSize: 9.5,
                         ),
                       ),
-
-                      // Badge Sit on Top-Right Corner
-                      if (hasBadge)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.dashboardTeal,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Text(
-                              badgeVal,
-                              style: const TextStyle(
-                                color: Color(0xFF0F172A),
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Text(
+                        tag2,
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF64748B),
+                          fontSize: 9.5,
                         ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          PopupMenuButton<String>(
-            tooltip: 'Account Menu',
-            onSelected: (value) async {
-              if (value == 'candidate_home') {
-                Navigator.of(context).pushReplacementNamed('/candidate/home');
-              } else if (value == 'candidate_apps') {
-                Navigator.of(
-                  context,
-                ).pushReplacementNamed('/candidate/applications');
-              } else if (value == 'candidate_profile') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
-                );
-              } else if (value == 'signout') {
-                await AuthService.signOut(context);
-                if (mounted) {
-                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'candidate_home',
-                child: Text(
-                  'Candidate Home',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_home',
-                child: Text(
-                  'Candidate Home',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_apps',
-                child: Text(
-                  'Candidate Applications',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_profile',
-                child: Text(
-                  'Profile & Settings',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem(
-                value: 'signout',
-                child: Row(
-                  children: [
-                    const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Sign Out',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.redAccent,
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-            child: Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFE6F7F5),
-                border: Border.all(
-                  color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  'MR',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF32BAB1),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              ],
             ),
           ),
         ],
@@ -1821,20 +1549,23 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'HOME',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
-            ),
+          Row(
+            children: [
+              Text(
+                'HOME',
+                style: GoogleFonts.spaceGrotesk(
+                  color: textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
           ),
 
           // Actions Search/Notifications
           Row(
             children: [
-              // Search Input
               Container(
                 width: 260,
                 height: 36,
@@ -1890,18 +1621,28 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
               ),
               const SizedBox(width: 14),
 
-              // Notification button
+              // Notification bell button
               _buildTopBarIconButton(
                 icon: Icons.notifications_none_rounded,
                 hasBadge: true,
                 badgeColor: AppColors.dashboardTeal,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateNotificationsScreen(),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
 
-              // Language button
+              // Settings icon
               _buildTopBarIconButton(
-                icon: Icons.language_rounded,
+                icon: Icons.settings_outlined,
                 hasBadge: false,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateProfileSettingsScreen(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1914,38 +1655,44 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     required IconData icon,
     required bool hasBadge,
     Color? badgeColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
+    return MouseRegion(
+      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, color: const Color(0xFF475569), size: 18),
+              if (hasBadge)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: badgeColor ?? Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  // ── MOCK NAVIGATION TOASTS ─────────────────────────────────────────────────
   void _showMockNavigation(String destination) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(

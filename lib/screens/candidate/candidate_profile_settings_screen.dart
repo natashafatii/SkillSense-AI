@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
@@ -12,6 +11,9 @@ import 'candidate_resume_management_screen.dart';
 import 'candidate_interview_lobby_screen.dart';
 import 'candidate_feedback_report_screen.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/candidate_side_nav.dart';
+import 'candidate_notifications_screen.dart';
+import '../../services/resume_manager.dart';
 
 // Global / Static theme preference so it persists across screen transitions in the prototype
 enum AppThemeMode { daylight, night, auto }
@@ -86,6 +88,98 @@ class _CandidateProfileSettingsScreenState
             fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog(BuildContext context) {
+    final sessionData = AuthService.currentUserData ?? _userData ?? {};
+    final currentFn = (sessionData['first_name'] ?? '').toString();
+    final currentLn = (sessionData['last_name'] ?? '').toString();
+
+    final fnController = TextEditingController(text: currentFn);
+    final lnController = TextEditingController(text: currentLn);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Edit Profile Name',
+          style: GoogleFonts.spaceGrotesk(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: fnController,
+              style: GoogleFonts.inter(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'First Name',
+                labelStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
+                enabledBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF334155)),
+                ),
+                focusedBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.dashboardTeal),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: lnController,
+              style: GoogleFonts.inter(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Last Name',
+                labelStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
+                enabledBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF334155)),
+                ),
+                focusedBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.dashboardTeal),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.dashboardTeal,
+              foregroundColor: const Color(0xFF0F172A),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () async {
+              final newFn = fnController.text.trim();
+              final newLn = lnController.text.trim();
+              await AuthService.updateUserProfile(
+                firstName: newFn,
+                lastName: newLn,
+              );
+              if (context.mounted) {
+                Navigator.pop(context);
+                _showToast('Profile name updated successfully.');
+              }
+            },
+            child: Text(
+              'Save',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -299,7 +393,10 @@ class _CandidateProfileSettingsScreenState
                   child: Row(
                     children: [
                       // Left Rail (Web Only)
-                      if (!isMobile) _buildLeftRail(context, isNightMode),
+                      if (!isMobile)
+                        const CandidateSideNav(
+                          currentRoute: '/candidate/profile',
+                        ),
 
                       // Main Canvas
                       Expanded(
@@ -510,71 +607,92 @@ class _CandidateProfileSettingsScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Builder(
-                            builder: (context) {
-                              String name = 'Candidate User';
-                              if (_userData != null) {
-                                final fn = (_userData!['first_name'] ?? '').toString().trim();
-                                final ln = (_userData!['last_name'] ?? '').toString().trim();
-                                final em = (_userData!['email'] ?? '').toString().trim();
-                                if (fn.isNotEmpty || ln.isNotEmpty) {
-                                  name = '$fn $ln'.trim();
-                                } else if (em.isNotEmpty) {
-                                  name = em.split('@').first;
-                                }
-                              }
-                              return Text(
-                                name,
-                                style: GoogleFonts.spaceGrotesk(
-                                  color: textPrimary,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                    ValueListenableBuilder<Map<String, dynamic>?>(
+                      valueListenable: AuthService.currentUserNotifier,
+                      builder: (context, userSession, child) {
+                        final fn =
+                            (userSession?['first_name'] ??
+                                    _userData?['first_name'] ??
+                                    '')
+                                .toString()
+                                .trim();
+                        final ln =
+                            (userSession?['last_name'] ??
+                                    _userData?['last_name'] ??
+                                    '')
+                                .toString()
+                                .trim();
+                        final email =
+                            (userSession?['email'] ?? _userData?['email'] ?? '')
+                                .toString()
+                                .trim();
+
+                        String fullName = '';
+                        if (fn.isNotEmpty || ln.isNotEmpty) {
+                          fullName = '$fn $ln'.trim();
+                        } else if (email.isNotEmpty) {
+                          final prefix = email.split('@').first;
+                          fullName = prefix.isNotEmpty
+                              ? prefix[0].toUpperCase() + prefix.substring(1)
+                              : email;
+                        } else {
+                          fullName = 'Candidate User';
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    fullName,
+                                    style: GoogleFonts.spaceGrotesk(
+                                      color: textPrimary,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              );
-                            },
-                          ),
-                        ),
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: textPrimary,
-                            side: BorderSide(color: cardBorder),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: textPrimary,
+                                    side: BorderSide(color: cardBorder),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                  onPressed: () =>
+                                      _showEditProfileDialog(context),
+                                  child: Text(
+                                    'Edit profile',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                            const SizedBox(height: 4),
+                            Text(
+                              email.isNotEmpty
+                                  ? '$email · Candidate Profile'
+                                  : 'Candidate Profile',
+                              style: GoogleFonts.inter(
+                                color: textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                          onPressed: () =>
-                              _showToast('Edit Profile Overlay loaded.'),
-                          child: Text(
-                            'Edit profile',
-                            style: GoogleFonts.inter(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Builder(
-                      builder: (context) {
-                        final email = _userData?['email']?.toString() ?? 'candidate@skillsense.ai';
-                        return Text(
-                          '$email · Candidate Profile',
-                          style: GoogleFonts.inter(
-                            color: textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          ],
                         );
                       },
                     ),
@@ -615,42 +733,65 @@ class _CandidateProfileSettingsScreenState
           ),
           const SizedBox(height: 16),
 
-          // Completion Rows
-          _buildCompletionBarRow(
-            'Experience',
-            0.95,
-            '95%',
-            AppColors.dashboardTeal,
-            textPrimary,
-            textSecondary,
+          // Dynamic Completion Rows derived from active resume API response / cache
+          Builder(
+            builder: (context) {
+              final activeResume = ResumeManager.getActiveResume();
+              final Map<String, dynamic> cov = (activeResume['coverage'] is Map)
+                  ? Map<String, dynamic>.from(activeResume['coverage'] as Map)
+                  : {
+                      'experience': 95,
+                      'skills': 90,
+                      'education': 100,
+                      'projects': 40,
+                    };
+
+              final num expVal = (cov['experience'] as num?) ?? 95;
+              final num sklVal = (cov['skills'] as num?) ?? 90;
+              final num eduVal = (cov['education'] as num?) ?? 100;
+              final num prjVal = (cov['projects'] as num?) ?? 40;
+
+              return Column(
+                children: [
+                  _buildCompletionBarRow(
+                    'Experience',
+                    expVal / 100.0,
+                    '${expVal.toInt()}%',
+                    AppColors.dashboardTeal,
+                    textPrimary,
+                    textSecondary,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildCompletionBarRow(
+                    'Skills',
+                    sklVal / 100.0,
+                    '${sklVal.toInt()}%',
+                    AppColors.dashboardTeal,
+                    textPrimary,
+                    textSecondary,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildCompletionBarRow(
+                    'Education',
+                    eduVal / 100.0,
+                    '${eduVal.toInt()}%',
+                    AppColors.dashboardTeal,
+                    textPrimary,
+                    textSecondary,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildCompletionBarRow(
+                    'Projects',
+                    prjVal / 100.0,
+                    '${prjVal.toInt()}%',
+                    prjVal < 50 ? const Color(0xFFF59E0B) : AppColors.dashboardTeal,
+                    textPrimary,
+                    textSecondary,
+                  ),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 14),
-          _buildCompletionBarRow(
-            'Skills',
-            0.90,
-            '90%',
-            AppColors.dashboardTeal,
-            textPrimary,
-            textSecondary,
-          ),
-          const SizedBox(height: 14),
-          _buildCompletionBarRow(
-            'Education',
-            1.0,
-            '100%',
-            AppColors.dashboardTeal,
-            textPrimary,
-            textSecondary,
-          ),
-          const SizedBox(height: 14),
-          _buildCompletionBarRow(
-            'Projects',
-            0.40,
-            '40%',
-            const Color(0xFFF59E0B),
-            textPrimary,
-            textSecondary,
-          ), // Gold/weak spot
           const SizedBox(height: 20),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 16),
@@ -1109,8 +1250,7 @@ class _CandidateProfileSettingsScreenState
     );
   }
 
-  // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
-  Widget _buildLeftRail(BuildContext context, bool isNightMode) {
+  /*
     final List<Map<String, dynamic>> navItems = [
       {'icon': Icons.home_rounded, 'label': 'Home', 'route': '/candidate/home'},
       {
@@ -1408,10 +1548,9 @@ class _CandidateProfileSettingsScreenState
               ),
             ),
           ),
-        ],
-      ),
     );
   }
+  */
 
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
   Widget _buildMobileBottomDock(bool isNightMode) {
@@ -1709,31 +1848,49 @@ class _CandidateProfileSettingsScreenState
               ),
               const SizedBox(width: 14),
 
+              // Notification bell button
               _buildTopBarIconButton(
                 icon: Icons.notifications_none_rounded,
                 hasBadge: true,
                 badgeColor: AppColors.dashboardTeal,
                 cardBorder: cardBorder,
                 isNightMode: isNightMode,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateNotificationsScreen(),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
 
+              // Settings icon
               _buildTopBarIconButton(
-                icon: Icons.language_rounded,
+                icon: Icons.settings_outlined,
                 hasBadge: false,
                 cardBorder: cardBorder,
                 isNightMode: isNightMode,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateProfileSettingsScreen(),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
 
               // Sign Out Button
               IconButton(
                 tooltip: 'Sign Out',
-                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
+                icon: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.redAccent,
+                  size: 20,
+                ),
                 onPressed: () async {
                   await AuthService.signOut(context);
                   if (mounted) {
-                    Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+                    Navigator.of(
+                      context,
+                    ).pushNamedAndRemoveUntil('/login', (_) => false);
                   }
                 },
               ),
@@ -1750,37 +1907,44 @@ class _CandidateProfileSettingsScreenState
     Color? badgeColor,
     required Color cardBorder,
     required bool isNightMode,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: isNightMode ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: cardBorder, width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(
-            icon,
-            color: isNightMode ? Colors.white : const Color(0xFF475569),
-            size: 18,
+    return MouseRegion(
+      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isNightMode ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: cardBorder, width: 1),
           ),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
-                ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(
+                icon,
+                color: isNightMode ? Colors.white : const Color(0xFF475569),
+                size: 18,
               ),
-            ),
-        ],
+              if (hasBadge)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: badgeColor ?? Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

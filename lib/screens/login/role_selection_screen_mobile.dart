@@ -12,6 +12,9 @@ class RoleSelectionScreenMobile extends StatelessWidget {
   final VoidCallback onSignUpTap;
   final Animation<double> fadeAnimation;
   final Animation<Offset> slideAnimation;
+  final bool isSignUpFlow;
+  final String? bottomPromptText;
+  final String? bottomLinkText;
 
   const RoleSelectionScreenMobile({
     super.key,
@@ -21,6 +24,9 @@ class RoleSelectionScreenMobile extends StatelessWidget {
     required this.onSignUpTap,
     required this.fadeAnimation,
     required this.slideAnimation,
+    this.isSignUpFlow = false,
+    this.bottomPromptText,
+    this.bottomLinkText,
   });
 
   @override
@@ -284,10 +290,17 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                                   ),
                                   children: [
                                     TextSpan(
-                                      text: "${AppConstants.noAccount} ",
+                                      text: bottomPromptText != null
+                                          ? "$bottomPromptText "
+                                          : (isSignUpFlow
+                                              ? "${AppConstants.welcomeWebHaveAccount} "
+                                              : "${AppConstants.noAccount} "),
                                     ),
                                     TextSpan(
-                                      text: AppConstants.signUp,
+                                      text: bottomLinkText ??
+                                          (isSignUpFlow
+                                              ? AppConstants.welcomeWebLoginLink.trim()
+                                              : AppConstants.signUp),
                                       style: GoogleFonts.inter(
                                         color:
                                             AppColors.mobileButtonGradientStart,

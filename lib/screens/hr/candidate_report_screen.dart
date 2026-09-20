@@ -27,6 +27,12 @@ class _CandidateReportScreenState extends State<CandidateReportScreen>
   late AnimationController _animationController;
   late Animation<double> _scoreAnimation;
 
+  bool _isLoadingResume = false;
+  ResumeDetail? _resumeDetail;
+
+  bool get isLoadingResume => _isLoadingResume;
+  ResumeDetail? get resumeDetail => _resumeDetail;
+
 
   // Search input controller
   final TextEditingController _searchController = TextEditingController();

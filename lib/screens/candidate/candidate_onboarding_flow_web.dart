@@ -105,8 +105,9 @@ class _CandidateOnboardingFlowWebState
   ) {
     final double fs = Responsive.getFontSize(
       context,
-      mobile: 26,
-      desktop: 32,
+      mobile: 32,
+      tablet: 36,
+      desktop: 40,
     );
     final idx = title.indexOf(highlight);
     if (idx == -1) {
@@ -115,9 +116,9 @@ class _CandidateOnboardingFlowWebState
         style: GoogleFonts.inter(
           color: Colors.white,
           fontSize: fs,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           height: 1.22,
-          letterSpacing: -0.5,
+          letterSpacing: -1.2,
         ),
       );
     }
@@ -128,27 +129,34 @@ class _CandidateOnboardingFlowWebState
         style: GoogleFonts.inter(
           color: Colors.white,
           fontSize: fs,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           height: 1.22,
-          letterSpacing: -0.5,
+          letterSpacing: -1.2,
         ),
         children: [
           TextSpan(text: before),
-          TextSpan(
-            text: highlight,
-            style: GoogleFonts.inter(
-              fontSize: fs,
-              fontWeight: FontWeight.w800,
-              height: 1.22,
-              letterSpacing: -0.5,
-              fontStyle: FontStyle.italic,
-              foreground: Paint()
-                ..shader = const LinearGradient(
-                  colors: [
-                    AppColors.webHeadlineFairlyStart,
-                    AppColors.webHeadlineFairlyEnd,
-                  ],
-                ).createShader(const Rect.fromLTWH(0, 0, 300, 60)),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: ShaderMask(
+              blendMode: BlendMode.srcIn,
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [
+                  AppColors.webHeadlineFairlyStart,
+                  AppColors.webHeadlineFairlyEnd,
+                ],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ).createShader(bounds),
+              child: Text(
+                highlight,
+                style: GoogleFonts.inter(
+                  fontSize: fs,
+                  fontWeight: FontWeight.w700,
+                  height: 1.22,
+                  letterSpacing: -1.2,
+                ),
+              ),
             ),
           ),
           TextSpan(text: after),
@@ -613,7 +621,7 @@ class _CandidateOnboardingFlowWebState
                                     style: GoogleFonts.inter(
                                       color: Colors.white,
                                       fontSize: 15,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w600,
                                       letterSpacing: -0.01,
                                     ),
                                   ),
@@ -642,17 +650,12 @@ class _CandidateOnboardingFlowWebState
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          AppConstants.candidateWebEyebrow,
-                                          style: GoogleFonts.inter(
-                                            color: AppColors.candidatePrimary
-                                                .withValues(alpha: 0.85),
-                                            fontSize: Responsive.getFontSize(
-                                              context,
-                                              mobile: 10,
-                                              desktop: 11.5,
-                                            ),
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 1.4,
+                                          AppConstants.candidateWebEyebrow.toUpperCase(),
+                                          style: GoogleFonts.jetBrainsMono(
+                                            color: const Color(0xFF7BA5FF),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 1.8,
                                           ),
                                         ),
                                       ],
@@ -682,9 +685,10 @@ class _CandidateOnboardingFlowWebState
                                       child: Text(
                                         currentLeft['body'] as String,
                                         style: GoogleFonts.inter(
-                                          color: AppColors.webSubcopy,
-                                          fontSize: 15.5,
-                                          height: 1.75,
+                                          color: const Color(0xFF94A3B8),
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w400,
+                                          height: 1.6,
                                         ),
                                       ),
                                     ),
@@ -711,14 +715,18 @@ class _CandidateOnboardingFlowWebState
                                 ),
                               ),
 
-                              const SizedBox(height: 60),
+                              const Spacer(),
 
                               // Footer
-                              Text(
-                                '© 2026 SkillSense AI · Bahria University',
-                                style: GoogleFonts.inter(
-                                  color: AppColors.webFooterText,
-                                  fontSize: 12.5,
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  '© 2026 SkillSense AI',
+                                  style: GoogleFonts.inter(
+                                    color: const Color(0xFF64748B),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w400,
+                                  ),
                                 ),
                               ),
                             ],
@@ -962,11 +970,9 @@ class _CandidateBulletPoint extends StatelessWidget {
           child: Text(
             text,
             style: GoogleFonts.inter(
-              color: isActive
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.45),
-              fontSize: 14,
-              height: 1.5,
+              color: const Color(0xFFCBD5E1),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),

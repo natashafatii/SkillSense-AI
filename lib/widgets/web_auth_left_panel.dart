@@ -220,7 +220,7 @@ class WebAuthLeftPanel extends StatelessWidget {
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 15,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: -0.01,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -246,16 +246,12 @@ class WebAuthLeftPanel extends StatelessWidget {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        eyebrow,
-                        style: GoogleFonts.inter(
-                          color: AppColors.webEyebrow,
-                          fontSize: Responsive.getFontSize(
-                            context,
-                            mobile: 10,
-                            desktop: 11.5,
-                          ),
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.4,
+                        eyebrow.toUpperCase(),
+                        style: GoogleFonts.jetBrainsMono(
+                          color: const Color(0xFF7BA5FF),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.8,
                         ),
                       ),
                     ),
@@ -280,9 +276,10 @@ class WebAuthLeftPanel extends StatelessWidget {
                   child: Text(
                     body,
                     style: GoogleFonts.inter(
-                      color: AppColors.webSubcopy,
-                      fontSize: 15.5,
-                      height: 1.75,
+                      color: const Color(0xFF94A3B8),
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w400,
+                      height: 1.6,
                     ),
                   ),
                 ),
@@ -301,14 +298,18 @@ class WebAuthLeftPanel extends StatelessWidget {
               ],
             ),
 
-            const SizedBox(height: 60),
+            const Spacer(),
 
             // Footer
-            Text(
-              '© 2026 SkillSense AI · Bahria University Lahore',
-              style: GoogleFonts.inter(
-                color: AppColors.webFooterText,
-                fontSize: 12.5,
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '© 2026 SkillSense AI',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF64748B),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
             ),
           ],
@@ -322,14 +323,14 @@ class WebAuthLeftPanel extends StatelessWidget {
       context,
       mobile: 32,
       tablet: 36,
-      desktop: 42,
+      desktop: 40,
     );
-    final TextStyle base = GoogleFonts.fraunces(
+    final TextStyle base = GoogleFonts.inter(
       color: Colors.white,
       fontSize: fontSize,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w700,
       height: 1.18,
-      letterSpacing: -0.01,
+      letterSpacing: -1.2,
     );
 
     if (gradientWord == null || !headline.contains(gradientWord!)) {
@@ -343,6 +344,8 @@ class WebAuthLeftPanel extends StatelessWidget {
         children: [
           TextSpan(text: parts[0]),
           WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
             child: ShaderMask(
               blendMode: BlendMode.srcIn,
               shaderCallback: (bounds) => const LinearGradient(
@@ -350,16 +353,16 @@ class WebAuthLeftPanel extends StatelessWidget {
                   AppColors.webHeadlineFairlyStart,
                   AppColors.webHeadlineFairlyEnd,
                 ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
               ).createShader(bounds),
               child: Text(
                 gradientWord!,
-                style: GoogleFonts.fraunces(
+                style: GoogleFonts.inter(
                   fontSize: fontSize,
-                  fontWeight: FontWeight.w500,
-                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w700,
                   height: 1.18,
+                  letterSpacing: -1.2,
                 ),
               ),
             ),
@@ -404,9 +407,9 @@ class _WebBullet extends StatelessWidget {
           child: Text(
             text,
             style: GoogleFonts.inter(
-              color: AppColors.webCheckText,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+              color: const Color(0xFFCBD5E1),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
