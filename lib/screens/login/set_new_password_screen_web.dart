@@ -2,20 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
+import '../../services/auth_service.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/web_auth_left_panel.dart';
 
 
 class SetNewPasswordScreenWeb extends StatefulWidget {
   final String email;
-  final String linkExpiresAt;
-  final VoidCallback onSetPassword;
+  final String code;
+  final ValueChanged<SignInResult> onSetPassword;
   final VoidCallback onIgnore;
 
   const SetNewPasswordScreenWeb({
     super.key,
     required this.email,
-    required this.linkExpiresAt,
+    required this.code,
     required this.onSetPassword,
     required this.onIgnore,
   });
@@ -33,6 +34,7 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
   bool _obscureNew = true;
   bool _obscureConfirm = true;
   bool _isLoading = false;
+  String? _errorMessage;
 
   // Live rule states
   bool get _has8Chars => _newPasswordCtrl.text.length >= 8;
@@ -66,15 +68,27 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_canSubmit) return;
-    setState(() => _isLoading = true);
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        widget.onSetPassword();
-      }
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
     });
+    try {
+      final result = await AuthService.resetPassword(
+        code: widget.code,
+        newPassword: _newPasswordCtrl.text,
+      );
+      if (mounted) widget.onSetPassword(result);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -159,6 +173,28 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                               height: 1.5,
                                             ),
                                           ),
+                                          if (_errorMessage != null) ...[
+                                            const SizedBox(height: 16),
+                                            Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFEF2F2),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: const Color(0xFFFCA5A5),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                _errorMessage!,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 13,
+                                                  color: const Color(0xFFB91C1C),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                           const SizedBox(height: 32),
 
                                           // New password field

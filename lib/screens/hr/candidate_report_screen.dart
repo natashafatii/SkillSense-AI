@@ -49,6 +49,9 @@ class _CandidateReportScreenState extends State<CandidateReportScreen>
   bool _isRejectConfirmActive = false;
   bool _isSelectConfirmActive = false;
 
+  bool _isLoadingResume = false;
+  ResumeDetail? _resumeDetail;
+
   // Radar chart highlight state
   String? _hoveredAxis;
   int? _hoveredShapIndex;

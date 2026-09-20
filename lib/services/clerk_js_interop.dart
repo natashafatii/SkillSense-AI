@@ -7,7 +7,8 @@
 ///   - Clerk lifecycle: load, signOut, setActive, addListener
 ///   - SignUp:  create, prepareEmailAddressVerification,
 ///              attemptEmailAddressVerification
-///   - SignIn:  create
+///   - SignIn:  create, attemptFirstFactor, prepareSecondFactor,
+///              attemptSecondFactor
 ///   - Session: getToken
 ///   - User:    publicMetadata, unsafeMetadata
 library;
@@ -23,6 +24,15 @@ import 'dart:js_interop_unsafe';
 /// script tag.  Will be `null` until the script has loaded.
 @JS('Clerk')
 external ClerkJS? get _clerkGlobal;
+
+/// Check if window.__clerkReady has been set to true by the JS script in index.html.
+@JS('__clerkReady')
+external bool? get _isClerkReady;
+
+bool get isClerkReady => _isClerkReady == true;
+
+@JS('__clerkError')
+external String? get clerkBootstrapError;
 
 /// Safe accessor that throws a descriptive error when clerk-js has not
 /// finished loading yet.
@@ -44,12 +54,20 @@ ClerkJS get clerkInstance {
 
 @JS()
 extension type ClerkJS._(JSObject _) implements JSObject {
-  /// `await clerk.load()` — initialises internal state & dev-browser
-  /// handshake.
-  external JSPromise<JSAny?> load();
+  /// True after `clerk.load()` has completed (or after auto-init via the
+  /// `data-clerk-publishable-key` script tag attribute).
+  external bool get loaded;
+
+  /// `await clerk.load(options?)` — initialises internal state & dev-browser
+  /// handshake. Accepts an optional options object.
+  external JSPromise<JSAny?> load([JSObject? options]);
+
+  /// Handles any pending Clerk redirect callback (e.g. after dev-browser
+  /// handshake redirect). Should be called after load() on page init.
+  external JSPromise<JSAny?>? handleRedirectCallback([JSObject? params]);
 
   /// The `Client` object containing `signIn` and `signUp` resources.
-  external ClerkClient get client;
+  external ClerkClient? get client;
 
   /// The active `Session`, or `null` when signed out.
   external ClerkSession? get session;
@@ -57,15 +75,14 @@ extension type ClerkJS._(JSObject _) implements JSObject {
   /// The active `User`, or `null` when signed out.
   external ClerkUser? get user;
 
-  /// `clerk.setActive({ session })` — makes the given session the active
-  /// one.
+  /// `clerk.setActive({ session })` — makes the given session the active one.
   external JSPromise<JSAny?> setActive(JSObject params);
 
   /// `clerk.signOut()` — signs out the current user.
   external JSPromise<JSAny?> signOut();
 
-  /// `clerk.addListener(callback)` — the callback is invoked with the
-  /// `ClerkClient` resource whenever auth state changes.
+  /// `clerk.addListener(callback)` — invoked with the `ClerkClient` resource
+  /// whenever auth state changes.
   external void addListener(JSFunction callback);
 }
 
@@ -75,8 +92,8 @@ extension type ClerkJS._(JSObject _) implements JSObject {
 
 @JS()
 extension type ClerkClient._(JSObject _) implements JSObject {
-  external ClerkSignUp get signUp;
-  external ClerkSignIn get signIn;
+  external ClerkSignUp? get signUp;
+  external ClerkSignIn? get signIn;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -115,11 +132,29 @@ extension type ClerkSignIn._(JSObject _) implements JSObject {
   /// `signIn.create({ identifier, password })`.
   external JSPromise<ClerkSignIn> create(JSObject params);
 
+  /// Completes a password-reset email-code first factor.
+  external JSPromise<ClerkSignIn> attemptFirstFactor(JSObject params);
+
+  /// Sends a code for an available second factor (Device Trust / MFA).
+  external JSPromise<ClerkSignIn> prepareSecondFactor(JSObject params);
+
+  /// Verifies the code for the prepared second factor.
+  external JSPromise<ClerkSignIn> attemptSecondFactor(JSObject params);
+
   /// `'complete'`, `'needs_first_factor'`, etc.
   external String? get status;
 
   /// Session id when sign-in is complete.
   external String? get createdSessionId;
+
+  /// Available verification methods after the password has been accepted.
+  external JSArray<ClerkSignInSecondFactor>? get supportedSecondFactors;
+}
+
+@JS()
+extension type ClerkSignInSecondFactor._(JSObject _) implements JSObject {
+  external String? get strategy;
+  external String? get emailAddressId;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -190,10 +225,38 @@ JSObject buildSignInCreateParams({
   required String identifier,
   required String password,
 }) {
+  return {'identifier': identifier, 'password': password}.jsify()! as JSObject;
+}
+
+/// Starts the email-code password-reset flow.
+JSObject buildPasswordResetCreateParams(String email) {
   return {
-    'identifier': identifier,
+    'strategy': 'reset_password_email_code',
+    'identifier': email,
+  }.jsify()! as JSObject;
+}
+
+/// Verifies the reset code and supplies the replacement password.
+JSObject buildPasswordResetAttemptParams({
+  required String code,
+  required String password,
+}) {
+  return {
+    'strategy': 'reset_password_email_code',
+    'code': code,
     'password': password,
   }.jsify()! as JSObject;
+}
+
+/// Builds the parameters that ask Clerk to send the Device Trust email code.
+JSObject buildPrepareSignInEmailCodeParams(String emailAddressId) {
+  return {'strategy': 'email_code', 'emailAddressId': emailAddressId}.jsify()!
+      as JSObject;
+}
+
+/// Builds the parameters that verify the Device Trust email code.
+JSObject buildAttemptSignInEmailCodeParams(String code) {
+  return {'strategy': 'email_code', 'code': code}.jsify()! as JSObject;
 }
 
 /// Builds `{ session: sessionId }` for `clerk.setActive()`.
@@ -207,4 +270,17 @@ String? readStringProperty(JSObject? obj, String key) {
   final value = obj.getProperty(key.toJS);
   if (value == null || value.isUndefinedOrNull) return null;
   return (value as JSString).toDart;
+}
+
+/// Builds the options object for `clerk.load()` for Flutter Web.
+///
+/// Only called as a fallback when clerk-js has not already auto-initialized
+/// via the `data-clerk-publishable-key` script tag attribute.
+///
+/// NOTE: Do NOT provide `routerPush`/`routerReplace` here — those callbacks
+/// intercept clerk-js internal navigation and redirect the browser to Clerk's
+/// hosted sign-in page (stunning-slug-13.accounts.dev/sign-in) instead of
+/// staying in the Flutter app.
+JSObject buildClerkLoadOptions() {
+  return {'standardBrowser': true}.jsify()! as JSObject;
 }

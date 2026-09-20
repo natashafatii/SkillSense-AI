@@ -6,6 +6,8 @@ import 'api_client.dart';
 import 'auth_service_interface.dart';
 import 'resume_manager.dart';
 
+export 'auth_service_interface.dart' show SignInResult, SignInResultStatus;
+
 // Conditional import selects the right factory at compile time.
 import 'auth_service_stub.dart'
     if (dart.library.js_interop) 'auth_service_web.dart'
@@ -77,13 +79,12 @@ class AuthService {
     return currentUserNotifier.value;
   }
 
-  static Future<void> login(
+  static Future<SignInResult> login(
     BuildContext context,
     String email,
     String password,
   ) async {
     await instance.login(email, password);
-    await fetchCurrentUser();
   }
 
   static Future<void> signUp(
