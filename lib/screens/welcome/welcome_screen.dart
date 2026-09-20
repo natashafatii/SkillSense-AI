@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
-import '../login/role_selection_screen.dart';
-import '../signup/signup_role_selection_screen.dart';
 import 'welcome_screen_web.dart';
 
 /// The main welcome/onboarding screen for SkillSense AI.
@@ -124,13 +122,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           ),
                           const SizedBox(height: 4),
 
-                          // ── Italic tagline ──────────────────────────────
+                          // ── Tagline ──────────────────────────────────────────────
                           Text(
                             'Intelligent recruitment, simplified',
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
-                              fontStyle: FontStyle.italic,
                               color: const Color(0xFF64748B),
                             ),
                           ),
@@ -198,26 +195,22 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 ),
                                 children: [
                                   const TextSpan(text: 'Discover the\n'),
-                                  WidgetSpan(
-                                    child: ShaderMask(
-                                      blendMode: BlendMode.srcIn,
-                                      shaderCallback:
-                                          (bounds) => const LinearGradient(
-                                            colors: [
-                                              Color(0xFF4376F8),
-                                              Color(0xFF6C63FF),
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ).createShader(bounds),
-                                      child: Text(
-                                        'right talent',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 34,
-                                          fontWeight: FontWeight.w800,
-                                          height: 1.18,
-                                        ),
-                                      ),
+                                  TextSpan(
+                                    text: 'right talent',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 34,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.18,
+                                      letterSpacing: -0.5,
+                                      foreground: Paint()
+                                        ..shader = const LinearGradient(
+                                          colors: [
+                                            Color(0xFF4376F8),
+                                            Color(0xFF6C63FF),
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ).createShader(const Rect.fromLTWH(0, 0, 300, 60)),
                                     ),
                                   ),
                                   const TextSpan(text: ', faster'),
@@ -247,12 +240,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             height: 54,
                             child: ElevatedButton.icon(
                               onPressed: () {
-                                Navigator.push(
+                                Navigator.pushNamed(
                                   context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const SignupRoleSelectionScreen(),
-                                  ),
+                                  '/signup/role',
                                 );
                               },
                               style: ElevatedButton.styleFrom(
@@ -276,13 +266,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           const SizedBox(height: 18),
 
                           // ── Already have an account? ─────────────────────
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
+                          MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: () {
+                              Navigator.pushNamed(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => const RoleSelectionScreen(),
-                                ),
+                                '/login/role',
                               );
                             },
                             child: RichText(
@@ -306,6 +296,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 ],
                               ),
                             ),
+                          ),
                           ),
 
                           const Spacer(),

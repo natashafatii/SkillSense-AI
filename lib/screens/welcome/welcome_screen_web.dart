@@ -4,8 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../utils/responsive.dart';
-import '../signup/signup_role_selection_screen.dart';
-import '../login/login_screen.dart';
 
 /// Web-only welcome screen: dark left panel with grid overlay + white right panel.
 class WelcomeScreenWeb extends StatelessWidget {
@@ -135,7 +133,7 @@ class WelcomeScreenWeb extends StatelessWidget {
                                     style: GoogleFonts.inter(
                                       color: Colors.white,
                                       fontSize: 15,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w600,
                                       letterSpacing: -0.01,
                                     ),
                                   ),
@@ -150,16 +148,12 @@ class WelcomeScreenWeb extends StatelessWidget {
                                   Row(
                                     children: [
                                       Text(
-                                        AppConstants.welcomeWebEyebrow,
-                                        style: GoogleFonts.inter(
-                                          color: AppColors.webEyebrow,
-                                          fontSize: Responsive.getFontSize(
-                                            context,
-                                            mobile: 10,
-                                            desktop: 11.5,
-                                          ),
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 1.4,
+                                        AppConstants.welcomeWebEyebrow.toUpperCase(),
+                                        style: GoogleFonts.jetBrainsMono(
+                                          color: const Color(0xFF7BA5FF),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 1.8,
                                         ),
                                       ),
                                       const SizedBox(width: 12),
@@ -173,7 +167,7 @@ class WelcomeScreenWeb extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 22),
 
-                                  // Main headline — Inter font matching screenshot
+                                  // Main headline
                                   ConstrainedBox(
                                     constraints: const BoxConstraints(
                                       maxWidth: Responsive.leftPanelContentMaxWidth,
@@ -184,38 +178,41 @@ class WelcomeScreenWeb extends StatelessWidget {
                                           color: Colors.white,
                                           fontSize: Responsive.getFontSize(
                                             context,
-                                            mobile: 30,
-                                            tablet: 34,
-                                            desktop: 42,
+                                            mobile: 32,
+                                            tablet: 36,
+                                            desktop: 40,
                                           ),
-                                          fontWeight: FontWeight.w800,
-                                          height: 1.2,
-                                          letterSpacing: -1.0,
+                                          fontWeight: FontWeight.w700,
+                                          height: 1.18,
+                                          letterSpacing: -1.2,
                                         ),
                                         children: [
                                           TextSpan(text: beforeSkill),
                                           WidgetSpan(
+                                            alignment: PlaceholderAlignment.baseline,
+                                            baseline: TextBaseline.alphabetic,
                                             child: ShaderMask(
                                               blendMode: BlendMode.srcIn,
                                               shaderCallback: (bounds) => const LinearGradient(
                                                 colors: [
-                                                  Color(0xFF7190E2), // Left end: indigo-blue
-                                                  Color(0xFF3AB5B7), // Right end: cyan-teal
+                                                  AppColors.webHeadlineFairlyStart,
+                                                  AppColors.webHeadlineFairlyEnd,
                                                 ],
-                                                begin: Alignment.topLeft,
-                                                end: Alignment.bottomRight,
+                                                begin: Alignment.centerLeft,
+                                                end: Alignment.centerRight,
                                               ).createShader(bounds),
                                               child: Text(
                                                 'skill',
                                                 style: GoogleFonts.inter(
                                                   fontSize: Responsive.getFontSize(
                                                     context,
-                                                    mobile: 30,
-                                                    tablet: 34,
-                                                    desktop: 42,
+                                                    mobile: 32,
+                                                    tablet: 36,
+                                                    desktop: 40,
                                                   ),
-                                                  fontWeight: FontWeight.w800,
-                                                  letterSpacing: -1.0,
+                                                  fontWeight: FontWeight.w700,
+                                                  height: 1.18,
+                                                  letterSpacing: -1.2,
                                                 ),
                                               ),
                                             ),
@@ -235,9 +232,10 @@ class WelcomeScreenWeb extends StatelessWidget {
                                     child: Text(
                                       AppConstants.welcomeWebBody,
                                       style: GoogleFonts.inter(
-                                        color: AppColors.webSubcopy,
-                                        fontSize: 15.5,
-                                        height: 1.75,
+                                        color: const Color(0xFF94A3B8),
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w400,
+                                        height: 1.6,
                                       ),
                                     ),
                                   ),
@@ -259,28 +257,16 @@ class WelcomeScreenWeb extends StatelessWidget {
                               ),
 
                               // Footer
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    '© 2026 SKILLSENSE AI',
-                                    style: GoogleFonts.inter(
-                                      color: AppColors.webFooterText,
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.5,
-                                    ),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  '© 2026 SkillSense AI',
+                                  style: GoogleFonts.inter(
+                                    color: const Color(0xFF64748B),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w400,
                                   ),
-                                  Text(
-                                    'BAHRIA UNIVERSITY LAHORE',
-                                    style: GoogleFonts.inter(
-                                      color: AppColors.webFooterText,
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
                             ],
                           ),
@@ -351,12 +337,9 @@ class WelcomeScreenWeb extends StatelessWidget {
                                         child: InkWell(
                                           borderRadius: BorderRadius.circular(26),
                                           onTap: () {
-                                            Navigator.push(
+                                            Navigator.pushNamed(
                                               context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const SignupRoleSelectionScreen(),
-                                              ),
+                                              '/signup/role',
                                             );
                                           },
                                           child: Center(
@@ -375,41 +358,6 @@ class WelcomeScreenWeb extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 20),
 
-                                  // Agreement text
-                                  Center(
-                                    child: RichText(
-                                      textAlign: TextAlign.center,
-                                      text: TextSpan(
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12.5,
-                                          color: const Color(0xFF64748B),
-                                          height: 1.5,
-                                        ),
-                                        children: [
-                                          const TextSpan(text: 'By continuing you agree to the '),
-                                          TextSpan(
-                                            text: 'Terms',
-                                            style: GoogleFonts.inter(
-                                              color: const Color(0xFF64748B),
-                                              decoration: TextDecoration.underline,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          const TextSpan(text: ' and '),
-                                          TextSpan(
-                                            text: 'Privacy Policy',
-                                            style: GoogleFonts.inter(
-                                              color: const Color(0xFF64748B),
-                                              decoration: TextDecoration.underline,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          const TextSpan(text: '.'),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
 
                                   // Divider Line
                                   Container(
@@ -420,14 +368,13 @@ class WelcomeScreenWeb extends StatelessWidget {
 
                                   // Already have an account? Log in
                                   Center(
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
+                                    child: MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                        Navigator.pushNamed(
                                           context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const LoginScreen(),
-                                          ),
+                                          '/login/role',
                                         );
                                       },
                                       child: RichText(
@@ -451,6 +398,7 @@ class WelcomeScreenWeb extends StatelessWidget {
                                         ),
                                       ),
                                     ),
+                                  ),
                                   ),
                                 ],
                               ),
@@ -505,9 +453,9 @@ class _BulletPoint extends StatelessWidget {
           child: Text(
             text,
             style: GoogleFonts.inter(
-              color: const Color(0xFFE2E8F0),
-              fontSize: 14,
-              height: 1.5,
+              color: const Color(0xFFCBD5E1),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),

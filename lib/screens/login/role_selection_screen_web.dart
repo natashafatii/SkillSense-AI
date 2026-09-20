@@ -167,7 +167,7 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                             style: GoogleFonts.inter(
                                               color: Colors.white,
                                               fontSize: 15,
-                                              fontWeight: FontWeight.w700,
+                                              fontWeight: FontWeight.w600,
                                               letterSpacing: -0.01,
                                             ),
                                             overflow: TextOverflow.ellipsis,
@@ -195,12 +195,12 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Text(
-                                                AppConstants.roleEyebrow,
-                                                style: GoogleFonts.inter(
-                                                  color: AppColors.webEyebrow,
-                                                  fontSize: Responsive.getFontSize(context, mobile: 10, desktop: 11.5),
-                                                  fontWeight: FontWeight.w700,
-                                                  letterSpacing: 1.4,
+                                                AppConstants.roleEyebrow.toUpperCase(),
+                                                style: GoogleFonts.jetBrainsMono(
+                                                  color: const Color(0xFF7BA5FF),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 1.8,
                                                 ),
                                               ),
                                             ),
@@ -215,12 +215,12 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                           ),
                                           child: RichText(
                                             text: TextSpan(
-                                              style: GoogleFonts.fraunces(
+                                              style: GoogleFonts.inter(
                                                 color: Colors.white,
-                                                fontSize: Responsive.getFontSize(context, mobile: 32, tablet: 36, desktop: 42),
-                                                fontWeight: FontWeight.w600,
+                                                fontSize: Responsive.getFontSize(context, mobile: 30, tablet: 34, desktop: 40),
+                                                fontWeight: FontWeight.w700,
                                                 height: 1.18,
-                                                letterSpacing: -0.01,
+                                                letterSpacing: -1.2,
                                               ),
                                               children: [
                                                 const TextSpan(
@@ -228,6 +228,8 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                       'The same interview,\nseen ',
                                                 ),
                                                 WidgetSpan(
+                                                  alignment: PlaceholderAlignment.baseline,
+                                                  baseline: TextBaseline.alphabetic,
                                                   child: ShaderMask(
                                                     blendMode: BlendMode.srcIn,
                                                     shaderCallback:
@@ -239,20 +241,19 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                                 .webHeadlineFairlyEnd,
                                                           ],
                                                           begin: Alignment
-                                                              .topLeft,
+                                                              .centerLeft,
                                                           end: Alignment
-                                                              .bottomRight,
+                                                              .centerRight,
                                                         ).createShader(bounds),
                                                     child: Text(
                                                       'fairly',
                                                       style:
-                                                          GoogleFonts.fraunces(
-                                                        fontSize: Responsive.getFontSize(context, mobile: 32, tablet: 36, desktop: 42),
+                                                          GoogleFonts.inter(
+                                                        fontSize: Responsive.getFontSize(context, mobile: 30, tablet: 34, desktop: 40),
                                                         fontWeight:
-                                                            FontWeight.w500,
-                                                        fontStyle:
-                                                            FontStyle.italic,
+                                                            FontWeight.w700,
                                                         height: 1.18,
+                                                        letterSpacing: -1.2,
                                                       ),
                                                     ),
                                                   ),
@@ -274,9 +275,10 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                           child: Text(
                                             AppConstants.webLeftPanelBody,
                                             style: GoogleFonts.inter(
-                                              color: AppColors.webSubcopy,
-                                              fontSize: Responsive.getFontSize(context, mobile: 14, desktop: 15.5),
-                                              height: 1.75,
+                                              color: const Color(0xFF94A3B8),
+                                              fontSize: 14.5,
+                                              fontWeight: FontWeight.w400,
+                                              height: 1.6,
                                             ),
                                           ),
                                         ),
@@ -303,13 +305,17 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                       ],
                                     ),
 
-                                    const SizedBox(height: 60),
+                                    const Spacer(),
                                     // Footer
-                                    Text(
-                                      '© 2026 SkillSense AI · Bahria University',
-                                      style: GoogleFonts.inter(
-                                        color: AppColors.webFooterText,
-                                        fontSize: 12.5,
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        '© 2026 SkillSense AI',
+                                        style: GoogleFonts.inter(
+                                          color: const Color(0xFF64748B),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w400,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -548,9 +554,9 @@ class _WebFeatureItem extends StatelessWidget {
           child: Text(
             text,
             style: GoogleFonts.inter(
-              color: AppColors.webCheckText,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+              color: const Color(0xFFCBD5E1),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),

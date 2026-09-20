@@ -11,6 +11,8 @@ import 'candidate_feedback_report_screen.dart';
 import 'candidate_resume_management_screen.dart';
 import 'candidate_interview_history_screen.dart';
 import 'candidate_profile_settings_screen.dart';
+import '../../widgets/candidate_side_nav.dart';
+import 'candidate_notifications_screen.dart';
 
 class CandidateJobFeedScreen extends StatefulWidget {
   const CandidateJobFeedScreen({super.key});
@@ -189,7 +191,8 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   child: Row(
                     children: [
                       // Left Rail (Web Only)
-                      if (!isMobile) _buildLeftRail(context),
+                      if (!isMobile)
+                        const CandidateSideNav(currentRoute: '/candidate/jobs'),
 
                       // Main Canvas
                       Expanded(
@@ -1197,18 +1200,28 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               ),
               const SizedBox(width: 14),
 
-              // Notification button
+              // Notification bell button
               _buildTopBarIconButton(
                 icon: Icons.notifications_none_rounded,
                 hasBadge: true,
                 badgeColor: AppColors.dashboardTeal,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateNotificationsScreen(),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
 
-              // Language button
+              // Settings icon
               _buildTopBarIconButton(
-                icon: Icons.language_rounded,
+                icon: Icons.settings_outlined,
                 hasBadge: false,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateProfileSettingsScreen(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1221,33 +1234,40 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     required IconData icon,
     required bool hasBadge,
     Color? badgeColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
+    return MouseRegion(
+      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, color: const Color(0xFF475569), size: 18),
+              if (hasBadge)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: badgeColor ?? Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -5,8 +5,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/gradient_background.dart';
-import '../login/role_selection_screen.dart';
-import '../signup/signup_role_selection_screen.dart';
 import '../../services/auth_service.dart';
 import 'login_screen_web.dart';
 import 'forgot_password_screen_web.dart';
@@ -209,11 +207,9 @@ class _LoginScreenState extends State<LoginScreen>
               );
             },
             onCreateAccount: () {
-              Navigator.push(
+              Navigator.pushNamed(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const SignupRoleSelectionScreen(),
-                ),
+                '/signup/role',
               );
             },
           );
@@ -531,12 +527,9 @@ class _LoginScreenState extends State<LoginScreen>
                               const SizedBox(width: 6),
                               GestureDetector(
                                 onTap: () {
-                                  Navigator.push(
+                                  Navigator.pushNamed(
                                     context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const RoleSelectionScreen(),
-                                    ),
+                                    '/signup/role',
                                   );
                                 },
                                 child: Text(

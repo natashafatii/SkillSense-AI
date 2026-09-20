@@ -7,15 +7,20 @@ import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
 import 'candidate_job_feed_screen.dart';
 import 'candidate_interview_lobby_screen.dart';
+import '../../widgets/candidate_side_nav.dart';
+import 'candidate_notifications_screen.dart';
 
 class CandidateFeedbackReportScreen extends StatefulWidget {
   const CandidateFeedbackReportScreen({super.key});
 
   @override
-  State<CandidateFeedbackReportScreen> createState() => _CandidateFeedbackReportScreenState();
+  State<CandidateFeedbackReportScreen> createState() =>
+      _CandidateFeedbackReportScreenState();
 }
 
-class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportScreen> with SingleTickerProviderStateMixin {
+class _CandidateFeedbackReportScreenState
+    extends State<CandidateFeedbackReportScreen>
+    with SingleTickerProviderStateMixin {
   final int _activeNavIndex = 3; // Interviews is index 3
   late AnimationController _animController;
   late Animation<double> _scoreAnimation;
@@ -28,29 +33,34 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
   final List<Map<String, String>> _workedItems = [
     {
       'title': 'Concrete examples in every technical answer',
-      'detail': 'You referenced your work on the inventory management system and the migration from Django 2.2 to 3.2 — both directly relevant to the role.'
+      'detail':
+          'You referenced your work on the inventory management system and the migration from Django 2.2 to 3.2 — both directly relevant to the role.',
     },
     {
       'title': 'Steady eye contact and pacing after Q2',
-      'detail': 'Your speech rate settled to a steady 130 words per minute, allowing the proctor AI to transcribe technical terminology with high confidence.'
+      'detail':
+          'Your speech rate settled to a steady 130 words per minute, allowing the proctor AI to transcribe technical terminology with high confidence.',
     },
     {
       'title': 'Clear trade-off reasoning on the Celery question',
-      'detail': 'You correctly identified queue overhead, serialization options, and task monitoring tools (Flower) compared to lightweight database solutions.'
-    }
+      'detail':
+          'You correctly identified queue overhead, serialization options, and task monitoring tools (Flower) compared to lightweight database solutions.',
+    },
   ];
 
   final List<Map<String, String>> _workOnItems = [
     {
       'title': 'Answers ran long — lead with the conclusion',
       'cohort': 'Avg 3m 40s vs 2m 30s cohort',
-      'detail': 'Try the STAR method: Situation → Task → Action → Result. State the result first, then back into the context to keep responses focused.'
+      'detail':
+          'Try the STAR method: Situation → Task → Action → Result. State the result first, then back into the context to keep responses focused.',
     },
     {
       'title': 'Filler words above median in Q1–Q2',
       'cohort': 'Settled once warmed up',
-      'detail': 'Pause silently instead of using vocal fillers like "um" or "like" while planning your database indexing arguments.'
-    }
+      'detail':
+          'Pause silently instead of using vocal fillers like "um" or "like" while planning your database indexing arguments.',
+    },
   ];
 
   final List<Map<String, dynamic>> _questions = [
@@ -59,22 +69,25 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
       'title': 'Django ORM & query optimisation',
       'score': 84,
       'color': const Color(0xFF10B981),
-      'why': 'Strong details on select_related and prefetch_related, but could have mentioned query caching strategies.'
+      'why':
+          'Strong details on select_related and prefetch_related, but could have mentioned query caching strategies.',
     },
     {
       'type': 'B',
       'title': 'Leading a difficult project',
       'score': 79,
       'color': const Color(0xFF3B82F6),
-      'why': 'Demonstrated clear ownership and prioritization under deadlines, though impact metrics could be more quantified.'
+      'why':
+          'Demonstrated clear ownership and prioritization under deadlines, though impact metrics could be more quantified.',
     },
     {
       'type': 'S',
       'title': 'Legacy code approach',
       'score': 66,
       'color': const Color(0xFFF59E0B),
-      'why': 'Solid safe refactoring outline; however, lacked detail on regression test coverage criteria.'
-    }
+      'why':
+          'Solid safe refactoring outline; however, lacked detail on regression test coverage criteria.',
+    },
   ];
 
   @override
@@ -129,7 +142,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
               height: isMobile ? 300 : 450,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.dashboardTeal.withValues(alpha: isMobile ? 0.06 : 0.04),
+                color: AppColors.dashboardTeal.withValues(
+                  alpha: isMobile ? 0.06 : 0.04,
+                ),
               ),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
@@ -147,13 +162,22 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                   child: Row(
                     children: [
                       // Left Rail (Web Only)
-                      if (!isMobile) _buildLeftRail(context),
+                      if (!isMobile)
+                        const CandidateSideNav(
+                          currentRoute: '/candidate/feedback-report',
+                        ),
 
                       // Main Canvas
                       Expanded(
                         child: Column(
                           children: [
-                            _buildTopBar(isMobile, textPrimary, textSecondary, cardBg, cardBorder),
+                            _buildTopBar(
+                              isMobile,
+                              textPrimary,
+                              textSecondary,
+                              cardBg,
+                              cardBorder,
+                            ),
                             Expanded(
                               child: SingleChildScrollView(
                                 physics: const BouncingScrollPhysics(),
@@ -164,8 +188,18 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                                   bottom: isMobile ? 100 : 32,
                                 ),
                                 child: isMobile
-                                    ? _buildMobileLayout(textPrimary, textSecondary, cardBg, cardBorder)
-                                    : _buildWebLayout(textPrimary, textSecondary, cardBg, cardBorder),
+                                    ? _buildMobileLayout(
+                                        textPrimary,
+                                        textSecondary,
+                                        cardBg,
+                                        cardBorder,
+                                      )
+                                    : _buildWebLayout(
+                                        textPrimary,
+                                        textSecondary,
+                                        cardBg,
+                                        cardBorder,
+                                      ),
                               ),
                             ),
                           ],
@@ -207,27 +241,49 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
             // Left Column (Hero Ring + Summary) - 1.15fr
             Expanded(
               flex: 115,
-              child: _buildHeroScoreCard(textPrimary, textSecondary, cardBg, cardBorder, false),
+              child: _buildHeroScoreCard(
+                textPrimary,
+                textSecondary,
+                cardBg,
+                cardBorder,
+                false,
+              ),
             ),
             const SizedBox(width: 24),
 
             // Right Columns (Worked + Work On) - 1fr each
             Expanded(
               flex: 100,
-              child: _buildWorkedPanel(textPrimary, textSecondary, cardBg, cardBorder),
+              child: _buildWorkedPanel(
+                textPrimary,
+                textSecondary,
+                cardBg,
+                cardBorder,
+              ),
             ),
             const SizedBox(width: 24),
 
             Expanded(
               flex: 100,
-              child: _buildWorkOnPanel(textPrimary, textSecondary, cardBg, cardBorder),
+              child: _buildWorkOnPanel(
+                textPrimary,
+                textSecondary,
+                cardBg,
+                cardBorder,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 24),
 
         // Bottom Row: Question by Question
-        _buildQuestionsListPanel(textPrimary, textSecondary, cardBg, cardBorder, false),
+        _buildQuestionsListPanel(
+          textPrimary,
+          textSecondary,
+          cardBg,
+          cardBorder,
+          false,
+        ),
       ],
     );
   }
@@ -241,13 +297,25 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
   ) {
     return Column(
       children: [
-        _buildHeroScoreCard(textPrimary, textSecondary, cardBg, cardBorder, true),
+        _buildHeroScoreCard(
+          textPrimary,
+          textSecondary,
+          cardBg,
+          cardBorder,
+          true,
+        ),
         const SizedBox(height: 16),
         _buildWorkedPanel(textPrimary, textSecondary, cardBg, cardBorder),
         const SizedBox(height: 16),
         _buildWorkOnPanel(textPrimary, textSecondary, cardBg, cardBorder),
         const SizedBox(height: 16),
-        _buildQuestionsListPanel(textPrimary, textSecondary, cardBg, cardBorder, true),
+        _buildQuestionsListPanel(
+          textPrimary,
+          textSecondary,
+          cardBg,
+          cardBorder,
+          true,
+        ),
       ],
     );
   }
@@ -279,7 +347,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
       child: Column(
         children: [
           Text(
-            isMobile ? 'YOUR INTERVIEW · 13 MAY' : 'YOUR INTERVIEW · SENIOR DJANGO DEV · 13 MAY',
+            isMobile
+                ? 'YOUR INTERVIEW · 13 MAY'
+                : 'YOUR INTERVIEW · SENIOR DJANGO DEV · 13 MAY',
             style: GoogleFonts.spaceGrotesk(
               color: AppColors.dashboardTeal,
               fontSize: isMobile ? 11 : 12,
@@ -304,7 +374,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                       value: value / 100,
                       strokeWidth: 8,
                       backgroundColor: const Color(0xFFE2E8F0),
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.dashboardTeal),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.dashboardTeal,
+                      ),
                     ),
                   ),
                   Column(
@@ -473,7 +545,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                         ),
                       ),
                     ),
-                    crossFadeState: isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                    crossFadeState: isExpanded
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
                     duration: const Duration(milliseconds: 200),
                   ),
                   if (index < _workedItems.length - 1)
@@ -596,7 +670,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                         ),
                       ),
                     ),
-                    crossFadeState: isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                    crossFadeState: isExpanded
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
                     duration: const Duration(milliseconds: 200),
                   ),
                   if (index < _workOnItems.length - 1)
@@ -691,7 +767,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                             value: q['score'] / 100,
                             strokeWidth: 3,
                             backgroundColor: const Color(0xFFE2E8F0),
-                            valueColor: AlwaysStoppedAnimation<Color>(q['color']),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              q['color'],
+                            ),
                           ),
                         ),
                         Text(
@@ -713,7 +791,11 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                   AnimatedCrossFade(
                     firstChild: const SizedBox.shrink(),
                     secondChild: Padding(
-                      padding: const EdgeInsets.only(left: 38, bottom: 16, top: 4),
+                      padding: const EdgeInsets.only(
+                        left: 38,
+                        bottom: 16,
+                        top: 4,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -741,7 +823,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                               foregroundColor: const Color(0xFF334155),
                               elevation: 0,
                               minimumSize: const Size(120, 32),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
                             ),
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -749,21 +833,32 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                                   backgroundColor: const Color(0xFF0F172A),
                                   content: Text(
                                     'Playing simulated voice response...',
-                                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                            icon: const Icon(
+                              Icons.play_arrow_rounded,
+                              size: 16,
+                            ),
                             label: Text(
                               'Play recording',
-                              style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              style: GoogleFonts.inter(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    crossFadeState: isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                    crossFadeState: isExpanded
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
                     duration: const Duration(milliseconds: 200),
                   ),
                   if (index < _questions.length - 1)
@@ -843,13 +938,15 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                       if (isSelected)
                         Container(
                           width: 42,
-                           height: 42,
+                          height: 42,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: AppColors.dashboardTeal,
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.dashboardTeal.withValues(alpha: 0.4),
+                                color: AppColors.dashboardTeal.withValues(
+                                  alpha: 0.4,
+                                ),
                                 blurRadius: 12,
                                 spreadRadius: 2,
                               ),
@@ -878,19 +975,30 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                             onTap: () {
                               if (index == 0) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) => const CandidateHomeScreen(),
+                                  ),
                                 );
                               } else if (index == 1) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CandidateApplicationsScreen(),
+                                  ),
                                 );
                               } else if (index == 2) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CandidateJobFeedScreen(),
+                                  ),
                                 );
                               } else if (index == 3) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateInterviewLobbyScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CandidateInterviewLobbyScreen(),
+                                  ),
                                 );
                               } else {
                                 _showMockNavigation(item['route']);
@@ -904,27 +1012,31 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                                 color: Colors.transparent,
                               ),
                               child: Center(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      // Child seam indicator inside Interviews tab
-                                      if (isSelected)
-                                        Container(
-                                          width: 3,
-                                          height: 12,
-                                          margin: const EdgeInsets.only(right: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF0F172A),
-                                            borderRadius: BorderRadius.circular(1),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Child seam indicator inside Interviews tab
+                                    if (isSelected)
+                                      Container(
+                                        width: 3,
+                                        height: 12,
+                                        margin: const EdgeInsets.only(right: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F172A),
+                                          borderRadius: BorderRadius.circular(
+                                            1,
                                           ),
                                         ),
-                                      Icon(
-                                        item['icon'],
-                                        color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                                        size: 19,
                                       ),
-                                    ],
-                                  ),
+                                    Icon(
+                                      item['icon'],
+                                      color: isSelected
+                                          ? const Color(0xFF0F172A)
+                                          : const Color(0xFF64748B),
+                                      size: 19,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -937,11 +1049,17 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                           top: -4,
                           right: -4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.dashboardTeal,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white, width: 1.5),
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
                             ),
                             child: Text(
                               badgeVal,
@@ -966,26 +1084,48 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
             onSelected: (value) {
               if (value == 'candidate_home') {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateHomeScreen(),
+                  ),
                 );
               } else if (value == 'candidate_apps') {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateApplicationsScreen(),
+                  ),
                 );
               }
             },
             itemBuilder: (context) => [
               PopupMenuItem(
                 value: 'candidate_home',
-                child: Text('Candidate Home', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Candidate Home',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               PopupMenuItem(
                 value: 'candidate_home',
-                child: Text('Candidate Home', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Candidate Home',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               PopupMenuItem(
                 value: 'candidate_apps',
-                child: Text('Candidate Applications', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Candidate Applications',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
             child: Container(
@@ -995,7 +1135,10 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFFE6F7F5),
-                border: Border.all(color: const Color(0xFF32BAB1).withValues(alpha: 0.3), width: 1),
+                border: Border.all(
+                  color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
+                  width: 1,
+                ),
               ),
               child: Center(
                 child: Text(
@@ -1054,19 +1197,27 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
             onTap: () {
               if (index == 0) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateHomeScreen(),
+                  ),
                 );
               } else if (index == 1) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateApplicationsScreen(),
+                  ),
                 );
               } else if (index == 2) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateJobFeedScreen(),
+                  ),
                 );
               } else if (index == 3) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateInterviewLobbyScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateInterviewLobbyScreen(),
+                  ),
                 );
               } else {
                 _showMockNavigation(item['route']);
@@ -1081,11 +1232,15 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                   height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected ? AppColors.dashboardTeal : Colors.transparent,
+                    color: isSelected
+                        ? AppColors.dashboardTeal
+                        : Colors.transparent,
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: AppColors.dashboardTeal.withValues(alpha: 0.3),
+                              color: AppColors.dashboardTeal.withValues(
+                                alpha: 0.3,
+                              ),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
                             ),
@@ -1108,7 +1263,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                         ),
                       Icon(
                         item['icon'],
-                        color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+                        color: isSelected
+                            ? const Color(0xFF0F172A)
+                            : const Color(0xFF94A3B8),
                         size: 20,
                       ),
                     ],
@@ -1119,11 +1276,17 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                     top: 2,
                     right: 2,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.dashboardTeal,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+                        border: Border.all(
+                          color: const Color(0xFF0F172A),
+                          width: 1.5,
+                        ),
                       ),
                       child: Text(
                         badgeVal,
@@ -1165,10 +1328,16 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
             Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.arrow_back_rounded, color: textPrimary, size: 20),
+                  icon: Icon(
+                    Icons.arrow_back_rounded,
+                    color: textPrimary,
+                    size: 20,
+                  ),
                   onPressed: () {
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const CandidateHomeScreen(),
+                      ),
                     );
                   },
                 ),
@@ -1207,7 +1376,9 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
               GestureDetector(
                 onTap: () {
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateHomeScreen(),
+                    ),
                   );
                 },
                 child: MouseRegion(
@@ -1272,7 +1443,10 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                   border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
                 ),
                 child: TextField(
-                  style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 13),
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF0F172A),
+                    fontSize: 13,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Search or jump to...',
                     hintStyle: GoogleFonts.inter(
@@ -1287,7 +1461,11 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                     suffixIcon: Container(
                       width: 32,
                       alignment: Alignment.center,
-                      margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
+                      margin: const EdgeInsets.only(
+                        right: 6,
+                        top: 4,
+                        bottom: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(4),
@@ -1314,6 +1492,11 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
                 icon: Icons.notifications_none_rounded,
                 hasBadge: true,
                 badgeColor: AppColors.dashboardTeal,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateNotificationsScreen(),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
 
@@ -1332,33 +1515,37 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
     required IconData icon,
     required bool hasBadge,
     Color? badgeColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF475569), size: 18),
+            if (hasBadge)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: badgeColor ?? Colors.red,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1371,7 +1558,10 @@ class _CandidateFeedbackReportScreenState extends State<CandidateFeedbackReportS
         behavior: SnackBarBehavior.floating,
         content: Text(
           'Navigating to: $destination',
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );

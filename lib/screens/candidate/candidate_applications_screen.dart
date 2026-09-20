@@ -12,6 +12,8 @@ import 'candidate_resume_management_screen.dart';
 import 'candidate_interview_history_screen.dart';
 import 'candidate_profile_settings_screen.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/candidate_side_nav.dart';
+import 'candidate_notifications_screen.dart';
 
 import '../../services/application_service.dart';
 import '../../services/resume_service.dart';
@@ -42,6 +44,8 @@ class _CandidateApplicationsScreenState
 
   List<Application> _apiApplications = [];
   bool _isLoading = false;
+
+  bool get isLoading => _isLoading;
 
   @override
   void initState() {
@@ -127,11 +131,15 @@ class _CandidateApplicationsScreenState
     super.dispose();
   }
 
-
   // Dynamic application counts calculated strictly from _applications list
-  int get _activeCount => _applications.where((a) => a['filter'] == 'Active' || a['filter'] == 'Offers').length;
-  int get _offersCount => _applications.where((a) => a['filter'] == 'Offers' || a['stage'] == 'OFFER').length;
-  int get _closedCount => _applications.where((a) => a['filter'] == 'Closed').length;
+  int get _activeCount => _applications
+      .where((a) => a['filter'] == 'Active' || a['filter'] == 'Offers')
+      .length;
+  int get _offersCount => _applications
+      .where((a) => a['filter'] == 'Offers' || a['stage'] == 'OFFER')
+      .length;
+  int get _closedCount =>
+      _applications.where((a) => a['filter'] == 'Closed').length;
 
   // Get matching filtered applications
   List<Map<String, dynamic>> _getFilteredApps() {
@@ -204,7 +212,10 @@ class _CandidateApplicationsScreenState
                   child: Row(
                     children: [
                       // Left Rail (Web Only)
-                      if (!isMobile) _buildLeftRail(context),
+                      if (!isMobile)
+                        const CandidateSideNav(
+                          currentRoute: '/candidate/applications',
+                        ),
 
                       // Main Canvas
                       Expanded(
@@ -348,7 +359,9 @@ class _CandidateApplicationsScreenState
           final isSelected = _selectedFilter == tab;
           final String label = tab == 'Active'
               ? 'Active $_activeCount'
-              : (tab == 'Offers' ? 'Offers $_offersCount' : 'Closed $_closedCount');
+              : (tab == 'Offers'
+                    ? 'Offers $_offersCount'
+                    : 'Closed $_closedCount');
 
           return GestureDetector(
             onTap: () {
@@ -399,7 +412,9 @@ class _CandidateApplicationsScreenState
           final isSelected = _selectedFilter == tab;
           final String label = tab == 'Active'
               ? 'Active $_activeCount'
-              : (tab == 'Offers' ? 'Offers $_offersCount' : 'Closed $_closedCount');
+              : (tab == 'Offers'
+                    ? 'Offers $_offersCount'
+                    : 'Closed $_closedCount');
 
           return Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -973,7 +988,10 @@ class _CandidateApplicationsScreenState
                                   );
                                 } else {
                                   Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const CandidateProfileSettingsScreen(),
+                                    ),
                                   );
                                 }
                               }
@@ -1045,12 +1063,16 @@ class _CandidateApplicationsScreenState
                 ).pushReplacementNamed('/candidate/applications');
               } else if (value == 'candidate_profile') {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateProfileSettingsScreen(),
+                  ),
                 );
               } else if (value == 'signout') {
                 await AuthService.signOut(context);
                 if (mounted) {
-                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+                  Navigator.of(
+                    context,
+                  ).pushNamedAndRemoveUntil('/login', (_) => false);
                 }
               }
             },
@@ -1100,7 +1122,11 @@ class _CandidateApplicationsScreenState
                 value: 'signout',
                 child: Row(
                   children: [
-                    const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+                    const Icon(
+                      Icons.logout_rounded,
+                      color: Colors.redAccent,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Sign Out',
@@ -1211,7 +1237,9 @@ class _CandidateApplicationsScreenState
                   );
                 } else {
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateProfileSettingsScreen(),
+                    ),
                   );
                 }
               }
@@ -1404,18 +1432,28 @@ class _CandidateApplicationsScreenState
               ),
               const SizedBox(width: 14),
 
-              // Notification button
+              // Notification bell button
               _buildTopBarIconButton(
                 icon: Icons.notifications_none_rounded,
                 hasBadge: true,
                 badgeColor: AppColors.dashboardTeal,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateNotificationsScreen(),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
 
-              // Language button
+              // Settings icon
               _buildTopBarIconButton(
-                icon: Icons.language_rounded,
+                icon: Icons.settings_outlined,
                 hasBadge: false,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateProfileSettingsScreen(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1428,33 +1466,40 @@ class _CandidateApplicationsScreenState
     required IconData icon,
     required bool hasBadge,
     Color? badgeColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
+    return MouseRegion(
+      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, color: const Color(0xFF475569), size: 18),
+              if (hasBadge)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: badgeColor ?? Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1465,14 +1510,19 @@ class _CandidateApplicationsScreenState
     final String company = app['company'] ?? 'TechCorp';
     final String stage = app['stage'] ?? 'APPLIED';
     final String detail = app['detail'] ?? '';
-    final String activeResumeName = (app['resume_filename'] as String?) ?? (ResumeManager.getActiveResume()['filename'] as String?) ?? 'Submitted Resume.pdf';
+    final String activeResumeName =
+        (app['resume_filename'] as String?) ??
+        (ResumeManager.getActiveResume()['filename'] as String?) ??
+        'Submitted Resume.pdf';
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1500,7 +1550,10 @@ class _CandidateApplicationsScreenState
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.dashboardTeal.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -1527,11 +1580,19 @@ class _CandidateApplicationsScreenState
                   // Resume Section
                   Row(
                     children: [
-                      const Icon(Icons.description_rounded, color: AppColors.dashboardTeal, size: 20),
+                      const Icon(
+                        Icons.description_rounded,
+                        color: AppColors.dashboardTeal,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Attached Resume:',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: const Color(0xFF0F172A)),
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: const Color(0xFF0F172A),
+                        ),
                       ),
                     ],
                   ),
@@ -1545,24 +1606,39 @@ class _CandidateApplicationsScreenState
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
+                        const Icon(
+                          Icons.picture_as_pdf,
+                          color: Colors.redAccent,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             activeResumeName,
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF1E293B)),
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF1E293B),
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFDCFCE7),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             'ACTIVE',
-                            style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFF15803D)),
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF15803D),
+                            ),
                           ),
                         ),
                       ],
@@ -1574,7 +1650,11 @@ class _CandidateApplicationsScreenState
                   // Gemini AI Parsing Results
                   Text(
                     'Gemini AI Parsed Skills & Matching:',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: const Color(0xFF0F172A)),
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: const Color(0xFF0F172A),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Container(
@@ -1590,38 +1670,69 @@ class _CandidateApplicationsScreenState
                           children: [
                             Text(
                               'Match Score:',
-                              style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B)),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: const Color(0xFF64748B),
+                              ),
                             ),
                             const Spacer(),
                             Text(
                               '92% Match',
-                              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.dashboardTeal),
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.dashboardTeal,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 10),
                         Text(
                           'Extracted Technical Skills:',
-                          style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF475569)),
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF475569),
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Wrap(
                           spacing: 6,
                           runSpacing: 4,
-                          children: ['Python', 'Django', 'PostgreSQL', 'Docker', 'Redis', 'REST APIs', 'PyTorch']
-                              .map((skill) => Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                          children:
+                              [
+                                    'Python',
+                                    'Django',
+                                    'PostgreSQL',
+                                    'Docker',
+                                    'Redis',
+                                    'REST APIs',
+                                    'PyTorch',
+                                  ]
+                                  .map(
+                                    (skill) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: const Color(0xFFCBD5E1),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        skill,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: const Color(0xFF334155),
+                                        ),
+                                      ),
                                     ),
-                                    child: Text(
-                                      skill,
-                                      style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, color: const Color(0xFF334155)),
-                                    ),
-                                  ))
-                              .toList(),
+                                  )
+                                  .toList(),
                         ),
                       ],
                     ),
@@ -1631,12 +1742,19 @@ class _CandidateApplicationsScreenState
                     const SizedBox(height: 14),
                     Text(
                       'Status Detail:',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: const Color(0xFF64748B)),
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: const Color(0xFF64748B),
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       detail,
-                      style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF0F172A)),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: const Color(0xFF0F172A),
+                      ),
                     ),
                   ],
                 ],
@@ -1646,22 +1764,38 @@ class _CandidateApplicationsScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: Text('Close', style: GoogleFonts.inter(color: const Color(0xFF64748B), fontWeight: FontWeight.bold)),
+              child: Text(
+                'Close',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.dashboardTeal,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: () {
                 Navigator.pop(dialogContext);
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateJobDetailScreen(jobTitle: 'Backend Engineer', jobId: '4d6baf7e-07e4-4614-93f9-daef1916ca43')),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateJobDetailScreen(
+                      jobTitle: 'Backend Engineer',
+                      jobId: '4d6baf7e-07e4-4614-93f9-daef1916ca43',
+                    ),
+                  ),
                 );
               },
               child: Text(
                 'View Job Details',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
           ],

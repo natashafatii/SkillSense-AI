@@ -1,9 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../utils/responsive.dart';
+import 'terms_privacy_screen.dart';
 
 /// Signup-specific web HR registration screen.
 class HrRegisterScreenWeb extends StatelessWidget {
@@ -12,12 +14,16 @@ class HrRegisterScreenWeb extends StatelessWidget {
   final TextEditingController emailController;
   final TextEditingController companyController;
   final TextEditingController passwordController;
+  final TextEditingController confirmController;
   final FocusNode nameFocus;
   final FocusNode emailFocus;
   final FocusNode companyFocus;
   final FocusNode passwordFocus;
+  final FocusNode confirmFocus;
   final bool obscurePassword;
+  final bool obscureConfirm;
   final VoidCallback onObscureToggle;
+  final VoidCallback onObscureConfirmToggle;
   final VoidCallback onRegister;
   final VoidCallback onGoogleSignIn;
   final VoidCallback onLoginTap;
@@ -29,12 +35,16 @@ class HrRegisterScreenWeb extends StatelessWidget {
     required this.emailController,
     required this.companyController,
     required this.passwordController,
+    required this.confirmController,
     required this.nameFocus,
     required this.emailFocus,
     required this.companyFocus,
     required this.passwordFocus,
+    required this.confirmFocus,
     required this.obscurePassword,
+    required this.obscureConfirm,
     required this.onObscureToggle,
+    required this.onObscureConfirmToggle,
     required this.onRegister,
     required this.onGoogleSignIn,
     required this.onLoginTap,
@@ -167,7 +177,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                             style: GoogleFonts.inter(
                                               color: Colors.white,
                                               fontSize: 15,
-                                              fontWeight: FontWeight.w700,
+                                              fontWeight: FontWeight.w600,
                                               letterSpacing: -0.01,
                                             ),
                                             overflow: TextOverflow.ellipsis,
@@ -199,17 +209,12 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Text(
-                                                AppConstants.hrRegisterEyebrow,
-                                                style: GoogleFonts.inter(
-                                                  color: AppColors.webEyebrow,
-                                                  fontSize:
-                                                      Responsive.getFontSize(
-                                                        context,
-                                                        mobile: 10,
-                                                        desktop: 11.5,
-                                                      ),
-                                                  fontWeight: FontWeight.w700,
-                                                  letterSpacing: 1.4,
+                                                AppConstants.hrRegisterEyebrow.toUpperCase(),
+                                                style: GoogleFonts.jetBrainsMono(
+                                                  color: const Color(0xFF7BA5FF),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 1.8,
                                                 ),
                                               ),
                                             ),
@@ -225,24 +230,26 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           ),
                                           child: RichText(
                                             text: TextSpan(
-                                              style: GoogleFonts.fraunces(
+                                              style: GoogleFonts.inter(
                                                 color: Colors.white,
                                                 fontSize:
                                                     Responsive.getFontSize(
                                                       context,
                                                       mobile: 32,
                                                       tablet: 36,
-                                                      desktop: 42,
+                                                      desktop: 40,
                                                     ),
-                                                fontWeight: FontWeight.w600,
+                                                fontWeight: FontWeight.w700,
                                                 height: 1.18,
-                                                letterSpacing: -0.01,
+                                                letterSpacing: -1.2,
                                               ),
                                               children: [
                                                 const TextSpan(
                                                   text: 'Your workspace,\nin ',
                                                 ),
                                                 WidgetSpan(
+                                                  alignment: PlaceholderAlignment.baseline,
+                                                  baseline: TextBaseline.alphabetic,
                                                   child: ShaderMask(
                                                     blendMode: BlendMode.srcIn,
                                                     shaderCallback: (bounds) =>
@@ -254,24 +261,23 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                                                 .webHeadlineFairlyEnd,
                                                           ],
                                                           begin:
-                                                              Alignment.topLeft,
+                                                              Alignment.centerLeft,
                                                           end: Alignment
-                                                              .bottomRight,
+                                                              .centerRight,
                                                         ).createShader(bounds),
                                                     child: Text(
                                                       'one minute.',
-                                                      style: GoogleFonts.fraunces(
+                                                      style: GoogleFonts.inter(
                                                         fontSize:
                                                             Responsive.getFontSize(
                                                               context,
                                                               mobile: 32,
                                                               tablet: 36,
-                                                              desktop: 42,
+                                                              desktop: 40,
                                                             ),
                                                         fontWeight:
-                                                            FontWeight.w500,
-                                                        fontStyle:
-                                                            FontStyle.italic,
+                                                            FontWeight.w700,
+                                                        letterSpacing: -1.2,
                                                         height: 1.18,
                                                       ),
                                                     ),
@@ -292,9 +298,10 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           child: Text(
                                             AppConstants.hrRegisterLeftBody,
                                             style: GoogleFonts.inter(
-                                              color: AppColors.webSubcopy,
-                                              fontSize: 15.5,
-                                              height: 1.75,
+                                              color: const Color(0xFF94A3B8),
+                                              fontSize: 14.5,
+                                              fontWeight: FontWeight.w400,
+                                              height: 1.6,
                                             ),
                                           ),
                                         ),
@@ -316,14 +323,18 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                     ),
 
                                     // Push footer to bottom
-                                    const SizedBox(height: 60),
+                                    const Spacer(),
 
                                     // Footer
-                                    Text(
-                                      '© 2026 SkillSense AI · Bahria University',
-                                      style: GoogleFonts.inter(
-                                        color: AppColors.webFooterText,
-                                        fontSize: 12.5,
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        '© 2026 SkillSense AI',
+                                        style: GoogleFonts.inter(
+                                          color: const Color(0xFF64748B),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w400,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -399,7 +410,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: nameController,
                                             focusNode: nameFocus,
-                                            hintText: 'Abdul Rehman',
+                                            hintText: 'e.g. Sara Ahmed',
                                           ),
                                           const SizedBox(height: 14),
 
@@ -411,7 +422,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: emailController,
                                             focusNode: emailFocus,
-                                            hintText: 'a.rehman@bahria.edu.pk',
+                                            hintText: 'you@company.com',
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                           ),
@@ -425,7 +436,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: companyController,
                                             focusNode: companyFocus,
-                                            hintText: 'Bahria University',
+                                            hintText: 'e.g. SkillSense AI',
                                           ),
                                           const SizedBox(height: 14),
 
@@ -437,13 +448,35 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: passwordController,
                                             focusNode: passwordFocus,
-                                            hintText: AppConstants
-                                                .hrRegisterPasswordHint,
+                                            hintText: 'At least 8 characters',
                                             obscureText: obscurePassword,
                                             suffixIcon: GestureDetector(
                                               onTap: onObscureToggle,
                                               child: Icon(
                                                 obscurePassword
+                                                    ? Icons
+                                                          .visibility_off_outlined
+                                                    : Icons.visibility_outlined,
+                                                color: const Color(0xFF94A3B8),
+                                                size: 20,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 14),
+
+                                          const _FormFieldLabel(
+                                            label: 'Confirm Password',
+                                          ),
+                                          const SizedBox(height: 8),
+                                          _CustomTextField(
+                                            controller: confirmController,
+                                            focusNode: confirmFocus,
+                                            hintText: 'Re-enter your password',
+                                            obscureText: obscureConfirm,
+                                            suffixIcon: GestureDetector(
+                                              onTap: onObscureConfirmToggle,
+                                              child: Icon(
+                                                obscureConfirm
                                                     ? Icons
                                                           .visibility_off_outlined
                                                     : Icons.visibility_outlined,
@@ -500,13 +533,37 @@ class HrRegisterScreenWeb extends StatelessWidget {
 
                                           // Bottom Agreement Text
                                           Center(
-                                            child: Text(
-                                              AppConstants.hrRegisterAgreement,
+                                            child: RichText(
                                               textAlign: TextAlign.center,
-                                              style: GoogleFonts.inter(
-                                                fontSize: 12,
-                                                color: const Color(0xFF64748B),
-                                                height: 1.5,
+                                              text: TextSpan(
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  color: const Color(0xFF64748B),
+                                                  height: 1.5,
+                                                ),
+                                                children: [
+                                                  const TextSpan(
+                                                    text: 'By continuing you agree to the ',
+                                                  ),
+                                                  TextSpan(
+                                                    text: 'Terms and Privacy Policy',
+                                                    style: GoogleFonts.inter(
+                                                      color: AppColors.webRoleHr,
+                                                      fontWeight: FontWeight.w600,
+                                                      decoration: TextDecoration.underline,
+                                                    ),
+                                                    recognizer: TapGestureRecognizer()
+                                                      ..onTap = () {
+                                                        Navigator.push(
+                                                          context,
+                                                          MaterialPageRoute(
+                                                            builder: (_) => const TermsPrivacyScreen(),
+                                                          ),
+                                                        );
+                                                      },
+                                                  ),
+                                                  const TextSpan(text: '.'),
+                                                ],
                                               ),
                                             ),
                                           ),
@@ -514,8 +571,10 @@ class HrRegisterScreenWeb extends StatelessWidget {
 
                                           // Already have an account? Sign in
                                           Center(
-                                            child: GestureDetector(
-                                              onTap: onLoginTap,
+                                            child: MouseRegion(
+                                              cursor: SystemMouseCursors.click,
+                                              child: GestureDetector(
+                                                onTap: onLoginTap,
                                               child: RichText(
                                                 text: TextSpan(
                                                   style: GoogleFonts.inter(
@@ -543,6 +602,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                                 ),
                                               ),
                                             ),
+                                          ),
                                           ),
                                         ],
                                       ),
@@ -592,9 +652,9 @@ class _BulletPoint extends StatelessWidget {
           child: Text(
             text,
             style: GoogleFonts.inter(
-              color: const Color(0xFFE1E4F5),
-              fontSize: 14.5,
-              height: 1.4,
+              color: const Color(0xFFCBD5E1),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),

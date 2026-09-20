@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:skillsense_ai/screens/candidate/candidate_onboarding_flow.dart';
-import 'package:skillsense_ai/screens/hr/hr_onboarding_flow.dart';
 import 'package:skillsense_ai/screens/signup/signup_role_selection_screen_web.dart';
 import 'package:skillsense_ai/screens/login/role_selection_screen_mobile.dart';
-import 'package:skillsense_ai/screens/login/login_screen.dart';
 
 /// Responsive wrapper for the signup role selection flow.
 /// > 900 px → [SignupRoleSelectionScreenWeb]
@@ -64,23 +61,14 @@ class _SignupRoleSelectionScreenState extends State<SignupRoleSelectionScreen>
 
   void _onContinue() {
     if (_selectedRole == 'recruiter') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const HrOnboardingFlow()),
-      );
+      Navigator.pushNamed(context, '/onboarding/hr');
     } else if (_selectedRole == 'job_seeker') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const CandidateOnboardingFlow()),
-      );
+      Navigator.pushNamed(context, '/onboarding/candidate');
     }
   }
 
   void _onLoginTap() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
+    Navigator.pushNamed(context, '/login');
   }
 
   @override
@@ -104,6 +92,7 @@ class _SignupRoleSelectionScreenState extends State<SignupRoleSelectionScreen>
             onSignUpTap: _onLoginTap,
             fadeAnimation: _fadeAnimation,
             slideAnimation: _slideAnimation,
+            isSignUpFlow: true,
           );
         }
       },

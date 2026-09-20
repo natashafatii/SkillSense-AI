@@ -4,8 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
 import '../login/login_screen.dart';
 
-const _green = Color(0xFF34C759);
-
 /// Email verification code input screen.
 ///
 /// Shown after signup to collect the 6-digit OTP that Clerk emailed.
@@ -29,13 +27,21 @@ class EmailVerificationScreen extends StatefulWidget {
 
 class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     with SingleTickerProviderStateMixin {
-  final List<TextEditingController> _controllers =
-      List.generate(6, (_) => TextEditingController());
+  final List<TextEditingController> _controllers = List.generate(
+    6,
+    (_) => TextEditingController(),
+  );
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   bool _isLoading = false;
   String? _error;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+
+  bool get _isRecruiter => widget.role.toUpperCase() == 'RECRUITER';
+  Color get _accentColor =>
+      _isRecruiter ? const Color(0xFF2563EB) : const Color(0xFF0FB89B);
+  Color get _accentDarkColor =>
+      _isRecruiter ? const Color(0xFF1D4ED8) : const Color(0xFF0D9F86);
 
   @override
   void initState() {
@@ -87,7 +93,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       // The onboarding flow will navigate to the dashboard/home on
       // completion and mark the user as onboarded.
       Navigator.of(context).pushNamedAndRemoveUntil(
-        widget.role == 'RECRUITER' ? '/dashboard' : '/candidate/home',
+        _isRecruiter ? '/dashboard' : '/candidate/home',
         (_) => false,
       );
     } catch (e) {
@@ -110,7 +116,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
           msg,
           style: GoogleFonts.publicSans(fontWeight: FontWeight.w500),
         ),
-        backgroundColor: _green,
+        backgroundColor: _accentColor,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -172,15 +178,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF34C759), Color(0xFF28A745)],
+                      gradient: LinearGradient(
+                        colors: [_accentColor, _accentDarkColor],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: _green.withValues(alpha: 0.3),
+                          color: _accentColor.withValues(alpha: 0.3),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         ),
@@ -195,13 +201,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                 ),
                 const SizedBox(height: 28),
 
-                // ── Title ───────────────────────────────────────────
+                // ── Title / Headline ────────────────────────────────
                 Text(
                   'Check your email',
                   style: GoogleFonts.publicSans(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A1A2E),
+                    color: _accentColor,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -219,9 +225,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                       const TextSpan(text: 'We sent a verification code to\n'),
                       TextSpan(
                         text: widget.email,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF1A1A2E),
+                          color: _accentColor,
                         ),
                       ),
                     ],
@@ -269,8 +275,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: _green,
+                              borderSide: BorderSide(
+                                color: _accentColor,
                                 width: 2,
                               ),
                             ),
@@ -320,14 +326,30 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                   ),
                 const SizedBox(height: 24),
 
-                // ── Verify button ───────────────────────────────────
-                SizedBox(
+                // ── Verify button with gradient ─────────────────────
+                Container(
                   width: double.infinity,
                   height: 50,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [_accentColor, _accentDarkColor],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _accentColor.withValues(alpha: 0.25),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _verify,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _green,
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -359,17 +381,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const LoginScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
                     );
                   },
                   child: Text(
                     'Back to Sign In',
                     style: GoogleFonts.publicSans(
                       fontSize: 13,
-                      color: const Color(0xFF6B7280),
-                      fontWeight: FontWeight.w500,
+                      color: _accentColor,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),

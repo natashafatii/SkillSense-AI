@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:skillsense_ai/screens/signup/signup_role_selection_screen.dart';
 import 'package:skillsense_ai/screens/login/role_selection_screen_web.dart';
 import 'package:skillsense_ai/screens/login/role_selection_screen_mobile.dart';
-import 'package:skillsense_ai/screens/login/login_screen.dart';
 
 
 /// Role selection screen where users choose between Recruiter/HR and Job Seeker.
@@ -60,19 +58,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
   }
 
   void _onContinue() {
-    Navigator.push(
+    Navigator.pushNamed(
       context,
-      MaterialPageRoute(
-        builder: (_) => LoginScreen(selectedRole: _selectedRole),
-      ),
+      '/login',
+      arguments: _selectedRole,
     );
   }
 
   void _onSignUpTap() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SignupRoleSelectionScreen()),
-    );
+    Navigator.pushNamed(context, '/signup/role');
   }
 
   @override

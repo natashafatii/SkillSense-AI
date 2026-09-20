@@ -8,15 +8,20 @@ import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
 import 'candidate_job_feed_screen.dart';
 import 'candidate_interview_session_screen.dart';
+import '../../widgets/candidate_side_nav.dart';
+import 'candidate_notifications_screen.dart';
+import 'candidate_profile_settings_screen.dart';
 
 class CandidateInterviewLobbyScreen extends StatefulWidget {
   const CandidateInterviewLobbyScreen({super.key});
 
   @override
-  State<CandidateInterviewLobbyScreen> createState() => _CandidateInterviewLobbyScreenState();
+  State<CandidateInterviewLobbyScreen> createState() =>
+      _CandidateInterviewLobbyScreenState();
 }
 
-class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyScreen> {
+class _CandidateInterviewLobbyScreenState
+    extends State<CandidateInterviewLobbyScreen> {
   final int _activeNavIndex = 3; // Interviews is index 3
   Timer? _countdownTimer;
   int _secondsRemaining = 276; // 4 minutes 36 seconds
@@ -112,7 +117,9 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
   }
 
   bool _allChecksPassed() {
-    return _cameraStatus == 'READY' && _micStatus == 'READY' && _connectionStatus == 'READY';
+    return _cameraStatus == 'READY' &&
+        _micStatus == 'READY' &&
+        _connectionStatus == 'READY';
   }
 
   int _getReadyCount() {
@@ -156,7 +163,9 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
               height: isMobile ? 300 : 450,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.dashboardTeal.withValues(alpha: isMobile ? 0.06 : 0.04),
+                color: AppColors.dashboardTeal.withValues(
+                  alpha: isMobile ? 0.06 : 0.04,
+                ),
               ),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
@@ -174,13 +183,22 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                   child: Row(
                     children: [
                       // Left Rail (Web Only)
-                      if (!isMobile) _buildLeftRail(context),
+                      if (!isMobile)
+                        const CandidateSideNav(
+                          currentRoute: '/candidate/interview-lobby',
+                        ),
 
                       // Main Canvas
                       Expanded(
                         child: Column(
                           children: [
-                            _buildTopBar(isMobile, textPrimary, textSecondary, cardBg, cardBorder),
+                            _buildTopBar(
+                              isMobile,
+                              textPrimary,
+                              textSecondary,
+                              cardBg,
+                              cardBorder,
+                            ),
                             Expanded(
                               child: SingleChildScrollView(
                                 physics: const BouncingScrollPhysics(),
@@ -191,8 +209,18 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                                   bottom: isMobile ? 100 : 32,
                                 ),
                                 child: isMobile
-                                    ? _buildMobileLayout(textPrimary, textSecondary, cardBg, cardBorder)
-                                    : _buildWebLayout(textPrimary, textSecondary, cardBg, cardBorder),
+                                    ? _buildMobileLayout(
+                                        textPrimary,
+                                        textSecondary,
+                                        cardBg,
+                                        cardBorder,
+                                      )
+                                    : _buildWebLayout(
+                                        textPrimary,
+                                        textSecondary,
+                                        cardBg,
+                                        cardBorder,
+                                      ),
                               ),
                             ),
                           ],
@@ -231,7 +259,13 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
         // Left Column (Launch Gate) - 1.4fr
         Expanded(
           flex: 7,
-          child: _buildLaunchGatePanel(textPrimary, textSecondary, cardBg, cardBorder, false),
+          child: _buildLaunchGatePanel(
+            textPrimary,
+            textSecondary,
+            cardBg,
+            cardBorder,
+            false,
+          ),
         ),
         const SizedBox(width: 24),
 
@@ -240,9 +274,20 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
           flex: 5,
           child: Column(
             children: [
-              _buildDeviceCheckPanel(textPrimary, textSecondary, cardBg, cardBorder, false),
+              _buildDeviceCheckPanel(
+                textPrimary,
+                textSecondary,
+                cardBg,
+                cardBorder,
+                false,
+              ),
               const SizedBox(height: 24),
-              _buildHouseRulesPanel(textPrimary, textSecondary, cardBg, cardBorder),
+              _buildHouseRulesPanel(
+                textPrimary,
+                textSecondary,
+                cardBg,
+                cardBorder,
+              ),
             ],
           ),
         ),
@@ -259,9 +304,21 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
   ) {
     return Column(
       children: [
-        _buildLaunchGatePanel(textPrimary, textSecondary, cardBg, cardBorder, true),
+        _buildLaunchGatePanel(
+          textPrimary,
+          textSecondary,
+          cardBg,
+          cardBorder,
+          true,
+        ),
         const SizedBox(height: 16),
-        _buildDeviceCheckPanel(textPrimary, textSecondary, cardBg, cardBorder, true),
+        _buildDeviceCheckPanel(
+          textPrimary,
+          textSecondary,
+          cardBg,
+          cardBorder,
+          true,
+        ),
         const SizedBox(height: 16),
         _buildHouseRulesPanel(textPrimary, textSecondary, cardBg, cardBorder),
       ],
@@ -350,7 +407,9 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                 boxShadow: canEnter
                     ? [
                         BoxShadow(
-                          color: AppColors.dashboardTeal.withValues(alpha: 0.25),
+                          color: AppColors.dashboardTeal.withValues(
+                            alpha: 0.25,
+                          ),
                           blurRadius: 12,
                           spreadRadius: 2,
                         ),
@@ -363,12 +422,17 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                   foregroundColor: const Color(0xFF0F172A),
                   elevation: 0,
                   minimumSize: const Size(double.infinity, 48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 onPressed: canEnter
                     ? () {
                         Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const CandidateInterviewSessionScreen()),
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const CandidateInterviewSessionScreen(),
+                          ),
                         );
                       }
                     : () {
@@ -463,13 +527,17 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: readyCount == 3 ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF),
+                  color: readyCount == 3
+                      ? const Color(0xFFECFDF5)
+                      : const Color(0xFFEFF6FF),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   '$readyCount OF 3',
                   style: GoogleFonts.jetBrainsMono(
-                    color: readyCount == 3 ? const Color(0xFF10B981) : AppColors.dashboardBlue,
+                    color: readyCount == 3
+                        ? const Color(0xFF10B981)
+                        : AppColors.dashboardBlue,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                   ),
@@ -479,17 +547,39 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
           ),
           const SizedBox(height: 16),
 
-          _buildCheckRow('Camera', _cameraStatus, '1080p · good lighting', isMobile),
+          _buildCheckRow(
+            'Camera',
+            _cameraStatus,
+            '1080p · good lighting',
+            isMobile,
+          ),
           const Divider(height: 20, color: Color(0xFFF1F5F9)),
-          _buildCheckRow('Microphone', _micStatus, 'Input level −12 dB', isMobile),
+          _buildCheckRow(
+            'Microphone',
+            _micStatus,
+            'Input level −12 dB',
+            isMobile,
+          ),
           const Divider(height: 20, color: Color(0xFFF1F5F9)),
-          _buildCheckRow('Connection', _connectionStatus, _connectionStatus == 'CHECKING' ? 'Testing bandwidth...' : '15 Mbps · ready', isMobile),
+          _buildCheckRow(
+            'Connection',
+            _connectionStatus,
+            _connectionStatus == 'CHECKING'
+                ? 'Testing bandwidth...'
+                : '15 Mbps · ready',
+            isMobile,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCheckRow(String label, String status, String detail, bool isMobile) {
+  Widget _buildCheckRow(
+    String label,
+    String status,
+    String detail,
+    bool isMobile,
+  ) {
     Color badgeColor = const Color(0xFF64748B);
     Color badgeText = Colors.white;
     String badgeLabel = 'CHECKING...';
@@ -514,7 +604,9 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
             height: 10,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: status == 'READY' ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+              color: status == 'READY'
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFF38BDF8),
             ),
           ),
           const SizedBox(width: 14),
@@ -563,7 +655,11 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
           if (status == 'FAILED') ...[
             const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF64748B)),
+              icon: const Icon(
+                Icons.refresh_rounded,
+                size: 16,
+                color: Color(0xFF64748B),
+              ),
               onPressed: () => _retryCheck(label),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
@@ -626,7 +722,11 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
       children: [
         Text(
           '◆ ',
-          style: GoogleFonts.inter(color: AppColors.dashboardTeal, fontSize: 13, fontWeight: FontWeight.bold),
+          style: GoogleFonts.inter(
+            color: AppColors.dashboardTeal,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         Expanded(
           child: Text(
@@ -715,7 +815,9 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                             color: AppColors.dashboardTeal,
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.dashboardTeal.withValues(alpha: 0.4),
+                                color: AppColors.dashboardTeal.withValues(
+                                  alpha: 0.4,
+                                ),
                                 blurRadius: 12,
                                 spreadRadius: 2,
                               ),
@@ -744,19 +846,30 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                             onTap: () {
                               if (index == 0) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) => const CandidateHomeScreen(),
+                                  ),
                                 );
                               } else if (index == 1) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CandidateApplicationsScreen(),
+                                  ),
                                 );
                               } else if (index == 2) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CandidateJobFeedScreen(),
+                                  ),
                                 );
                               } else if (index == 3) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateInterviewLobbyScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CandidateInterviewLobbyScreen(),
+                                  ),
                                 );
                               } else {
                                 _showMockNavigation(item['route']);
@@ -770,27 +883,31 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                                 color: Colors.transparent,
                               ),
                               child: Center(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      // Child seam indicator inside Interviews tab
-                                      if (isSelected)
-                                        Container(
-                                          width: 3,
-                                          height: 12,
-                                          margin: const EdgeInsets.only(right: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF0F172A),
-                                            borderRadius: BorderRadius.circular(1),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Child seam indicator inside Interviews tab
+                                    if (isSelected)
+                                      Container(
+                                        width: 3,
+                                        height: 12,
+                                        margin: const EdgeInsets.only(right: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F172A),
+                                          borderRadius: BorderRadius.circular(
+                                            1,
                                           ),
                                         ),
-                                      Icon(
-                                        item['icon'],
-                                        color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                                        size: 19,
                                       ),
-                                    ],
-                                  ),
+                                    Icon(
+                                      item['icon'],
+                                      color: isSelected
+                                          ? const Color(0xFF0F172A)
+                                          : const Color(0xFF64748B),
+                                      size: 19,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -803,11 +920,17 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                           top: -4,
                           right: -4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.dashboardTeal,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white, width: 1.5),
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
                             ),
                             child: Text(
                               badgeVal,
@@ -832,26 +955,48 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
             onSelected: (value) {
               if (value == 'candidate_home') {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateHomeScreen(),
+                  ),
                 );
               } else if (value == 'candidate_apps') {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateApplicationsScreen(),
+                  ),
                 );
               }
             },
             itemBuilder: (context) => [
               PopupMenuItem(
                 value: 'candidate_home',
-                child: Text('Candidate Home', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Candidate Home',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               PopupMenuItem(
                 value: 'candidate_home',
-                child: Text('Candidate Home', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Candidate Home',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               PopupMenuItem(
                 value: 'candidate_apps',
-                child: Text('Candidate Applications', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Candidate Applications',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
             child: Container(
@@ -861,7 +1006,10 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFFE6F7F5),
-                border: Border.all(color: const Color(0xFF32BAB1).withValues(alpha: 0.3), width: 1),
+                border: Border.all(
+                  color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
+                  width: 1,
+                ),
               ),
               child: Center(
                 child: Text(
@@ -920,19 +1068,27 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
             onTap: () {
               if (index == 0) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateHomeScreen(),
+                  ),
                 );
               } else if (index == 1) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateApplicationsScreen(),
+                  ),
                 );
               } else if (index == 2) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateJobFeedScreen(),
+                  ),
                 );
               } else if (index == 3) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateInterviewLobbyScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateInterviewLobbyScreen(),
+                  ),
                 );
               } else {
                 _showMockNavigation(item['route']);
@@ -947,11 +1103,15 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                   height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected ? AppColors.dashboardTeal : Colors.transparent,
+                    color: isSelected
+                        ? AppColors.dashboardTeal
+                        : Colors.transparent,
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: AppColors.dashboardTeal.withValues(alpha: 0.3),
+                              color: AppColors.dashboardTeal.withValues(
+                                alpha: 0.3,
+                              ),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
                             ),
@@ -974,7 +1134,9 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                         ),
                       Icon(
                         item['icon'],
-                        color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+                        color: isSelected
+                            ? const Color(0xFF0F172A)
+                            : const Color(0xFF94A3B8),
                         size: 20,
                       ),
                     ],
@@ -985,11 +1147,17 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                     top: 2,
                     right: 2,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.dashboardTeal,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+                        border: Border.all(
+                          color: const Color(0xFF0F172A),
+                          width: 1.5,
+                        ),
                       ),
                       child: Text(
                         badgeVal,
@@ -1031,10 +1199,16 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
             Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.arrow_back_rounded, color: textPrimary, size: 20),
+                  icon: Icon(
+                    Icons.arrow_back_rounded,
+                    color: textPrimary,
+                    size: 20,
+                  ),
                   onPressed: () {
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const CandidateHomeScreen(),
+                      ),
                     );
                   },
                 ),
@@ -1073,7 +1247,9 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
               GestureDetector(
                 onTap: () {
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateHomeScreen(),
+                    ),
                   );
                 },
                 child: MouseRegion(
@@ -1121,7 +1297,10 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                   border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
                 ),
                 child: TextField(
-                  style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 13),
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF0F172A),
+                    fontSize: 13,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Search or jump to...',
                     hintStyle: GoogleFonts.inter(
@@ -1136,7 +1315,11 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
                     suffixIcon: Container(
                       width: 32,
                       alignment: Alignment.center,
-                      margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
+                      margin: const EdgeInsets.only(
+                        right: 6,
+                        top: 4,
+                        bottom: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(4),
@@ -1159,16 +1342,28 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
               ),
               const SizedBox(width: 14),
 
+              // Notification bell button
               _buildTopBarIconButton(
                 icon: Icons.notifications_none_rounded,
                 hasBadge: true,
                 badgeColor: AppColors.dashboardTeal,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateNotificationsScreen(),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
 
+              // Settings icon
               _buildTopBarIconButton(
-                icon: Icons.language_rounded,
+                icon: Icons.settings_outlined,
                 hasBadge: false,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateProfileSettingsScreen(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1181,33 +1376,37 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
     required IconData icon,
     required bool hasBadge,
     Color? badgeColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF475569), size: 18),
+            if (hasBadge)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: badgeColor ?? Colors.red,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1220,7 +1419,10 @@ class _CandidateInterviewLobbyScreenState extends State<CandidateInterviewLobbyS
         behavior: SnackBarBehavior.floating,
         content: Text(
           'Navigating to: $destination',
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );

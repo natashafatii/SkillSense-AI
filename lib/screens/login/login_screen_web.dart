@@ -163,7 +163,7 @@ class LoginScreenWeb extends StatelessWidget {
                                             style: GoogleFonts.inter(
                                               color: Colors.white,
                                               fontSize: 15,
-                                              fontWeight: FontWeight.w700,
+                                              fontWeight: FontWeight.w600,
                                               letterSpacing: -0.01,
                                             ),
                                             overflow: TextOverflow.ellipsis,
@@ -195,17 +195,12 @@ class LoginScreenWeb extends StatelessWidget {
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Text(
-                                                AppConstants.loginWebEyebrow,
-                                                style: GoogleFonts.inter(
-                                                  color: AppColors.webEyebrow,
-                                                  fontSize:
-                                                      Responsive.getFontSize(
-                                                    context,
-                                                    mobile: 10,
-                                                    desktop: 11.5,
-                                                  ),
-                                                  fontWeight: FontWeight.w700,
-                                                  letterSpacing: 1.4,
+                                                AppConstants.loginWebEyebrow.toUpperCase(),
+                                                style: GoogleFonts.jetBrainsMono(
+                                                  color: const Color(0xFF7BA5FF),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 1.8,
                                                 ),
                                               ),
                                             ),
@@ -232,9 +227,10 @@ class LoginScreenWeb extends StatelessWidget {
                                           child: Text(
                                             AppConstants.loginWebBody,
                                             style: GoogleFonts.inter(
-                                              color: AppColors.webSubcopy,
-                                              fontSize: 15.5,
-                                              height: 1.75,
+                                              color: const Color(0xFF94A3B8),
+                                              fontSize: 14.5,
+                                              fontWeight: FontWeight.w400,
+                                              height: 1.6,
                                             ),
                                           ),
                                         ),
@@ -260,16 +256,20 @@ class LoginScreenWeb extends StatelessWidget {
                                     ),
 
                                     // Push footer to bottom
-                                    const SizedBox(height: 60),
+                                    const Spacer(),
 
-                                    // Footer
-                                    Text(
-                                      '© 2026 SkillSense AI · Bahria University Lahore',
-                                      style: GoogleFonts.inter(
-                                        color: AppColors.webFooterText,
-                                        fontSize: 12.5,
-                                      ),
-                                    ),
+                                     // Footer
+                                     Align(
+                                       alignment: Alignment.centerLeft,
+                                       child: Text(
+                                         '© 2026 SkillSense AI',
+                                         style: GoogleFonts.inter(
+                                           color: const Color(0xFF64748B),
+                                           fontSize: 12,
+                                           fontWeight: FontWeight.w400,
+                                         ),
+                                       ),
+                                     ),
                                   ],
                                 ),
                               ),
@@ -566,24 +566,26 @@ class LoginScreenWeb extends StatelessWidget {
   Widget _buildFormattedHeadline(BuildContext context) {
     final double fontSize = Responsive.getFontSize(
       context,
-      mobile: 32,
-      tablet: 36,
-      desktop: 42,
+      mobile: 30,
+      tablet: 34,
+      desktop: 40,
     );
     return RichText(
       text: TextSpan(
-        style: GoogleFonts.fraunces(
+        style: GoogleFonts.inter(
           color: Colors.white,
           fontSize: fontSize,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           height: 1.18,
-          letterSpacing: -0.01,
+          letterSpacing: -1.2,
         ),
         children: [
           const TextSpan(
             text: 'Everything is where\nyou ',
           ),
           WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
             child: ShaderMask(
               blendMode: BlendMode.srcIn,
               shaderCallback: (bounds) => const LinearGradient(
@@ -591,16 +593,16 @@ class LoginScreenWeb extends StatelessWidget {
                   AppColors.webHeadlineFairlyStart,
                   AppColors.webHeadlineFairlyEnd,
                 ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
               ).createShader(bounds),
               child: Text(
                 'left it.',
-                style: GoogleFonts.fraunces(
+                style: GoogleFonts.inter(
                   fontSize: fontSize,
-                  fontWeight: FontWeight.w500,
-                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w700,
                   height: 1.18,
+                  letterSpacing: -1.2,
                 ),
               ),
             ),
@@ -645,9 +647,9 @@ class _WebFeatureItem extends StatelessWidget {
           child: Text(
             text,
             style: GoogleFonts.inter(
-              color: AppColors.webCheckText,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+              color: const Color(0xFFCBD5E1),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),

@@ -24,6 +24,7 @@ import 'screens/candidate/candidate_interview_session_screen.dart';
 import 'screens/candidate/candidate_job_detail_screen.dart';
 import 'screens/candidate/candidate_job_feed_screen.dart';
 import 'screens/candidate/candidate_profile_settings_screen.dart';
+import 'screens/candidate/candidate_notifications_screen.dart';
 import 'screens/candidate/candidate_resume_management_screen.dart';
 import 'screens/dashboard/command_deck_screen.dart';
 import 'screens/hr/analytics_screen.dart';
@@ -36,21 +37,26 @@ import 'screens/hr/org_team_screen.dart';
 import 'screens/hr/rankings_screen.dart';
 import 'screens/hr/schedule_interview_screen.dart';
 import 'screens/hr/settings_screen.dart';
+import 'screens/signup/terms_privacy_screen.dart';
 import 'screens/welcome/aperture_splash_screen.dart';
 import 'screens/welcome/welcome_screen.dart';
 import 'widgets/role_guard.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
+import 'services/route_storage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AuthService.loadUserSession();
 
   // Set the status bar style
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+    ),
+  );
 
   // Initialise the platform-specific auth backend.
   await initializePlatformAuth(EnvConfig.clerkPublishableKey);
@@ -67,6 +73,24 @@ void main() async {
 
 /// Global navigator key — used for programmatic navigation without BuildContext.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+class AppRouteObserver extends NavigatorObserver {
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    if (route.settings.name != null && route.settings.name != '/') {
+      RouteStorage.saveLastRoute(route.settings.name!);
+    }
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    if (newRoute?.settings.name != null && newRoute!.settings.name != '/') {
+      RouteStorage.saveLastRoute(newRoute.settings.name!);
+    }
+  }
+}
 
 class SkillSenseApp extends StatelessWidget {
   const SkillSenseApp({super.key});
@@ -86,6 +110,7 @@ class SkillSenseApp extends StatelessWidget {
       title: 'SkillSense AI',
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
+      navigatorObservers: [AppRouteObserver()],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.primary,
@@ -106,6 +131,9 @@ class SkillSenseApp extends StatelessWidget {
         signedOutWidget: const ApertureSplashScreen(),
       ),
       onGenerateRoute: (settings) {
+        if (settings.name != null && settings.name != '/') {
+          RouteStorage.saveLastRoute(settings.name!);
+        }
         Widget builder;
         switch (settings.name) {
           case '/auth':
@@ -132,6 +160,10 @@ class SkillSenseApp extends StatelessWidget {
             break;
           case '/signup/hr':
             builder = const HrRegisterScreen();
+            break;
+          case '/terms':
+          case '/terms-privacy':
+            builder = const TermsPrivacyScreen();
             break;
           case '/welcome':
             builder = const WelcomeScreen();
@@ -254,6 +286,12 @@ class SkillSenseApp extends StatelessWidget {
             builder = const RoleGuard(
               allowedRoles: [EnvConfig.roleCandidate],
               child: CandidateInterviewHistoryScreen(),
+            );
+            break;
+          case '/candidate/notifications':
+            builder = const RoleGuard(
+              allowedRoles: [EnvConfig.roleCandidate],
+              child: CandidateNotificationsScreen(),
             );
             break;
           case '/candidate/profile':

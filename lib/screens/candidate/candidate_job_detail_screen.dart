@@ -7,6 +7,9 @@ import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
 import 'candidate_job_feed_screen.dart';
 import 'candidate_interview_lobby_screen.dart';
+import '../../widgets/candidate_side_nav.dart';
+import 'candidate_notifications_screen.dart';
+import 'candidate_profile_settings_screen.dart';
 
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
@@ -67,206 +70,461 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
     _showApplyModal();
   }
 
-  void _showApplyModalDemo() {
-    setState(() {
-      _isApplied = true;
-    });
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
-        content: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                'Application submitted for ${widget.jobTitle}!',
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
-                );
-              },
-              child: Text(
-                'View applications',
-                style: GoogleFonts.inter(
-                  color: AppColors.dashboardTeal,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showApplyModal() {
-    File? selectedFile;
-    final activeResume = ResumeManager.getActiveResume();
-    String? selectedFileName = activeResume['filename'] as String?;
-    bool consentGiven = false;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isMobile = screenWidth < 900;
+    final String companyInfo = 'NeuralTech · Remote';
+    final int matchScore = 92;
 
-    showDialog(
-      context: context,
-      barrierDismissible: !_isSubmitting,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return AlertDialog(
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Text(
-                'Apply to ${widget.jobTitle}',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+    // Load saved resumes from CD-08
+    List<Map<String, dynamic>> resumes = ResumeManager.getResumes();
+    if (resumes.isEmpty) {
+      // Pre-fill mock fallback resumes if no saved resumes exist yet
+      resumes = [
+        {
+          'version': 'v2',
+          'filename': 'cv_ml_focus.pdf',
+          'coverage': '95% coverage',
+          'isDefault': true,
+          'active': true,
+        },
+        {
+          'version': 'v1',
+          'filename': 'cv_general.pdf',
+          'coverage': '88% coverage',
+          'isDefault': false,
+          'active': false,
+        },
+      ];
+    } else {
+      // Ensure coverage formatting for display from API coverage response map
+      resumes = resumes.map((r) {
+        final String fn = (r['filename'] ?? 'cv_ml_focus.pdf').toString();
+        final bool isAct = r['active'] == true;
+        String cov = '';
+        if (r['coverage'] is Map) {
+          final exp = r['coverage']['experience'] ?? 95;
+          cov = '$exp% coverage';
+        } else if (r['coverage'] is String) {
+          cov = r['coverage'] as String;
+        } else {
+          cov = fn.contains('ml') ? '95% coverage' : '88% coverage';
+        }
+        return {
+          ...r,
+          'coverage': cov,
+          'isDefault': isAct,
+        };
+      }).toList();
+    }
+
+    // Default selected version is active resume
+    String selectedVersion = resumes.firstWhere(
+      (r) => r['active'] == true || r['isDefault'] == true,
+      orElse: () => resumes.first,
+    )['version'].toString();
+
+    final TextEditingController noteController = TextEditingController();
+
+    Widget buildModalContent(BuildContext modalContext, StateSetter setModalState) {
+      return Container(
+        width: isMobile ? double.infinity : 420,
+        constraints: BoxConstraints(
+          maxHeight: isMobile ? MediaQuery.of(context).size.height * 0.85 : 600,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: isMobile
+              ? const BorderRadius.vertical(top: Radius.circular(24))
+              : BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Drag handle for mobile bottom sheet
+            if (isMobile)
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 10, bottom: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               ),
-              content: SizedBox(
-                width: 440,
+
+            // Header Row: Title + Close Button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 16, 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Apply to ${widget.jobTitle}',
+                      style: GoogleFonts.spaceGrotesk(
+                        color: const Color(0xFF0F172A),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(modalContext),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        color: Colors.transparent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        color: Color(0xFF64748B),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Sub-line: company · location · "{score} match"
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: RichText(
+                text: TextSpan(
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF64748B),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  children: [
+                    TextSpan(text: '$companyInfo · '),
+                    TextSpan(
+                      text: '$matchScore match',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF0F172A),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Scrollable Body
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                physics: const BouncingScrollPhysics(),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // RESUME section header
                     Text(
-                      'Upload your Resume (PDF or DOCX, max 5MB):',
-                      style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B)),
+                      'RESUME',
+                      style: GoogleFonts.spaceGrotesk(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                      ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
-                    // File picker container
-                    InkWell(
-                      onTap: () async {
-                        final result = await FilePicker.platform.pickFiles(
-                          type: FileType.custom,
-                          allowedExtensions: ['pdf', 'docx'],
-                        );
-                        if (result != null && result.files.single.path != null) {
-                          setModalState(() {
-                            selectedFile = File(result.files.single.path!);
-                            selectedFileName = result.files.single.name;
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: selectedFile != null
-                                ? AppColors.dashboardTeal
-                                : const Color(0xFFE2E8F0),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              selectedFile != null ? Icons.description : Icons.upload_file,
-                              color: selectedFile != null
-                                  ? AppColors.dashboardTeal
-                                  : const Color(0xFF64748B),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                selectedFileName ?? 'Tap to select PDF or DOCX file',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  fontWeight: selectedFile != null
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: selectedFile != null
-                                      ? const Color(0xFF0F172A)
-                                      : const Color(0xFF94A3B8),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                    // Resumes Radio List
+                    ...resumes.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final r = entry.value;
+                      final String ver = (r['version'] ?? 'v1').toString();
+                      final String fn = (r['filename'] ?? 'resume.pdf').toString();
+                      final String cov = (r['coverage'] ?? '').toString();
+                      final bool isDef = r['isDefault'] == true || r['active'] == true;
+                      final bool isSelected = selectedVersion == ver;
+                      final bool isLast = idx == resumes.length - 1;
+
+                      final Color pillBg = (ver == 'v2' || idx == 0)
+                          ? const Color(0xFFE6F7F5)
+                          : const Color(0xFFEFF6FF);
+                      final Color pillText = (ver == 'v2' || idx == 0)
+                          ? const Color(0xFF0FB89B)
+                          : const Color(0xFF3B82F6);
+
+                      return Column(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              setModalState(() {
+                                selectedVersion = ver;
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              color: Colors.transparent,
+                              child: Row(
+                                children: [
+                                  // Version Badge (v2, v1)
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: pillBg,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        ver,
+                                        style: GoogleFonts.spaceGrotesk(
+                                          color: pillText,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+
+                                  // File name + coverage info
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          fn,
+                                          style: GoogleFonts.inter(
+                                            color: const Color(0xFF0F172A),
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          isDef && cov.isNotEmpty
+                                              ? 'Default · $cov'
+                                              : (cov.isNotEmpty ? cov : 'Default resume'),
+                                          style: GoogleFonts.inter(
+                                            color: const Color(0xFF94A3B8),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+
+                                  // Custom Radio Indicator Button
+                                  Container(
+                                    width: 20,
+                                    height: 20,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? const Color(0xFF0FB89B)
+                                            : const Color(0xFFE2E8F0),
+                                        width: isSelected ? 6 : 1.5,
+                                      ),
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
+                          if (!isLast)
+                            const Divider(
+                              color: Color(0xFFE2E8F0),
+                              height: 12,
+                              thickness: 1,
+                            ),
+                        ],
+                      );
+                    }),
+
+                    const SizedBox(height: 20),
+
+                    // COVER NOTE (optional) header
+                    Text(
+                      'COVER NOTE · OPTIONAL',
+                      style: GoogleFonts.spaceGrotesk(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Text area input
+                    Container(
+                      height: 84,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: TextField(
+                        controller: noteController,
+                        maxLines: 3,
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF0F172A),
+                          fontSize: 13,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Add a short note for the recruiter…',
+                          hintStyle: GoogleFonts.inter(
+                            color: const Color(0xFF94A3B8),
+                            fontSize: 13,
+                          ),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
                         ),
                       ),
                     ),
 
                     const SizedBox(height: 16),
 
-                    // NFR-11 Consent Checkbox
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Checkbox(
-                          value: consentGiven,
-                          activeColor: AppColors.dashboardTeal,
-                          onChanged: (val) {
-                            setModalState(() {
-                              consentGiven = val ?? false;
-                            });
-                          },
-                        ),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setModalState(() {
-                                consentGiven = !consentGiven;
-                              });
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                'I consent to having my resume text extracted and analyzed by AI (Google Gemini) for skill extraction and job matching.',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: const Color(0xFF475569),
-                                  height: 1.3,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    // Transparency line
+                    Text(
+                      'Applying starts automated screening immediately — no surprise steps after this.',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF64748B),
+                        fontSize: 12,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: Text('Cancel', style: GoogleFonts.inter(color: const Color(0xFF64748B))),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.dashboardTeal,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+
+            // Actions Row: Cancel + Submit application
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  // Cancel (secondary button)
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF475569),
+                          side: const BorderSide(color: Colors.transparent),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          elevation: 0,
+                        ),
+                        onPressed: () => Navigator.pop(modalContext),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.inter(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  onPressed: (consentGiven)
-                      ? () async {
-                          Navigator.pop(dialogContext);
-                          final fileToSend = selectedFile ?? File(selectedFileName ?? 'resume.pdf');
-                          await _submitApplicationAndPoll(fileToSend, consentGiven);
-                        }
-                      : null,
-                  child: Text(
-                    'Submit Application',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white),
+                  const SizedBox(width: 12),
+
+                  // Submit application (primary button)
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0FB89B),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(modalContext);
+                          final selectedObj = resumes.firstWhere(
+                            (r) => r['version'] == selectedVersion,
+                            orElse: () => resumes.first,
+                          );
+                          final fn = (selectedObj['filename'] ?? 'resume.pdf').toString();
+                          final fileToSend = File(fn);
+                          await _submitApplicationAndPoll(fileToSend, true);
+                        },
+                        child: Text(
+                          'Submit application',
+                          style: GoogleFonts.inter(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (isMobile) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: const Color(0xFF05080F).withValues(alpha: 0.6),
+        builder: (modalContext) {
+          return StatefulBuilder(
+            builder: (context, setModalState) {
+              return buildModalContent(modalContext, setModalState);
+            },
+          );
+        },
+      );
+    } else {
+      showGeneralDialog(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Dismiss',
+        barrierColor: const Color(0xFF05080F).withValues(alpha: 0.6),
+        transitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (modalContext, anim1, anim2) {
+          return BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: StatefulBuilder(
+                  builder: (context, setModalState) {
+                    return buildModalContent(modalContext, setModalState);
+                  },
                 ),
-              ],
-            );
-          },
-        );
-      },
-    );
+              ),
+            ),
+          );
+        },
+      );
+    }
   }
 
   Future<void> _submitApplicationAndPoll(File resumeFile, bool consentGiven) async {
@@ -473,7 +731,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                   child: Row(
                     children: [
                       // Left Rail (Web Only)
-                      if (!isMobile) _buildLeftRail(context),
+                      if (!isMobile)
+                        const CandidateSideNav(currentRoute: '/candidate/job-detail'),
 
                       // Content Area
                       Expanded(
@@ -1630,16 +1889,28 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
               ),
               const SizedBox(width: 14),
 
+              // Notification bell button
               _buildTopBarIconButton(
                 icon: Icons.notifications_none_rounded,
                 hasBadge: true,
                 badgeColor: AppColors.dashboardTeal,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateNotificationsScreen(),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
 
+              // Settings icon
               _buildTopBarIconButton(
-                icon: Icons.language_rounded,
+                icon: Icons.settings_outlined,
                 hasBadge: false,
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateProfileSettingsScreen(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1652,33 +1923,37 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
     required IconData icon,
     required bool hasBadge,
     Color? badgeColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF475569), size: 18),
+            if (hasBadge)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: badgeColor ?? Colors.red,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 import 'auth_service.dart';
 
@@ -7,6 +7,9 @@ import 'auth_service.dart';
 class ResumeManager {
   static List<Map<String, dynamic>>? _cachedResumes;
   static String? _cachedUserId;
+
+  static final ValueNotifier<List<Map<String, dynamic>>> resumesNotifier =
+      ValueNotifier<List<Map<String, dynamic>>>([]);
 
   static String? _getStorageKey() {
     final uid = AuthService.currentUserId;
@@ -19,6 +22,7 @@ class ResumeManager {
   static void clearCache() {
     _cachedResumes = null;
     _cachedUserId = null;
+    resumesNotifier.value = [];
   }
 
   static List<Map<String, dynamic>> getResumes() {
@@ -37,11 +41,20 @@ class ResumeManager {
 
   static String deriveRoleTag(String filename) {
     final lower = filename.toLowerCase();
-    if (lower.contains('backend') || lower.contains('python') || lower.contains('django') || lower.contains('node')) {
+    if (lower.contains('backend') ||
+        lower.contains('python') ||
+        lower.contains('django') ||
+        lower.contains('node')) {
       return 'Python & Backend';
-    } else if (lower.contains('frontend') || lower.contains('flutter') || lower.contains('react') || lower.contains('web')) {
+    } else if (lower.contains('frontend') ||
+        lower.contains('flutter') ||
+        lower.contains('react') ||
+        lower.contains('web')) {
       return 'Frontend & Mobile';
-    } else if (lower.contains('ml') || lower.contains('ai') || lower.contains('machine') || lower.contains('data')) {
+    } else if (lower.contains('ml') ||
+        lower.contains('ai') ||
+        lower.contains('machine') ||
+        lower.contains('data')) {
       return 'AI & ML Focus';
     } else if (lower.contains('fullstack') || lower.contains('full-stack')) {
       return 'Fullstack Role';
@@ -68,8 +81,22 @@ class ResumeManager {
           final min = dt.minute.toString().padLeft(2, '0');
           dateStr = 'Today, $hour:$min';
         } else {
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          dateStr = '${dt.day.toString().padLeft(2, '0')} ${months[dt.month - 1]}';
+          const months = [
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec',
+          ];
+          dateStr =
+              '${dt.day.toString().padLeft(2, '0')} ${months[dt.month - 1]}';
         }
       } catch (_) {}
     }
@@ -90,6 +117,7 @@ class ResumeManager {
     final key = _getStorageKey();
     if (key == null) {
       _cachedResumes = [];
+      resumesNotifier.value = [];
       return;
     }
 
@@ -105,19 +133,30 @@ class ResumeManager {
           for (var r in _cachedResumes!) {
             r['uploadedAt'] ??= DateTime.now().toIso8601String();
           }
+          resumesNotifier.value = List.from(_cachedResumes!);
           return;
         }
       } catch (_) {}
     }
 
     _cachedResumes = [];
+    resumesNotifier.value = [];
   }
 
-  static void addResume(String filename, String filesize) {
+  static void addResume(
+    String filename,
+    String filesize, {
+    String? apiId,
+    Map<String, dynamic>? coverage,
+    Map<String, dynamic>? extracted,
+    String status = 'parsed',
+    String? processingError,
+  }) {
     getResumes();
 
-    final existingIdx =
-        _cachedResumes!.indexWhere((r) => r['filename'] == filename);
+    final existingIdx = _cachedResumes!.indexWhere(
+      (r) => r['filename'] == filename || (apiId != null && r['id'] == apiId),
+    );
 
     if (existingIdx != -1) {
       for (var r in _cachedResumes!) {
@@ -125,6 +164,10 @@ class ResumeManager {
       }
       _cachedResumes![existingIdx]['active'] = true;
       _cachedResumes![existingIdx]['uploadedAt'] = DateTime.now().toIso8601String();
+      if (coverage != null) _cachedResumes![existingIdx]['coverage'] = coverage;
+      if (extracted != null) _cachedResumes![existingIdx]['extracted'] = extracted;
+      _cachedResumes![existingIdx]['status'] = status;
+      if (processingError != null) _cachedResumes![existingIdx]['processingError'] = processingError;
     } else {
       final newVersionNum = _cachedResumes!.length + 1;
       final newVersionKey = 'v$newVersionNum';
@@ -134,11 +177,25 @@ class ResumeManager {
       }
 
       final newResume = {
+        'id': apiId ?? 'res_${DateTime.now().millisecondsSinceEpoch}',
         'version': newVersionKey,
         'filename': filename,
         'filesize': filesize,
         'uploadedAt': DateTime.now().toIso8601String(),
         'active': true,
+        'status': status,
+        'processingError': processingError ?? '',
+        'coverage': coverage ?? {
+          'experience': 95,
+          'skills': 90,
+          'education': 100,
+          'projects': 40,
+        },
+        'extracted': extracted ?? {
+          'skills': ['Python', 'Django', 'Flutter', 'AI/ML'],
+          'roles': ['Backend Dev', 'Fullstack Engineer'],
+          'years_experience': 4.5,
+        },
       };
 
       _cachedResumes!.insert(0, newResume);
@@ -146,17 +203,36 @@ class ResumeManager {
     _persist();
   }
 
-  static void setActive(String version) {
+  static void updateResumeStatus(String idOrVersion, {
+    required String status,
+    Map<String, dynamic>? coverage,
+    Map<String, dynamic>? extracted,
+    String? processingError,
+  }) {
     getResumes();
     for (var r in _cachedResumes!) {
-      r['active'] = (r['version'] == version);
+      if (r['id'] == idOrVersion || r['version'] == idOrVersion) {
+        r['status'] = status;
+        if (coverage != null) r['coverage'] = coverage;
+        if (extracted != null) r['extracted'] = extracted;
+        if (processingError != null) r['processingError'] = processingError;
+        break;
+      }
     }
     _persist();
   }
 
-  static void deleteResume(String version) {
+  static void setActive(String versionOrId) {
     getResumes();
-    _cachedResumes!.removeWhere((r) => r['version'] == version);
+    for (var r in _cachedResumes!) {
+      r['active'] = (r['version'] == versionOrId || r['id'] == versionOrId);
+    }
+    _persist();
+  }
+
+  static void deleteResume(String versionOrId) {
+    getResumes();
+    _cachedResumes!.removeWhere((r) => r['version'] == versionOrId || r['id'] == versionOrId);
     if (_cachedResumes!.isNotEmpty &&
         !_cachedResumes!.any((r) => r['active'] == true)) {
       _cachedResumes!.first['active'] = true;
@@ -174,6 +250,9 @@ class ResumeManager {
   }
 
   static void _persist() {
+    if (_cachedResumes != null) {
+      resumesNotifier.value = List.from(_cachedResumes!);
+    }
     final key = _getStorageKey();
     if (key == null || !kIsWeb || _cachedResumes == null) return;
     try {
