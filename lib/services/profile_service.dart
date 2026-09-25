@@ -13,15 +13,42 @@ class ProfileService {
   // Candidate Profile Endpoints (`/api/candidates/profile/`)
   // ══════════════════════════════════════════════════════════════════════════
 
+  static CandidateProfile? cachedCandidateProfile;
+
   /// Retrieves the self-owned candidate profile for the authenticated candidate.
-  static Future<CandidateProfile> getCandidateProfile() async {
-    try {
-      final dio = await ApiClient.getInstance();
-      final response = await dio.get('/candidates/profile/');
-      return CandidateProfile.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      throw ApiException.fromDioException(e);
+  static Future<CandidateProfile?> getCandidateProfile({
+    bool forceRefresh = false,
+  }) async {
+    if (cachedCandidateProfile != null && !forceRefresh) {
+      return cachedCandidateProfile!;
     }
+    int attempts = 0;
+    while (attempts < 2) {
+      try {
+        final dio = await ApiClient.getInstance();
+        final response = await dio.get('/candidates/profile/');
+        cachedCandidateProfile = CandidateProfile.fromJson(
+          response.data as Map<String, dynamic>,
+        );
+        return cachedCandidateProfile;
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 401) {
+          throw ApiException(statusCode: 401, message: 'Unauthorized');
+        }
+        if (e.response?.statusCode == 404) {
+          // No profile yet, return null
+          return null;
+        }
+        attempts++;
+        if (attempts >= 2) {
+          return cachedCandidateProfile;
+        }
+        await Future.delayed(const Duration(milliseconds: 500));
+      } catch (_) {
+        break;
+      }
+    }
+    return cachedCandidateProfile;
   }
 
   /// Partially updates the self-owned candidate profile.
@@ -30,11 +57,11 @@ class ProfileService {
   ) async {
     try {
       final dio = await ApiClient.getInstance();
-      final response = await dio.patch(
-        '/candidates/profile/',
-        data: patchData,
+      final response = await dio.patch('/candidates/profile/', data: patchData);
+      cachedCandidateProfile = CandidateProfile.fromJson(
+        response.data as Map<String, dynamic>,
       );
-      return CandidateProfile.fromJson(response.data as Map<String, dynamic>);
+      return cachedCandidateProfile!;
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
     }
@@ -61,10 +88,7 @@ class ProfileService {
   ) async {
     try {
       final dio = await ApiClient.getInstance();
-      final response = await dio.patch(
-        '/recruiters/profile/',
-        data: patchData,
-      );
+      final response = await dio.patch('/recruiters/profile/', data: patchData);
       return RecruiterProfile.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
@@ -83,10 +107,7 @@ class ProfileService {
         ),
       });
 
-      final response = await dio.patch(
-        '/recruiters/profile/',
-        data: formData,
-      );
+      final response = await dio.patch('/recruiters/profile/', data: formData);
       return RecruiterProfile.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);

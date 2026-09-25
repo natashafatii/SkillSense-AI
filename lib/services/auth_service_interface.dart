@@ -85,6 +85,10 @@ abstract class AuthServiceInterface {
   /// Returns the unique ID of the currently signed-in user, or null if signed out.
   String? get userId;
 
+  String? get firstName;
+  
+  String? get lastName;
+
   /// `true` when there is an active Clerk session.
   bool get isSignedIn;
 

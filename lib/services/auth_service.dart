@@ -84,7 +84,7 @@ class AuthService {
     String email,
     String password,
   ) async {
-    await instance.login(email, password);
+    return instance.login(email, password);
   }
 
   static Future<void> signUp(
@@ -117,6 +117,25 @@ class AuthService {
 
   static Future<void> verifySignUpCode(String code) async {
     await instance.verifySignUpCode(code);
+  }
+
+  static Future<void> verifySignInCode(String code) async {
+    await instance.verifySignInCode(code);
+  }
+
+  static Future<void> resendSignInCode() async {
+    await instance.resendSignInCode();
+  }
+
+  static Future<void> requestPasswordReset(String email) async {
+    await instance.requestPasswordReset(email);
+  }
+
+  static Future<SignInResult> resetPassword({
+    required String code,
+    required String newPassword,
+  }) {
+    return instance.resetPassword(code: code, newPassword: newPassword);
   }
 
   static Future<void> registerCandidate(
@@ -162,19 +181,39 @@ class AuthService {
     await registerHr(context, data);
   }
 
-  static Future<Map<String, dynamic>?> fetchCurrentUser() async {
+  static Future<Map<String, dynamic>?> fetchCurrentUser({String? fallbackEmail}) async {
     if (currentUserNotifier.value == null) {
       await loadUserSession();
     }
-    try {
-      final dio = await ApiClient.getInstance();
-      final response = await dio.get('/users/me/');
-      if (response.data is Map<String, dynamic>) {
-        final data = response.data as Map<String, dynamic>;
-        await saveUserSession(data);
-        return data;
+    int attempts = 0;
+    while (attempts < 2) {
+      try {
+        final dio = await ApiClient.getInstance();
+        final response = await dio.get('/users/me/');
+        if (response.data is Map<String, dynamic>) {
+          final data = response.data as Map<String, dynamic>;
+          await saveUserSession(data);
+          return data;
+        }
+        break; // If not map, break loop
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 401) {
+          throw Exception('Unauthorized');
+        }
+        attempts++;
+        if (attempts >= 2) {
+          // Fallback to JWT email / existing session
+          if (currentUserNotifier.value == null && fallbackEmail != null) {
+            final fallbackData = {'email': fallbackEmail, 'first_name': '', 'last_name': ''};
+            await saveUserSession(fallbackData);
+          }
+          break;
+        }
+        await Future.delayed(const Duration(milliseconds: 500));
+      } catch (_) {
+        break;
       }
-    } catch (_) {}
+    }
     return currentUserNotifier.value;
   }
 
@@ -202,6 +241,8 @@ class AuthService {
   }
 
   static String? get currentUserId => instance.userId;
+  static String? get clerkFirstName => instance.firstName;
+  static String? get clerkLastName => instance.lastName;
 
   static Future<void> signOut(BuildContext context) async {
     await instance.signOut();

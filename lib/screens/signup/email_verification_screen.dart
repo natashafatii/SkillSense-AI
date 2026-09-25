@@ -97,6 +97,14 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
         await AuthService.verifySignInCode(code);
       } else {
         await AuthService.verifySignUpCode(code);
+        // FIX 2: Persist the name at sign-up time
+        final cFn = (AuthService.clerkFirstName ?? '').trim();
+        final cLn = (AuthService.clerkLastName ?? '').trim();
+        if (cFn.isNotEmpty || cLn.isNotEmpty) {
+          try {
+            await AuthService.updateUserProfile(firstName: cFn, lastName: cLn);
+          } catch (_) {}
+        }
       }
       if (!mounted) return;
       _snack(
@@ -421,7 +429,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                       _isResending ? 'Sending…' : 'Resend code',
                       style: GoogleFonts.publicSans(
                         fontSize: 13,
-                        color: _green,
+                        color: _accentColor,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

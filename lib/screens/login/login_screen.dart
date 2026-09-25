@@ -6,11 +6,13 @@ import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/gradient_background.dart';
 import '../../services/auth_service.dart';
+import '../../services/profile_service.dart';
 import 'login_screen_web.dart';
 import 'forgot_password_screen_web.dart';
 import 'check_email_screen_web.dart';
 import 'set_new_password_screen_web.dart';
 import '../signup/email_verification_screen.dart';
+import '../../widgets/profile_name_prompt_dialog.dart';
 
 /// Login screen for SkillSense AI.
 /// Background: identical gradient to WelcomeScreen & RoleSelectionScreen.
@@ -103,12 +105,62 @@ class _LoginScreenState extends State<LoginScreen>
         );
         return;
       }
+      // Fetch backend user profile right after login success
+      try {
+        await AuthService.fetchCurrentUser(fallbackEmail: email);
+      } catch (e) {
+        if (e.toString().contains('Unauthorized')) {
+          if (!mounted) return;
+          await AuthService.signOut(context);
+          if (mounted) {
+            setState(() {
+              _loginError = 'Session expired or unauthorized. Please sign in again.';
+            });
+          }
+          return;
+        }
+      }
 
       _snack('Login successful!');
-      final userRole = AuthService.getUserRole();
-      if (userRole == 'RECRUITER') {
+      final userData = AuthService.currentUserData;
+      
+      final fn = (userData?['first_name'] ?? '').toString().trim();
+      final ln = (userData?['last_name'] ?? '').toString().trim();
+      
+      final cFn = (AuthService.clerkFirstName ?? '').trim();
+      final cLn = (AuthService.clerkLastName ?? '').trim();
+
+      if (fn.isEmpty && ln.isEmpty) {
+        if (cFn.isNotEmpty || cLn.isNotEmpty) {
+          // We have the name from Clerk, but it's missing in the backend. 
+          // PATCH silently and avoid the modal.
+          try {
+            await AuthService.updateUserProfile(firstName: cFn, lastName: cLn);
+          } catch (_) {}
+        } else {
+          if (mounted) {
+            await showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => const ProfileNamePromptDialog(),
+            );
+          }
+        }
+      }
+
+      final updatedUserData = AuthService.currentUserData;
+      final role = (updatedUserData?['role']?.toString().toUpperCase()) ?? AuthService.getUserRole().toUpperCase();
+      
+      if (role == 'RECRUITER' || role == 'ADMIN') {
+        if (!mounted) return;
         Navigator.pushReplacementNamed(context, '/dashboard');
       } else {
+        try {
+          await ProfileService.getCandidateProfile();
+        } catch (_) {
+          // Ignore fetch errors during login (e.g. 404 profile doesn't exist yet)
+        }
+        if (!mounted) return;
         Navigator.pushReplacementNamed(context, '/candidate/home');
       }
     } catch (e) {

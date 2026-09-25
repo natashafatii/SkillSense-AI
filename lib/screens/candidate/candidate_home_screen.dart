@@ -82,9 +82,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     }
   }
 
-  Future<void> _loadUser() async {
+  void _loadUser() {
     try {
-      final user = await AuthService.fetchCurrentUser();
+      final user = AuthService.currentUserData;
       if (user != null && mounted) {
         final firstName = user['first_name']?.toString().trim();
         final lastName = user['last_name']?.toString().trim();
@@ -392,9 +392,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
       return ValueListenableBuilder<Map<String, dynamic>?>(
         valueListenable: AuthService.currentUserNotifier,
         builder: (context, userData, child) {
-          final firstName = (userData?['first_name'] ?? _userName)
-              .toString()
-              .trim();
+          final firstName = (userData?['first_name'] ?? '').toString().trim();
           final welcomeText = firstName.isNotEmpty
               ? 'Welcome, $firstName.'
               : 'Welcome.';

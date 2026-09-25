@@ -339,6 +339,12 @@ class AuthServiceWeb implements AuthServiceInterface {
   String? get userId => _initialised ? _clerk.user?.id : null;
 
   @override
+  String? get firstName => _initialised ? _clerk.user?.firstName : null;
+
+  @override
+  String? get lastName => _initialised ? _clerk.user?.lastName : null;
+
+  @override
   bool get isSignedIn => _initialised && _clerk.user != null;
 
   @override

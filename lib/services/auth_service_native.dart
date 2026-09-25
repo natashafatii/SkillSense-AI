@@ -160,6 +160,12 @@ class AuthServiceNative implements AuthServiceInterface {
   String? get userId => _auth?.client.user?.id;
 
   @override
+  String? get firstName => _auth?.client.user?.firstName;
+
+  @override
+  String? get lastName => _auth?.client.user?.lastName;
+
+  @override
   bool get isSignedIn => _auth?.client.user != null;
 
   @override

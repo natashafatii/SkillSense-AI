@@ -13,7 +13,11 @@ import 'candidate_feedback_report_screen.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/candidate_side_nav.dart';
 import 'candidate_notifications_screen.dart';
-import '../../services/resume_manager.dart';
+import '../../services/resume_service.dart';
+import '../../models/resume_detail.dart';
+import '../../models/candidate_profile.dart';
+import '../../services/profile_service.dart';
+import '../../services/api_exception.dart';
 
 // Global / Static theme preference so it persists across screen transitions in the prototype
 enum AppThemeMode { daylight, night, auto }
@@ -46,26 +50,94 @@ class _CandidateProfileSettingsScreenState
   // User profile state
   Map<String, dynamic>? _userData;
 
+  ResumeDetail? _resumeDetail;
+  double _overallScore = 0.0;
+
+  CandidateProfile? _candidateProfile;
+
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _loadResumeDetail();
+    _loadCandidateProfile();
     _strengthController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _strengthAnimation = Tween<double>(begin: 0, end: 78).animate(
+    _strengthAnimation = Tween<double>(begin: 0, end: 0).animate(
       CurvedAnimation(parent: _strengthController, curve: Curves.easeOutCubic),
     );
-    _strengthController.forward();
   }
 
-  Future<void> _loadUserProfile() async {
-    final user = await AuthService.fetchCurrentUser();
+  Future<void> _loadResumeDetail() async {
+    try {
+      final detail = await ResumeService.ensureActiveDetailCached();
+      if (mounted) {
+        setState(() {
+          _resumeDetail = detail;
+          if (detail != null) {
+            final cov = ResumeService.coverageFromDetail(detail);
+            _overallScore =
+                ((cov['experience'] ?? 0) +
+                    (cov['skills'] ?? 0) +
+                    (cov['education'] ?? 0) +
+                    (cov['projects'] ?? 0)) /
+                4.0;
+          } else {
+            _overallScore = 0.0;
+          }
+
+          _strengthAnimation = Tween<double>(begin: 0, end: _overallScore)
+              .animate(
+                CurvedAnimation(
+                  parent: _strengthController,
+                  curve: Curves.easeOutCubic,
+                ),
+              );
+          _strengthController.forward(from: 0);
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  void _loadUserProfile() {
+    final user = AuthService.currentUserData;
     if (mounted) {
       setState(() {
         _userData = user;
       });
+    }
+  }
+
+  Future<void> _loadCandidateProfile() async {
+    try {
+      final profile = await ProfileService.getCandidateProfile();
+      if (mounted) {
+        setState(() {
+          _candidateProfile = profile;
+        });
+      }
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        if (!mounted) return;
+        await AuthService.signOut(context);
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/login');
+        }
+        return;
+      }
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 
@@ -96,90 +168,218 @@ class _CandidateProfileSettingsScreenState
     final sessionData = AuthService.currentUserData ?? _userData ?? {};
     final currentFn = (sessionData['first_name'] ?? '').toString();
     final currentLn = (sessionData['last_name'] ?? '').toString();
+    final currentLocation = _candidateProfile?.location ?? '';
+    final currentExp = _candidateProfile?.yearsExperience?.toString() ?? '';
 
     final fnController = TextEditingController(text: currentFn);
     final lnController = TextEditingController(text: currentLn);
+    final locationController = TextEditingController(text: currentLocation);
+    final expController = TextEditingController(text: currentExp);
+
+    String? errorMessage;
+    bool isSaving = false;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Edit Profile Name',
-          style: GoogleFonts.spaceGrotesk(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: fnController,
-              style: GoogleFonts.inter(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'First Name',
-                labelStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
-                enabledBorder: const UnderlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFF334155)),
-                ),
-                focusedBorder: const UnderlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.dashboardTeal),
-                ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF0F172A),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Text(
+              'Edit Profile',
+              style: GoogleFonts.spaceGrotesk(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: lnController,
-              style: GoogleFonts.inter(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Last Name',
-                labelStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
-                enabledBorder: const UnderlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFF334155)),
-                ),
-                focusedBorder: const UnderlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.dashboardTeal),
-                ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (errorMessage != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(8),
+                      color: Colors.red.withValues(alpha: 0.1),
+                      child: Text(
+                        errorMessage!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                  TextField(
+                    controller: fnController,
+                    style: GoogleFonts.inter(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'First Name',
+                      labelStyle: GoogleFonts.inter(
+                        color: const Color(0xFF94A3B8),
+                      ),
+                      enabledBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: Color(0xFF334155)),
+                      ),
+                      focusedBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.dashboardTeal),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: lnController,
+                    style: GoogleFonts.inter(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Last Name',
+                      labelStyle: GoogleFonts.inter(
+                        color: const Color(0xFF94A3B8),
+                      ),
+                      enabledBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: Color(0xFF334155)),
+                      ),
+                      focusedBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.dashboardTeal),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: locationController,
+                    style: GoogleFonts.inter(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Location',
+                      labelStyle: GoogleFonts.inter(
+                        color: const Color(0xFF94A3B8),
+                      ),
+                      enabledBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: Color(0xFF334155)),
+                      ),
+                      focusedBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.dashboardTeal),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: expController,
+                    keyboardType: TextInputType.number,
+                    style: GoogleFonts.inter(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Years of Experience',
+                      labelStyle: GoogleFonts.inter(
+                        color: const Color(0xFF94A3B8),
+                      ),
+                      enabledBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: Color(0xFF334155)),
+                      ),
+                      focusedBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.dashboardTeal),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.dashboardTeal,
-              foregroundColor: const Color(0xFF0F172A),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+            actions: [
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.pop(context),
+                child: Text(
+                  'Cancel',
+                  style: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
+                ),
               ),
-            ),
-            onPressed: () async {
-              final newFn = fnController.text.trim();
-              final newLn = lnController.text.trim();
-              await AuthService.updateUserProfile(
-                firstName: newFn,
-                lastName: newLn,
-              );
-              if (context.mounted) {
-                Navigator.pop(context);
-                _showToast('Profile name updated successfully.');
-              }
-            },
-            child: Text(
-              'Save',
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.dashboardTeal,
+                  foregroundColor: const Color(0xFF0F172A),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setState(() {
+                          isSaving = true;
+                          errorMessage = null;
+                        });
+                        try {
+                          final newFn = fnController.text.trim();
+                          final newLn = lnController.text.trim();
+
+                          if (newFn != currentFn || newLn != currentLn) {
+                            await AuthService.updateUserProfile(
+                              firstName: newFn,
+                              lastName: newLn,
+                            );
+                          }
+
+                          final newLoc = locationController.text.trim();
+                          final newExpStr = expController.text.trim();
+
+                          if (_candidateProfile != null ||
+                              newLoc.isNotEmpty ||
+                              newExpStr.isNotEmpty) {
+                            final patchData = <String, dynamic>{};
+                            if (newLoc != currentLocation) {
+                              patchData['location'] = newLoc;
+                            }
+                            if (newExpStr != currentExp) {
+                              final parsedExp = int.tryParse(newExpStr);
+                              if (newExpStr.isNotEmpty && parsedExp == null) {
+                                throw Exception(
+                                  "Years of experience must be a valid number",
+                                );
+                              }
+                              if (newExpStr.isNotEmpty) {
+                                patchData['years_experience'] = parsedExp;
+                              }
+                            }
+
+                            if (patchData.isNotEmpty) {
+                              final updatedProfile =
+                                  await ProfileService.updateCandidateProfile(
+                                    patchData,
+                                  );
+                              if (mounted) {
+                                setState(() {
+                                  _candidateProfile = updatedProfile;
+                                });
+                              }
+                            }
+                          }
+
+                          if (context.mounted) {
+                            _showToast('Profile updated successfully.');
+                            Navigator.pop(context);
+                          }
+                        } catch (e) {
+                          setState(() {
+                            isSaving = false;
+                            errorMessage = e.toString().replaceAll(
+                              'Exception: ',
+                              '',
+                            );
+                          });
+                        }
+                      },
+                child: isSaving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF0F172A),
+                        ),
+                      )
+                    : Text(
+                        'Save',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -639,6 +839,17 @@ class _CandidateProfileSettingsScreenState
                           fullName = 'Candidate User';
                         }
 
+                        String initials = '';
+                        if (fn.isNotEmpty) {
+                          initials =
+                              fn[0].toUpperCase() +
+                              (ln.isNotEmpty ? ln[0].toUpperCase() : '');
+                        } else if (email.isNotEmpty) {
+                          initials = email[0].toUpperCase();
+                        } else {
+                          initials = 'C';
+                        }
+
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -646,15 +857,43 @@ class _CandidateProfileSettingsScreenState
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Expanded(
-                                  child: Text(
-                                    fullName,
-                                    style: GoogleFonts.spaceGrotesk(
-                                      color: textPrimary,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 32,
+                                        height: 32,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE2F9F3),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: const Color(0xFFA7F3D0),
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            initials,
+                                            style: GoogleFonts.spaceGrotesk(
+                                              color: const Color(0xFF047857),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          fullName,
+                                          style: GoogleFonts.spaceGrotesk(
+                                            color: textPrimary,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 OutlinedButton(
@@ -692,6 +931,30 @@ class _CandidateProfileSettingsScreenState
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            if (_candidateProfile != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '${_candidateProfile!.location.isNotEmpty ? _candidateProfile!.location : 'Unknown Location'} · ${_candidateProfile!.yearsExperience ?? 0} yrs',
+                                style: GoogleFonts.inter(
+                                  color: textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 8),
+                              InkWell(
+                                onTap: () => _showEditProfileDialog(context),
+                                child: Text(
+                                  'Complete your profile →',
+                                  style: GoogleFonts.inter(
+                                    color: AppColors.dashboardTeal,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         );
                       },
@@ -706,7 +969,9 @@ class _CandidateProfileSettingsScreenState
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        'Add 2 projects with metrics → 85+ and a stronger match rank.',
+                        _resumeDetail == null
+                            ? 'Add your resume and skills to get a match score.'
+                            : 'Add 2 projects with metrics → 85+ and a stronger match rank.',
                         style: GoogleFonts.inter(
                           color: AppColors.dashboardTeal,
                           fontSize: 12,
@@ -736,20 +1001,19 @@ class _CandidateProfileSettingsScreenState
           // Dynamic Completion Rows derived from active resume API response / cache
           Builder(
             builder: (context) {
-              final activeResume = ResumeManager.getActiveResume();
-              final Map<String, dynamic> cov = (activeResume['coverage'] is Map)
-                  ? Map<String, dynamic>.from(activeResume['coverage'] as Map)
+              final Map<String, int> cov = _resumeDetail != null
+                  ? ResumeService.coverageFromDetail(_resumeDetail!)
                   : {
-                      'experience': 95,
-                      'skills': 90,
-                      'education': 100,
-                      'projects': 40,
+                      'experience': 0,
+                      'skills': 0,
+                      'education': 0,
+                      'projects': 0,
                     };
 
-              final num expVal = (cov['experience'] as num?) ?? 95;
-              final num sklVal = (cov['skills'] as num?) ?? 90;
-              final num eduVal = (cov['education'] as num?) ?? 100;
-              final num prjVal = (cov['projects'] as num?) ?? 40;
+              final num expVal = cov['experience'] ?? 0;
+              final num sklVal = cov['skills'] ?? 0;
+              final num eduVal = cov['education'] ?? 0;
+              final num prjVal = cov['projects'] ?? 0;
 
               return Column(
                 children: [
@@ -784,7 +1048,9 @@ class _CandidateProfileSettingsScreenState
                     'Projects',
                     prjVal / 100.0,
                     '${prjVal.toInt()}%',
-                    prjVal < 50 ? const Color(0xFFF59E0B) : AppColors.dashboardTeal,
+                    prjVal < 50
+                        ? const Color(0xFFF59E0B)
+                        : AppColors.dashboardTeal,
                     textPrimary,
                     textSecondary,
                   ),

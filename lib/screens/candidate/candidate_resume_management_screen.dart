@@ -22,8 +22,8 @@ class _CandidateResumeManagementScreenState
     extends State<CandidateResumeManagementScreen> {
   final int _activeNavIndex = 4; // Resumes tab is index 4
 
-  // State flag for Empty State vs Uploaded State preview demonstration
-  bool _forceEmptyState = false;
+  // Right-panel list loading state
+  bool _isLoadingList = true;
 
   // Uploading and Parsing State
   bool _isUploading = false;
@@ -32,12 +32,12 @@ class _CandidateResumeManagementScreenState
   bool _parseCompleted = false;
   bool _isFailed = false;
   String _failureErrorMessage = '';
-  String _stagedFilename = 'cv_senior_2026.pdf';
-  String _stagedFilesize = '1.8 MB';
+  String _stagedFilename = '';
+  String _stagedFilesize = '';
   String? _stagedResumeId;
   int _parsingElapsedSeconds = 0;
 
-  // Parsed Response Data
+  // Parsed Response Data (from API — no hardcoded values)
   Map<String, dynamic>? _stagedCoverage;
   Map<String, dynamic>? _stagedExtracted;
 
@@ -47,20 +47,42 @@ class _CandidateResumeManagementScreenState
   Timer? _uploadTimer;
 
   @override
+  void initState() {
+    super.initState();
+    _loadResumeList();
+  }
+
+  /// Fetches the canonical resume list from the API on page load.
+  Future<void> _loadResumeList() async {
+    setState(() => _isLoadingList = true);
+    await ResumeManager.loadFromApi();
+    if (mounted) setState(() => _isLoadingList = false);
+  }
+
+  @override
   void dispose() {
     _uploadTimer?.cancel();
     super.dispose();
   }
 
   void _setActiveResume(Map<String, dynamic> selectedVersion) async {
-    final String versionOrId =
-        (selectedVersion['version'] ?? selectedVersion['id'] ?? '').toString();
+    final String apiId = (selectedVersion['id'] ?? '').toString();
+    final String versionOrId = (selectedVersion['version'] != null && selectedVersion['version'].toString().isNotEmpty) 
+        ? selectedVersion['version'].toString() 
+        : apiId;
+        
     setState(() {
       ResumeManager.setActive(versionOrId);
     });
 
     if (selectedVersion['id'] != null) {
-      await ResumeService.setDefaultResume(selectedVersion['id'].toString());
+      try {
+        await ResumeService.patchResume(selectedVersion['id'].toString(), {
+          'is_default': true,
+        });
+      } catch (_) {
+        // Best-effort — local state is already updated.
+      }
     }
 
     if (!mounted) return;
@@ -94,17 +116,48 @@ class _CandidateResumeManagementScreenState
   }
 
   void _removeResume(Map<String, dynamic> resume) async {
-    final String versionOrId = (resume['version'] ?? resume['id'] ?? '')
-        .toString();
+    final String apiId = (resume['id'] ?? '').toString();
+    final String versionOrId = (resume['version'] != null && resume['version'].toString().isNotEmpty) 
+        ? resume['version'].toString() 
+        : apiId;
+    if (apiId.isEmpty && versionOrId.isEmpty) return;
+
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text('Delete this resume?', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to delete "${resume['filename']}"?', style: GoogleFonts.inter()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey[700])),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Yes, delete', style: GoogleFonts.inter(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    if (apiId.isNotEmpty) {
+      try {
+        await ResumeService.deleteResume(apiId);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete on server: $e'), backgroundColor: Colors.red),
+        );
+        return; // Stop if backend delete failed
+      }
+    }
+
     setState(() {
       ResumeManager.deleteResume(versionOrId);
     });
-
-    if (resume['id'] != null) {
-      try {
-        await ResumeService.deleteResume(resume['id'].toString());
-      } catch (_) {}
-    }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -243,29 +296,34 @@ class _CandidateResumeManagementScreenState
               "Couldn't read this file — try a text-based PDF.";
         });
       } else {
-        final skillsCount = detail.skills?.length ?? 8;
-        final rolesCount = (detail.experience?.length ?? 2);
-        final yrs = detail.experience != null && detail.experience!.isNotEmpty
-            ? 4.5
-            : 3.0;
+        // Derive all values from the real API response — no hardcoded numbers.
+        final coverage = ResumeService.coverageFromDetail(detail);
+        final skills = detail.skills ?? [];
+        final roles =
+            detail.experience
+                ?.map((e) => (e['title'] ?? 'Role').toString())
+                .toList() ??
+            [];
+        final expList = detail.experience ?? [];
+        // Estimate years_experience from experience entries if possible.
+        double yrs = 0;
+        for (final exp in expList) {
+          final start = exp['start_year'] as int?;
+          final end = exp['end_year'] as int?;
+          if (start != null) {
+            yrs += (end ?? DateTime.now().year) - start;
+          }
+        }
+        if (yrs == 0 && expList.isNotEmpty) yrs = expList.length.toDouble();
 
         setState(() {
           _isParsing = false;
           _parseCompleted = true;
-          _stagedCoverage = {
-            'experience': 95,
-            'skills': (skillsCount * 10).clamp(50, 95),
-            'education': 100,
-            'projects': 40,
-          };
+          _stagedCoverage = coverage.map((k, v) => MapEntry(k, v));
           _stagedExtracted = {
-            'skills': detail.skills ?? ['Python', 'Django', 'REST'],
-            'roles':
-                detail.experience
-                    ?.map((e) => (e['title'] ?? 'Role').toString())
-                    .toList() ??
-                ['Engineer'],
-            'years_experience': yrs,
+            'skills': skills,
+            'roles': roles,
+            'years_experience': yrs > 0 ? yrs : null,
           };
         });
       }
@@ -280,7 +338,8 @@ class _CandidateResumeManagementScreenState
   }
 
   void _commitStagedResume() {
-    if (!_parseCompleted && _isUploading) return;
+    // Only callable when parsing has successfully completed.
+    if (!_parseCompleted) return;
 
     setState(() {
       ResumeManager.addResume(
@@ -292,7 +351,6 @@ class _CandidateResumeManagementScreenState
         status: _isFailed ? 'failed' : 'parsed',
         processingError: _failureErrorMessage,
       );
-      _forceEmptyState = false;
       _parseCompleted = false;
       _isParsing = false;
       _isUploading = false;
@@ -316,35 +374,12 @@ class _CandidateResumeManagementScreenState
     );
   }
 
-  void _toggleStatePreview() {
-    setState(() {
-      _forceEmptyState = !_forceEmptyState;
-    });
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-        content: Text(
-          _forceEmptyState
-              ? 'Previewing: No Resumes Uploaded (Empty State)'
-              : 'Previewing: Resumes Uploaded State (${_resumes.length} versions)',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 950;
 
-    final bool hasResumes = _resumes.isNotEmpty && !_forceEmptyState;
+    final bool hasResumes = _resumes.isNotEmpty;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
@@ -544,41 +579,6 @@ class _CandidateResumeManagementScreenState
             ),
             const SizedBox(width: 12),
           ],
-
-          // Toggle State Icon Button (◔)
-          Tooltip(
-            message: _forceEmptyState
-                ? 'Switch to Resumes Uploaded State'
-                : 'Switch to Empty State Preview',
-            child: InkWell(
-              onTap: _toggleStatePreview,
-              borderRadius: BorderRadius.circular(11),
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(
-                    color: const Color.fromRGBO(38, 51, 77, 0.08),
-                    width: 0.88,
-                  ),
-                ),
-                child: const Center(
-                  child: Text(
-                    '◔',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      color: Color(0xFF4A5875),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
 
           // Secondary Action Icon Button (◍)
           InkWell(
@@ -831,333 +831,351 @@ class _CandidateResumeManagementScreenState
 
                 const SizedBox(height: 16),
 
-                // UPLOADING section header
-                Text(
-                  'UPLOADING',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: const Color(0xFF7A88A3),
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.425,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Uploading File row
-                Row(
-                  children: [
-                    // PDF Badge icon container (34x34px bg #E9E4FB radius 11px)
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE9E4FB),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'PDF',
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF4B3AB8),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                          ),
+                if (_isUploading || _isParsing || _isFailed || _parseCompleted)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // UPLOADING section header
+                      Text(
+                        'UPLOADING',
+                        style: GoogleFonts.spaceGrotesk(
+                          color: const Color(0xFF7A88A3),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.425,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
+                      const SizedBox(height: 8),
 
-                    // Filename & Filesize
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      // Uploading File row
+                      Row(
                         children: [
-                          Text(
-                            _stagedFilename,
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF1B2740),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                          // PDF Badge icon container (34x34px bg #E9E4FB radius 11px)
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE9E4FB),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'PDF',
+                                style: GoogleFonts.inter(
+                                  color: const Color(0xFF4B3AB8),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 12),
+
+                          // Filename & Filesize
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _stagedFilename,
+                                  style: GoogleFonts.inter(
+                                    color: const Color(0xFF1B2740),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  _stagedFilesize,
+                                  style: GoogleFonts.spaceGrotesk(
+                                    color: const Color(0xFF7A88A3),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Progress percentage text: 62%
                           Text(
-                            _stagedFilesize,
-                            style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF7A88A3),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w500,
+                            '${(_uploadProgress * 100).toInt()}%',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: const Color(0xFF4A5875),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 6),
 
-                    // Progress percentage text: 62%
-                    Text(
-                      '${(_uploadProgress * 100).toInt()}%',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: const Color(0xFF4A5875),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-
-                // Progress Track & Animated Progress Bar
-                Container(
-                  width: double.infinity,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color.fromRGBO(38, 51, 77, 0.09),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: _uploadProgress,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3E6FF0),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // DistilBERT Parsing status / Failed row box
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 11,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _isFailed ? const Color(0xFFFEF2F2) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _isFailed
-                          ? const Color(0xFFFCA5A5)
-                          : const Color.fromRGBO(38, 51, 77, 0.08),
-                      width: 0.88,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      // Pulse Indicator Dot
+                      // Progress Track & Animated Progress Bar
                       Container(
-                        width: 8,
-                        height: 8,
+                        width: double.infinity,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color.fromRGBO(38, 51, 77, 0.09),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: _uploadProgress,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3E6FF0),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // DistilBERT Parsing status / Failed row box
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 13,
+                          vertical: 11,
+                        ),
                         decoration: BoxDecoration(
                           color: _isFailed
-                              ? const Color(0xFFEF4444)
-                              : const Color(0xFF0FB89B),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: _isFailed
-                                  ? const Color.fromRGBO(239, 68, 68, 0.25)
-                                  : const Color.fromRGBO(25, 200, 170, 0.25),
-                              blurRadius: 7,
-                              spreadRadius: 3,
-                            ),
-                          ],
+                              ? const Color(0xFFFEF2F2)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _isFailed
+                                ? const Color(0xFFFCA5A5)
+                                : const Color.fromRGBO(38, 51, 77, 0.08),
+                            width: 0.88,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-
-                      // Text: Parsing with AI… / Failure message
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              _isFailed
-                                  ? "Couldn't read this file — try a text-based PDF."
-                                  : (_isParsing
-                                        ? 'Parsing with AI…'
-                                        : _parseCompleted
-                                        ? 'AI Resume Parsing Complete'
-                                        : 'Preparing AI feature extraction…'),
-                              style: GoogleFonts.inter(
+                            // Pulse Indicator Dot
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
                                 color: _isFailed
-                                    ? const Color(0xFF991B1B)
-                                    : const Color(0xFF1B2740),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                                    ? const Color(0xFFEF4444)
+                                    : const Color(0xFF0FB89B),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _isFailed
+                                        ? const Color.fromRGBO(
+                                            239,
+                                            68,
+                                            68,
+                                            0.25,
+                                          )
+                                        : const Color.fromRGBO(
+                                            25,
+                                            200,
+                                            170,
+                                            0.25,
+                                          ),
+                                    blurRadius: 7,
+                                    spreadRadius: 3,
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              _isFailed
-                                  ? (_failureErrorMessage.isNotEmpty
-                                        ? _failureErrorMessage
-                                        : 'Text extraction or AI parsing failed')
-                                  : (_stagedExtracted != null && _parseCompleted
-                                        ? '${(_stagedExtracted!['skills'] as List?)?.length ?? 0} skills · ${(_stagedExtracted!['roles'] as List?)?.length ?? 0} roles · ${_stagedExtracted!['years_experience'] ?? 4} yrs experience'
-                                        : 'Extracting skills, roles & experience'),
-                              style: GoogleFonts.spaceGrotesk(
-                                color: _isFailed
-                                    ? const Color(0xFFB91C1C)
-                                    : const Color(0xFF7A88A3),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w500,
+                            const SizedBox(width: 10),
+
+                            // Text: Parsing with AI… / Failure message
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _isFailed
+                                        ? "Couldn't read this file — try a text-based PDF."
+                                        : (_isParsing
+                                              ? (_parsingElapsedSeconds > 10 ? 'Still processing — this can take a moment.' : 'Parsing with AI…')
+                                              : _parseCompleted
+                                              ? 'AI Resume Parsing Complete'
+                                              : 'Preparing AI feature extraction…'),
+                                    style: GoogleFonts.inter(
+                                      color: _isFailed
+                                          ? const Color(0xFF991B1B)
+                                          : const Color(0xFF1B2740),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    _isFailed
+                                        ? (_failureErrorMessage.isNotEmpty
+                                              ? _failureErrorMessage
+                                              : 'Text extraction or AI parsing failed')
+                                        : (_stagedExtracted != null &&
+                                                  _parseCompleted
+                                              ? '${(_stagedExtracted!['skills'] as List?)?.length ?? 0} skills · ${(_stagedExtracted!['roles'] as List?)?.length ?? 0} roles · ${_stagedExtracted!['years_experience'] ?? 4} yrs experience'
+                                              : 'Extracting skills, roles & experience'),
+                                    style: GoogleFonts.spaceGrotesk(
+                                      color: _isFailed
+                                          ? const Color(0xFFB91C1C)
+                                          : const Color(0xFF7A88A3),
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      ),
 
-                      // Badge: PARSING… / COMPLETED / FAILED
-                      if (_isFailed)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            InkWell(
-                              onTap: _triggerBrowseFiles,
-                              borderRadius: BorderRadius.circular(6),
-                              child: Container(
+                            // Badge: PARSING… / COMPLETED / FAILED
+                            if (_isFailed)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: _triggerBrowseFiles,
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEE2E2),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: const Color(0xFFFCA5A5),
+                                          width: 0.88,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Retry',
+                                        style: GoogleFonts.jetBrainsMono(
+                                          color: const Color(0xFF991B1B),
+                                          fontSize: 8.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        _isFailed = false;
+                                        _isUploading = false;
+                                        _isParsing = false;
+                                      });
+                                    },
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      size: 14,
+                                      color: Color(0xFF991B1B),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            else
+                              Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 7,
                                   vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFFEE2E2),
+                                  color: _parseCompleted
+                                      ? const Color(0xFFECFDF5)
+                                      : const Color(0xFFEDF0F7),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: const Color(0xFFFCA5A5),
+                                    color: const Color.fromRGBO(
+                                      38,
+                                      51,
+                                      77,
+                                      0.08,
+                                    ),
                                     width: 0.88,
                                   ),
                                 ),
                                 child: Text(
-                                  'Retry',
+                                  _parseCompleted ? 'READY' : 'PARSING…',
                                   style: GoogleFonts.jetBrainsMono(
-                                    color: const Color(0xFF991B1B),
+                                    color: _parseCompleted
+                                        ? const Color(0xFF0B6B4A)
+                                        : const Color(0xFF7A88A3),
                                     fontSize: 8.5,
                                     fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.68,
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _isFailed = false;
-                                  _isUploading = false;
-                                  _isParsing = false;
-                                });
-                              },
-                              child: const Icon(
-                                Icons.close_rounded,
-                                size: 14,
-                                color: Color(0xFF991B1B),
-                              ),
-                            ),
                           ],
-                        )
-                      else
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
-                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Button: Use this resume
+                      InkWell(
+                        onTap: _parseCompleted ? _commitStagedResume : null,
+                        borderRadius: BorderRadius.circular(11),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          height: 32,
+                          width: double.infinity,
                           decoration: BoxDecoration(
-                            color: _parseCompleted
-                                ? const Color(0xFFECFDF5)
-                                : const Color(0xFFEDF0F7),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: const Color.fromRGBO(38, 51, 77, 0.08),
-                              width: 0.88,
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
+                            borderRadius: BorderRadius.circular(11),
+                            boxShadow: _parseCompleted
+                                ? const [
+                                    BoxShadow(
+                                      color: Color.fromRGBO(15, 184, 155, 0.8),
+                                      blurRadius: 24,
+                                      spreadRadius: -10,
+                                      offset: Offset(0, 10),
+                                    ),
+                                  ]
+                                : [],
                           ),
-                          child: Text(
-                            _parseCompleted ? 'READY' : 'PARSING…',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: _parseCompleted
-                                  ? const Color(0xFF0B6B4A)
-                                  : const Color(0xFF7A88A3),
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.68,
+                          child: Opacity(
+                            opacity: _parseCompleted ? 1.0 : 0.45,
+                            child: Center(
+                              child: Text(
+                                'Use this resume',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Subtext
+                      Center(
+                        child: Text(
+                          _isFailed
+                              ? 'Parsing failed — please re-upload a clean text PDF or DOCX'
+                              : (_parseCompleted
+                                    ? 'Parsing complete — resume ready for applications!'
+                                    : (_parsingElapsedSeconds > 10
+                                          ? 'Still processing — this can take a moment.'
+                                          : 'Unlocks once parsing finishes — usually 3–6 seconds')),
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.spaceGrotesk(
+                            color: _isFailed
+                                ? const Color(0xFFDC2626)
+                                : const Color(0xFF7A88A3),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-
-                // Button: Use this resume
-                InkWell(
-                  onTap: (_parseCompleted || (!_isUploading && !_isParsing))
-                      ? _commitStagedResume
-                      : null,
-                  borderRadius: BorderRadius.circular(11),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    height: 32,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(11),
-                      boxShadow:
-                          (_parseCompleted || (!_isUploading && !_isParsing))
-                          ? const [
-                              BoxShadow(
-                                color: Color.fromRGBO(15, 184, 155, 0.8),
-                                blurRadius: 24,
-                                spreadRadius: -10,
-                                offset: Offset(0, 10),
-                              ),
-                            ]
-                          : [],
-                    ),
-                    child: Opacity(
-                      opacity:
-                          (_parseCompleted || (!_isUploading && !_isParsing))
-                          ? 1.0
-                          : 0.45,
-                      child: Center(
-                        child: Text(
-                          'Use this resume',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Subtext
-                Center(
-                  child: Text(
-                    _isFailed
-                        ? 'Parsing failed — please re-upload a clean text PDF or DOCX'
-                        : (_parseCompleted
-                              ? 'Parsing complete — resume ready for applications!'
-                              : (_parsingElapsedSeconds > 10
-                                    ? 'Still processing — this can take a moment.'
-                                    : 'Unlocks once parsing finishes — usually 3–6 seconds')),
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.spaceGrotesk(
-                      color: _isFailed
-                          ? const Color(0xFFDC2626)
-                          : const Color(0xFF7A88A3),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -1230,8 +1248,24 @@ class _CandidateResumeManagementScreenState
             ),
           ),
 
-          // Conditional Render: Resumes List OR Empty State Preview
-          if (hasResumes)
+          // Conditional Render: Resumes List, Loading Spinner, OR Empty State
+          if (_isLoadingList)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFF17CBAC),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else if (hasResumes)
             Column(
               children: List.generate(_resumes.length, (index) {
                 final r = _resumes[index];

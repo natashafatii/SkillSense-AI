@@ -10,6 +10,7 @@ import 'candidate_interview_lobby_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
 import 'candidate_notifications_screen.dart';
 import 'candidate_profile_settings_screen.dart';
+import 'candidate_resume_management_screen.dart';
 
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
@@ -29,19 +30,25 @@ class CandidateJobDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<CandidateJobDetailScreen> createState() => _CandidateJobDetailScreenState();
+  State<CandidateJobDetailScreen> createState() =>
+      _CandidateJobDetailScreenState();
 }
 
-class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> with SingleTickerProviderStateMixin {
+class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
+    with SingleTickerProviderStateMixin {
   final int _activeNavIndex = 2; // Jobs is index 2
   late AnimationController _animController;
   late Animation<double> _progressAnimation;
   bool _isApplied = false;
   bool _isSubmitting = false;
 
+  ResumeDetail? _resumeDetail;
+  bool _isLoadingResume = true;
+
   @override
   void initState() {
     super.initState();
+    _loadResumeDetail();
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -56,6 +63,24 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
   void dispose() {
     _animController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadResumeDetail() async {
+    try {
+      final detail = await ResumeService.ensureActiveDetailCached();
+      if (mounted) {
+        setState(() {
+          _resumeDetail = detail;
+          _isLoadingResume = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoadingResume = false;
+        });
+      }
+    }
   }
 
   String get _effectiveJobId {
@@ -110,23 +135,24 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
         } else {
           cov = fn.contains('ml') ? '95% coverage' : '88% coverage';
         }
-        return {
-          ...r,
-          'coverage': cov,
-          'isDefault': isAct,
-        };
+        return {...r, 'coverage': cov, 'isDefault': isAct};
       }).toList();
     }
 
     // Default selected version is active resume
-    String selectedVersion = resumes.firstWhere(
-      (r) => r['active'] == true || r['isDefault'] == true,
-      orElse: () => resumes.first,
-    )['version'].toString();
+    String selectedVersion = resumes
+        .firstWhere(
+          (r) => r['active'] == true || r['isDefault'] == true,
+          orElse: () => resumes.first,
+        )['version']
+        .toString();
 
     final TextEditingController noteController = TextEditingController();
 
-    Widget buildModalContent(BuildContext modalContext, StateSetter setModalState) {
+    Widget buildModalContent(
+      BuildContext modalContext,
+      StateSetter setModalState,
+    ) {
       return Container(
         width: isMobile ? double.infinity : 420,
         constraints: BoxConstraints(
@@ -246,9 +272,11 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                       final idx = entry.key;
                       final r = entry.value;
                       final String ver = (r['version'] ?? 'v1').toString();
-                      final String fn = (r['filename'] ?? 'resume.pdf').toString();
+                      final String fn = (r['filename'] ?? 'resume.pdf')
+                          .toString();
                       final String cov = (r['coverage'] ?? '').toString();
-                      final bool isDef = r['isDefault'] == true || r['active'] == true;
+                      final bool isDef =
+                          r['isDefault'] == true || r['active'] == true;
                       final bool isSelected = selectedVersion == ver;
                       final bool isLast = idx == resumes.length - 1;
 
@@ -296,7 +324,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                                   // File name + coverage info
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           fn,
@@ -312,7 +341,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                                         Text(
                                           isDef && cov.isNotEmpty
                                               ? 'Default · $cov'
-                                              : (cov.isNotEmpty ? cov : 'Default resume'),
+                                              : (cov.isNotEmpty
+                                                    ? cov
+                                                    : 'Default resume'),
                                           style: GoogleFonts.inter(
                                             color: const Color(0xFF94A3B8),
                                             fontSize: 12,
@@ -375,7 +406,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       child: TextField(
                         controller: noteController,
                         maxLines: 3,
@@ -465,7 +499,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                             (r) => r['version'] == selectedVersion,
                             orElse: () => resumes.first,
                           );
-                          final fn = (selectedObj['filename'] ?? 'resume.pdf').toString();
+                          final fn = (selectedObj['filename'] ?? 'resume.pdf')
+                              .toString();
                           final fileToSend = File(fn);
                           await _submitApplicationAndPoll(fileToSend, true);
                         },
@@ -527,7 +562,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
     }
   }
 
-  Future<void> _submitApplicationAndPoll(File resumeFile, bool consentGiven) async {
+  Future<void> _submitApplicationAndPoll(
+    File resumeFile,
+    bool consentGiven,
+  ) async {
     setState(() => _isSubmitting = true);
 
     // Show Progress Dialog
@@ -556,7 +594,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
 
       if (app.resumeId != null && app.resumeId!.isNotEmpty) {
         // Poll for parsed results
-        final parsedDetail = await ResumeService.pollResumeUntilReady(app.resumeId!);
+        final parsedDetail = await ResumeService.pollResumeUntilReady(
+          app.resumeId!,
+        );
 
         if (mounted) {
           Navigator.pop(context); // Close progress dialog
@@ -565,18 +605,29 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
       } else {
         if (mounted) {
           Navigator.pop(context);
-          _showParsingSuccessDialog(ResumeDetail(
-            id: 'mock-resume-id',
-            status: ResumeStatus.parsed,
-            matchScore: 92.0,
-            matchedSkills: ['Python', 'PyTorch', 'Docker', 'SQL', 'AWS', 'CI/CD'],
-            missingSkills: ['Feature stores', 'Kubeflow'],
-          ));
+          _showParsingSuccessDialog(
+            ResumeDetail(
+              id: 'mock-resume-id',
+              status: ResumeStatus.parsed,
+              matchScore: 92.0,
+              matchedSkills: [
+                'Python',
+                'PyTorch',
+                'Docker',
+                'SQL',
+                'AWS',
+                'CI/CD',
+              ],
+              missingSkills: ['Feature stores', 'Kubeflow'],
+            ),
+          );
         }
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context); // Always dismiss progress dialog on any exception
+        Navigator.pop(
+          context,
+        ); // Always dismiss progress dialog on any exception
         setState(() => _isApplied = true);
 
         final detail = ResumeDetail(
@@ -606,16 +657,26 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
           children: [
             const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
             const SizedBox(width: 10),
-            Text('Application & Matching Complete!',
-                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              'Application & Matching Complete!',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Your resume has been parsed and matched against this job description.',
-                style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B))),
+            Text(
+              'Your resume has been parsed and matched against this job description.',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: const Color(0xFF64748B),
+              ),
+            ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
@@ -636,7 +697,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                       child: Text(
                         '$score%',
                         style: GoogleFonts.inter(
-                            fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   ),
@@ -645,13 +709,20 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('SBERT Match Score',
-                            style: GoogleFonts.inter(
-                                fontSize: 14, fontWeight: FontWeight.bold)),
+                        Text(
+                          'SBERT Match Score',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           'Matched ${matchedSkills.length} required skills.',
-                          style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B)),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: const Color(0xFF64748B),
+                          ),
                         ),
                       ],
                     ),
@@ -663,22 +734,30 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.dashboardTeal),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.dashboardTeal,
+            ),
             onPressed: () {
               Navigator.pop(context);
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const CandidateApplicationsScreen(),
+                ),
               );
             },
-            child: Text('View My Applications',
-                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(
+              'View My Applications',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -713,7 +792,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
               height: isMobile ? 300 : 450,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.dashboardTeal.withValues(alpha: isMobile ? 0.06 : 0.04),
+                color: AppColors.dashboardTeal.withValues(
+                  alpha: isMobile ? 0.06 : 0.04,
+                ),
               ),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
@@ -732,13 +813,21 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                     children: [
                       // Left Rail (Web Only)
                       if (!isMobile)
-                        const CandidateSideNav(currentRoute: '/candidate/job-detail'),
+                        const CandidateSideNav(
+                          currentRoute: '/candidate/job-detail',
+                        ),
 
                       // Content Area
                       Expanded(
                         child: Column(
                           children: [
-                            _buildTopBar(isMobile, textPrimary, textSecondary, cardBg, cardBorder),
+                            _buildTopBar(
+                              isMobile,
+                              textPrimary,
+                              textSecondary,
+                              cardBg,
+                              cardBorder,
+                            ),
                             Expanded(
                               child: SingleChildScrollView(
                                 physics: const BouncingScrollPhysics(),
@@ -749,8 +838,18 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                                   bottom: isMobile ? 100 : 32,
                                 ),
                                 child: isMobile
-                                    ? _buildMobileLayout(textPrimary, textSecondary, cardBg, cardBorder)
-                                    : _buildWebLayout(textPrimary, textSecondary, cardBg, cardBorder),
+                                    ? _buildMobileLayout(
+                                        textPrimary,
+                                        textSecondary,
+                                        cardBg,
+                                        cardBorder,
+                                      )
+                                    : _buildWebLayout(
+                                        textPrimary,
+                                        textSecondary,
+                                        cardBg,
+                                        cardBorder,
+                                      ),
                               ),
                             ),
                           ],
@@ -789,7 +888,12 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
         // Left Column (Job Description) - 1.5fr
         Expanded(
           flex: 3,
-          child: _buildJobDescriptionCard(textPrimary, textSecondary, cardBg, cardBorder),
+          child: _buildJobDescriptionCard(
+            textPrimary,
+            textSecondary,
+            cardBg,
+            cardBorder,
+          ),
         ),
         const SizedBox(width: 24),
 
@@ -800,7 +904,13 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
             children: [
               _buildMatchPanel(textPrimary, textSecondary, cardBg, cardBorder),
               const SizedBox(height: 24),
-              _buildWhyYouMatchPanel(textPrimary, textSecondary, cardBg, cardBorder, false),
+              _buildWhyYouMatchPanel(
+                textPrimary,
+                textSecondary,
+                cardBg,
+                cardBorder,
+                false,
+              ),
             ],
           ),
         ),
@@ -818,11 +928,23 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCompactHeaderBlock(textPrimary, textSecondary, cardBg, cardBorder, true),
+        _buildCompactHeaderBlock(
+          textPrimary,
+          textSecondary,
+          cardBg,
+          cardBorder,
+          true,
+        ),
         const SizedBox(height: 16),
         _buildMatchPanel(textPrimary, textSecondary, cardBg, cardBorder),
         const SizedBox(height: 16),
-        _buildWhyYouMatchPanel(textPrimary, textSecondary, cardBg, cardBorder, true),
+        _buildWhyYouMatchPanel(
+          textPrimary,
+          textSecondary,
+          cardBg,
+          cardBorder,
+          true,
+        ),
         const SizedBox(height: 16),
         _buildDescriptionTextSection(textPrimary, textSecondary),
         const SizedBox(height: 16),
@@ -855,7 +977,13 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildCompactHeaderBlock(textPrimary, textSecondary, cardBg, cardBorder, false),
+          _buildCompactHeaderBlock(
+            textPrimary,
+            textSecondary,
+            cardBg,
+            cardBorder,
+            false,
+          ),
           const SizedBox(height: 20),
           _buildDescriptionTextSection(textPrimary, textSecondary),
           const SizedBox(height: 24),
@@ -885,7 +1013,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                 decoration: BoxDecoration(
                   color: const Color(0xFFE6F7F5),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF32BAB1).withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Center(
                   child: Text(
@@ -1082,7 +1212,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                       value: value / 100,
                       strokeWidth: 7,
                       backgroundColor: const Color(0xFFE2E8F0),
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.dashboardTeal),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.dashboardTeal,
+                      ),
                     ),
                   ),
                   Column(
@@ -1138,11 +1270,15 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
               foregroundColor: const Color(0xFF0F172A),
               elevation: 0,
               minimumSize: const Size(double.infinity, 44),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: _isApplied ? null : _applyJob,
             child: Text(
-              _isApplied ? 'Application Submitted' : 'Apply with default resume',
+              _isApplied
+                  ? 'Application Submitted'
+                  : 'Apply with default resume',
               style: GoogleFonts.inter(
                 fontWeight: FontWeight.bold,
                 fontSize: 13.5,
@@ -1172,8 +1308,132 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
     Color cardBorder,
     bool isMobile,
   ) {
-    final matched = ['Python', 'PyTorch', 'Docker', 'SQL', 'AWS', 'CI/CD'];
-    final missing = ['Feature stores', 'Kubeflow'];
+    if (_isLoadingResume) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cardBorder, width: 1.5),
+        ),
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                AppColors.dashboardTeal,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_resumeDetail == null) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cardBorder, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Why you match',
+                  style: GoogleFonts.spaceGrotesk(
+                    color: textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.upload_file_rounded,
+                    size: 48,
+                    color: const Color(0xFF94A3B8).withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Upload a resume to see why you match',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.dashboardTeal,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const CandidateResumeManagementScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.add, size: 16),
+                    label: Text(
+                      'Upload resume',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final reqs = [
+      'Python',
+      'Docker',
+      'Kubeflow',
+      'PyTorch',
+      'SQL',
+      'AWS',
+      'CI/CD',
+      'Feature stores',
+    ];
+
+    // Matched skills = intersection of resume skills and job required skills
+    final resumeSkills =
+        _resumeDetail!.skills?.map((s) => s.toLowerCase()).toSet() ?? {};
+    final matched = reqs
+        .where((req) => resumeSkills.contains(req.toLowerCase()))
+        .toList();
+    final missing = reqs
+        .where((req) => !resumeSkills.contains(req.toLowerCase()))
+        .toList();
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -1256,7 +1516,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                       ),
                     ),
                     backgroundColor: const Color(0xFFECFDF5),
-                    side: BorderSide(color: const Color(0xFF10B981).withValues(alpha: 0.2)),
+                    side: BorderSide(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                    ),
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                   ),
                 ),
@@ -1286,7 +1548,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                 child: GestureDetector(
                   onTap: () {
                     if (isMobile) {
-                      _showChipToast('Missing skill: $m not detected in resume');
+                      _showChipToast(
+                        'Missing skill: $m not detected in resume',
+                      );
                     }
                   },
                   child: Chip(
@@ -1332,17 +1596,38 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'NeuralTech',
-          style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+          style: GoogleFonts.spaceGrotesk(
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF0F172A),
+          ),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Size: 150 - 500 employees', style: GoogleFonts.inter(fontSize: 13.5, color: const Color(0xFF475569))),
+            Text(
+              'Size: 150 - 500 employees',
+              style: GoogleFonts.inter(
+                fontSize: 13.5,
+                color: const Color(0xFF475569),
+              ),
+            ),
             const SizedBox(height: 6),
-            Text('Industry: Artificial Intelligence & SaaS', style: GoogleFonts.inter(fontSize: 13.5, color: const Color(0xFF475569))),
+            Text(
+              'Industry: Artificial Intelligence & SaaS',
+              style: GoogleFonts.inter(
+                fontSize: 13.5,
+                color: const Color(0xFF475569),
+              ),
+            ),
             const SizedBox(height: 6),
-            Text('Website: neuraltech.ai', style: GoogleFonts.inter(fontSize: 13.5, color: const Color(0xFF475569))),
+            Text(
+              'Website: neuraltech.ai',
+              style: GoogleFonts.inter(
+                fontSize: 13.5,
+                color: const Color(0xFF475569),
+              ),
+            ),
           ],
         ),
         actions: [
@@ -1350,7 +1635,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
             onPressed: () => Navigator.pop(context),
             child: Text(
               'Close',
-              style: GoogleFonts.inter(color: AppColors.dashboardTeal, fontWeight: FontWeight.bold),
+              style: GoogleFonts.inter(
+                color: AppColors.dashboardTeal,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -1445,7 +1733,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                             color: AppColors.dashboardTeal,
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.dashboardTeal.withValues(alpha: 0.4),
+                                color: AppColors.dashboardTeal.withValues(
+                                  alpha: 0.4,
+                                ),
                                 blurRadius: 12,
                                 spreadRadius: 2,
                               ),
@@ -1474,19 +1764,30 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                             onTap: () {
                               if (index == 0) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) => const CandidateHomeScreen(),
+                                  ),
                                 );
                               } else if (index == 1) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CandidateApplicationsScreen(),
+                                  ),
                                 );
                               } else if (index == 2) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CandidateJobFeedScreen(),
+                                  ),
                                 );
                               } else if (index == 3) {
                                 Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(builder: (_) => const CandidateInterviewLobbyScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const CandidateInterviewLobbyScreen(),
+                                  ),
                                 );
                               } else {
                                 _showMockNavigation(item['route']);
@@ -1500,27 +1801,31 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                                 color: Colors.transparent,
                               ),
                               child: Center(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      // Child seam indicator inside Jobs tab
-                                      if (isSelected)
-                                        Container(
-                                          width: 3,
-                                          height: 12,
-                                          margin: const EdgeInsets.only(right: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF0F172A),
-                                            borderRadius: BorderRadius.circular(1),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Child seam indicator inside Jobs tab
+                                    if (isSelected)
+                                      Container(
+                                        width: 3,
+                                        height: 12,
+                                        margin: const EdgeInsets.only(right: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F172A),
+                                          borderRadius: BorderRadius.circular(
+                                            1,
                                           ),
                                         ),
-                                      Icon(
-                                        item['icon'],
-                                        color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                                        size: 19,
                                       ),
-                                    ],
-                                  ),
+                                    Icon(
+                                      item['icon'],
+                                      color: isSelected
+                                          ? const Color(0xFF0F172A)
+                                          : const Color(0xFF64748B),
+                                      size: 19,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -1533,11 +1838,17 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                           top: -4,
                           right: -4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.dashboardTeal,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white, width: 1.5),
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
                             ),
                             child: Text(
                               badgeVal,
@@ -1562,26 +1873,48 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
             onSelected: (value) {
               if (value == 'candidate_home') {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateHomeScreen(),
+                  ),
                 );
               } else if (value == 'candidate_apps') {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateApplicationsScreen(),
+                  ),
                 );
               }
             },
             itemBuilder: (context) => [
               PopupMenuItem(
                 value: 'candidate_home',
-                child: Text('Candidate Home', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Candidate Home',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               PopupMenuItem(
                 value: 'candidate_home',
-                child: Text('Candidate Home', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Candidate Home',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               PopupMenuItem(
                 value: 'candidate_apps',
-                child: Text('Candidate Applications', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Candidate Applications',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
             child: Container(
@@ -1591,7 +1924,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFFE6F7F5),
-                border: Border.all(color: const Color(0xFF32BAB1).withValues(alpha: 0.3), width: 1),
+                border: Border.all(
+                  color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
+                  width: 1,
+                ),
               ),
               child: Center(
                 child: Text(
@@ -1650,19 +1986,27 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
             onTap: () {
               if (index == 0) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateHomeScreen(),
+                  ),
                 );
               } else if (index == 1) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateApplicationsScreen(),
+                  ),
                 );
               } else if (index == 2) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateJobFeedScreen(),
+                  ),
                 );
               } else if (index == 3) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateInterviewLobbyScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateInterviewLobbyScreen(),
+                  ),
                 );
               } else {
                 _showMockNavigation(item['route']);
@@ -1677,11 +2021,15 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                   height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected ? AppColors.dashboardTeal : Colors.transparent,
+                    color: isSelected
+                        ? AppColors.dashboardTeal
+                        : Colors.transparent,
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: AppColors.dashboardTeal.withValues(alpha: 0.3),
+                              color: AppColors.dashboardTeal.withValues(
+                                alpha: 0.3,
+                              ),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
                             ),
@@ -1704,7 +2052,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                         ),
                       Icon(
                         item['icon'],
-                        color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+                        color: isSelected
+                            ? const Color(0xFF0F172A)
+                            : const Color(0xFF94A3B8),
                         size: 20,
                       ),
                     ],
@@ -1715,11 +2065,17 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                     top: 2,
                     right: 2,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.dashboardTeal,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+                        border: Border.all(
+                          color: const Color(0xFF0F172A),
+                          width: 1.5,
+                        ),
                       ),
                       child: Text(
                         badgeVal,
@@ -1761,10 +2117,16 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
             Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.arrow_back_rounded, color: textPrimary, size: 20),
+                  icon: Icon(
+                    Icons.arrow_back_rounded,
+                    color: textPrimary,
+                    size: 20,
+                  ),
                   onPressed: () {
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const CandidateJobFeedScreen(),
+                      ),
                     );
                   },
                 ),
@@ -1803,7 +2165,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
               GestureDetector(
                 onTap: () {
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateJobFeedScreen(),
+                    ),
                   );
                 },
                 child: MouseRegion(
@@ -1851,7 +2215,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                   border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
                 ),
                 child: TextField(
-                  style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 13),
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF0F172A),
+                    fontSize: 13,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Search or jump to...',
                     hintStyle: GoogleFonts.inter(
@@ -1866,7 +2233,11 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
                     suffixIcon: Container(
                       width: 32,
                       alignment: Alignment.center,
-                      margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
+                      margin: const EdgeInsets.only(
+                        right: 6,
+                        top: 4,
+                        bottom: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(4),
@@ -1966,7 +2337,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> wit
         behavior: SnackBarBehavior.floating,
         content: Text(
           'Navigating to: $destination',
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );

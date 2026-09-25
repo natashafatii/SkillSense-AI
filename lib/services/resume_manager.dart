@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 import 'auth_service.dart';
+import 'resume_service.dart';
 
 // Manages candidate resumes in localStorage, isolated per user ID.
 class ResumeManager {
@@ -23,6 +24,75 @@ class ResumeManager {
     _cachedResumes = null;
     _cachedUserId = null;
     resumesNotifier.value = [];
+  }
+
+  /// Fetches the authoritative resume list from the API and syncs it into
+  /// the local cache (and localStorage on web). Call this on page load.
+  ///
+  /// Each item from the API is normalised into the same map shape the UI
+  /// already understands:
+  ///   id, filename, filesize, uploadedAt, active, status, coverage, extracted.
+  static Future<void> loadFromApi() async {
+    try {
+      final apiList = await ResumeService.listResumes();
+      if (apiList.isEmpty) {
+        // Only wipe local state if the API confirmed the user has no resumes.
+        _cachedResumes = [];
+        resumesNotifier.value = [];
+        _persist();
+        return;
+      }
+
+      final normalised = apiList.map((r) {
+        final String id = (r['id'] ?? '').toString();
+        final String filename =
+            (r['file_name'] ?? r['filename'] ?? 'resume.pdf').toString();
+        final String filesize =
+            (r['file_size'] ?? r['filesize'] ?? '').toString();
+        final String uploadedAt =
+            (r['uploaded_at'] ?? r['uploadedAt'] ?? '').toString();
+        final bool isDefault =
+            r['is_default'] == true || r['active'] == true;
+        final String status =
+            (r['status'] ?? 'PARSED').toString().toLowerCase();
+
+        // Real coverage from API if present, else leave null (UI shows dash).
+        final Map<String, dynamic>? coverage =
+            r['coverage'] is Map
+                ? Map<String, dynamic>.from(r['coverage'] as Map)
+                : null;
+        final Map<String, dynamic>? extracted =
+            r['extracted'] is Map
+                ? Map<String, dynamic>.from(r['extracted'] as Map)
+                : null;
+
+        return <String, dynamic>{
+          'id': id,
+          'version': r['version'] ?? '',
+          'filename': filename,
+          'filesize': filesize,
+          'uploadedAt': uploadedAt,
+          'active': isDefault,
+          'status': status,
+          'processingError': (r['processing_error'] ?? '').toString(),
+          if (coverage != null) 'coverage': coverage,
+          if (extracted != null) 'extracted': extracted,
+        };
+      }).toList();
+
+      // Ensure exactly one active resume (first is_default if none flagged).
+      if (!normalised.any((r) => r['active'] == true) &&
+          normalised.isNotEmpty) {
+        normalised.first['active'] = true;
+      }
+
+      _cachedResumes = normalised;
+      _cachedUserId = AuthService.currentUserId;
+      resumesNotifier.value = List.from(normalised);
+      _persist();
+    } catch (_) {
+      // On failure keep whatever was in localStorage / memory.
+    }
   }
 
   static List<Map<String, dynamic>> getResumes() {
@@ -176,7 +246,7 @@ class ResumeManager {
         r['active'] = false;
       }
 
-      final newResume = {
+      final newResume = <String, dynamic>{
         'id': apiId ?? 'res_${DateTime.now().millisecondsSinceEpoch}',
         'version': newVersionKey,
         'filename': filename,
@@ -185,17 +255,9 @@ class ResumeManager {
         'active': true,
         'status': status,
         'processingError': processingError ?? '',
-        'coverage': coverage ?? {
-          'experience': 95,
-          'skills': 90,
-          'education': 100,
-          'projects': 40,
-        },
-        'extracted': extracted ?? {
-          'skills': ['Python', 'Django', 'Flutter', 'AI/ML'],
-          'roles': ['Backend Dev', 'Fullstack Engineer'],
-          'years_experience': 4.5,
-        },
+        // Only include coverage/extracted if the API returned them.
+        if (coverage != null) 'coverage': coverage,
+        if (extracted != null) 'extracted': extracted,
       };
 
       _cachedResumes!.insert(0, newResume);
