@@ -195,13 +195,18 @@ class LoginScreenWeb extends StatelessWidget {
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Text(
-                                                AppConstants.loginWebEyebrow.toUpperCase(),
-                                                style: GoogleFonts.jetBrainsMono(
-                                                  color: const Color(0xFF7BA5FF),
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 1.8,
-                                                ),
+                                                AppConstants.loginWebEyebrow
+                                                    .toUpperCase(),
+                                                style:
+                                                    GoogleFonts.jetBrainsMono(
+                                                      color: const Color(
+                                                        0xFF7BA5FF,
+                                                      ),
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      letterSpacing: 1.8,
+                                                    ),
                                               ),
                                             ),
                                           ],
@@ -214,7 +219,9 @@ class LoginScreenWeb extends StatelessWidget {
                                             maxWidth: Responsive
                                                 .leftPanelContentMaxWidth,
                                           ),
-                                          child: _buildFormattedHeadline(context),
+                                          child: _buildFormattedHeadline(
+                                            context,
+                                          ),
                                         ),
                                         const SizedBox(height: 22),
 
@@ -258,18 +265,18 @@ class LoginScreenWeb extends StatelessWidget {
                                     // Push footer to bottom
                                     const Spacer(),
 
-                                     // Footer
-                                     Align(
-                                       alignment: Alignment.centerLeft,
-                                       child: Text(
-                                         '© 2026 SkillSense AI',
-                                         style: GoogleFonts.inter(
-                                           color: const Color(0xFF64748B),
-                                           fontSize: 12,
-                                           fontWeight: FontWeight.w400,
-                                         ),
-                                       ),
-                                     ),
+                                    // Footer
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        '© 2026 SkillSense AI',
+                                        style: GoogleFonts.inter(
+                                          color: const Color(0xFF64748B),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -322,66 +329,77 @@ class LoginScreenWeb extends StatelessWidget {
                                           const SizedBox(height: 32),
 
                                           // Error banner (shown on bad credentials)
-                                          if (errorMessage != null) ...
-                                            [
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 14,
-                                                  vertical: 12,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFFEF2F2),
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  border: Border.all(
-                                                    color: const Color(0xFFFCA5A5),
-                                                    width: 1,
+                                          if (errorMessage != null) ...[
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 12,
                                                   ),
-                                                ),
-                                                child: Row(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    const Icon(
-                                                      Icons.close,
-                                                      color: Color(0xFFEF4444),
-                                                      size: 16,
-                                                    ),
-                                                    const SizedBox(width: 10),
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          Text(
-                                                            'Authentication Failed',
-                                                            style: GoogleFonts.inter(
-                                                              fontSize: 13,
-                                                              fontWeight:
-                                                                  FontWeight.w700,
-                                                              color: const Color(
-                                                                  0xFF991B1B),
-                                                            ),
-                                                          ),
-                                                          const SizedBox(height: 3),
-                                                          Text(
-                                                            errorMessage!,
-                                                            style: GoogleFonts.inter(
-                                                              fontSize: 12.5,
-                                                              color: const Color(
-                                                                  0xFFB91C1C),
-                                                              height: 1.4,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFEF2F2),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFFCA5A5,
+                                                  ),
+                                                  width: 1,
                                                 ),
                                               ),
-                                              const SizedBox(height: 24),
-                                            ],
+                                              child: Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.close,
+                                                    color: Color(0xFFEF4444),
+                                                    size: 16,
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          'Authentication Failed',
+                                                          style:
+                                                              GoogleFonts.inter(
+                                                                fontSize: 13,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                                color:
+                                                                    const Color(
+                                                                      0xFF991B1B,
+                                                                    ),
+                                                              ),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 3,
+                                                        ),
+                                                        Text(
+                                                          errorMessage!,
+                                                          style:
+                                                              GoogleFonts.inter(
+                                                                fontSize: 12.5,
+                                                                color:
+                                                                    const Color(
+                                                                      0xFFB91C1C,
+                                                                    ),
+                                                                height: 1.4,
+                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 24),
+                                          ],
 
                                           // Form Fields
                                           const _FormFieldLabel(label: 'Email'),
@@ -389,30 +407,40 @@ class LoginScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: emailController,
                                             focusNode: emailFocus,
-                                            hintText: 'you@company.com',
+                                            hintText:
+                                                'Enter your email address',
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                           ),
                                           const SizedBox(height: 20),
 
-                                          const _FormFieldLabel(label: 'Password'),
+                                          const _FormFieldLabel(
+                                            label: 'Password',
+                                          ),
                                           const SizedBox(height: 8),
                                           _CustomTextField(
                                             controller: passwordController,
                                             focusNode: passwordFocus,
-                                            hintText: '••••••••',
+                                            hintText: 'Enter your password',
                                             obscureText: obscurePassword,
-                                            suffixIcon: GestureDetector(
-                                              onTap: onObscureToggle,
-                                              child: Center(
-                                                widthFactor: 1.0,
-                                                heightFactor: 1.0,
-                                                child: Text(
-                                                  obscurePassword ? 'Show' : 'Hide',
-                                                  style: GoogleFonts.inter(
-                                                    color: AppColors.webLoginButton,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
+                                            suffixIcon: MouseRegion(
+                                              cursor: SystemMouseCursors.click,
+                                              child: GestureDetector(
+                                                onTap: onObscureToggle,
+                                                child: Center(
+                                                  widthFactor: 1.0,
+                                                  heightFactor: 1.0,
+                                                  child: Text(
+                                                    obscurePassword
+                                                        ? 'Show'
+                                                        : 'Hide',
+                                                    style: GoogleFonts.inter(
+                                                      color: AppColors
+                                                          .webLoginButton,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -433,33 +461,48 @@ class LoginScreenWeb extends StatelessWidget {
                                                     height: 20,
                                                     child: Checkbox(
                                                       value: rememberMe,
-                                                      onChanged: onRememberMeChanged,
-                                                      activeColor: AppColors.webLoginButton,
+                                                      onChanged:
+                                                          onRememberMeChanged,
+                                                      activeColor: AppColors
+                                                          .webLoginButton,
                                                       shape: RoundedRectangleBorder(
                                                         borderRadius:
-                                                            BorderRadius.circular(4),
+                                                            BorderRadius.circular(
+                                                              4,
+                                                            ),
                                                       ),
                                                     ),
                                                   ),
                                                   const SizedBox(width: 8),
                                                   Text(
-                                                    AppConstants.loginWebKeepMeSignedIn,
+                                                    AppConstants
+                                                        .loginWebKeepMeSignedIn,
                                                     style: GoogleFonts.inter(
                                                       fontSize: 13,
-                                                      fontWeight: FontWeight.w500,
-                                                      color: const Color(0xFF475569),
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: const Color(
+                                                        0xFF475569,
+                                                      ),
                                                     ),
                                                   ),
                                                 ],
                                               ),
-                                              GestureDetector(
-                                                onTap: onForgotPassword,
-                                                child: Text(
-                                                  AppConstants.loginWebForgotPassword,
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: AppColors.webLoginButton,
+                                              MouseRegion(
+                                                cursor:
+                                                    SystemMouseCursors.click,
+                                                child: GestureDetector(
+                                                  onTap: onForgotPassword,
+                                                  child: Text(
+                                                    AppConstants
+                                                        .loginWebForgotPassword,
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: AppColors
+                                                          .webLoginButton,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -472,14 +515,16 @@ class LoginScreenWeb extends StatelessWidget {
                                             width: double.infinity,
                                             height: 50,
                                             child: ElevatedButton(
-                                              onPressed: isLoading ? null : onLogin,
+                                              onPressed: isLoading
+                                                  ? null
+                                                  : onLogin,
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor:
                                                     AppColors.webLoginButton,
                                                 foregroundColor: Colors.white,
-                                                disabledBackgroundColor: AppColors
-                                                    .webLoginButton
-                                                    .withValues(alpha: 0.5),
+                                                disabledBackgroundColor:
+                                                    AppColors.webLoginButton
+                                                        .withValues(alpha: 0.5),
                                                 elevation: 0,
                                                 shape: RoundedRectangleBorder(
                                                   borderRadius:
@@ -492,12 +537,13 @@ class LoginScreenWeb extends StatelessWidget {
                                                       height: 20,
                                                       child:
                                                           CircularProgressIndicator(
-                                                        color: Colors.white,
-                                                        strokeWidth: 2,
-                                                      ),
+                                                            color: Colors.white,
+                                                            strokeWidth: 2,
+                                                          ),
                                                     )
                                                   : Text(
-                                                      AppConstants.loginWebButton,
+                                                      AppConstants
+                                                          .loginWebButton,
                                                       style: GoogleFonts.inter(
                                                         fontSize: 15,
                                                         fontWeight:
@@ -510,32 +556,35 @@ class LoginScreenWeb extends StatelessWidget {
 
                                           // Don't have an account? Sign Up
                                           Center(
-                                            child: GestureDetector(
-                                              onTap: onCreateAccount,
-                                              child: RichText(
-                                                text: TextSpan(
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 13,
-                                                    color: const Color(
-                                                      0xFF64748B,
-                                                    ),
-                                                  ),
-                                                  children: [
-                                                    const TextSpan(
-                                                      text: AppConstants
-                                                          .loginWebNewUserPrompt,
-                                                    ),
-                                                    TextSpan(
-                                                      text: AppConstants
-                                                          .loginWebCreateAccountLink,
-                                                      style: GoogleFonts.inter(
-                                                        color:
-                                                            AppColors.webLoginButton,
-                                                        fontWeight:
-                                                            FontWeight.w600,
+                                            child: MouseRegion(
+                                              cursor: SystemMouseCursors.click,
+                                              child: GestureDetector(
+                                                onTap: onCreateAccount,
+                                                child: RichText(
+                                                  text: TextSpan(
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 13,
+                                                      color: const Color(
+                                                        0xFF64748B,
                                                       ),
                                                     ),
-                                                  ],
+                                                    children: [
+                                                      const TextSpan(
+                                                        text: AppConstants
+                                                            .loginWebNewUserPrompt,
+                                                      ),
+                                                      TextSpan(
+                                                        text: AppConstants
+                                                            .loginWebCreateAccountLink,
+                                                        style: GoogleFonts.inter(
+                                                          color: AppColors
+                                                              .webLoginButton,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -578,9 +627,7 @@ class LoginScreenWeb extends StatelessWidget {
           letterSpacing: -1.2,
         ),
         children: [
-          const TextSpan(
-            text: 'Everything is where\nyou ',
-          ),
+          const TextSpan(text: 'Everything is where\nyou '),
           WidgetSpan(
             alignment: PlaceholderAlignment.baseline,
             baseline: TextBaseline.alphabetic,

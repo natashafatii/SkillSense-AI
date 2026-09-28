@@ -22,7 +22,19 @@ class _CandidateOnboardingFlowWebState
 
   // Wave bar heights for the AI interviewer card on page 3
   static const List<double> _waveHeights = [
-    16, 28, 40, 52, 44, 60, 48, 56, 36, 44, 52, 32, 20,
+    16,
+    28,
+    40,
+    52,
+    44,
+    60,
+    48,
+    56,
+    36,
+    44,
+    52,
+    32,
+    20,
   ];
 
   /// Left-panel data per page — all strings from AppConstants.
@@ -580,11 +592,7 @@ class _CandidateOnboardingFlowWebState
                     ),
                   ),
                   // Right: light green tint background
-                  Expanded(
-                    child: Container(
-                      color: const Color(0xFFF2FBF5),
-                    ),
-                  ),
+                  Expanded(child: Container(color: const Color(0xFFF2FBF5))),
                 ],
               ),
 
@@ -650,7 +658,8 @@ class _CandidateOnboardingFlowWebState
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          AppConstants.candidateWebEyebrow.toUpperCase(),
+                                          AppConstants.candidateWebEyebrow
+                                              .toUpperCase(),
                                           style: GoogleFonts.jetBrainsMono(
                                             color: const Color(0xFF7BA5FF),
                                             fontSize: 10,
@@ -743,157 +752,172 @@ class _CandidateOnboardingFlowWebState
                               alignment: Alignment.topCenter,
                               child: ConstrainedBox(
                                 constraints: const BoxConstraints(
-                                  maxWidth: Responsive.rightPanelContentMaxWidth,
+                                  maxWidth:
+                                      Responsive.rightPanelContentMaxWidth,
                                 ),
-                                child: SingleChildScrollView(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: hPad * 0.6,
-                                    vertical: vPad * 1.5,
-                                  ),
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 300),
-                                    child: Column(
-                                      key: ValueKey<int>(_currentPage),
-                                      mainAxisAlignment: MainAxisAlignment.start,
-                                      children: [
-                                        const SizedBox(height: 80),
-                                        // "For job seekers" badge
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 18,
-                                            vertical: 7,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: AppColors.candidatePrimary
-                                                  .withValues(alpha: 0.5),
+                                child: ScrollConfiguration(
+                                  behavior: ScrollConfiguration.of(
+                                    context,
+                                  ).copyWith(scrollbars: false),
+                                  child: SingleChildScrollView(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: hPad * 0.6,
+                                      vertical: vPad * 1.5,
+                                    ),
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 300,
+                                      ),
+                                      child: Column(
+                                        key: ValueKey<int>(_currentPage),
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 80),
+                                          // "For job seekers" badge
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 18,
+                                              vertical: 7,
                                             ),
-                                            color: Colors.transparent,
-                                          ),
-                                          child: Text(
-                                            AppConstants.candidateBadge,
-                                            style: GoogleFonts.inter(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                              color: AppColors.candidatePrimary,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 28),
-
-                                        // Central icon box
-                                        Container(
-                                          width: 72,
-                                          height: 72,
-                                          decoration: BoxDecoration(
-                                            color: AppColors.candidateLightGreen,
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                          ),
-                                          child: Icon(
-                                            _pageIcon(),
-                                            color: AppColors.candidatePrimary,
-                                            size: 34,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 20),
-
-                                        // Right-panel title
-                                        Text(
-                                          _rightTitle(),
-                                          textAlign: TextAlign.center,
-                                          style: GoogleFonts.inter(
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.w800,
-                                            color: AppColors.hrTextDark,
-                                            height: 1.25,
-                                            letterSpacing: -0.3,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 10),
-
-                                        // Right-panel subtitle
-                                        Text(
-                                          _rightSub(),
-                                          textAlign: TextAlign.center,
-                                          style: GoogleFonts.inter(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w400,
-                                            color: AppColors.hrTextGrey,
-                                            height: 1.55,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 28),
-
-                                        // Page-specific card/widget
-                                        _buildRightContent(),
-                                        const SizedBox(height: 28),
-
-                                        // Pagination dots
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: List.generate(
-                                            _totalPages,
-                                            (i) => Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 4,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: AppColors
+                                                    .candidatePrimary
+                                                    .withValues(alpha: 0.5),
                                               ),
-                                              child: AnimatedContainer(
-                                                duration: const Duration(
-                                                  milliseconds: 300,
-                                                ),
-                                                width: _currentPage == i
-                                                    ? 24
-                                                    : 8,
-                                                height: 8,
-                                                decoration: BoxDecoration(
-                                                  color: _currentPage == i
-                                                      ? AppColors.candidatePrimary
-                                                      : AppColors
-                                                          .candidateDotInactive,
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 24),
-
-                                        // Next / Create account button
-                                        SizedBox(
-                                          width: double.infinity,
-                                          height: 54,
-                                          child: ElevatedButton(
-                                            onPressed: _nextPage,
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  AppColors.candidatePrimary,
-                                              foregroundColor: Colors.white,
-                                              elevation: 0,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(28),
-                                              ),
+                                              color: Colors.transparent,
                                             ),
                                             child: Text(
-                                              _currentPage == _totalPages - 1
-                                                  ? AppConstants
-                                                      .candidateCreateAccount
-                                                  : AppConstants
-                                                      .candidateNextButton,
+                                              AppConstants.candidateBadge,
                                               style: GoogleFonts.inter(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                                color:
+                                                    AppColors.candidatePrimary,
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(height: 28),
+
+                                          // Central icon box
+                                          Container(
+                                            width: 72,
+                                            height: 72,
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  AppColors.candidateLightGreen,
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Icon(
+                                              _pageIcon(),
+                                              color: AppColors.candidatePrimary,
+                                              size: 34,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 20),
+
+                                          // Right-panel title
+                                          Text(
+                                            _rightTitle(),
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.w800,
+                                              color: AppColors.hrTextDark,
+                                              height: 1.25,
+                                              letterSpacing: -0.3,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+
+                                          // Right-panel subtitle
+                                          Text(
+                                            _rightSub(),
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w400,
+                                              color: AppColors.hrTextGrey,
+                                              height: 1.55,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 28),
+
+                                          // Page-specific card/widget
+                                          _buildRightContent(),
+                                          const SizedBox(height: 28),
+
+                                          // Pagination dots
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: List.generate(
+                                              _totalPages,
+                                              (i) => Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                    ),
+                                                child: AnimatedContainer(
+                                                  duration: const Duration(
+                                                    milliseconds: 300,
+                                                  ),
+                                                  width: _currentPage == i
+                                                      ? 24
+                                                      : 8,
+                                                  height: 8,
+                                                  decoration: BoxDecoration(
+                                                    color: _currentPage == i
+                                                        ? AppColors
+                                                              .candidatePrimary
+                                                        : AppColors
+                                                              .candidateDotInactive,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 24),
+
+                                          // Next / Create account button
+                                          SizedBox(
+                                            width: double.infinity,
+                                            height: 54,
+                                            child: ElevatedButton(
+                                              onPressed: _nextPage,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    AppColors.candidatePrimary,
+                                                foregroundColor: Colors.white,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(28),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                _currentPage == _totalPages - 1
+                                                    ? AppConstants
+                                                          .candidateCreateAccount
+                                                    : AppConstants
+                                                          .candidateNextButton,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -901,21 +925,22 @@ class _CandidateOnboardingFlowWebState
                             ),
 
                             // Skip button
-                            Positioned(
-                              top: vPad,
-                              right: hPad,
-                              child: TextButton(
-                                onPressed: _skip,
-                                child: Text(
-                                  'Skip',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.candidatePrimary,
+                            if (_currentPage < _totalPages - 1)
+                              Positioned(
+                                top: vPad,
+                                right: hPad,
+                                child: TextButton(
+                                  onPressed: _skip,
+                                  child: Text(
+                                    'Skip',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.candidatePrimary,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
                           ],
                         ),
                       ),

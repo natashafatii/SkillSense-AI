@@ -410,7 +410,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: nameController,
                                             focusNode: nameFocus,
-                                            hintText: 'e.g. Sara Ahmed',
+                                            hintText: 'Enter your full name',
                                           ),
                                           const SizedBox(height: 14),
 
@@ -422,7 +422,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: emailController,
                                             focusNode: emailFocus,
-                                            hintText: 'you@company.com',
+                                            hintText: 'Enter your work email address',
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                           ),
@@ -436,7 +436,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: companyController,
                                             focusNode: companyFocus,
-                                            hintText: 'e.g. SkillSense AI',
+                                            hintText: 'Enter your company name',
                                           ),
                                           const SizedBox(height: 14),
 
@@ -448,7 +448,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: passwordController,
                                             focusNode: passwordFocus,
-                                            hintText: 'At least 8 characters',
+                                            hintText: 'Create a password (min 8 characters)',
                                             obscureText: obscurePassword,
                                             suffixIcon: GestureDetector(
                                               onTap: onObscureToggle,
@@ -461,6 +461,22 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                                 size: 20,
                                               ),
                                             ),
+                                          ),
+                                          AnimatedBuilder(
+                                            animation: passwordFocus,
+                                            builder: (context, child) {
+                                              if (!passwordFocus.hasFocus) return const SizedBox.shrink();
+                                              return Padding(
+                                                padding: const EdgeInsets.only(top: 6, left: 4),
+                                                child: Text(
+                                                  'Use at least 8 characters with a number',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12,
+                                                    color: const Color(0xFF64748B),
+                                                  ),
+                                                ),
+                                              );
+                                            },
                                           ),
                                           const SizedBox(height: 14),
 

@@ -59,10 +59,7 @@ class ResumeService {
     try {
       final dio = await ApiClient.getInstance();
       final formData = FormData.fromMap({
-        'file': MultipartFile.fromBytes(
-          fileBytes,
-          filename: fileName,
-        ),
+        'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
       });
 
       final response = await dio.post(
@@ -91,7 +88,7 @@ class ResumeService {
     }
     try {
       final dio = await ApiClient.getInstance();
-      final response = await dio.get('/candidates/resumes/$resumeId/');
+      final response = await dio.get('/resumes/$resumeId/');
       final detail = ResumeDetail.fromJson(
         response.data as Map<String, dynamic>,
       );
@@ -158,7 +155,7 @@ class ResumeService {
       // so screens like CD-04 / CD-10 fetch the latest active resume.
       _cachedDetail = null;
       _cachedDetailId = null;
-      
+
       return Map<String, dynamic>.from(response.data as Map);
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
@@ -240,8 +237,7 @@ class ResumeService {
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.get('/profile/coverage/');
-      _cachedProfileCoverage =
-          Map<String, dynamic>.from(response.data as Map);
+      _cachedProfileCoverage = Map<String, dynamic>.from(response.data as Map);
       return _cachedProfileCoverage!;
     } on DioException catch (e) {
       if (_cachedProfileCoverage != null) return _cachedProfileCoverage!;
@@ -265,8 +261,9 @@ class ResumeService {
   /// If [cachedDetail] is missing but [ResumeManager] indicates there's an active resume,
   /// this fetches it. If no active resume exists in [ResumeManager], this returns null.
   static Future<ResumeDetail?> ensureActiveDetailCached() async {
-    if (_cachedDetail != null && !_cachedDetail!.isPending) return _cachedDetail;
-    
+    if (_cachedDetail != null && !_cachedDetail!.isPending)
+      return _cachedDetail;
+
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.get('/candidates/resumes/');
@@ -279,15 +276,17 @@ class ResumeService {
         return null;
       }
       if (results.isEmpty) return null;
-      
-      final active = results.firstWhere((r) => r['active'] == true || r['is_default'] == true, orElse: () => results.first);
+
+      final active = results.firstWhere(
+        (r) => r['active'] == true || r['is_default'] == true,
+        orElse: () => results.first,
+      );
       final activeId = active['id']?.toString();
       if (activeId == null) return null;
-      
+
       return await getResumeDetail(activeId);
     } catch (_) {
       return null;
     }
   }
 }
-

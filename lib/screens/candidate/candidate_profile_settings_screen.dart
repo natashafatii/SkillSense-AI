@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
@@ -13,8 +14,6 @@ import 'candidate_feedback_report_screen.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/candidate_side_nav.dart';
 import 'candidate_notifications_screen.dart';
-import '../../services/resume_service.dart';
-import '../../models/resume_detail.dart';
 import '../../models/candidate_profile.dart';
 import '../../services/profile_service.dart';
 import '../../services/api_exception.dart';
@@ -48,18 +47,14 @@ class _CandidateProfileSettingsScreenState
   bool _recruiterViews = false;
 
   // User profile state
-  Map<String, dynamic>? _userData;
-
-  ResumeDetail? _resumeDetail;
-  double _overallScore = 0.0;
+  bool _isLoadingProfile = true;
+  String? _profileError;
 
   CandidateProfile? _candidateProfile;
 
   @override
   void initState() {
     super.initState();
-    _loadUserProfile();
-    _loadResumeDetail();
     _loadCandidateProfile();
     _strengthController = AnimationController(
       vsync: this,
@@ -70,56 +65,17 @@ class _CandidateProfileSettingsScreenState
     );
   }
 
-  Future<void> _loadResumeDetail() async {
-    try {
-      final detail = await ResumeService.ensureActiveDetailCached();
-      if (mounted) {
-        setState(() {
-          _resumeDetail = detail;
-          if (detail != null) {
-            final cov = ResumeService.coverageFromDetail(detail);
-            _overallScore =
-                ((cov['experience'] ?? 0) +
-                    (cov['skills'] ?? 0) +
-                    (cov['education'] ?? 0) +
-                    (cov['projects'] ?? 0)) /
-                4.0;
-          } else {
-            _overallScore = 0.0;
-          }
-
-          _strengthAnimation = Tween<double>(begin: 0, end: _overallScore)
-              .animate(
-                CurvedAnimation(
-                  parent: _strengthController,
-                  curve: Curves.easeOutCubic,
-                ),
-              );
-          _strengthController.forward(from: 0);
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {});
-      }
-    }
-  }
-
-  void _loadUserProfile() {
-    final user = AuthService.currentUserData;
-    if (mounted) {
-      setState(() {
-        _userData = user;
-      });
-    }
-  }
-
   Future<void> _loadCandidateProfile() async {
+    setState(() {
+      _isLoadingProfile = true;
+      _profileError = null;
+    });
     try {
       final profile = await ProfileService.getCandidateProfile();
       if (mounted) {
         setState(() {
           _candidateProfile = profile;
+          _isLoadingProfile = false;
         });
       }
     } on ApiException catch (e) {
@@ -132,11 +88,17 @@ class _CandidateProfileSettingsScreenState
         return;
       }
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _isLoadingProfile = false;
+          _profileError = e.message;
+        });
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _isLoadingProfile = false;
+          _profileError = e.toString();
+        });
       }
     }
   }
@@ -165,24 +127,67 @@ class _CandidateProfileSettingsScreenState
   }
 
   void _showEditProfileDialog(BuildContext context) {
-    final sessionData = AuthService.currentUserData ?? _userData ?? {};
-    final currentFn = (sessionData['first_name'] ?? '').toString();
-    final currentLn = (sessionData['last_name'] ?? '').toString();
+    final currentPhone = _candidateProfile?.phone ?? '';
     final currentLocation = _candidateProfile?.location ?? '';
+    final currentLinkedin = _candidateProfile?.linkedinUrl ?? '';
+    final currentPortfolio = _candidateProfile?.portfolioUrl ?? '';
     final currentExp = _candidateProfile?.yearsExperience?.toString() ?? '';
+    final currentHeadline = _candidateProfile?.headline ?? '';
 
-    final fnController = TextEditingController(text: currentFn);
-    final lnController = TextEditingController(text: currentLn);
+    final phoneController = TextEditingController(text: currentPhone);
     final locationController = TextEditingController(text: currentLocation);
+    final linkedinController = TextEditingController(text: currentLinkedin);
+    final portfolioController = TextEditingController(text: currentPortfolio);
     final expController = TextEditingController(text: currentExp);
+    final headlineController = TextEditingController(text: currentHeadline);
 
     String? errorMessage;
+    Map<String, dynamic> fieldErrors = {};
     bool isSaving = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) {
+          String? getFieldError(String key) {
+            final err = fieldErrors[key];
+            if (err == null) return null;
+            if (err is List && err.isNotEmpty) return err.first.toString();
+            return err.toString();
+          }
+
+          Widget buildTextField(
+            String label,
+            TextEditingController controller,
+            String key, {
+            String? placeholder,
+            TextInputType? keyboardType,
+          }) {
+            final errorText = getFieldError(key);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                controller: controller,
+                keyboardType: keyboardType,
+                style: GoogleFonts.inter(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: label,
+                  hintText: placeholder,
+                  hintStyle: GoogleFonts.inter(color: const Color(0xFF475569)),
+                  errorText: errorText,
+                  labelStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF334155)),
+                  ),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.dashboardTeal),
+                  ),
+                ),
+              ),
+            );
+          }
+
           return AlertDialog(
             backgroundColor: const Color(0xFF0F172A),
             shape: RoundedRectangleBorder(
@@ -209,73 +214,42 @@ class _CandidateProfileSettingsScreenState
                         style: const TextStyle(color: Colors.red, fontSize: 12),
                       ),
                     ),
-                  TextField(
-                    controller: fnController,
-                    style: GoogleFonts.inter(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'First Name',
-                      labelStyle: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
-                      ),
-                      enabledBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF334155)),
-                      ),
-                      focusedBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.dashboardTeal),
-                      ),
-                    ),
+                  buildTextField(
+                    'Phone',
+                    phoneController,
+                    'phone',
+                    placeholder: 'Enter your phone number',
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: lnController,
-                    style: GoogleFonts.inter(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Last Name',
-                      labelStyle: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
-                      ),
-                      enabledBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF334155)),
-                      ),
-                      focusedBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.dashboardTeal),
-                      ),
-                    ),
+                  buildTextField(
+                    'Location',
+                    locationController,
+                    'location',
+                    placeholder: 'e.g. Lahore',
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: locationController,
-                    style: GoogleFonts.inter(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Location',
-                      labelStyle: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
-                      ),
-                      enabledBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF334155)),
-                      ),
-                      focusedBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.dashboardTeal),
-                      ),
-                    ),
+                  buildTextField(
+                    'LinkedIn URL',
+                    linkedinController,
+                    'linkedin_url',
+                    placeholder: 'Enter your LinkedIn URL',
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: expController,
+                  buildTextField(
+                    'Portfolio URL',
+                    portfolioController,
+                    'portfolio_url',
+                    placeholder: 'Enter your portfolio URL',
+                  ),
+                  buildTextField(
+                    'Years of Experience',
+                    expController,
+                    'years_experience',
+                    placeholder: 'e.g. 4',
                     keyboardType: TextInputType.number,
-                    style: GoogleFonts.inter(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Years of Experience',
-                      labelStyle: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
-                      ),
-                      enabledBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Color(0xFF334155)),
-                      ),
-                      focusedBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.dashboardTeal),
-                      ),
-                    ),
+                  ),
+                  buildTextField(
+                    'Headline',
+                    headlineController,
+                    'headline',
+                    placeholder: 'e.g. Senior Django Developer',
                   ),
                 ],
               ),
@@ -302,64 +276,113 @@ class _CandidateProfileSettingsScreenState
                         setState(() {
                           isSaving = true;
                           errorMessage = null;
+                          fieldErrors = {};
                         });
                         try {
-                          final newFn = fnController.text.trim();
-                          final newLn = lnController.text.trim();
+                          final newPhone = phoneController.text.trim();
+                          final newLoc = locationController.text.trim();
+                          final newLi = linkedinController.text.trim();
+                          final newPort = portfolioController.text.trim();
+                          final newExpStr = expController.text.trim();
+                          final newHeadline = headlineController.text.trim();
 
-                          if (newFn != currentFn || newLn != currentLn) {
-                            await AuthService.updateUserProfile(
-                              firstName: newFn,
-                              lastName: newLn,
-                            );
+                          int? expValue;
+                          if (newExpStr.isNotEmpty) {
+                            expValue = int.tryParse(newExpStr);
+                            if (expValue == null) {
+                              setState(() {
+                                isSaving = false;
+                                fieldErrors['years_experience'] =
+                                    'Must be a valid number';
+                              });
+                              return;
+                            }
                           }
 
-                          final newLoc = locationController.text.trim();
-                          final newExpStr = expController.text.trim();
+                          final patchData = <String, dynamic>{};
+                          if (newPhone != (_candidateProfile?.phone ?? '')) {
+                            patchData['phone'] = newPhone;
+                          }
+                          if (newLoc != (_candidateProfile?.location ?? '')) {
+                            patchData['location'] = newLoc;
+                          }
+                          if (newLi != (_candidateProfile?.linkedinUrl ?? '')) {
+                            patchData['linkedin_url'] = newLi;
+                          }
+                          if (newPort !=
+                              (_candidateProfile?.portfolioUrl ?? '')) {
+                            patchData['portfolio_url'] = newPort;
+                          }
+                          if (expValue != _candidateProfile?.yearsExperience) {
+                            patchData['years_experience'] = expValue;
+                          }
+                          if (newHeadline !=
+                              (_candidateProfile?.headline ?? '')) {
+                            patchData['headline'] = newHeadline;
+                          }
 
-                          if (_candidateProfile != null ||
-                              newLoc.isNotEmpty ||
-                              newExpStr.isNotEmpty) {
-                            final patchData = <String, dynamic>{};
-                            if (newLoc != currentLocation) {
-                              patchData['location'] = newLoc;
-                            }
-                            if (newExpStr != currentExp) {
-                              final parsedExp = int.tryParse(newExpStr);
-                              if (newExpStr.isNotEmpty && parsedExp == null) {
-                                throw Exception(
-                                  "Years of experience must be a valid number",
-                                );
-                              }
-                              if (newExpStr.isNotEmpty) {
-                                patchData['years_experience'] = parsedExp;
-                              }
-                            }
+                          if (patchData.isEmpty) {
+                            if (context.mounted) Navigator.pop(context);
+                            return;
+                          }
 
-                            if (patchData.isNotEmpty) {
-                              final updatedProfile =
-                                  await ProfileService.updateCandidateProfile(
-                                    patchData,
-                                  );
-                              if (mounted) {
-                                setState(() {
-                                  _candidateProfile = updatedProfile;
-                                });
-                              }
-                            }
+                          final updatedProfile =
+                              await ProfileService.updateCandidateProfile(
+                                patchData,
+                              );
+
+                          if (mounted) {
+                            setState(() {
+                              _candidateProfile = updatedProfile;
+                            });
                           }
 
                           if (context.mounted) {
                             _showToast('Profile updated successfully.');
                             Navigator.pop(context);
                           }
+                        } on ApiException catch (e) {
+                          if (e.statusCode == 401) {
+                            if (context.mounted) {
+                              Navigator.pop(context); // Close dialog
+                            }
+                            if (mounted) {
+                              await AuthService.signOut(this.context);
+                              if (mounted) {
+                                Navigator.of(
+                                  this.context,
+                                ).pushReplacementNamed('/login');
+                              }
+                            }
+                            return;
+                          }
+
+                          if (e.statusCode == 403) {
+                            setState(() {
+                              isSaving = false;
+                              errorMessage =
+                                  'You are not authorized as a candidate.';
+                            });
+                            return;
+                          }
+
+                          if (e.statusCode == 400 && e.fieldErrors != null) {
+                            setState(() {
+                              isSaving = false;
+                              fieldErrors = e.fieldErrors!;
+                              errorMessage = 'Please fix the errors below.';
+                            });
+                            return;
+                          }
+
+                          setState(() {
+                            isSaving = false;
+                            errorMessage = e.message;
+                          });
                         } catch (e) {
                           setState(() {
                             isSaving = false;
-                            errorMessage = e.toString().replaceAll(
-                              'Exception: ',
-                              '',
-                            );
+                            errorMessage = 'An unexpected error occurred.';
                           });
                         }
                       },
@@ -807,29 +830,33 @@ class _CandidateProfileSettingsScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ValueListenableBuilder<Map<String, dynamic>?>(
-                      valueListenable: AuthService.currentUserNotifier,
-                      builder: (context, userSession, child) {
-                        final fn =
-                            (userSession?['first_name'] ??
-                                    _userData?['first_name'] ??
-                                    '')
-                                .toString()
-                                .trim();
-                        final ln =
-                            (userSession?['last_name'] ??
-                                    _userData?['last_name'] ??
-                                    '')
-                                .toString()
-                                .trim();
-                        final email =
-                            (userSession?['email'] ?? _userData?['email'] ?? '')
-                                .toString()
-                                .trim();
+                    ValueListenableBuilder<CandidateProfile?>(
+                      valueListenable: ProfileService.currentProfileNotifier,
+                      builder: (context, profile, child) {
+                        if (_isLoadingProfile) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: CircularProgressIndicator(
+                                color: AppColors.dashboardTeal,
+                              ),
+                            ),
+                          );
+                        }
+                        if (_profileError != null) {
+                          return Text(
+                            'Error: ',
+                            style: const TextStyle(color: Colors.red),
+                          );
+                        }
+
+                        final fn = profile?.user.firstName?.trim() ?? '';
+                        final ln = profile?.user.lastName?.trim() ?? '';
+                        final email = profile?.user.email.trim() ?? '';
 
                         String fullName = '';
                         if (fn.isNotEmpty || ln.isNotEmpty) {
-                          fullName = '$fn $ln'.trim();
+                          fullName = '${fn} ${ln}'.trim();
                         } else if (email.isNotEmpty) {
                           final prefix = email.split('@').first;
                           fullName = prefix.isNotEmpty
@@ -848,6 +875,100 @@ class _CandidateProfileSettingsScreenState
                           initials = email[0].toUpperCase();
                         } else {
                           initials = 'C';
+                        }
+
+                        Widget buildMissing(String label) {
+                          return Row(
+                            children: [
+                              Text(
+                                '${label}: ',
+                                style: GoogleFonts.inter(
+                                  color: textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Text(
+                                'Not added ',
+                                style: GoogleFonts.inter(
+                                  color: textSecondary.withValues(alpha: 0.6),
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                              InkWell(
+                                onTap: () => _showEditProfileDialog(context),
+                                child: Text(
+                                  'Add',
+                                  style: GoogleFonts.inter(
+                                    color: AppColors.dashboardTeal,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        Widget buildIconRow(IconData icon, String text) {
+                          return Row(
+                            children: [
+                              Icon(icon, size: 14, color: textSecondary),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  text,
+                                  style: GoogleFonts.inter(
+                                    color: textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        Widget buildLinkRow(IconData icon, String url) {
+                          return Row(
+                            children: [
+                              Icon(icon, size: 14, color: textSecondary),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Tooltip(
+                                  message: url,
+                                  child: InkWell(
+                                    onTap: () async {
+                                      final uri = Uri.parse(
+                                        url.startsWith('http')
+                                            ? url
+                                            : 'https://${url}',
+                                      );
+                                      if (await canLaunchUrl(uri)) {
+                                        await launchUrl(
+                                          uri,
+                                          mode: LaunchMode.externalApplication,
+                                        );
+                                      }
+                                    },
+                                    child: Text(
+                                      url,
+                                      style: GoogleFonts.inter(
+                                        color: AppColors.dashboardTeal,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
                         }
 
                         return Column(
@@ -896,6 +1017,7 @@ class _CandidateProfileSettingsScreenState
                                     ],
                                   ),
                                 ),
+
                                 OutlinedButton(
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: textPrimary,
@@ -921,26 +1043,120 @@ class _CandidateProfileSettingsScreenState
                               ],
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              email.isNotEmpty
-                                  ? '$email · Candidate Profile'
-                                  : 'Candidate Profile',
-                              style: GoogleFonts.inter(
-                                color: textSecondary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (_candidateProfile != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                '${_candidateProfile!.location.isNotEmpty ? _candidateProfile!.location : 'Unknown Location'} · ${_candidateProfile!.yearsExperience ?? 0} yrs',
-                                style: GoogleFonts.inter(
-                                  color: textSecondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                            Row(
+                              children: [
+                                Text(
+                                  email.isNotEmpty
+                                      ? '${email} · Candidate Profile'
+                                      : 'Candidate Profile',
+                                  style: GoogleFonts.inter(
+                                    color: textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
+                                if (email.endsWith('@example.com'))
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 8.0),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.withValues(
+                                          alpha: 0.2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.amber),
+                                      ),
+                                      child: Text(
+                                        'Placeholder email - please update',
+                                        style: GoogleFonts.inter(
+                                          color: Colors.amber[900],
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+
+                            if (_candidateProfile != null) ...[
+                              const SizedBox(height: 12),
+
+                              // Headline
+                              if (_candidateProfile!.headline.isNotEmpty)
+                                Text(
+                                  _candidateProfile!.headline,
+                                  style: GoogleFonts.inter(
+                                    color: textPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                )
+                              else
+                                buildMissing('Headline'),
+
+                              const SizedBox(height: 6),
+
+                              // Location and Years
+                              Builder(
+                                builder: (context) {
+                                  final loc = _candidateProfile!.location;
+                                  final yrs =
+                                      _candidateProfile!.yearsExperience;
+                                  if (loc.isEmpty && yrs == null) {
+                                    return buildMissing(
+                                      'Location & Experience',
+                                    );
+                                  }
+                                  final locStr = loc.isNotEmpty
+                                      ? loc
+                                      : 'Location not added';
+                                  final yrsStr = yrs != null
+                                      ? '${yrs} yrs'
+                                      : 'Experience not added';
+                                  return buildIconRow(
+                                    Icons.location_on_outlined,
+                                    '${locStr} · ${yrsStr}',
+                                  );
+                                },
                               ),
+
+                              const SizedBox(height: 6),
+
+                              // Phone
+                              if (_candidateProfile!.phone.isNotEmpty)
+                                buildIconRow(
+                                  Icons.phone,
+                                  _candidateProfile!.phone,
+                                )
+                              else
+                                buildMissing('Phone'),
+
+                              const SizedBox(height: 6),
+
+                              // LinkedIn URL
+                              if (_candidateProfile!.linkedinUrl.isNotEmpty)
+                                buildLinkRow(
+                                  Icons.link,
+                                  _candidateProfile!.linkedinUrl,
+                                )
+                              else
+                                buildMissing('LinkedIn'),
+
+                              const SizedBox(height: 6),
+
+                              // Portfolio URL
+                              if (_candidateProfile!.portfolioUrl.isNotEmpty)
+                                buildLinkRow(
+                                  Icons.link,
+                                  _candidateProfile!.portfolioUrl,
+                                )
+                              else
+                                buildMissing('Portfolio'),
                             ] else ...[
                               const SizedBox(height: 8),
                               InkWell(
@@ -969,9 +1185,7 @@ class _CandidateProfileSettingsScreenState
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        _resumeDetail == null
-                            ? 'Add your resume and skills to get a match score.'
-                            : 'Add 2 projects with metrics → 85+ and a stronger match rank.',
+                        'Add your resume and skills to get a match score.',
                         style: GoogleFonts.inter(
                           color: AppColors.dashboardTeal,
                           fontSize: 12,
@@ -1001,14 +1215,12 @@ class _CandidateProfileSettingsScreenState
           // Dynamic Completion Rows derived from active resume API response / cache
           Builder(
             builder: (context) {
-              final Map<String, int> cov = _resumeDetail != null
-                  ? ResumeService.coverageFromDetail(_resumeDetail!)
-                  : {
-                      'experience': 0,
-                      'skills': 0,
-                      'education': 0,
-                      'projects': 0,
-                    };
+              final Map<String, int> cov = {
+                'experience': 0,
+                'skills': 0,
+                'education': 0,
+                'projects': 0,
+              };
 
               final num expVal = cov['experience'] ?? 0;
               final num sklVal = cov['skills'] ?? 0;

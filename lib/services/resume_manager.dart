@@ -45,26 +45,28 @@ class ResumeManager {
 
       final normalised = apiList.map((r) {
         final String id = (r['id'] ?? '').toString();
-        final String filename =
+        final String rawFilename =
             (r['file_name'] ?? r['filename'] ?? 'resume.pdf').toString();
-        final String filesize =
-            (r['file_size'] ?? r['filesize'] ?? '').toString();
-        final String uploadedAt =
-            (r['uploaded_at'] ?? r['uploadedAt'] ?? '').toString();
-        final bool isDefault =
-            r['is_default'] == true || r['active'] == true;
-        final String status =
-            (r['status'] ?? 'PARSED').toString().toLowerCase();
+        final String filename = rawFilename.replaceAllMapped(
+          RegExp(r'_([a-zA-Z0-9]{7})(\.[a-zA-Z0-9]+)$'),
+          (match) => match.group(2)!,
+        );
+        final String filesize = (r['file_size'] ?? r['filesize'] ?? '')
+            .toString();
+        final String uploadedAt = (r['uploaded_at'] ?? r['uploadedAt'] ?? '')
+            .toString();
+        final bool isDefault = r['is_default'] == true || r['active'] == true;
+        final String status = (r['status'] ?? 'PARSED')
+            .toString()
+            .toLowerCase();
 
         // Real coverage from API if present, else leave null (UI shows dash).
-        final Map<String, dynamic>? coverage =
-            r['coverage'] is Map
-                ? Map<String, dynamic>.from(r['coverage'] as Map)
-                : null;
-        final Map<String, dynamic>? extracted =
-            r['extracted'] is Map
-                ? Map<String, dynamic>.from(r['extracted'] as Map)
-                : null;
+        final Map<String, dynamic>? coverage = r['coverage'] is Map
+            ? Map<String, dynamic>.from(r['coverage'] as Map)
+            : null;
+        final Map<String, dynamic>? extracted = r['extracted'] is Map
+            ? Map<String, dynamic>.from(r['extracted'] as Map)
+            : null;
 
         return <String, dynamic>{
           'id': id,
@@ -233,11 +235,14 @@ class ResumeManager {
         r['active'] = false;
       }
       _cachedResumes![existingIdx]['active'] = true;
-      _cachedResumes![existingIdx]['uploadedAt'] = DateTime.now().toIso8601String();
+      _cachedResumes![existingIdx]['uploadedAt'] = DateTime.now()
+          .toIso8601String();
       if (coverage != null) _cachedResumes![existingIdx]['coverage'] = coverage;
-      if (extracted != null) _cachedResumes![existingIdx]['extracted'] = extracted;
+      if (extracted != null)
+        _cachedResumes![existingIdx]['extracted'] = extracted;
       _cachedResumes![existingIdx]['status'] = status;
-      if (processingError != null) _cachedResumes![existingIdx]['processingError'] = processingError;
+      if (processingError != null)
+        _cachedResumes![existingIdx]['processingError'] = processingError;
     } else {
       final newVersionNum = _cachedResumes!.length + 1;
       final newVersionKey = 'v$newVersionNum';
@@ -265,7 +270,8 @@ class ResumeManager {
     _persist();
   }
 
-  static void updateResumeStatus(String idOrVersion, {
+  static void updateResumeStatus(
+    String idOrVersion, {
     required String status,
     Map<String, dynamic>? coverage,
     Map<String, dynamic>? extracted,
@@ -294,7 +300,9 @@ class ResumeManager {
 
   static void deleteResume(String versionOrId) {
     getResumes();
-    _cachedResumes!.removeWhere((r) => r['version'] == versionOrId || r['id'] == versionOrId);
+    _cachedResumes!.removeWhere(
+      (r) => r['version'] == versionOrId || r['id'] == versionOrId,
+    );
     if (_cachedResumes!.isNotEmpty &&
         !_cachedResumes!.any((r) => r['active'] == true)) {
       _cachedResumes!.first['active'] = true;

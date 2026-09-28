@@ -2,7 +2,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl_phone_field/intl_phone_field.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/green_gradient_background.dart';
@@ -10,6 +9,7 @@ import '../../services/auth_service.dart';
 import 'candidate_register_screen_web.dart';
 import 'email_verification_screen.dart';
 import 'terms_privacy_screen.dart';
+import '../../widgets/country_code_phone_field.dart';
 
 const _green = Color(0xFF34C759);
 
@@ -27,7 +27,6 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
   bool _isLoading = false;
 
   // ── Phone length tracker ───────────────────────────────────────────────────
-  int _phoneLength = 0;
   String _phoneNumber = '';
 
   // ── Form ───────────────────────────────────────────────────────────────────
@@ -409,6 +408,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                 _obscureConfirm = !_obscureConfirm;
               });
             },
+            onPhoneChanged: (val) => setState(() => _phoneNumber = val),
             onRegister: () => _register(isWeb: true),
             onGoogleSignIn: () {
               // TODO: Implement Google Sign In
@@ -569,7 +569,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                       ),
                                       decoration: _decor(
                                         'First Name',
-                                        'e.g. Sara',
+                                        'Enter your first name',
                                         focused: _firstNameFocus.hasFocus,
                                         prefix: _icon(
                                           Icons.badge_outlined,
@@ -597,7 +597,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                       ),
                                       decoration: _decor(
                                         'Last Name',
-                                        'e.g. Khan',
+                                        'Enter your last name',
                                         focused: _lastNameFocus.hasFocus,
                                         prefix: _icon(
                                           Icons.badge_outlined,
@@ -635,7 +635,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                 ),
                                 decoration: _decor(
                                   'Email Address',
-                                  'sara.khan@example.com',
+                                  'Enter your email address',
                                   focused: _emailFocus.hasFocus,
                                   prefix: _icon(
                                     Icons.alternate_email_rounded,
@@ -657,81 +657,35 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                             const SizedBox(height: 16),
 
                             // Phone (all countries)
-                            IntlPhoneField(
-                              controller: _phoneController,
-                              focusNode: _phoneFocus,
-                              style: GoogleFonts.publicSans(
-                                fontSize: 14,
-                                color: const Color(0xFF212121),
-                              ),
-                              dropdownTextStyle: GoogleFonts.publicSans(
-                                fontSize: 14,
-                                color: const Color(0xFF212121),
-                              ),
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: 'Phone Number',
-                                labelStyle: GoogleFonts.publicSans(
-                                  fontSize: 14,
-                                  color: const Color(0xFF9E9E9E),
-                                ),
-                                floatingLabelStyle: GoogleFonts.publicSans(
-                                  fontSize: 12,
-                                  color: _green,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                hintText: 'e.g. 300 1234567',
-                                hintStyle: GoogleFonts.publicSans(
-                                  fontSize: 13,
-                                  color: const Color(0xFFCFCFCF),
-                                ),
-                                floatingLabelBehavior: FloatingLabelBehavior.auto,
-                                filled: true,
-                                fillColor: const Color(0xFFF8F9FA),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE8E8E8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4, bottom: 6),
+                                  child: Text(
+                                    'Phone Number',
+                                    style: GoogleFonts.publicSans(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: _phoneFocus.hasFocus ? _green : const Color(0xFF9E9E9E),
+                                    ),
                                   ),
                                 ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE8E8E8),
+                                _glow(
+                                  focused: _phoneFocus.hasFocus,
+                                  child: CountryCodePhoneField(
+                                    controller: _phoneController,
+                                    focusNode: _phoneFocus,
+                                    hintText: 'Enter your phone number',
+                                    focusColor: _green,
+                                    onPhoneChanged: (val) {
+                                      setState(() {
+                                        _phoneNumber = val;
+                                      });
+                                    },
                                   ),
                                 ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: _green,
-                                    width: 2,
-                                  ),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 18,
-                                ),
-                                // Phone counter
-                                counterText: '$_phoneLength / 10',
-                                counterStyle: GoogleFonts.publicSans(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: _phoneLength >= 10
-                                      ? _green
-                                      : const Color(0xFFBDBDBD),
-                                ),
-                              ),
-                              initialCountryCode: 'PK',
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
                               ],
-                              onChanged: (phone) {
-                                setState(() {
-                                  _phoneLength = phone.number.length;
-                                  _phoneNumber = phone.completeNumber;
-                                });
-                              },
-                              onCountryChanged: (_) {},
                             ),
 
                             _divider(),
@@ -753,7 +707,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                 onChanged: (_) => setState(() {}),
                                 decoration: _decor(
                                   'Password',
-                                  'At least 8 characters',
+                                  'Create a password (min 8 characters)',
                                   focused: _passwordFocus.hasFocus,
                                   prefix: _icon(
                                     Icons.lock_outline_rounded,

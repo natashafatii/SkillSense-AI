@@ -65,12 +65,16 @@ class User {
 class UserSummary {
   final String id;
   final String email;
+  final String? firstName;
+  final String? lastName;
   final String role;
   final DateTime createdAt;
 
   const UserSummary({
     required this.id,
     required this.email,
+    this.firstName,
+    this.lastName,
     required this.role,
     required this.createdAt,
   });
@@ -79,6 +83,8 @@ class UserSummary {
     return UserSummary(
       id: json['id'] as String,
       email: json['email'] as String,
+      firstName: json['first_name'] as String?,
+      lastName: json['last_name'] as String?,
       role: json['role'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
@@ -87,6 +93,8 @@ class UserSummary {
   Map<String, dynamic> toJson() => {
         'id': id,
         'email': email,
+        'first_name': firstName,
+        'last_name': lastName,
         'role': role,
         'created_at': createdAt.toIso8601String(),
       };

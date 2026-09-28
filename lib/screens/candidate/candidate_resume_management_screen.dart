@@ -8,6 +8,8 @@ import 'package:file_picker/file_picker.dart';
 import '../../constants/app_colors.dart';
 import '../../services/resume_manager.dart';
 import '../../services/resume_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/api_exception.dart';
 import '../../widgets/candidate_side_nav.dart';
 
 class CandidateResumeManagementScreen extends StatefulWidget {
@@ -67,10 +69,12 @@ class _CandidateResumeManagementScreenState
 
   void _setActiveResume(Map<String, dynamic> selectedVersion) async {
     final String apiId = (selectedVersion['id'] ?? '').toString();
-    final String versionOrId = (selectedVersion['version'] != null && selectedVersion['version'].toString().isNotEmpty) 
-        ? selectedVersion['version'].toString() 
+    final String versionOrId =
+        (selectedVersion['version'] != null &&
+            selectedVersion['version'].toString().isNotEmpty)
+        ? selectedVersion['version'].toString()
         : apiId;
-        
+
     setState(() {
       ResumeManager.setActive(versionOrId);
     });
@@ -117,8 +121,9 @@ class _CandidateResumeManagementScreenState
 
   void _removeResume(Map<String, dynamic> resume) async {
     final String apiId = (resume['id'] ?? '').toString();
-    final String versionOrId = (resume['version'] != null && resume['version'].toString().isNotEmpty) 
-        ? resume['version'].toString() 
+    final String versionOrId =
+        (resume['version'] != null && resume['version'].toString().isNotEmpty)
+        ? resume['version'].toString()
         : apiId;
     if (apiId.isEmpty && versionOrId.isEmpty) return;
 
@@ -126,16 +131,28 @@ class _CandidateResumeManagementScreenState
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
-        title: Text('Delete this resume?', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-        content: Text('Are you sure you want to delete "${resume['filename']}"?', style: GoogleFonts.inter()),
+        title: Text(
+          'Delete this resume?',
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${resume['filename']}"?',
+          style: GoogleFonts.inter(),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey[700])),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.grey[700]),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Yes, delete', style: GoogleFonts.inter(color: Colors.red)),
+            child: Text(
+              'Yes, delete',
+              style: GoogleFonts.inter(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -148,10 +165,32 @@ class _CandidateResumeManagementScreenState
         await ResumeService.deleteResume(apiId);
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete on server: $e'), backgroundColor: Colors.red),
-        );
-        return; // Stop if backend delete failed
+        if (e is ApiException) {
+          if (e.statusCode == 401) {
+            await AuthService.signOut(context);
+            if (!mounted) return;
+            Navigator.of(context).pushReplacementNamed('/sign-in');
+            return;
+          } else if (e.statusCode == 404) {
+            // Already deleted on server, proceed to remove from UI
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Network error. Please try again.'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+            return;
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Network error. Please try again.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+          return;
+        }
       }
     }
 
@@ -992,7 +1031,9 @@ class _CandidateResumeManagementScreenState
                                     _isFailed
                                         ? "Couldn't read this file — try a text-based PDF."
                                         : (_isParsing
-                                              ? (_parsingElapsedSeconds > 10 ? 'Still processing — this can take a moment.' : 'Parsing with AI…')
+                                              ? (_parsingElapsedSeconds > 10
+                                                    ? 'Still processing — this can take a moment.'
+                                                    : 'Parsing with AI…')
                                               : _parseCompleted
                                               ? 'AI Resume Parsing Complete'
                                               : 'Preparing AI feature extraction…'),

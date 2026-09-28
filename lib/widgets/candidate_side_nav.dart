@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../services/auth_service.dart';
+
+import '../services/profile_service.dart';
+import '../models/candidate_profile.dart';
 
 class CandidateSideNav extends StatefulWidget {
   final String currentRoute;
@@ -55,6 +57,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
     super.initState();
     _isExpanded = widget.initialExpanded || globalIsExpanded;
     _syncActiveDestinationAccordion();
+    if (ProfileService.currentProfileNotifier.value == null) {
+      ProfileService.getCandidateProfile();
+    }
   }
 
   void _syncActiveDestinationAccordion() {
@@ -464,18 +469,12 @@ class _CandidateSideNavState extends State<CandidateSideNav>
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
                 onTap: () => _handleNavigation('/candidate/profile', -1),
-                child: ValueListenableBuilder<Map<String, dynamic>?>(
-                  valueListenable: AuthService.currentUserNotifier,
-                  builder: (context, userSession, child) {
-                    final fn = (userSession?['first_name'] ?? '')
-                        .toString()
-                        .trim();
-                    final ln = (userSession?['last_name'] ?? '')
-                        .toString()
-                        .trim();
-                    final email = (userSession?['email'] ?? '')
-                        .toString()
-                        .trim();
+                child: ValueListenableBuilder<CandidateProfile?>(
+                  valueListenable: ProfileService.currentProfileNotifier,
+                  builder: (context, profile, child) {
+                    final fn = profile?.user.firstName?.trim() ?? '';
+                    final ln = profile?.user.lastName?.trim() ?? '';
+                    final email = profile?.user.email.trim() ?? '';
 
                     String initials = '';
                     if (fn.isNotEmpty) {
@@ -529,16 +528,12 @@ class _CandidateSideNavState extends State<CandidateSideNav>
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () => _handleNavigation('/candidate/profile', -1),
-              child: ValueListenableBuilder<Map<String, dynamic>?>(
-                valueListenable: AuthService.currentUserNotifier,
-                builder: (context, userSession, child) {
-                  final fn = (userSession?['first_name'] ?? '')
-                      .toString()
-                      .trim();
-                  final ln = (userSession?['last_name'] ?? '')
-                      .toString()
-                      .trim();
-                  final email = (userSession?['email'] ?? '').toString().trim();
+              child: ValueListenableBuilder<CandidateProfile?>(
+                valueListenable: ProfileService.currentProfileNotifier,
+                builder: (context, profile, child) {
+                  final fn = profile?.user.firstName?.trim() ?? '';
+                  final ln = profile?.user.lastName?.trim() ?? '';
+                  final email = profile?.user.email.trim() ?? '';
 
                   String name = '';
                   if (fn.isNotEmpty || ln.isNotEmpty) {

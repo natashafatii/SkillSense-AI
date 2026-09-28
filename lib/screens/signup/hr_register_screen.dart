@@ -2,7 +2,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl_phone_field/intl_phone_field.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/gradient_background.dart';
@@ -10,6 +9,7 @@ import '../../services/auth_service.dart';
 import 'hr_register_screen_web.dart';
 import 'email_verification_screen.dart';
 import 'terms_privacy_screen.dart';
+import '../../widgets/country_code_phone_field.dart';
 
 const _blue = AppColors.buttonBlue;
 
@@ -27,7 +27,6 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
   bool _isLoading = false;
 
   // ── Phone length tracker ───────────────────────────────────────────────────
-  int _phoneLength = 0;
   String _phoneNumber = '';
 
   // ── Form ───────────────────────────────────────────────────────────────────
@@ -41,6 +40,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
   final _companyNameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
+  final _phoneController = TextEditingController();
 
   // ── Focus nodes (for animated focus glow) ─────────────────────────────────
   final _firstNameFocus = FocusNode();
@@ -50,6 +50,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
   final _companyNameFocus = FocusNode();
+  final _phoneFocus = FocusNode();
 
   @override
   void initState() {
@@ -62,6 +63,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
       _passwordFocus,
       _confirmFocus,
       _companyNameFocus,
+      _phoneFocus,
     ]) {
       n.addListener(() => setState(() {}));
     }
@@ -77,6 +79,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
       _companyNameController,
       _passwordController,
       _confirmController,
+      _phoneController,
     ]) {
       c.dispose();
     }
@@ -88,6 +91,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
       _passwordFocus,
       _confirmFocus,
       _companyNameFocus,
+      _phoneFocus,
     ]) {
       n.dispose();
     }
@@ -560,7 +564,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                       ),
                                       decoration: _decor(
                                         'First Name',
-                                        'e.g. Sara',
+                                        'Enter your first name',
                                         focused: _firstNameFocus.hasFocus,
                                         prefix: _icon(
                                           Icons.badge_outlined,
@@ -589,7 +593,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                       ),
                                       decoration: _decor(
                                         'Last Name',
-                                        'e.g. Ahmed',
+                                        'Enter your last name',
                                         focused: _lastNameFocus.hasFocus,
                                         prefix: _icon(
                                           Icons.badge_outlined,
@@ -620,7 +624,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                 ),
                                 decoration: _decor(
                                   'Company Name',
-                                  'e.g. SkillSense AI',
+                                  'Enter your company name',
                                   focused: _companyNameFocus.hasFocus,
                                   prefix: _icon(
                                     Icons.business_rounded,
@@ -655,7 +659,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                 ),
                                 decoration: _decor(
                                   'Email Address',
-                                  'you@company.com',
+                                  'Enter your work email address',
                                   focused: _emailFocus.hasFocus,
                                   prefix: _icon(
                                     Icons.alternate_email_rounded,
@@ -677,80 +681,35 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                             const SizedBox(height: 16),
 
                             // Phone (all countries)
-                            IntlPhoneField(
-                              style: GoogleFonts.publicSans(
-                                fontSize: 14,
-                                color: const Color(0xFF212121),
-                              ),
-                              dropdownTextStyle: GoogleFonts.publicSans(
-                                fontSize: 14,
-                                color: const Color(0xFF212121),
-                              ),
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: 'Phone Number',
-                                labelStyle: GoogleFonts.publicSans(
-                                  fontSize: 14,
-                                  color: const Color(0xFF9E9E9E),
-                                ),
-                                floatingLabelStyle: GoogleFonts.publicSans(
-                                  fontSize: 12,
-                                  color: _blue,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                hintText: 'e.g. 300 1234567',
-                                hintStyle: GoogleFonts.publicSans(
-                                  fontSize: 13,
-                                  color: const Color(0xFFCFCFCF),
-                                ),
-                                floatingLabelBehavior:
-                                    FloatingLabelBehavior.auto,
-                                filled: true,
-                                fillColor: const Color(0xFFF8F9FA),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE8E8E8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4, bottom: 6),
+                                  child: Text(
+                                    'Phone Number',
+                                    style: GoogleFonts.publicSans(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: _phoneFocus.hasFocus ? _blue : const Color(0xFF9E9E9E),
+                                    ),
                                   ),
                                 ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE8E8E8),
+                                _glow(
+                                  focused: _phoneFocus.hasFocus,
+                                  child: CountryCodePhoneField(
+                                    controller: _phoneController,
+                                    focusNode: _phoneFocus,
+                                    hintText: 'Enter your phone number',
+                                    focusColor: _blue,
+                                    onPhoneChanged: (val) {
+                                      setState(() {
+                                        _phoneNumber = val;
+                                      });
+                                    },
                                   ),
                                 ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: _blue,
-                                    width: 2,
-                                  ),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 18,
-                                ),
-                                // Phone counter
-                                counterText: '$_phoneLength / 10',
-                                counterStyle: GoogleFonts.publicSans(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: _phoneLength >= 10
-                                      ? _blue
-                                      : const Color(0xFFBDBDBD),
-                                ),
-                              ),
-                              initialCountryCode: 'PK',
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
                               ],
-                              onChanged: (phone) {
-                                setState(() {
-                                  _phoneLength = phone.number.length;
-                                  _phoneNumber = phone.completeNumber;
-                                });
-                              },
-                              onCountryChanged: (_) {},
                             ),
 
                             _divider(),
@@ -772,7 +731,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                 onChanged: (_) => setState(() {}),
                                 decoration: _decor(
                                   'Password',
-                                  'At least 8 characters',
+                                  'Create a password (min 8 characters)',
                                   focused: _passwordFocus.hasFocus,
                                   prefix: _icon(
                                     Icons.lock_outline_rounded,

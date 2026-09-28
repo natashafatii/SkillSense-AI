@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/country_code_phone_field.dart';
 import 'terms_privacy_screen.dart';
 
 /// Signup-specific web HR registration screen.
@@ -26,6 +27,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
   final bool obscureConfirm;
   final VoidCallback onObscureToggle;
   final VoidCallback onObscureConfirmToggle;
+  final ValueChanged<String>? onPhoneChanged;
   final VoidCallback onRegister;
   final VoidCallback onGoogleSignIn;
   final VoidCallback onLoginTap;
@@ -49,6 +51,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
     required this.obscureConfirm,
     required this.onObscureToggle,
     required this.onObscureConfirmToggle,
+    this.onPhoneChanged,
     required this.onRegister,
     required this.onGoogleSignIn,
     required this.onLoginTap,
@@ -427,7 +430,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                       controller:
                                                           firstNameController,
                                                       focusNode: firstNameFocus,
-                                                      hintText: 'e.g. Sara',
+                                                      hintText: 'Enter your first name',
                                                     ),
                                                   ],
                                                 ),
@@ -446,7 +449,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                       controller:
                                                           lastNameController,
                                                       focusNode: lastNameFocus,
-                                                      hintText: 'e.g. Khan',
+                                                      hintText: 'Enter your last name',
                                                     ),
                                                   ],
                                                 ),
@@ -462,7 +465,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: emailController,
                                             focusNode: emailFocus,
-                                            hintText: 'sara.khan@example.com',
+                                            hintText: 'Enter your email address',
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                           ),
@@ -472,11 +475,12 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             label: 'Phone Number',
                                           ),
                                           const SizedBox(height: 8),
-                                          _CustomTextField(
+                                          CountryCodePhoneField(
                                             controller: phoneController,
                                             focusNode: phoneFocus,
-                                            hintText: 'e.g. 300 1234567',
-                                            keyboardType: TextInputType.phone,
+                                            hintText: 'Enter your phone number',
+                                            onPhoneChanged: onPhoneChanged,
+                                            focusColor: AppColors.candidatePrimary,
                                           ),
                                           const SizedBox(height: 14),
 
@@ -487,7 +491,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: passwordController,
                                             focusNode: passwordFocus,
-                                            hintText: 'At least 8 characters',
+                                            hintText: 'Create a password (min 8 characters)',
                                             obscureText: obscurePassword,
                                             suffixIcon: GestureDetector(
                                               onTap: onObscureToggle,
@@ -500,6 +504,22 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                 size: 20,
                                               ),
                                             ),
+                                          ),
+                                          AnimatedBuilder(
+                                            animation: passwordFocus,
+                                            builder: (context, child) {
+                                              if (!passwordFocus.hasFocus) return const SizedBox.shrink();
+                                              return Padding(
+                                                padding: const EdgeInsets.only(top: 6, left: 4),
+                                                child: Text(
+                                                  'Use at least 8 characters with a number',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12,
+                                                    color: const Color(0xFF64748B),
+                                                  ),
+                                                ),
+                                              );
+                                            },
                                           ),
                                           const SizedBox(height: 14),
 

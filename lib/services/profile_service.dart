@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import '../models/candidate_profile.dart';
 import '../models/recruiter_profile.dart';
+import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
 
@@ -13,24 +14,24 @@ class ProfileService {
   // Candidate Profile Endpoints (`/api/candidates/profile/`)
   // ══════════════════════════════════════════════════════════════════════════
 
-  static CandidateProfile? cachedCandidateProfile;
+  static final ValueNotifier<CandidateProfile?> currentProfileNotifier = ValueNotifier<CandidateProfile?>(null);
 
   /// Retrieves the self-owned candidate profile for the authenticated candidate.
   static Future<CandidateProfile?> getCandidateProfile({
     bool forceRefresh = false,
   }) async {
-    if (cachedCandidateProfile != null && !forceRefresh) {
-      return cachedCandidateProfile!;
+    if (currentProfileNotifier.value != null && !forceRefresh) {
+      return currentProfileNotifier.value!;
     }
     int attempts = 0;
     while (attempts < 2) {
       try {
         final dio = await ApiClient.getInstance();
         final response = await dio.get('/candidates/profile/');
-        cachedCandidateProfile = CandidateProfile.fromJson(
+        currentProfileNotifier.value = CandidateProfile.fromJson(
           response.data as Map<String, dynamic>,
         );
-        return cachedCandidateProfile;
+        return currentProfileNotifier.value;
       } on DioException catch (e) {
         if (e.response?.statusCode == 401) {
           throw ApiException(statusCode: 401, message: 'Unauthorized');
@@ -41,14 +42,14 @@ class ProfileService {
         }
         attempts++;
         if (attempts >= 2) {
-          return cachedCandidateProfile;
+          return currentProfileNotifier.value;
         }
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (_) {
         break;
       }
     }
-    return cachedCandidateProfile;
+    return currentProfileNotifier.value;
   }
 
   /// Partially updates the self-owned candidate profile.
@@ -58,10 +59,26 @@ class ProfileService {
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.patch('/candidates/profile/', data: patchData);
-      cachedCandidateProfile = CandidateProfile.fromJson(
+      currentProfileNotifier.value = CandidateProfile.fromJson(
         response.data as Map<String, dynamic>,
       );
-      return cachedCandidateProfile!;
+      return currentProfileNotifier.value!;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  /// Fully replaces the self-owned candidate profile.
+  static Future<CandidateProfile> putCandidateProfile(
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final dio = await ApiClient.getInstance();
+      final response = await dio.put('/candidates/profile/', data: data);
+      currentProfileNotifier.value = CandidateProfile.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+      return currentProfileNotifier.value!;
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
     }

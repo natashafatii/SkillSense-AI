@@ -82,8 +82,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     }
   }
 
-  void _loadUser() {
+  Future<void> _loadUser() async {
     try {
+      await AuthService.fetchCurrentUser();
       final user = AuthService.currentUserData;
       if (user != null && mounted) {
         final firstName = user['first_name']?.toString().trim();
@@ -393,9 +394,27 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
         valueListenable: AuthService.currentUserNotifier,
         builder: (context, userData, child) {
           final firstName = (userData?['first_name'] ?? '').toString().trim();
-          final welcomeText = firstName.isNotEmpty
-              ? 'Welcome, $firstName.'
-              : 'Welcome.';
+          final lastName = (userData?['last_name'] ?? '').toString().trim();
+
+          String displayName = '';
+          if (firstName.isNotEmpty) {
+            displayName = firstName;
+            if (lastName.isNotEmpty) displayName += ' $lastName';
+          } else if (lastName.isNotEmpty) {
+            displayName = lastName;
+          } else {
+            final email = (userData?['email'] ?? '').toString().trim();
+            if (email.isNotEmpty) {
+              final prefix = email.split('@').first;
+              displayName = prefix.isNotEmpty
+                  ? prefix[0].toUpperCase() + prefix.substring(1)
+                  : email;
+            }
+          }
+
+          final welcomeText = displayName.isNotEmpty
+              ? 'Welcome $displayName'
+              : 'Welcome';
 
           return Container(
             constraints: BoxConstraints(minHeight: isMobile ? 0 : 360),
