@@ -68,7 +68,11 @@ class _SignupRoleSelectionScreenState extends State<SignupRoleSelectionScreen>
   }
 
   void _onLoginTap() {
-    Navigator.pushNamed(context, '/login');
+    if (_selectedRole == null) {
+      Navigator.pushNamed(context, '/login/role');
+    } else {
+      Navigator.pushNamed(context, '/login', arguments: _selectedRole);
+    }
   }
 
   @override

@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/resume_detail.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
+import 'session_scope.dart';
 
 /// Resume parsing and matching results service.
 ///
@@ -86,6 +87,7 @@ class ResumeService {
     if (_cachedDetailId == resumeId && _cachedDetail != null) {
       return _cachedDetail!;
     }
+    final epoch = SessionScope.generation;
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.get('/resumes/$resumeId/');
@@ -93,6 +95,9 @@ class ResumeService {
         response.data as Map<String, dynamic>,
       );
       // Only cache once fully parsed — keep polling until then.
+      if (epoch != SessionScope.generation) {
+        throw StateError('Session changed.');
+      }
       if (!detail.isPending) {
         _cachedDetail = detail;
         _cachedDetailId = resumeId;
@@ -234,13 +239,18 @@ class ResumeService {
     if (!forceRefresh && _cachedProfileCoverage != null) {
       return _cachedProfileCoverage!;
     }
+    final epoch = SessionScope.generation;
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.get('/profile/coverage/');
       _cachedProfileCoverage = Map<String, dynamic>.from(response.data as Map);
       return _cachedProfileCoverage!;
     } on DioException catch (e) {
-      if (_cachedProfileCoverage != null) return _cachedProfileCoverage!;
+      if (epoch == SessionScope.generation &&
+          e.type != DioExceptionType.cancel &&
+          _cachedProfileCoverage != null) {
+        return _cachedProfileCoverage!;
+      }
       throw ApiException.fromDioException(e);
     }
   }

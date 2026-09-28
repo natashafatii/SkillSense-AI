@@ -14,6 +14,7 @@ class LoginScreenWeb extends StatelessWidget {
   final bool obscurePassword;
   final bool rememberMe;
   final String? errorMessage;
+  final VoidCallback onChooseLoginRole;
   final VoidCallback onObscureToggle;
   final ValueChanged<bool?> onRememberMeChanged;
   final VoidCallback onLogin;
@@ -30,6 +31,7 @@ class LoginScreenWeb extends StatelessWidget {
     required this.obscurePassword,
     required this.rememberMe,
     this.errorMessage,
+    required this.onChooseLoginRole,
     required this.onObscureToggle,
     required this.onRememberMeChanged,
     required this.onLogin,

@@ -474,10 +474,12 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
               } else if (value == 'settings') {
                 Navigator.of(context).pushReplacementNamed('/settings');
               } else if (value == 'signout') {
-                await AuthService.signOut(context);
-                if (mounted) {
-                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+                final navigator = Navigator.of(context);
+                final signOut = AuthService.signOut(context);
+                if (navigator.mounted) {
+                  navigator.pushNamedAndRemoveUntil('/login', (_) => false);
                 }
+                await signOut;
               }
             },
             itemBuilder: (context) => [

@@ -2,6 +2,15 @@ import 'dart:async';
 
 enum SignInResultStatus { complete, verificationRequired }
 
+class RoleMismatchException implements Exception {
+  final String role;
+  const RoleMismatchException(this.role);
+  @override
+  String toString() =>
+      'This account is registered as a ${role.toLowerCase()}. '
+      'Please use ${role.toLowerCase()} login.';
+}
+
 class SignInResult {
   final SignInResultStatus status;
 
@@ -19,6 +28,9 @@ class SignInResult {
 /// implement this contract.  The rest of the app interacts only with this
 /// interface — never with SDK-specific types directly.
 abstract class AuthServiceInterface {
+  /// Called with credential proof before publishing a completed sign-in.
+  set sessionValidator(Future<void> Function(String token) validator);
+
   /// One-time SDK initialisation (called from `main()`).
   Future<void> initialize(String publishableKey);
 
@@ -48,6 +60,8 @@ abstract class AuthServiceInterface {
   Future<void> requestPasswordReset(String email);
 
   /// Verifies the reset [code], changes the password, and completes sign-in.
+  ///
+  /// The session validator must accept the backend identity before completion.
   Future<SignInResult> resetPassword({
     required String code,
     required String newPassword,
@@ -86,7 +100,7 @@ abstract class AuthServiceInterface {
   String? get userId;
 
   String? get firstName;
-  
+
   String? get lastName;
 
   /// `true` when there is an active Clerk session.

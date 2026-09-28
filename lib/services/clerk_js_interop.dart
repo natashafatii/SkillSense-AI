@@ -78,8 +78,8 @@ extension type ClerkJS._(JSObject _) implements JSObject {
   /// `clerk.setActive({ session })` — makes the given session the active one.
   external JSPromise<JSAny?> setActive(JSObject params);
 
-  /// `clerk.signOut()` — signs out the current user.
-  external JSPromise<JSAny?> signOut();
+  /// A callback lets Flutter own routing instead of Clerk's default redirect.
+  external JSPromise<JSAny?> signOut([JSFunction? callback]);
 
   /// `clerk.addListener(callback)` — invoked with the `ClerkClient` resource
   /// whenever auth state changes.
@@ -94,6 +94,7 @@ extension type ClerkJS._(JSObject _) implements JSObject {
 extension type ClerkClient._(JSObject _) implements JSObject {
   external ClerkSignUp? get signUp;
   external ClerkSignIn? get signIn;
+  external JSArray<ClerkSession>? get sessions;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -164,6 +165,8 @@ extension type ClerkSignInSecondFactor._(JSObject _) implements JSObject {
 @JS()
 extension type ClerkSession._(JSObject _) implements JSObject {
   external String get id;
+  external String get status;
+  external JSPromise<JSAny?> remove();
 
   /// `session.getToken()` — returns the session JWT.
   external JSPromise<JSString?> getToken();

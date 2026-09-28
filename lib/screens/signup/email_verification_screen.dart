@@ -38,6 +38,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   );
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   bool _isLoading = false;
+  bool _codeVerified = false;
   bool _isResending = false;
   String? _error;
   late AnimationController _pulseController;
@@ -82,7 +83,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   Future<void> _verify() async {
     if (_isLoading) return;
     final code = _code;
-    if (code.length != 6) {
+    if (!_codeVerified && code.length != 6) {
       setState(() => _error = 'Please enter the full 6-digit code.');
       return;
     }
@@ -93,19 +94,16 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     });
 
     try {
-      if (widget.isSignIn) {
+      if (_codeVerified) {
+        // Retry backend provisioning without submitting an already-used code.
+      } else if (widget.isSignIn) {
         await AuthService.verifySignInCode(code);
+        _codeVerified = true;
       } else {
         await AuthService.verifySignUpCode(code);
-        // FIX 2: Persist the name at sign-up time
-        final cFn = (AuthService.clerkFirstName ?? '').trim();
-        final cLn = (AuthService.clerkLastName ?? '').trim();
-        if (cFn.isNotEmpty || cLn.isNotEmpty) {
-          try {
-            await AuthService.updateUserProfile(firstName: cFn, lastName: cLn);
-          } catch (_) {}
-        }
+        _codeVerified = true;
       }
+      await AuthService.fetchCurrentUser();
       if (!mounted) return;
       _snack(
         widget.isSignIn
@@ -116,11 +114,17 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       // The onboarding flow will navigate to the dashboard/home on
       // completion and mark the user as onboarded.
       Navigator.of(context).pushNamedAndRemoveUntil(
-        widget.role == 'RECRUITER' ? '/dashboard' : '/candidate/home',
+        AuthService.getUserRole() == 'RECRUITER'
+            ? '/dashboard'
+            : '/candidate/home',
         (_) => false,
       );
     } catch (e) {
       if (mounted) {
+        if (widget.isSignIn && e is RoleMismatchException) {
+          Navigator.of(context).pop(e);
+          return;
+        }
         setState(() {
           _error = e.toString().replaceAll('Exception: ', '');
         });
@@ -177,13 +181,28 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     }
   }
 
-  void _onKeyDown(int index, KeyEvent event) {
+  // Navigation / special keys that have no meaning in a single-digit
+  // text field but can trigger Flutter's editable.dart assertions on web.
+  static final _ignoredKeys = <LogicalKeyboardKey>{
+    LogicalKeyboardKey.pageUp,
+    LogicalKeyboardKey.pageDown,
+    LogicalKeyboardKey.home,
+    LogicalKeyboardKey.end,
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+  };
+
+  KeyEventResult _onKeyDown(int index, KeyEvent event) {
     if (event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.backspace &&
         _controllers[index].text.isEmpty &&
         index > 0) {
       _focusNodes[index - 1].requestFocus();
+      return KeyEventResult.handled;
     }
+    return KeyEventResult.ignored;
   }
 
   @override
@@ -286,9 +305,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                       width: 48,
                       height: 56,
                       margin: EdgeInsets.only(right: i < 5 ? 8 : 0),
-                      child: KeyboardListener(
-                        focusNode: FocusNode(),
-                        onKeyEvent: (e) => _onKeyDown(i, e),
+                      child: Focus(
+                        onKeyEvent: (node, e) {
+                          // Swallow navigation keys to prevent the
+                          // Flutter editable.dart assertion crash on web.
+                          if (_ignoredKeys.contains(e.logicalKey)) {
+                            return KeyEventResult.handled;
+                          }
+                          return _onKeyDown(i, e);
+                        },
                         child: TextField(
                           controller: _controllers[i],
                           focusNode: _focusNodes[i],
@@ -439,7 +464,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const LoginScreen(),
+                        builder: (_) => LoginScreen(
+                          selectedRole: widget.isSignIn
+                              ? AuthService.expectedLoginRole
+                              : widget.role,
+                        ),
                       ),
                     );
                   },

@@ -416,7 +416,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
     final int index = _cohort.indexOf(candidate);
 
     return Container(
-      height: height,
+      constraints: BoxConstraints(minHeight: height),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,

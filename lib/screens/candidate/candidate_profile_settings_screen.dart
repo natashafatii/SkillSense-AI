@@ -2364,12 +2364,12 @@ class _CandidateProfileSettingsScreenState
                   size: 20,
                 ),
                 onPressed: () async {
-                  await AuthService.signOut(context);
-                  if (mounted) {
-                    Navigator.of(
-                      context,
-                    ).pushNamedAndRemoveUntil('/login', (_) => false);
+                  final navigator = Navigator.of(context);
+                  final signOut = AuthService.signOut(context);
+                  if (navigator.mounted) {
+                    navigator.pushNamedAndRemoveUntil('/login', (_) => false);
                   }
+                  await signOut;
                 },
               ),
             ],
