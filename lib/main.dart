@@ -47,7 +47,6 @@ import 'services/route_storage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AuthService.loadUserSession();
 
   // Set the status bar style
   SystemChrome.setSystemUIOverlayStyle(
@@ -73,8 +72,7 @@ void main() async {
   }
 
   runApp(
-    // On native: wraps in ClerkAuth(...) widget
-    // On web:    returns child directly (clerk-js manages its own state)
+    // Both platforms use the verified session owned by AuthService.
     wrapWithPlatformAuth(
       publishableKey: EnvConfig.clerkPublishableKey,
       child: const SkillSenseApp(),
@@ -176,7 +174,7 @@ class SkillSenseApp extends StatelessWidget {
     // Configure ApiClient token supplier dynamically from the auth service.
     ApiClient.setTokenSupplier(() async {
       try {
-        return await AuthService.instance.getSessionToken();
+        return await AuthService.getSessionToken();
       } catch (_) {
         return null;
       }
@@ -194,15 +192,13 @@ class SkillSenseApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      // On native: ClerkAuthBuilder (signed-in / signed-out routing)
-      // On web:    StreamBuilder listening to clerk-js auth state
+      // Routing observes only backend-verified application sessions.
       home: buildPlatformHome(
         signedInBuilder: (role) {
-          if (role == EnvConfig.roleRecruiter) {
-            return const CommandDeckScreen();
-          } else {
-            return const CandidateHomeScreen();
-          }
+          return const RoleGuard(
+            allowedRoles: [EnvConfig.roleRecruiter, EnvConfig.roleCandidate],
+            child: _VerifiedHome(),
+          );
         },
         signedOutWidget: const ApertureSplashScreen(),
       ),
@@ -214,7 +210,7 @@ class SkillSenseApp extends StatelessWidget {
         switch (settings.name) {
           case '/auth':
           case '/login':
-            builder = const LoginScreen();
+            builder = LoginScreen(selectedRole: settings.arguments as String?);
             break;
           case '/login/role':
             builder = const login_role.RoleSelectionScreen();
@@ -388,4 +384,14 @@ class SkillSenseApp extends StatelessWidget {
       },
     );
   }
+}
+
+class _VerifiedHome extends StatelessWidget {
+  const _VerifiedHome();
+
+  @override
+  Widget build(BuildContext context) =>
+      AuthService.getUserRole() == EnvConfig.roleRecruiter
+      ? const CommandDeckScreen()
+      : const CandidateHomeScreen();
 }

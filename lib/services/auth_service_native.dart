@@ -19,13 +19,26 @@ class AuthServiceNative implements AuthServiceInterface {
       StreamController<bool>.broadcast();
 
   @override
+  late Future<void> Function(String token) sessionValidator;
+
+  Future<void> _validateCompletedSession() async {
+    if (_requireAuth.client.user == null ||
+        _requireAuth.client.activeSession?.isActive != true) {
+      throw StateError('Sign-in has not completed.');
+    }
+    final token = await _requireAuth.sessionToken();
+    await sessionValidator(token.jwt);
+    _authStreamController.add(true);
+  }
+
+  @override
   Future<void> initialize(String publishableKey) async {
     final config = createClerkAuthConfig(publishableKey: publishableKey);
     _auth = clerk.Auth(config: config);
     await _auth!.initialize();
 
     // Seed the initial auth state.
-    _authStreamController.add(_auth!.client.user != null);
+    _authStreamController.add(isSignedIn);
   }
 
   clerk.Auth get _requireAuth {
@@ -46,22 +59,31 @@ class AuthServiceNative implements AuthServiceInterface {
       identifier: email,
       password: password,
     );
-    _authStreamController.add(true);
+
+    if (_requireAuth.client.user == null) {
+      if (_requireAuth.signIn?.needsSecondFactor == true ||
+          _requireAuth.signIn?.needsClientTrust == true) {
+        await _requireAuth.attemptSignIn(strategy: clerk.Strategy.emailCode);
+        return const SignInResult.verificationRequired();
+      }
+      throw StateError('Sign-in has not completed.');
+    }
+    await _validateCompletedSession();
     return const SignInResult.complete();
   }
 
   @override
-  Future<void> verifySignInCode(String code) {
-    throw UnsupportedError(
-      'Sign-in verification is not supported by the native auth flow.',
+  Future<void> verifySignInCode(String code) async {
+    await _requireAuth.attemptSignIn(
+      strategy: clerk.Strategy.emailCode,
+      code: code,
     );
+    await _validateCompletedSession();
   }
 
   @override
-  Future<void> resendSignInCode() {
-    throw UnsupportedError(
-      'Resending a sign-in code is not supported by the native auth flow.',
-    );
+  Future<void> resendSignInCode() async {
+    await _requireAuth.attemptSignIn(strategy: clerk.Strategy.emailCode);
   }
 
   @override
@@ -82,11 +104,13 @@ class AuthServiceNative implements AuthServiceInterface {
       code: code,
       password: newPassword,
     );
-    final isComplete = _requireAuth.client.user != null;
-    _authStreamController.add(isComplete);
-    if (!isComplete) {
-      throw Exception('Password reset did not complete. Request a new code.');
+    if (_requireAuth.client.user == null &&
+        (_requireAuth.signIn?.needsSecondFactor == true ||
+            _requireAuth.signIn?.needsClientTrust == true)) {
+      await _requireAuth.attemptSignIn(strategy: clerk.Strategy.emailCode);
+      return const SignInResult.verificationRequired();
     }
+    await _validateCompletedSession();
     return const SignInResult.complete();
   }
 
@@ -117,14 +141,12 @@ class AuthServiceNative implements AuthServiceInterface {
       strategy: clerk.Strategy.emailCode,
       code: code,
     );
-    _authStreamController.add(_requireAuth.client.user != null);
+    await _validateCompletedSession();
   }
 
   @override
   Future<void> signOut() async {
-    try {
-      await _requireAuth.signOut();
-    } catch (_) {}
+    await _requireAuth.signOut();
     _authStreamController.add(false);
   }
 
@@ -166,7 +188,9 @@ class AuthServiceNative implements AuthServiceInterface {
   String? get lastName => _auth?.client.user?.lastName;
 
   @override
-  bool get isSignedIn => _auth?.client.user != null;
+  bool get isSignedIn =>
+      _auth?.client.user != null &&
+      _auth?.client.activeSession?.isActive == true;
 
   @override
   Stream<bool> get authStateChanges => _authStreamController.stream;

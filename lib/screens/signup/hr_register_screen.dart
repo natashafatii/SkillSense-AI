@@ -405,7 +405,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
               // TODO: Google Sign In
             },
             onLoginTap: () {
-              Navigator.pushReplacementNamed(context, '/login');
+              Navigator.pushReplacementNamed(context, '/login', arguments: 'RECRUITER');
             },
           );
         }
@@ -988,6 +988,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                   onTap: () => Navigator.pushReplacementNamed(
                                     context,
                                     '/login',
+                                    arguments: 'RECRUITER',
                                   ),
                                   child: Text(
                                     AppConstants.loginLinkText,

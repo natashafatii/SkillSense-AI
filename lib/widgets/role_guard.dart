@@ -1,60 +1,103 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../constants/env_config.dart';
 import '../services/auth_service.dart';
 
-// Redirects users if their active role isn't authorized for the route.
+/// Verify the current backend identity before constructing a protected screen.
 class RoleGuard extends StatefulWidget {
   final List<String> allowedRoles;
   final Widget child;
-
-  const RoleGuard({
-    super.key,
-    required this.allowedRoles,
-    required this.child,
-  });
-
+  const RoleGuard({super.key, required this.allowedRoles, required this.child});
   @override
   State<RoleGuard> createState() => _RoleGuardState();
 }
 
 class _RoleGuardState extends State<RoleGuard> {
+  bool _allowed = false;
+  String? _error;
+  StreamSubscription<bool>? _subscription;
   @override
   void initState() {
     super.initState();
+    _subscription = AuthService.authStateChanges.listen((signedIn) {
+      if (mounted && !signedIn) {
+        setState(() {
+          _allowed = false;
+          _error = 'Please sign in to access this page.';
+        });
+      }
+    });
     _verifyAccess();
   }
 
-  void _verifyAccess() {
-    final currentRole = AuthService.getUserRole();
-    if (!widget.allowedRoles.contains(currentRole)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Access Denied: You do not have permission to view this page.'),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _verifyAccess() async {
+    setState(() {
+      _allowed = false;
+      _error = null;
+    });
+
+    try {
+      await AuthService.fetchCurrentUser();
+      if (!mounted) return;
+      final role = AuthService.getUserRole();
+      if (widget.allowedRoles.contains(role)) {
+        setState(() => _allowed = true);
+      } else if (role == 'CANDIDATE' || role == 'RECRUITER') {
+        Navigator.of(context).pushReplacementNamed(
+          role == 'RECRUITER' ? '/dashboard' : '/candidate/home',
         );
-        final redirectRoute = currentRole == EnvConfig.roleRecruiter
-            ? '/dashboard'
-            : '/candidate/home';
-        Navigator.of(context).pushReplacementNamed(redirectRoute);
-      });
+      } else {
+        setState(() => _error = 'This account cannot access this page.');
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Unable to verify access. ${error.toString().replaceFirst('Exception: ', '')}',
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentRole = AuthService.getUserRole();
-    if (!widget.allowedRoles.contains(currentRole)) {
-      // Temporary fallback while post frame callback executes redirect
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+    if (_allowed && widget.allowedRoles.contains(AuthService.getUserRole())) {
+      return widget.child;
     }
-    return widget.child;
+    return Scaffold(
+      body: Center(
+        child: _error == null
+            ? const CircularProgressIndicator()
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(_error!, textAlign: TextAlign.center),
+                  ),
+                  TextButton(
+                    onPressed: _verifyAccess,
+                    child: const Text('Retry'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await AuthService.signOut();
+                      if (context.mounted) {
+                        Navigator.of(
+                          context,
+                        ).pushNamedAndRemoveUntil('/login/role', (_) => false);
+                      }
+                    },
+                    child: const Text('Back to login'),
+                  ),
+                ],
+              ),
+      ),
+    );
   }
 }

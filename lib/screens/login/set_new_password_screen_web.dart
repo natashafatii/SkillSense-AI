@@ -10,7 +10,7 @@ import '../../widgets/web_auth_left_panel.dart';
 class SetNewPasswordScreenWeb extends StatefulWidget {
   final String email;
   final String code;
-  final ValueChanged<SignInResult> onSetPassword;
+  final Future<void> Function(SignInResult) onSetPassword;
   final VoidCallback onIgnore;
 
   const SetNewPasswordScreenWeb({
@@ -79,7 +79,7 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
         code: widget.code,
         newPassword: _newPasswordCtrl.text,
       );
-      if (mounted) widget.onSetPassword(result);
+      if (mounted) await widget.onSetPassword(result);
     } catch (e) {
       if (mounted) {
         setState(() {

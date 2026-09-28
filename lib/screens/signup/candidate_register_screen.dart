@@ -414,7 +414,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
               // TODO: Implement Google Sign In
             },
             onLoginTap: () {
-              Navigator.pushReplacementNamed(context, '/login');
+              Navigator.pushReplacementNamed(context, '/login', arguments: 'CANDIDATE');
             },
           );
         }
@@ -961,6 +961,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                   onTap: () => Navigator.pushReplacementNamed(
                                     context,
                                     '/login',
+                                    arguments: 'CANDIDATE',
                                   ),
                                   child: Text(
                                     AppConstants.loginLinkText,

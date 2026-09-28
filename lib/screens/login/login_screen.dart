@@ -94,32 +94,27 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      final result = await AuthService.login(context, email, password);
+      final result = await AuthService.login(
+        context,
+        email,
+        password,
+        expectedRole: widget.selectedRole,
+      );
       if (!mounted) return;
 
       if (result.status == SignInResultStatus.verificationRequired) {
-        Navigator.of(context).push(
+        final mismatch = await Navigator.of(context).push<RoleMismatchException>(
           MaterialPageRoute(
             builder: (_) => EmailVerificationScreen.signIn(email: email),
           ),
         );
+        if (mounted && mismatch != null) {
+          setState(() => _loginError = mismatch.toString());
+        }
         return;
       }
-      // Fetch backend user profile right after login success
-      try {
-        await AuthService.fetchCurrentUser(fallbackEmail: email);
-      } catch (e) {
-        if (e.toString().contains('Unauthorized')) {
-          if (!mounted) return;
-          await AuthService.signOut(context);
-          if (mounted) {
-            setState(() {
-              _loginError = 'Session expired or unauthorized. Please sign in again.';
-            });
-          }
-          return;
-        }
-      }
+      await AuthService.fetchCurrentUser();
+      if (!mounted) return;
 
       _snack('Login successful!');
       final userData = AuthService.currentUserData;
@@ -193,7 +188,15 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  Future<void> _chooseLoginRole() async {
+    Navigator.of(context).pushNamedAndRemoveUntil('/login/role', (_) => false);
+  }
+
   void _openForgotPassword() {
+    // Preserve the portal's role throughout password reset and device verification.
+    AuthService.expectedLoginRole = AuthService.normalizeRole(
+      widget.selectedRole,
+    );
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -212,10 +215,10 @@ class _LoginScreenState extends State<LoginScreen>
                         builder: (_) => SetNewPasswordScreenWeb(
                           email: email,
                           code: code,
-                          onSetPassword: (result) {
+                          onSetPassword: (result) async {
                             if (result.status ==
                                 SignInResultStatus.verificationRequired) {
-                              Navigator.push(
+                              final mismatch = await Navigator.push<RoleMismatchException>(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) =>
@@ -224,8 +227,11 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ),
                               );
+                              if (mismatch != null) throw mismatch;
                               return;
                             }
+                            await AuthService.fetchCurrentUser();
+                            if (!mounted) return;
                             _snack('Password updated successfully.');
                             final route = AuthService.getUserRole() == 'RECRUITER'
                                 ? '/dashboard'
@@ -237,7 +243,10 @@ class _LoginScreenState extends State<LoginScreen>
                             );
                           },
                           onIgnore: () {
-                            Navigator.popUntil(context, (route) => route.isFirst);
+                            Navigator.popUntil(
+                              context,
+                              (route) => route.isFirst,
+                            );
                           },
                         ),
                       ),
@@ -300,6 +309,7 @@ class _LoginScreenState extends State<LoginScreen>
             obscurePassword: _obscurePassword,
             rememberMe: _rememberMe,
             errorMessage: _loginError,
+            onChooseLoginRole: _chooseLoginRole,
             onObscureToggle: () {
               setState(() {
                 _obscurePassword = !_obscurePassword;
@@ -313,10 +323,7 @@ class _LoginScreenState extends State<LoginScreen>
             onLogin: _login,
             onForgotPassword: _openForgotPassword,
             onCreateAccount: () {
-              Navigator.pushNamed(
-                context,
-                '/signup/role',
-              );
+              Navigator.pushNamed(context, '/signup/role');
             },
           );
         }
@@ -479,6 +486,31 @@ class _LoginScreenState extends State<LoginScreen>
                             ],
                           ),
                           const SizedBox(height: 22),
+
+                              if (_loginError != null) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF2F2),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    _loginError!,
+                                    style: const TextStyle(
+                                      color: Color(0xFF991B1B),
+                                    ),
+                                  ),
+                                ),
+                                if (_loginError!.contains('Please use'))
+                                  TextButton(
+                                    onPressed: _chooseLoginRole,
+                                    child: const Text(
+                                      'Choose another login type',
+                                    ),
+                                  ),
+                                const SizedBox(height: 12),
+                              ],
 
                           // ── Log In button ──────────────────────────────
                           SizedBox(

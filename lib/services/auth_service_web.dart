@@ -18,6 +18,9 @@ class AuthServiceWeb implements AuthServiceInterface {
       StreamController<bool>.broadcast();
   bool _initialised = false;
 
+  @override
+  late Future<void> Function(String token) sessionValidator;
+
   /// Polls for window.__clerkReady to be set to true by index.html init script
   /// up to ~20 seconds.
   Future<ClerkJS> _waitForClerk() async {
@@ -48,12 +51,12 @@ class AuthServiceWeb implements AuthServiceInterface {
     // Listen for auth state changes from clerk-js.
     _clerk.addListener(
       ((JSAny? _) {
-        _authStreamController.add(_clerk.user != null);
+        _authStreamController.add(isSignedIn);
       }).toJS,
     );
 
     // Seed the stream with the current signed-in state.
-    _authStreamController.add(_clerk.user != null);
+    _authStreamController.add(isSignedIn);
   }
 
   @override
@@ -87,6 +90,7 @@ class AuthServiceWeb implements AuthServiceInterface {
 
       throw Exception('Sign-in cannot continue. Status: ${signIn.status}');
     } catch (e) {
+      if (e is RoleMismatchException) rethrow;
       final clean = e
           .toString()
           .replaceAll('JavaScriptError: ', '')
@@ -134,7 +138,34 @@ class AuthServiceWeb implements AuthServiceInterface {
         'Clerk completed sign-in without returning a session ID.',
       );
     }
-    await _clerk.setActive(buildSetActiveParams(sessionId)).toDart;
+    await _activateSession(sessionId);
+  }
+
+  Future<void> _activateSession(String sessionId) async {
+    final sessions = _clerk.client?.sessions?.toDart;
+    final matches = sessions?.where((session) => session.id == sessionId);
+    if (matches == null || matches.isEmpty) {
+      throw StateError('Clerk did not provide the completed session.');
+    }
+    final session = matches.first;
+    try {
+      if (session.status != 'active') {
+        throw StateError(
+          'This account requires additional Clerk session steps.',
+        );
+      }
+      final token = (await session.getToken().toDart)?.toDart;
+      if (token == null || token.isEmpty) {
+        throw StateError('Clerk did not provide a session token.');
+      }
+      await sessionValidator(token);
+      await _clerk.setActive(buildSetActiveParams(sessionId)).toDart;
+    } catch (_) {
+      try {
+        await session.remove().toDart;
+      } catch (_) {}
+      rethrow;
+    }
     _authStreamController.add(true);
   }
 
@@ -156,6 +187,7 @@ class AuthServiceWeb implements AuthServiceInterface {
       }
       await _activateCompletedSignIn(result);
     } catch (e) {
+      if (e is RoleMismatchException) rethrow;
       final clean = e
           .toString()
           .replaceAll('JavaScriptError: ', '')
@@ -210,19 +242,20 @@ class AuthServiceWeb implements AuthServiceInterface {
     try {
       final result = await signIn
           .attemptFirstFactor(
-            buildPasswordResetAttemptParams(
-              code: code,
-              password: newPassword,
-            ),
+            buildPasswordResetAttemptParams(code: code, password: newPassword),
           )
           .toDart;
 
       if (result.status == 'complete') {
+        // Validate role BEFORE activating the session — a recruiter must not
+        // be able to reach the recruiter dashboard via the candidate reset flow.
         await _activateCompletedSignIn(result);
         return const SignInResult.complete();
       }
       if (result.status == 'needs_client_trust' ||
           result.status == 'needs_second_factor') {
+        // Carry the role expectation into the OTP-verification step so
+        // verifySignInCode() → _activateCompletedSignIn() can also enforce it.
         await _prepareEmailCode(result);
         return const SignInResult.verificationRequired();
       }
@@ -230,6 +263,7 @@ class AuthServiceWeb implements AuthServiceInterface {
         'Password reset did not complete. Status: ${result.status}',
       );
     } catch (e) {
+      if (e is RoleMismatchException) rethrow;
       throw Exception(_cleanError(e, 'The reset code is invalid or expired.'));
     }
   }
@@ -290,10 +324,10 @@ class AuthServiceWeb implements AuthServiceInterface {
 
     if (signUp.status == 'complete') {
       final sessionId = signUp.createdSessionId;
-      if (sessionId != null) {
-        await _clerk.setActive(buildSetActiveParams(sessionId)).toDart;
+      if (sessionId == null) {
+        throw StateError('Clerk did not create a session.');
       }
-      _authStreamController.add(true);
+      await _activateSession(sessionId);
     } else {
       throw Exception(
         'Sign-up verification did not complete. Status: ${signUp.status}',
@@ -303,7 +337,7 @@ class AuthServiceWeb implements AuthServiceInterface {
 
   @override
   Future<void> signOut() async {
-    await _clerk.signOut().toDart;
+    await _clerk.signOut((() {}).toJS).toDart;
     _authStreamController.add(false);
   }
 
@@ -345,7 +379,8 @@ class AuthServiceWeb implements AuthServiceInterface {
   String? get lastName => _initialised ? _clerk.user?.lastName : null;
 
   @override
-  bool get isSignedIn => _initialised && _clerk.user != null;
+  bool get isSignedIn =>
+      _initialised && _clerk.user != null && _clerk.session?.status == 'active';
 
   @override
   Stream<bool> get authStateChanges => _authStreamController.stream;

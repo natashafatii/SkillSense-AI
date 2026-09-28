@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:web/web.dart' as web;
+import 'browser_storage_stub.dart'
+    if (dart.library.js_interop) 'browser_storage_web.dart'
+    as browser_storage;
 import 'auth_service.dart';
 import 'resume_service.dart';
+import 'session_scope.dart';
 
 // Manages candidate resumes in localStorage, isolated per user ID.
 class ResumeManager {
@@ -33,8 +36,10 @@ class ResumeManager {
   /// already understands:
   ///   id, filename, filesize, uploadedAt, active, status, coverage, extracted.
   static Future<void> loadFromApi() async {
+    final epoch = SessionScope.generation;
     try {
       final apiList = await ResumeService.listResumes();
+      if (epoch != SessionScope.generation) return;
       if (apiList.isEmpty) {
         // Only wipe local state if the API confirmed the user has no resumes.
         _cachedResumes = [];
@@ -195,7 +200,7 @@ class ResumeManager {
 
     if (kIsWeb) {
       try {
-        final raw = web.window.localStorage.getItem(key);
+        final raw = browser_storage.read(key);
         if (raw != null && raw.isNotEmpty && raw != 'null') {
           final List decoded = jsonDecode(raw) as List;
           _cachedResumes = decoded
@@ -326,7 +331,7 @@ class ResumeManager {
     final key = _getStorageKey();
     if (key == null || !kIsWeb || _cachedResumes == null) return;
     try {
-      web.window.localStorage.setItem(key, jsonEncode(_cachedResumes));
+      browser_storage.write(key, jsonEncode(_cachedResumes));
     } catch (_) {}
   }
 }

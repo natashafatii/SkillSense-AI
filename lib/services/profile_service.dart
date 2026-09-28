@@ -5,6 +5,7 @@ import '../models/recruiter_profile.dart';
 import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
+import 'session_scope.dart';
 
 /// Profile management service for Candidate and Recruiter profiles.
 class ProfileService {
@@ -13,13 +14,17 @@ class ProfileService {
   // ══════════════════════════════════════════════════════════════════════════
   // Candidate Profile Endpoints (`/api/candidates/profile/`)
   // ══════════════════════════════════════════════════════════════════════════
+  static final ValueNotifier<CandidateProfile?> currentProfileNotifier =
+      ValueNotifier(null);
 
-  static final ValueNotifier<CandidateProfile?> currentProfileNotifier = ValueNotifier<CandidateProfile?>(null);
-
+  static void clearCache() {
+    currentProfileNotifier.value = null;
+  }
   /// Retrieves the self-owned candidate profile for the authenticated candidate.
   static Future<CandidateProfile?> getCandidateProfile({
     bool forceRefresh = false,
   }) async {
+    final epoch = SessionScope.generation;
     if (currentProfileNotifier.value != null && !forceRefresh) {
       return currentProfileNotifier.value!;
     }
@@ -33,6 +38,10 @@ class ProfileService {
         );
         return currentProfileNotifier.value;
       } on DioException catch (e) {
+        if (epoch != SessionScope.generation ||
+            e.type == DioExceptionType.cancel) {
+          return null;
+        }
         if (e.response?.statusCode == 401) {
           throw ApiException(statusCode: 401, message: 'Unauthorized');
         }
@@ -56,25 +65,10 @@ class ProfileService {
   static Future<CandidateProfile> updateCandidateProfile(
     Map<String, dynamic> patchData,
   ) async {
+
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.patch('/candidates/profile/', data: patchData);
-      currentProfileNotifier.value = CandidateProfile.fromJson(
-        response.data as Map<String, dynamic>,
-      );
-      return currentProfileNotifier.value!;
-    } on DioException catch (e) {
-      throw ApiException.fromDioException(e);
-    }
-  }
-
-  /// Fully replaces the self-owned candidate profile.
-  static Future<CandidateProfile> putCandidateProfile(
-    Map<String, dynamic> data,
-  ) async {
-    try {
-      final dio = await ApiClient.getInstance();
-      final response = await dio.put('/candidates/profile/', data: data);
       currentProfileNotifier.value = CandidateProfile.fromJson(
         response.data as Map<String, dynamic>,
       );

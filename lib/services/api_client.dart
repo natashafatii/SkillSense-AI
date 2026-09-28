@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:dio/dio.dart';
+import 'session_scope.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 typedef TokenSupplier = Future<String?> Function();
@@ -9,7 +10,16 @@ typedef TokenSupplier = Future<String?> Function();
 class ApiClient {
   ApiClient._();
 
+  static String get baseUrl => _getBaseUrl();
+
   static Dio? _dio;
+  static final Dio authenticationClient = Dio(
+    BaseOptions(
+      baseUrl: _getBaseUrl(),
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
+    ),
+  );
   static TokenSupplier? _tokenSupplier;
 
   static void setTokenSupplier(TokenSupplier supplier) {
@@ -19,20 +29,24 @@ class ApiClient {
   static Future<Dio> getInstance() async {
     if (_dio != null) return _dio!;
 
-    final dio = Dio(BaseOptions(
-      baseUrl: _getBaseUrl(),
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      extra: <String, dynamic>{'withCredentials': true},
-    ));
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: _getBaseUrl(),
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        extra: <String, dynamic>{'withCredentials': true},
+      ),
+    );
 
-    dio.interceptors.add(ClerkTokenInterceptor(
-      tokenSupplier: () => _tokenSupplier?.call() ?? Future.value(null),
-    ));
+    dio.interceptors.add(
+      ClerkTokenInterceptor(
+        tokenSupplier: () => _tokenSupplier?.call() ?? Future.value(null),
+      ),
+    );
 
     _dio = dio;
     return dio;
@@ -53,7 +67,7 @@ class ApiClient {
   }
 }
 
-// Automatically adds Authorization header and retries once on 401.
+// Gets a current SDK token for each request and discards obsolete responses.
 class ClerkTokenInterceptor extends Interceptor {
   final TokenSupplier tokenSupplier;
 
@@ -64,44 +78,74 @@ class ClerkTokenInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
+    final epoch = SessionScope.generation;
+    options.extra['sessionGeneration'] = epoch;
     try {
       final token = await tokenSupplier();
-      if (token != null && token.isNotEmpty) {
-        options.headers['Authorization'] = 'Bearer $token';
+      if (epoch != SessionScope.generation) {
+        handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.cancel,
+            error: 'Session changed.',
+          ),
+        );
+        return;
       }
-    } catch (_) {
-      // Proceed without header if token fetching fails
+      if (token == null || token.isEmpty) {
+        handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.cancel,
+            error: 'Please sign in again.',
+          ),
+        );
+        return;
+      }
+      options.headers['Authorization'] = 'Bearer $token';
+    } catch (error) {
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.cancel,
+          error: error,
+        ),
+      );
+      return;
     }
 
     super.onRequest(options, handler);
   }
 
   @override
-  Future<void> onError(
-    DioException err,
-    ErrorInterceptorHandler handler,
-  ) async {
-    if (err.response?.statusCode == 401) {
-      final options = err.requestOptions;
-      final retried = options.extra['retried'] == true;
-
-      if (!retried) {
-        options.extra['retried'] = true;
-        try {
-          final newToken = await tokenSupplier();
-          if (newToken != null && newToken.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $newToken';
-            final dio = await ApiClient.getInstance();
-            final response = await dio.fetch(options);
-            return handler.resolve(response);
-          }
-        } catch (_) {
-          // Token refresh failed, pass error down
-        }
-      }
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    if (response.requestOptions.extra['sessionGeneration'] !=
+        SessionScope.generation) {
+      handler.reject(
+        DioException(
+          requestOptions: response.requestOptions,
+          type: DioExceptionType.cancel,
+          error: 'Session changed.',
+        ),
+      );
+      return;
     }
+    handler.next(response);
+  }
 
-    super.onError(err, handler);
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    if (err.requestOptions.extra['sessionGeneration'] !=
+        SessionScope.generation) {
+      handler.next(
+        DioException(
+          requestOptions: err.requestOptions,
+          type: DioExceptionType.cancel,
+          error: 'Session changed.',
+        ),
+      );
+      return;
+    }
+    handler.next(err);
   }
 }
-

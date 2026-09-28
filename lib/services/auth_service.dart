@@ -1,12 +1,17 @@
 import 'package:dio/dio.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/env_config.dart';
 import 'api_client.dart';
 import 'auth_service_interface.dart';
+import 'profile_service.dart';
 import 'resume_manager.dart';
+import 'resume_service.dart';
+import 'session_scope.dart';
 
-export 'auth_service_interface.dart' show SignInResult, SignInResultStatus;
+export 'auth_service_interface.dart'
+    show SignInResult, SignInResultStatus, RoleMismatchException;
 
 // Conditional import selects the right factory at compile time.
 import 'auth_service_stub.dart'
@@ -17,8 +22,188 @@ import 'auth_service_stub.dart'
 class AuthService {
   AuthService._();
 
-  static final AuthServiceInterface instance = createAuthService();
-  static String selectedRole = EnvConfig.roleCandidate;
+  static AuthServiceInterface _instance = createAuthService()
+    ..sessionValidator = _validateSession;
+  static AuthServiceInterface get instance => _instance;
+
+  @visibleForTesting
+  static void setInstanceForTesting(AuthServiceInterface service) {
+    _sdkSubscription?.cancel();
+    _sdkSubscription = null;
+    _instance = service..sessionValidator = _validateSession;
+    _invalidate();
+    _published = false;
+    _authOperation = false;
+    _verifiedRole = null;
+    _verifiedUserId = null;
+    expectedLoginRole = null;
+    currentUserNotifier.value = null;
+  }
+
+  static String? _verifiedUserId;
+  static String? _verifiedRole;
+  static String? expectedLoginRole;
+
+  static final _authEvents = StreamController<bool>.broadcast();
+  static Stream<bool> get authStateChanges => _authEvents.stream;
+  static StreamSubscription<bool>? _sdkSubscription;
+  static bool _published = false;
+  static bool _authOperation = false;
+  static String? _operationRole;
+  static int? _operationGeneration;
+  static Map<String, dynamic>? _pendingUser;
+  static Future<Map<String, dynamic>?>? _identityRequest;
+  static Future<void> _preferenceWrites = Future.value();
+  static bool get isAuthenticated => _published && getUserRole().isNotEmpty;
+  static Future<String?> getSessionToken() async =>
+      isAuthenticated ? instance.getSessionToken() : null;
+
+  static void _emit(bool authenticated) {
+    if (_published == authenticated) return;
+    _published = authenticated;
+    _authEvents.add(authenticated);
+  }
+
+  static void _invalidate() {
+    SessionScope.invalidate();
+    _verifiedRole = null;
+    _verifiedUserId = null;
+    _pendingUser = null;
+    _identityRequest = null;
+    currentUserNotifier.value = null;
+    ResumeManager.clearCache();
+    ResumeService.clearCache();
+    ProfileService.clearCache();
+    ApiClient.reset();
+  }
+
+  static Future<void> initialize(String publishableKey) async {
+    _sdkSubscription ??= instance.authStateChanges.listen((signedIn) {
+      if (_authOperation) return;
+      if (!signedIn) {
+        _invalidate();
+        _emit(false);
+      } else {
+        unawaited(_restoreSession());
+      }
+    });
+    await instance.initialize(publishableKey);
+    if (instance.isSignedIn) await _restoreSession();
+  }
+
+  static Future<void> _restoreSession() async {
+    final epoch = SessionScope.generation;
+    try {
+      await fetchCurrentUser();
+      if (!_authOperation &&
+          epoch == SessionScope.generation &&
+          getUserRole().isNotEmpty) {
+        _emit(true);
+      }
+    } catch (_) {
+      if (!_authOperation && epoch == SessionScope.generation) {
+        _invalidate();
+        _emit(false);
+      }
+    }
+  }
+
+  static Future<void> _validateSession(String token) async {
+    final epoch = SessionScope.generation;
+    if (!_authOperation || _operationGeneration != epoch) {
+      throw StateError('Session changed.');
+    }
+    final dio = ApiClient.authenticationClient;
+    try {
+      final response = await dio.get(
+        '/auth/login-role/',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (epoch != SessionScope.generation) {
+        throw StateError('Session changed.');
+      }
+      final role = data['role']?.toString();
+      if (data['clerk_id'] == null ||
+          data['is_active'] != true ||
+          !['CANDIDATE', 'RECRUITER', 'ADMIN'].contains(role)) {
+        throw StateError('Unable to verify your account.');
+      }
+      if (_operationRole != null && role != _operationRole) {
+        throw RoleMismatchException(role!);
+      }
+      _pendingUser = data;
+    } on DioException catch (error) {
+      throw handleDioException(error);
+    }
+  }
+
+  /// SDK sessions are credential proof. Only a verified backend identity is
+  /// published to routing, after the whole operation has succeeded.
+  static Future<T> _authenticate<T>(
+    Future<T> Function() action, {
+    bool replaceSession = false,
+    String? expectedRole,
+  }) async {
+    if (_authOperation) {
+      throw StateError('An authentication operation is already running.');
+    }
+    _authOperation = true;
+    _operationRole = expectedRole;
+    try {
+      if (replaceSession) {
+        _invalidate();
+        _emit(false);
+        if (instance.isSignedIn) await instance.signOut();
+      }
+      final epoch = SessionScope.generation;
+      _operationGeneration = epoch;
+      final result = await action();
+      if (epoch != SessionScope.generation) {
+        throw StateError('Session changed.');
+      }
+      final data = _pendingUser;
+      if (instance.isSignedIn && data == null) {
+        throw StateError('The session has not been verified.');
+      }
+      if (instance.isSignedIn && data != null) {
+        if (data['clerk_id'] != instance.userId) {
+          throw StateError('Session identity changed.');
+        }
+        _verifiedUserId = instance.userId;
+        _verifiedRole = data['role'] as String;
+        await saveUserSession(data);
+        if (epoch != SessionScope.generation) {
+          throw StateError('Session changed.');
+        }
+        _pendingUser = null;
+        _emit(true);
+      } else if (!instance.isSignedIn) {
+        _emit(false);
+      }
+      return result;
+    } catch (_) {
+      if (instance.isSignedIn) {
+        try {
+          await instance.signOut();
+        } catch (_) {}
+      }
+      _invalidate();
+      _emit(false);
+      rethrow;
+    } finally {
+      _authOperation = false;
+      _operationRole = null;
+      _operationGeneration = null;
+    }
+  }
+
+  static String? normalizeRole(String? role) {
+    if (role == null || role.isEmpty) return null;
+    return role.toUpperCase() == 'JOB_SEEKER'
+        ? 'CANDIDATE'
+        : role.toUpperCase();
+  }
 
   /// Centralized reactive user session state listener.
   static final ValueNotifier<Map<String, dynamic>?> currentUserNotifier =
@@ -39,21 +224,25 @@ class AuthService {
     current.addAll(data);
     currentUserNotifier.value = current;
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (current.containsKey('first_name')) {
-        await prefs.setString('user_first_name', current['first_name'].toString());
-      }
-      if (current.containsKey('last_name')) {
-        await prefs.setString('user_last_name', current['last_name'].toString());
-      }
-      if (current.containsKey('email')) {
-        await prefs.setString('user_email', current['email'].toString());
-      }
-      if (current.containsKey('role')) {
-        await prefs.setString('user_role', current['role'].toString());
-      }
-    } catch (_) {}
+    final epoch = SessionScope.generation;
+    _preferenceWrites = _preferenceWrites
+        .then((_) async {
+          if (epoch != SessionScope.generation) return;
+          final prefs = await SharedPreferences.getInstance();
+          for (final entry in {
+            'first_name': 'user_first_name',
+            'last_name': 'user_last_name',
+            'email': 'user_email',
+            'role': 'user_role',
+          }.entries) {
+            if (epoch != SessionScope.generation) return;
+            if (current.containsKey(entry.key)) {
+              await prefs.setString(entry.value, current[entry.key].toString());
+            }
+          }
+        })
+        .catchError((_) {});
+    await _preferenceWrites;
   }
 
   /// Loads cached session data from SharedPreferences.
@@ -82,9 +271,19 @@ class AuthService {
   static Future<SignInResult> login(
     BuildContext context,
     String email,
-    String password,
-  ) async {
-    return instance.login(email, password);
+    String password, {
+    String? expectedRole,
+  }) async {
+    if (_authOperation) {
+      throw StateError('An authentication operation is already running.');
+    }
+    final role = normalizeRole(expectedRole);
+    expectedLoginRole = role;
+    return _authenticate(
+      () => instance.login(email.trim().toLowerCase(), password),
+      replaceSession: true,
+      expectedRole: role,
+    );
   }
 
   static Future<void> signUp(
@@ -95,47 +294,63 @@ class AuthService {
     String? lastName,
     required String role,
   }) async {
-    selectedRole = role;
-
-    // Immediately record signup user data so UI greets the user without delay
-    final userData = {
-      'first_name': firstName ?? '',
-      'last_name': lastName ?? '',
-      'email': email,
-      'role': role,
-    };
-    await saveUserSession(userData);
-
-    await instance.signUp(
-      email: email,
-      password: password,
-      firstName: firstName,
-      lastName: lastName,
-      role: role,
+    if (_authOperation) {
+      throw StateError('An authentication operation is already running.');
+    }
+    expectedLoginRole = normalizeRole(role);
+    await _authenticate(
+      () => instance.signUp(
+        email: email.trim().toLowerCase(),
+        password: password,
+        firstName: firstName,
+        lastName: lastName,
+        role: role,
+      ),
+      replaceSession: true,
+      expectedRole: expectedLoginRole,
     );
   }
 
-  static Future<void> verifySignUpCode(String code) async {
-    await instance.verifySignUpCode(code);
-  }
+  static Future<void> verifySignUpCode(String code) => _authenticate(
+    () => instance.verifySignUpCode(code),
+    expectedRole: expectedLoginRole,
+  );
 
-  static Future<void> verifySignInCode(String code) async {
-    await instance.verifySignInCode(code);
-  }
+  static Future<void> verifySignInCode(String code) => _authenticate(
+    () => instance.verifySignInCode(code),
+    expectedRole: expectedLoginRole,
+  );
 
   static Future<void> resendSignInCode() async {
     await instance.resendSignInCode();
   }
 
-  static Future<void> requestPasswordReset(String email) async {
-    await instance.requestPasswordReset(email);
+  static Future<void> requestPasswordReset(
+    String email, {
+    String? expectedRole,
+  }) async {
+    if (_authOperation) {
+      throw StateError('An authentication operation is already running.');
+    }
+    // Keep the originating portal's role through the reset and OTP steps.
+    if (expectedRole != null) {
+      expectedLoginRole = normalizeRole(expectedRole);
+    }
+    await _authenticate(
+      () => instance.requestPasswordReset(email.trim().toLowerCase()),
+      replaceSession: true,
+      expectedRole: expectedLoginRole,
+    );
   }
 
   static Future<SignInResult> resetPassword({
     required String code,
     required String newPassword,
   }) {
-    return instance.resetPassword(code: code, newPassword: newPassword);
+    return _authenticate(
+      () => instance.resetPassword(code: code, newPassword: newPassword),
+      expectedRole: expectedLoginRole,
+    );
   }
 
   static Future<void> registerCandidate(
@@ -148,7 +363,7 @@ class AuthService {
     final lastName = data['last_name']?.toString();
     await signUp(
       context,
-      email: email,
+      email: email.trim().toLowerCase(),
       password: password,
       firstName: firstName,
       lastName: lastName,
@@ -166,7 +381,7 @@ class AuthService {
     final lastName = data['last_name']?.toString();
     await signUp(
       context,
-      email: email,
+      email: email.trim().toLowerCase(),
       password: password,
       firstName: firstName,
       lastName: lastName,
@@ -181,40 +396,63 @@ class AuthService {
     await registerHr(context, data);
   }
 
-  static Future<Map<String, dynamic>?> fetchCurrentUser({String? fallbackEmail}) async {
-    if (currentUserNotifier.value == null) {
-      await loadUserSession();
+  /// Coalesces concurrent identity requests and reuses the verified session.
+  /// Call with forceRefresh when an explicit account refresh is required.
+  static Future<Map<String, dynamic>?> fetchCurrentUser({
+    String? fallbackEmail,
+    bool forceRefresh = false,
+  }) {
+    if (!forceRefresh && getUserRole().isNotEmpty && currentUserData != null) {
+      return Future.value(currentUserData);
     }
-    int attempts = 0;
-    while (attempts < 2) {
-      try {
-        final dio = await ApiClient.getInstance();
-        final response = await dio.get('/users/me/');
-        if (response.data is Map<String, dynamic>) {
-          final data = response.data as Map<String, dynamic>;
-          await saveUserSession(data);
-          return data;
-        }
-        break; // If not map, break loop
-      } on DioException catch (e) {
-        if (e.response?.statusCode == 401) {
-          throw Exception('Unauthorized');
-        }
-        attempts++;
-        if (attempts >= 2) {
-          // Fallback to JWT email / existing session
-          if (currentUserNotifier.value == null && fallbackEmail != null) {
-            final fallbackData = {'email': fallbackEmail, 'first_name': '', 'last_name': ''};
-            await saveUserSession(fallbackData);
-          }
-          break;
-        }
-        await Future.delayed(const Duration(milliseconds: 500));
-      } catch (_) {
-        break;
+    if (_identityRequest != null) return _identityRequest!;
+    final epoch = SessionScope.generation;
+    final request = _fetchIdentity().whenComplete(() {
+      if (epoch == SessionScope.generation) _identityRequest = null;
+    });
+    _identityRequest = request;
+    return request;
+  }
+
+  static Future<Map<String, dynamic>?> _fetchIdentity() async {
+    final userId = instance.userId;
+    final epoch = SessionScope.generation;
+    if (!instance.isSignedIn || userId == null) {
+      throw StateError('Please sign in again.');
+    }
+    try {
+      final token = await instance.getSessionToken();
+      if (epoch != SessionScope.generation) {
+        throw StateError('Session changed.');
       }
+      if (token == null) throw StateError('Please sign in again.');
+      final response = await ApiClient.authenticationClient.get(
+        '/users/me/',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (epoch != SessionScope.generation ||
+          instance.userId != userId ||
+          data['clerk_id'] != userId ||
+          data['is_active'] != true ||
+          !['CANDIDATE', 'RECRUITER', 'ADMIN'].contains(data['role'])) {
+        throw StateError('Unable to verify your account.');
+      }
+      _verifiedUserId = userId;
+      _verifiedRole = data['role'] as String;
+      await saveUserSession(data);
+      if (epoch != SessionScope.generation) {
+        throw StateError('Session changed.');
+      }
+      return data;
+    } catch (error) {
+      if (epoch == SessionScope.generation) {
+        _invalidate();
+        _emit(false);
+      }
+      if (error is DioException) throw handleDioException(error);
+      rethrow;
     }
-    return currentUserNotifier.value;
   }
 
   /// Updates user profile details locally and synchronizes to backend.
@@ -237,25 +475,32 @@ class AuthService {
   }
 
   static String getUserRole([dynamic user]) {
-    return instance.getUserRole(selectedRole);
+    return instance.isSignedIn && instance.userId == _verifiedUserId
+        ? (_verifiedRole ?? '')
+        : '';
   }
 
   static String? get currentUserId => instance.userId;
   static String? get clerkFirstName => instance.firstName;
   static String? get clerkLastName => instance.lastName;
 
-  static Future<void> signOut(BuildContext context) async {
+  static Future<void> signOut([BuildContext? context]) async {
+    _invalidate();
+    expectedLoginRole = null;
+    _emit(false);
     await instance.signOut();
-    ApiClient.reset();
-    ResumeManager.clearCache();
-    currentUserNotifier.value = null;
-    try {
+    _preferenceWrites = _preferenceWrites.then((_) async {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('user_first_name');
-      await prefs.remove('user_last_name');
-      await prefs.remove('user_email');
-      await prefs.remove('user_role');
-    } catch (_) {}
+      for (final key in [
+        'user_first_name',
+        'user_last_name',
+        'user_email',
+        'user_role',
+      ]) {
+        await prefs.remove(key);
+      }
+    });
+    await _preferenceWrites;
   }
 
   static Exception handleDioException(DioException e) {
