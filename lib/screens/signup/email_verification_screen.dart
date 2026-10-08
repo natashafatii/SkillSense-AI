@@ -136,14 +136,18 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     }
   }
 
-  Future<void> _resendSignInCode() async {
+  Future<void> _resendCode() async {
     if (_isResending) return;
     setState(() {
       _isResending = true;
       _error = null;
     });
     try {
-      await AuthService.resendSignInCode();
+      if (widget.isSignIn) {
+        await AuthService.resendSignInCode();
+      } else {
+        await AuthService.resendSignUpCode();
+      }
       if (mounted) _snack('A new verification code has been sent.');
     } catch (e) {
       if (mounted) {
@@ -447,18 +451,17 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                 const SizedBox(height: 20),
 
                 // ── Resend / back link ──────────────────────────────
-                if (widget.isSignIn)
-                  TextButton(
-                    onPressed: _isResending ? null : _resendSignInCode,
-                    child: Text(
-                      _isResending ? 'Sending…' : 'Resend code',
-                      style: GoogleFonts.publicSans(
-                        fontSize: 13,
-                        color: _accentColor,
-                        fontWeight: FontWeight.w600,
-                      ),
+                TextButton(
+                  onPressed: _isResending ? null : _resendCode,
+                  child: Text(
+                    _isResending ? 'Sending…' : 'Resend code',
+                    style: GoogleFonts.publicSans(
+                      fontSize: 13,
+                      color: _accentColor,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                ),
                 TextButton(
                   onPressed: () {
                     Navigator.pushReplacement(

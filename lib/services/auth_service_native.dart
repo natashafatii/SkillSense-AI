@@ -120,8 +120,13 @@ class AuthServiceNative implements AuthServiceInterface {
     required String password,
     String? firstName,
     String? lastName,
+    String? companyName,
     required String role,
   }) async {
+    final metadata = <String, dynamic>{'role': role};
+    if (companyName != null && companyName.trim().isNotEmpty) {
+      metadata['company_name'] = companyName.trim();
+    }
     await _requireAuth.attemptSignUp(
       strategy: clerk.Strategy.emailCode,
       emailAddress: email,
@@ -129,10 +134,14 @@ class AuthServiceNative implements AuthServiceInterface {
       passwordConfirmation: password,
       firstName: firstName,
       lastName: lastName,
-      metadata: {'role': role},
+      metadata: metadata,
     );
-    // Sign-up is created but not yet verified — the UI must collect the
     // email code and call verifySignUpCode().
+  }
+
+  @override
+  Future<void> resendSignUpCode() async {
+    await _requireAuth.attemptSignUp(strategy: clerk.Strategy.emailCode);
   }
 
   @override

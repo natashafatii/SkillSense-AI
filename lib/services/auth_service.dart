@@ -295,6 +295,7 @@ class AuthService {
     required String password,
     String? firstName,
     String? lastName,
+    String? companyName,
     required String role,
   }) async {
     if (_authOperation) {
@@ -307,6 +308,7 @@ class AuthService {
         password: password,
         firstName: firstName,
         lastName: lastName,
+        companyName: companyName,
         role: role,
       ),
       replaceSession: true,
@@ -326,6 +328,10 @@ class AuthService {
 
   static Future<void> resendSignInCode() async {
     await instance.resendSignInCode();
+  }
+
+  static Future<void> resendSignUpCode() async {
+    await instance.resendSignUpCode();
   }
 
   static Future<void> requestPasswordReset(
@@ -382,12 +388,14 @@ class AuthService {
     final password = data['password']?.toString() ?? '';
     final firstName = data['first_name']?.toString();
     final lastName = data['last_name']?.toString();
+    final companyName = data['company_name']?.toString();
     await signUp(
       context,
       email: email.trim().toLowerCase(),
       password: password,
       firstName: firstName,
       lastName: lastName,
+      companyName: companyName,
       role: EnvConfig.roleRecruiter,
     );
   }

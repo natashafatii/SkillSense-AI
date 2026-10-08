@@ -102,9 +102,9 @@ class _CandidateJobCardState extends State<CandidateJobCard>
     final skills = widget.job.skillsRequired;
     final skillChips = _buildSkillChips(skills);
 
-    // Fallback to 85 if no averageScore provided for the visual
-    final score = widget.job.averageScore ?? 85.0;
-    final ringColor = _getRingColor(score);
+    // Use actual score, or null if none
+    final score = widget.job.averageScore;
+    final ringColor = score != null ? _getRingColor(score) : const Color(0xFF94A3B8);
     final isHot = widget.isHot;
 
     // Day shadow
@@ -218,8 +218,9 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                               builder: (context, child) {
                                 return CustomPaint(
                                   painter: _RingPainter(
-                                    progress:
-                                        (score / 100) * _ringAnimation.value,
+                                    progress: score != null
+                                        ? (score / 100) * _ringAnimation.value
+                                        : 0.0,
                                     ringColor: ringColor,
                                     trackColor: const Color(
                                       0xFF26334D,
@@ -230,7 +231,7 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                             ),
                           ),
                           Text(
-                            '${score.round()}',
+                            score != null ? '${score.round()}' : '--',
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
