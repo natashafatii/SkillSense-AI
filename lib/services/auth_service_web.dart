@@ -283,6 +283,7 @@ class AuthServiceWeb implements AuthServiceInterface {
     required String password,
     String? firstName,
     String? lastName,
+    String? companyName,
     required String role,
   }) async {
     final client = _clerk.client;
@@ -298,12 +299,27 @@ class AuthServiceWeb implements AuthServiceInterface {
             password: password,
             firstName: firstName,
             lastName: lastName,
-            unsafeMetadata: {'role': role},
+            unsafeMetadata: {
+              'role': role,
+              if (companyName != null && companyName.trim().isNotEmpty)
+                'company_name': companyName.trim(),
+            },
           ),
         )
         .toDart;
 
     // Step 2: Request email verification code.
+    await client.signUp!
+        .prepareEmailAddressVerification(buildPrepareEmailVerificationParams())
+        .toDart;
+  }
+
+  @override
+  Future<void> resendSignUpCode() async {
+    final client = _clerk.client;
+    if (client == null || client.signUp == null) {
+      throw StateError('There is no pending sign-up challenge to resend.');
+    }
     await client.signUp!
         .prepareEmailAddressVerification(buildPrepareEmailVerificationParams())
         .toDart;

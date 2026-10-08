@@ -220,7 +220,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
 
     Widget buildModal(BuildContext dialogContext) => _ApplyModalWidget(
       jobTitle: _job!.title,
-      companyInfo: '${_job!.recruiterCompany} · ${_job!.location}',
+      companyInfo:
+          '${_job!.recruiterCompany} · ${_job!.location}${_job!.salary.isNotEmpty ? ' · ${_job!.salary}' : ''}',
       loadResumes: widget.loadApplyResumes,
       loadResumeDetail: widget.loadApplyResumeDetail,
       isMobile: isMobile,
@@ -336,7 +337,13 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
 
   void _showParsingSuccessDialog(ResumeDetail detail) {
     final score = detail.matchScore?.round();
-    final matchedSkills = detail.matchedSkills ?? [];
+    final match = JobSkillMatch.cached(
+      jobId: widget.jobId,
+      resumeId: detail.id,
+      jobSkills: _jobSkills?.map((skill) => skill.skillName).toList() ?? [],
+      resumeSkills: detail.skills ?? [],
+    );
+    final matchedSkills = match.matched;
 
     showDialog(
       context: context,
@@ -2520,9 +2527,6 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
-                          color: _selectedResumeId == r['id'].toString()
-                              ? const Color(0xFFF0FDF4)
-                              : Colors.white,
                           border: Border.all(
                             color: _selectedResumeId == r['id'].toString()
                                 ? const Color(0xFF10B981)
@@ -2530,7 +2534,13 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: RadioListTile<String>(
+                        child: Material(
+                          color: _selectedResumeId == r['id'].toString()
+                              ? const Color(0xFFF0FDF4)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          clipBehavior: Clip.antiAlias,
+                          child: RadioListTile<String>(
                           value: r['id'].toString(),
                           groupValue: _selectedResumeId,
                           onChanged: _onResumeSelected,
@@ -2551,6 +2561,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                               color: const Color(0xFF64748B),
                             ),
                           ),
+                        ),
                         ),
                       );
                     }),

@@ -93,6 +93,7 @@ class Job {
   final String requirements;
   final List<String> skillsRequired;
   final String location;
+  final String salary;
   final JobType jobType;
   final ExperienceLevel experienceLevel;
   final JobStatus status;
@@ -113,6 +114,7 @@ class Job {
     required this.requirements,
     required this.skillsRequired,
     required this.location,
+    this.salary = '',
     required this.jobType,
     required this.experienceLevel,
     required this.status,
@@ -149,6 +151,7 @@ class Job {
               .toList() ??
           const [],
       location: json['location'] as String,
+      salary: json['salary'] as String? ?? '',
       jobType: JobType.fromString(json['job_type'] as String? ?? 'REMOTE'),
       experienceLevel: ExperienceLevel.fromString(
         json['experience_level'] as String? ?? 'MID',
@@ -178,6 +181,7 @@ class Job {
     String? requirements,
     required List<String> skillsRequired,
     required String location,
+    String? salary,
     required JobType jobType,
     required ExperienceLevel experienceLevel,
     required DateTime deadline,
@@ -187,6 +191,7 @@ class Job {
       'description': description,
       'requirements': requirements ?? '',
       'location': location,
+      'salary': salary ?? '',
       'job_type': jobType.value,
       'experience_level': experienceLevel.value,
       'deadline':

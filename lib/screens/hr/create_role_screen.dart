@@ -897,6 +897,13 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               hint: 'YYYY-MM-DD',
               errorText: _fieldErrors['deadline'],
             ),
+            const SizedBox(height: 14),
+            _buildFormField(
+              label: 'SALARY',
+              controller: _salaryController,
+              hint: 'e.g. \$80k - \$100k',
+              errorText: _fieldErrors['salary'],
+            ),
           ] else ...[
             Row(
               children: [
@@ -928,6 +935,15 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                     controller: _closesController,
                     hint: 'YYYY-MM-DD',
                     errorText: _fieldErrors['deadline'],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _buildFormField(
+                    label: 'SALARY',
+                    controller: _salaryController,
+                    hint: 'e.g. \$80k - \$100k',
+                    errorText: _fieldErrors['salary'],
                   ),
                 ),
               ],
@@ -1675,6 +1691,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         skillsRequired:
             [], // Force usage of addSkillToJob API to preserve is_required flags
         location: _locationController.text.trim(),
+        salary: _salaryController.text.trim(),
         jobType: _jobType,
         experienceLevel: _experienceLevel,
         deadline: DateTime.parse(_closesController.text.trim()),

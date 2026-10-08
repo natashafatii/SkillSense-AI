@@ -56,6 +56,13 @@ abstract class AuthServiceInterface {
     );
   }
 
+  /// Sends a new code for the current pending sign-up challenge.
+  Future<void> resendSignUpCode() {
+    throw UnsupportedError(
+      'Resending a sign-up code is not supported on this platform.',
+    );
+  }
+
   /// Starts Clerk's password-reset flow and sends a code to [email].
   Future<void> requestPasswordReset(String email);
 
@@ -77,6 +84,7 @@ abstract class AuthServiceInterface {
     required String password,
     String? firstName,
     String? lastName,
+    String? companyName,
     required String role,
   });
 
