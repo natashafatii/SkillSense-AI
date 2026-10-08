@@ -34,6 +34,8 @@ class AuthService {
     _invalidate();
     _published = false;
     _authOperation = false;
+    _signingOut = false;
+    _preferenceWrites = Future.value();
     _verifiedRole = null;
     _verifiedUserId = null;
     expectedLoginRole = null;
@@ -49,6 +51,7 @@ class AuthService {
   static StreamSubscription<bool>? _sdkSubscription;
   static bool _published = false;
   static bool _authOperation = false;
+  static bool _signingOut = false;
   static String? _operationRole;
   static int? _operationGeneration;
   static Map<String, dynamic>? _pendingUser;
@@ -455,23 +458,35 @@ class AuthService {
     }
   }
 
-  /// Updates user profile details locally and synchronizes to backend.
+  /// Publish profile changes only after the backend confirms their saved values.
   static Future<void> updateUserProfile({
     String? firstName,
     String? lastName,
     String? email,
   }) async {
-    final current = Map<String, dynamic>.from(currentUserNotifier.value ?? {});
-    if (firstName != null) current['first_name'] = firstName.trim();
-    if (lastName != null) current['last_name'] = lastName.trim();
-    if (email != null) current['email'] = email.trim();
-
-    await saveUserSession(current);
-
+    final patch = <String, dynamic>{
+      if (firstName != null) 'first_name': firstName.trim(),
+      if (lastName != null) 'last_name': lastName.trim(),
+      if (email != null) 'email': email.trim(),
+    };
+    if (patch.isEmpty) return;
+    final epoch = SessionScope.generation;
     try {
       final dio = await ApiClient.getInstance();
-      await dio.patch('/users/me/', data: current);
-    } catch (_) {}
+      await dio.patch('/users/me/', data: patch);
+      final response = await dio.get('/users/me/');
+      if (epoch != SessionScope.generation) {
+        throw StateError('Session changed before profile confirmation.');
+      }
+      final confirmed = Map<String, dynamic>.from(response.data as Map);
+      if (confirmed['clerk_id'] != instance.userId ||
+          patch.entries.any((entry) => confirmed[entry.key] != entry.value)) {
+        throw StateError('The backend did not confirm the profile update.');
+      }
+      await saveUserSession(confirmed);
+    } on DioException catch (error) {
+      throw handleDioException(error);
+    }
   }
 
   static String getUserRole([dynamic user]) {
@@ -485,10 +500,36 @@ class AuthService {
   static String? get clerkLastName => instance.lastName;
 
   static Future<void> signOut([BuildContext? context]) async {
+    if (_signingOut) throw StateError('Sign-out is already running.');
+    _signingOut = true;
+    final wasAuthOperation = _authOperation;
+    _authOperation = true;
+    try {
+      await instance.signOut();
+      if (instance.isSignedIn) {
+        throw StateError('Clerk still reports an active session.');
+      }
+    } catch (_) {
+      // Some providers can end the session and then fail while notifying the
+      // caller. Reflect the SDK's actual session state in that case.
+      if (!instance.isSignedIn) {
+        _invalidate();
+        expectedLoginRole = null;
+        _emit(false);
+        await _clearStoredUserSession();
+      }
+      rethrow;
+    } finally {
+      _authOperation = wasAuthOperation;
+      _signingOut = false;
+    }
     _invalidate();
     expectedLoginRole = null;
     _emit(false);
-    await instance.signOut();
+    await _clearStoredUserSession();
+  }
+
+  static Future<void> _clearStoredUserSession() async {
     _preferenceWrites = _preferenceWrites.then((_) async {
       final prefs = await SharedPreferences.getInstance();
       for (final key in [

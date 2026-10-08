@@ -19,24 +19,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _commWeight = 30.0;
   double _fitWeight = 25.0;
 
-  // Initial saved state to check if changes occurred
-  late double _savedTech;
-  late double _savedComm;
-  late double _savedFit;
-
   // Band thresholds: No (<40), Maybe (40-54), Yes (55-69), Strong Yes (70-84), Exceptional (85+)
   double _thresholdNo = 40.0;
   double _thresholdMaybe = 55.0;
   double _thresholdYes = 70.0;
   double _thresholdStrong = 85.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _savedTech = _techWeight;
-    _savedComm = _commWeight;
-    _savedFit = _fitWeight;
-  }
 
   @override
   void dispose() {
@@ -104,23 +91,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  bool get _hasChanges {
-    return (_techWeight - _savedTech).abs() > 0.01 ||
-        (_commWeight - _savedComm).abs() > 0.01 ||
-        (_fitWeight - _savedFit).abs() > 0.01;
-  }
-
-  void _saveWeights() {
-    setState(() {
-      _savedTech = _techWeight;
-      _savedComm = _commWeight;
-      _savedFit = _fitWeight;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Scoring model weights saved successfully')),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -144,7 +114,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           // ── GRID PATTERN OVERLAY (Web Only) ─────────────────────────────────
-          if (!isMobile) Positioned.fill(child: CustomPaint(painter: GridPainter())),
+          if (!isMobile)
+            Positioned.fill(child: CustomPaint(painter: GridPainter())),
 
           // ── MAIN WORKSPACE CONTENT ──────────────────────────────────────────
           SafeArea(
@@ -152,7 +123,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Row(
               children: [
                 // 1. LEFT RAIL (Web Only)
-                if (!isMobile) _buildLeftRail(context),
 
                 // 2. MAIN WORKSPACE
                 Expanded(
@@ -171,7 +141,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             horizontal: isMobile ? 16 : 24,
                             vertical: isMobile ? 12 : 8,
                           ),
-                          child: isMobile ? _buildMobileLayout() : _buildWebLayout(),
+                          child: isMobile
+                              ? _buildMobileLayout()
+                              : _buildWebLayout(),
                         ),
                       ),
                     ],
@@ -198,29 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildHeaderArea(),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left main config form
-            Expanded(
-              flex: 3,
-              child: _buildConfigurationForm(isMobile: false),
-            ),
-            const SizedBox(width: 20),
-
-            // Right auditability model card & features panel
-            Expanded(
-              flex: 2,
-              child: Column(
-                children: [
-                  _buildGlobalFeatureImportanceCard(),
-                  const SizedBox(height: 20),
-                  _buildModelCardPanel(isMobile: false),
-                ],
-              ),
-            ),
-          ],
-        ),
+        _buildConfigurationForm(isMobile: false),
         const SizedBox(height: 60),
       ],
     );
@@ -232,9 +182,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         _buildConfigurationForm(isMobile: true),
         const SizedBox(height: 16),
-        _buildGlobalFeatureImportanceCard(),
-        const SizedBox(height: 16),
-        _buildModelCardPanel(isMobile: true),
         const SizedBox(height: 110), // Safe space above bottom dock
       ],
     );
@@ -270,7 +217,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              _buildVersionBadge('XGBOOST V2.3'),
+              _buildVersionBadge('LOCAL PREVIEW'),
             ],
           ),
           const SizedBox(height: 24),
@@ -316,11 +263,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF64748B)),
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 16,
+                  color: Color(0xFF64748B),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Changes apply to new evaluations only — past reports are never recalculated.',
+                    'Preview only. These controls do not save or change the active scoring rubric.',
                     style: GoogleFonts.inter(
                       color: const Color(0xFF64748B),
                       fontSize: 11.5,
@@ -347,7 +298,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Adjust sliders to recalibrate the colored recommendation bands below.',
+            'Explore a local preview of recommendation bands. Recruiter changes are not saved.',
             style: GoogleFonts.inter(
               color: const Color(0xFF64748B),
               fontSize: 12,
@@ -369,7 +320,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: _thresholdMaybe,
             onChanged: (val) {
               setState(() {
-                _thresholdMaybe = val.clamp(_thresholdNo + 1.0, _thresholdYes - 1.0);
+                _thresholdMaybe = val.clamp(
+                  _thresholdNo + 1.0,
+                  _thresholdYes - 1.0,
+                );
               });
             },
           ),
@@ -378,7 +332,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: _thresholdYes,
             onChanged: (val) {
               setState(() {
-                _thresholdYes = val.clamp(_thresholdMaybe + 1.0, _thresholdStrong - 1.0);
+                _thresholdYes = val.clamp(
+                  _thresholdMaybe + 1.0,
+                  _thresholdStrong - 1.0,
+                );
               });
             },
           ),
@@ -415,8 +372,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 onPressed: () {
                   setState(() {
@@ -438,24 +400,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-
-              // Save Weights Button (Primary Action)
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.dashboardBlue,
-                  disabledBackgroundColor: const Color(0xFFE2E8F0),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: _hasChanges ? _saveWeights : null,
-                child: Text(
-                  'Save weights',
-                  style: GoogleFonts.inter(
-                    color: _hasChanges ? Colors.white : const Color(0xFF94A3B8),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
             ],
           ),
         ],
@@ -502,7 +446,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             overlayColor: color.withValues(alpha: 0.12),
             trackHeight: 6,
             thumbShape: RoundSliderThumbShape(
-              enabledThumbRadius: isMobile ? 12 : 8, // touch friendly handle target 24px diameter on mobile
+              enabledThumbRadius: isMobile
+                  ? 12
+                  : 8, // touch friendly handle target 24px diameter on mobile
               elevation: 4,
             ),
           ),
@@ -578,20 +524,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final double shareExceptional = 100.0 - _thresholdStrong;
 
     final List<Map<String, dynamic>> segments = [
-      {'label': 'NO <${_thresholdNo.toInt()}', 'share': shareNo, 'color': AppColors.dashboardRed},
-      {'label': 'MAYBE', 'share': shareMaybe, 'color': AppColors.dashboardAmber},
+      {
+        'label': 'NO <${_thresholdNo.toInt()}',
+        'share': shareNo,
+        'color': AppColors.dashboardRed,
+      },
+      {
+        'label': 'MAYBE',
+        'share': shareMaybe,
+        'color': AppColors.dashboardAmber,
+      },
       {'label': 'YES', 'share': shareYes, 'color': AppColors.dashboardBlue},
-      {'label': 'STRONG YES', 'share': shareStrong, 'color': AppColors.dashboardTeal},
-      {'label': 'EXCEPTIONAL', 'share': shareExceptional, 'color': const Color(0xFF22C55E)},
+      {
+        'label': 'STRONG YES',
+        'share': shareStrong,
+        'color': AppColors.dashboardTeal,
+      },
+      {
+        'label': 'EXCEPTIONAL',
+        'share': shareExceptional,
+        'color': const Color(0xFF22C55E),
+      },
     ];
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: Container(
         height: isMobile ? 32 : 38,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: Row(
           children: segments.map((seg) {
             final double share = seg['share'];
@@ -617,164 +577,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             );
           }).toList(),
         ),
-      ),
-    );
-  }
-
-  // ── SHAP GLOBAL FEATURE IMPORTANCE PANEL ───────────────────────────────────
-  Widget _buildGlobalFeatureImportanceCard() {
-    final List<Map<String, dynamic>> features = [
-      {'name': 'SKILLS OVERLAP', 'val': 0.31, 'color': Colors.blue},
-      {'name': 'ANSWER DEPTH', 'val': 0.24, 'color': Colors.blue},
-      {'name': 'GAZE STABILITY', 'val': 0.14, 'color': AppColors.dashboardTeal},
-      {'name': 'SPEECH PACE', 'val': 0.11, 'color': AppColors.dashboardAmber},
-      {'name': 'FILLER RATE', 'val': 0.08, 'color': AppColors.dashboardAmber},
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Global feature importance',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              _buildVersionBadge('SHAP'),
-            ],
-          ),
-          const SizedBox(height: 18),
-
-          Column(
-            children: features.map((feat) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 100,
-                      child: Text(
-                        feat['name'],
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: feat['val'],
-                          minHeight: 5,
-                          backgroundColor: const Color(0xFFF1F5F9),
-                          valueColor: AlwaysStoppedAnimation<Color>(feat['color']),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Text(
-                      '.${(feat['val'] * 100).toInt()}',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: const Color(0xFF475569),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── AUDITABILITY MODEL CARD PANEL ──────────────────────────────────────────
-  Widget _buildModelCardPanel({required bool isMobile}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Model audit trail',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          if (!isMobile)
-            // Web dense inline audit table
-            Column(
-              children: [
-                _buildAuditRow('Model release version', 'XGBoost v2.3.1-pro', isMobile: false),
-                _buildAuditRow('Training database size', '1,840 scored interviews', isMobile: false),
-                _buildAuditRow('Area Under Curve (AUC)', '0.87 (highly calibrated)', isMobile: false),
-                _buildAuditRow('Concept drift status', 'Stable (none detected)', isMobile: false),
-              ],
-            )
-          else
-            // Mobile stacked clean list rows
-            Column(
-              children: [
-                _buildAuditRow('Model version', 'v2.3.1-pro', isMobile: true),
-                _buildAuditRow('Training size', '1,840 interviews', isMobile: true),
-                _buildAuditRow('AUC accuracy', '0.87', isMobile: true),
-                _buildAuditRow('Concept drift', 'none', isMobile: true),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAuditRow(String label, String value, {required bool isMobile}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(
-            value,
-            style: GoogleFonts.jetBrainsMono(
-              color: const Color(0xFF0F172A),
-              fontSize: 12.5,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -806,7 +608,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            'Scoring Model Settings',
+            'Scoring preview',
             style: GoogleFonts.spaceGrotesk(
               color: const Color(0xFF0F172A),
               fontSize: 24,
@@ -820,7 +622,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               foregroundColor: AppColors.dashboardBlue,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () {
               Navigator.of(context).pushReplacementNamed('/org');
@@ -872,11 +676,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             itemBuilder: (context) => [
               PopupMenuItem(
                 value: '/settings',
-                child: Text('Scoring Model Settings', style: GoogleFonts.inter(fontSize: 13)),
+                child: Text(
+                  'Scoring preview',
+                  style: GoogleFonts.inter(fontSize: 13),
+                ),
               ),
               PopupMenuItem(
                 value: '/org',
-                child: Text('Organization & Team', style: GoogleFonts.inter(fontSize: 13)),
+                child: Text(
+                  'Organization & Team',
+                  style: GoogleFonts.inter(fontSize: 13),
+                ),
               ),
             ],
           ),
@@ -886,14 +696,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ── WEB LEFT RAIL NAVIGATION ───────────────────────────────────────────────
+  // Legacy rail is kept for reference while the shared recruiter rail owns navigation.
+  // ignore: unused_element
   Widget _buildLeftRail(BuildContext context) {
     final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'route': '/dashboard'},
+      {
+        'icon': Icons.dashboard_rounded,
+        'label': 'Dashboard',
+        'route': '/dashboard',
+      },
       {'icon': Icons.menu_book_rounded, 'label': 'Jobs', 'route': '/pipeline'},
-      {'icon': Icons.calendar_month_rounded, 'label': 'Interviews', 'route': '/schedule'},
-      {'icon': Icons.emoji_events_outlined, 'label': 'Rankings', 'route': '/rankings'},
-      {'icon': Icons.analytics_outlined, 'label': 'Analytics', 'route': '/analytics'},
-      {'icon': Icons.settings_outlined, 'label': 'Settings', 'route': '/settings'},
+      {
+        'icon': Icons.calendar_month_rounded,
+        'label': 'Interviews',
+        'route': '/schedule',
+      },
+      {
+        'icon': Icons.emoji_events_outlined,
+        'label': 'Rankings',
+        'route': '/rankings',
+      },
+      {
+        'icon': Icons.analytics_outlined,
+        'label': 'Analytics',
+        'route': '/analytics',
+      },
+      {
+        'icon': Icons.settings_outlined,
+        'label': 'Settings',
+        'route': '/settings',
+      },
     ];
 
     return Container(
@@ -924,7 +756,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               itemBuilder: (context, index) {
                 final isSelected = index == 5; // Settings is active
                 final item = navItems[index];
-                final bool hasBadge = index == 1; // Jobs has unread item badge "18"
+                final bool hasBadge =
+                    index == 1; // Jobs has unread item badge "18"
 
                 return Center(
                   child: Stack(
@@ -941,7 +774,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             color: AppColors.dashboardBlue,
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.dashboardBlue.withValues(alpha: 0.4),
+                                color: AppColors.dashboardBlue.withValues(
+                                  alpha: 0.4,
+                                ),
                                 blurRadius: 12,
                                 spreadRadius: 2,
                               ),
@@ -969,7 +804,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: GestureDetector(
                             onTap: () {
                               if (!isSelected) {
-                                Navigator.of(context).pushReplacementNamed(item['route']);
+                                Navigator.of(
+                                  context,
+                                ).pushReplacementNamed(item['route']);
                               }
                             },
                             child: Container(
@@ -982,7 +819,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               child: Center(
                                 child: Icon(
                                   item['icon'],
-                                  color: isSelected ? Colors.white : const Color(0xFF64748B),
+                                  color: isSelected
+                                      ? Colors.white
+                                      : const Color(0xFF64748B),
                                   size: 19,
                                 ),
                               ),
@@ -997,11 +836,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           top: -4,
                           right: -4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.dashboardBlue,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white, width: 1.5),
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
                             ),
                             child: const Text(
                               '18',
@@ -1112,7 +957,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 child: TextField(
                   controller: _searchController,
-                  style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 13),
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF0F172A),
+                    fontSize: 13,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Search or jump to...',
                     hintStyle: GoogleFonts.inter(
@@ -1127,7 +975,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     suffixIcon: Container(
                       width: 32,
                       alignment: Alignment.center,
-                      margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
+                      margin: const EdgeInsets.only(
+                        right: 6,
+                        top: 4,
+                        bottom: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(4),
@@ -1226,7 +1078,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           _buildMobileDockItem(Icons.dashboard_rounded, '/dashboard', false),
           _buildMobileDockItem(Icons.menu_book_rounded, '/pipeline', false),
-          _buildMobileDockItem(Icons.calendar_month_rounded, '/schedule', false),
+          _buildMobileDockItem(
+            Icons.calendar_month_rounded,
+            '/schedule',
+            false,
+          ),
           _buildMobileDockItem(Icons.emoji_events_outlined, '/rankings', false),
           _buildMobileDockItem(Icons.analytics_outlined, '/analytics', false),
         ],
@@ -1246,11 +1102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           shape: BoxShape.circle,
           color: Colors.transparent,
         ),
-        child: Icon(
-          icon,
-          color: const Color(0xFF94A3B8),
-          size: 22,
-        ),
+        child: Icon(icon, color: const Color(0xFF94A3B8), size: 22),
       ),
     );
   }

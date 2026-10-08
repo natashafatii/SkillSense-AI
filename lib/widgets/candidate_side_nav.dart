@@ -214,6 +214,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
   void _handleNavigation(String targetRoute, int parentIndex) {
     _removeTooltipOverlay();
+    FocusManager.instance.primaryFocus?.unfocus();
     // Clear badge when actioned
     if (parentIndex == 1) {
       jobsBadgeCount = 0;
@@ -283,15 +284,13 @@ class _CandidateSideNavState extends State<CandidateSideNav>
       ],
     },
     {
-      'id': 'profile_settings',
-      'label': 'PROFILE & SETTINGS',
-      'icon': Icons.contrast_rounded,
-      'primaryRoute': '/candidate/profile',
-      'childRoutes': ['/candidate/profile', '/candidate/resumes'],
-      'isChildScreen': (String route) => route == '/candidate/resumes',
+      'id': 'resumes',
+      'label': 'RESUMES',
+      'icon': Icons.description_outlined,
+      'primaryRoute': '/candidate/resumes',
+      'childRoutes': ['/candidate/resumes'],
+      'isChildScreen': (String route) => false,
       'subItems': [
-        {'label': 'Profile & settings', 'route': '/candidate/profile'},
-        {'label': 'Resumes', 'route': '/candidate/resumes'},
         {'label': 'Resume upload', 'route': '/candidate/resumes'},
       ],
     },
@@ -357,21 +356,8 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                   physics: const BouncingScrollPhysics(),
                   children: [
                     // Work Destinations (Index 0 to 3)
-                    for (int i = 0; i < 4; i++)
+                    for (int i = 0; i < 5; i++)
                       _buildDestinationTile(i, tealAccent),
-
-                    // Spacer separating work destinations from Profile & Settings
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(
-                        color: const Color(0xFFE2E8F0).withValues(alpha: 0.8),
-                        height: 1,
-                        thickness: 1,
-                      ),
-                    ),
-
-                    // Destination 4: Profile & Settings (sits below spacer)
-                    _buildDestinationTile(4, tealAccent),
                   ],
                 ),
               ),
@@ -764,7 +750,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                     _accordionExpanded[i] = (i == index) ? willOpen : false;
                   }
                 });
-                _handleNavigation(primaryRoute, index);
+                if (dest['id'] != 'explore_jobs') {
+                  _handleNavigation(primaryRoute, index);
+                }
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),

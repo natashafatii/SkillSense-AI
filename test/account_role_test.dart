@@ -25,6 +25,7 @@ class FakeSdk extends AuthServiceInterface {
   Completer<void>? validated;
   Completer<void>? activationGate;
   Completer<void>? signOutGate;
+  bool failSignOut = false;
   final events = StreamController<bool>.broadcast();
   @override
   late Future<void> Function(String) sessionValidator;
@@ -72,9 +73,10 @@ class FakeSdk extends AuthServiceInterface {
   }) => login('', '');
   @override
   Future<void> signOut() async {
+    if (signOutGate != null) await signOutGate!.future;
+    if (failSignOut) throw StateError('Clerk sign-out failed.');
     signedIn = false;
     events.add(false);
-    if (signOutGate != null) await signOutGate!.future;
   }
 
   @override
@@ -367,6 +369,90 @@ void main() {
     hold.complete();
     expect(await request, isNull);
     expect(ProfileService.currentProfileNotifier.value, isNull);
+  });
+
+  test(
+    'failed profile PATCH leaves the published identity unchanged',
+    () async {
+      await AuthService.login(
+        context,
+        'test@example.com',
+        'password',
+        expectedRole: 'CANDIDATE',
+      );
+      final before = Map<String, dynamic>.from(AuthService.currentUserData!);
+      final prefs = await SharedPreferences.getInstance();
+      final dio = await ApiClient.getInstance();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (request, handler) {
+            handler.reject(
+              DioException(
+                requestOptions: request,
+                response: Response(
+                  requestOptions: request,
+                  statusCode: 500,
+                  data: {'detail': 'Save failed.'},
+                ),
+                type: DioExceptionType.badResponse,
+              ),
+            );
+          },
+        ),
+      );
+      await expectLater(
+        AuthService.updateUserProfile(firstName: 'Unsaved'),
+        throwsException,
+      );
+      expect(AuthService.currentUserData, before);
+      expect(prefs.getString('user_first_name'), 'Test');
+    },
+  );
+
+  test('profile is published only after matching backend readback', () async {
+    await AuthService.login(
+      context,
+      'test@example.com',
+      'password',
+      expectedRole: 'CANDIDATE',
+    );
+    final dio = await ApiClient.getInstance();
+    var confirmedName = 'Different';
+    final requests = <String>[];
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (request, handler) {
+          requests.add('${request.method} ${request.path}');
+          handler.resolve(
+            Response(
+              requestOptions: request,
+              statusCode: 200,
+              data: request.method == 'PATCH'
+                  ? identity('CANDIDATE')
+                  : {...identity('CANDIDATE'), 'first_name': confirmedName},
+            ),
+          );
+        },
+      ),
+    );
+    await expectLater(
+      AuthService.updateUserProfile(firstName: 'Saved'),
+      throwsA(isA<StateError>()),
+    );
+    expect(AuthService.currentUserData!['first_name'], 'Test');
+    confirmedName = 'Saved';
+    await AuthService.updateUserProfile(firstName: 'Saved');
+    expect(AuthService.currentUserData!['first_name'], 'Saved');
+    expect(
+      (await SharedPreferences.getInstance()).getString('user_first_name'),
+      'Saved',
+    );
+    expect(requests, [
+      'PATCH /users/me/',
+      'GET /users/me/',
+      'PATCH /users/me/',
+      'GET /users/me/',
+    ]);
   });
 
   test(

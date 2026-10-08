@@ -1,11 +1,15 @@
 import 'dart:ui';
+import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
+import '../../models/job.dart';
+import '../../models/paginated_response.dart';
+import '../../services/job_service.dart';
 import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
-import 'candidate_job_detail_screen.dart';
 import 'candidate_interview_lobby_screen.dart';
 import 'candidate_feedback_report_screen.dart';
 import 'candidate_resume_management_screen.dart';
@@ -13,9 +17,12 @@ import 'candidate_interview_history_screen.dart';
 import 'candidate_profile_settings_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
 import 'candidate_notifications_screen.dart';
+import 'widgets/candidate_job_card.dart';
 
 class CandidateJobFeedScreen extends StatefulWidget {
-  const CandidateJobFeedScreen({super.key});
+  final Future<PaginatedResponse<Job>> Function(int page)? loadJobs;
+
+  const CandidateJobFeedScreen({super.key, this.loadJobs});
 
   @override
   State<CandidateJobFeedScreen> createState() => _CandidateJobFeedScreenState();
@@ -23,116 +30,110 @@ class CandidateJobFeedScreen extends StatefulWidget {
 
 class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
   final int _activeNavIndex = 2; // Jobs is index 2
-  String _selectedFilter = 'Best match';
+  String _selectedFilter = 'All jobs';
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  Timer? _searchDebounce;
+  CancelToken? _jobsCancelToken;
+  JobType? _jobType;
+  ExperienceLevel? _experienceLevel;
 
-  // Mock Job Data with backend Job UUIDs
-  final List<Map<String, dynamic>> _jobs = [
-    {
-      'id': '108bfa34-2efa-4211-9736-52fa37fa7875',
-      'title': 'ML Engineer',
-      'company': 'NeuralTech',
-      'location': 'Remote',
-      'salary': 'PKR 250–350k',
-      'score': 92,
-      'posted': '1d ago',
-      'postedDays': 1,
-      'isRemote': true,
-      'isLahore': false,
-      'skills': ['PyTorch', 'MLOps', 'Python', '+3'],
-    },
-    {
-      'id': 'a7fef706-585c-486d-ae7f-f3446a59457b',
-      'title': 'Django Developer',
-      'company': 'CloudNine',
-      'location': 'Lahore',
-      'salary': 'PKR 180–260k',
-      'score': 85,
-      'posted': '2d ago',
-      'postedDays': 2,
-      'isRemote': false,
-      'isLahore': true,
-      'skills': ['Django', 'DRF', 'PostgreSQL'],
-    },
-    {
-      'id': '4d6baf7e-07e4-4614-93f9-daef1916ca43',
-      'title': 'Backend Engineer',
-      'company': 'DataFlow',
-      'location': 'Hybrid',
-      'salary': 'PKR 200–280k',
-      'score': 78,
-      'posted': '3d ago',
-      'postedDays': 3,
-      'isRemote': false,
-      'isLahore': false,
-      'skills': ['Python', 'Redis', 'Celery'],
-    },
-    {
-      'id': '4d6baf7e-07e4-4614-93f9-daef1916ca43',
-      'title': 'DevOps Engineer',
-      'company': 'StackUp',
-      'location': 'Remote',
-      'salary': 'PKR 220–300k',
-      'score': 71,
-      'posted': '5d ago',
-      'postedDays': 5,
-      'isRemote': true,
-      'isLahore': false,
-      'skills': ['AWS', 'Docker', 'CI/CD'],
-    },
-    {
-      'id': 'a7fef706-585c-486d-ae7f-f3446a59457b',
-      'title': 'Full Stack Dev',
-      'company': 'CodeCraft',
-      'location': 'Lahore',
-      'salary': 'PKR 150–220k',
-      'score': 64,
-      'posted': '7d ago',
-      'postedDays': 7,
-      'isRemote': false,
-      'isLahore': true,
-      'skills': ['React', 'Node', 'SQL'],
-    },
-    {
-      'id': '108bfa34-2efa-4211-9736-52fa37fa7875',
-      'title': 'Data Analyst',
-      'company': 'InsightIQ',
-      'location': 'On-site',
-      'salary': 'PKR 120–180k',
-      'score': 58,
-      'posted': '10d ago',
-      'postedDays': 10,
-      'isRemote': false,
-      'isLahore': false,
-      'skills': ['SQL', 'PowerBI', 'Excel'],
-    },
-  ];
+  List<Job> _jobs = [];
+  bool _loading = true;
+  String? _error;
+  int _page = 1;
+  int _requestGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadJobs();
+  }
+
+  Future<void> _loadJobs({int page = 1}) async {
+    final generation = ++_requestGeneration;
+    _jobsCancelToken?.cancel('A newer job search started.');
+    final cancelToken = CancelToken();
+    _jobsCancelToken = cancelToken;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final response =
+          await (widget.loadJobs?.call(page) ??
+              JobService.listJobs(
+                status: JobStatus.active,
+                titleContains: _searchController.text,
+                jobType: _selectedFilter == 'Remote'
+                    ? JobType.remote
+                    : _jobType,
+                experienceLevel: _experienceLevel,
+                locationContains: _selectedFilter == 'Lahore'
+                    ? 'Lahore'
+                    : _locationController.text,
+                page: page,
+                cancelToken: cancelToken,
+              ));
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() {
+        _jobs = response.results
+            .where((job) => job.isActive && job.id.isNotEmpty)
+            .toList();
+        _page = page;
+      });
+    } catch (e) {
+      if (mounted && generation == _requestGeneration) {
+        setState(() {
+          _jobs = [];
+          _error = e.toString();
+        });
+      }
+    } finally {
+      if (mounted && generation == _requestGeneration) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _jobsCancelToken?.cancel();
     _searchController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
-  // Get matching filtered & sorted jobs
-  List<Map<String, dynamic>> _getProcessedJobs() {
-    List<Map<String, dynamic>> list = List.from(_jobs);
+  void _queueSearch() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _loadJobs(),
+    );
+  }
 
-    // Apply Filter
-    if (_selectedFilter == 'Remote') {
-      list = list.where((j) => j['isRemote'] == true).toList();
-    } else if (_selectedFilter == 'Lahore') {
-      list = list.where((j) => j['isLahore'] == true).toList();
+  void _selectFilter(String chip) {
+    _searchDebounce?.cancel();
+    setState(() {
+      _selectedFilter = chip;
+      if (chip == 'Remote') _jobType = JobType.remote;
+      if (chip == 'Lahore') _locationController.text = 'Lahore';
+      if (chip == 'All jobs') {
+        _jobType = null;
+        _experienceLevel = null;
+        _locationController.clear();
+      }
+    });
+    _loadJobs();
+  }
+
+  List<Job> _getProcessedJobs() {
+    final jobs = List<Job>.from(_jobs);
+    if (_selectedFilter == 'Newest') {
+      jobs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     }
-
-    // Apply Sorting
-    if (_selectedFilter == 'Best match') {
-      list.sort((a, b) => b['score'].compareTo(a['score']));
-    } else if (_selectedFilter == 'Newest') {
-      list.sort((a, b) => a['postedDays'].compareTo(b['postedDays']));
-    }
-
-    return list;
+    return jobs;
   }
 
   @override
@@ -209,12 +210,10 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                               child: SingleChildScrollView(
                                 physics: const BouncingScrollPhysics(),
                                 padding: EdgeInsets.only(
-                                  left: isMobile ? 16 : 24,
-                                  right: isMobile ? 16 : 24,
+                                  left: 22,
+                                  right: 22,
                                   top: 16,
-                                  bottom: isMobile
-                                      ? 100
-                                      : 32, // bottom margin for mobile dock
+                                  bottom: isMobile ? 100 : 32,
                                 ),
                                 child: _buildContentCanvas(
                                   isMobile,
@@ -252,7 +251,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
   // ── CONTENT CANVAS ─────────────────────────────────────────────────────────
   Widget _buildContentCanvas(
     bool isMobile,
-    List<Map<String, dynamic>> processedJobs,
+    List<Job> processedJobs,
     Color textPrimary,
     Color textSecondary,
     Color cardBg,
@@ -263,32 +262,72 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       children: [
         // Title / Summary row
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Job feed',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: isMobile ? 22 : 28,
-                    fontWeight: FontWeight.bold,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Job feed',
+                        style: GoogleFonts.spaceGrotesk(
+                          color: textPrimary,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.025,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.auto_awesome,
+                              size: 10,
+                              color: AppColors.dashboardTeal,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'SBERT',
+                              style: GoogleFonts.inter(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                Text(
-                  'Ranked by semantic match to your profile · updated 5 min ago',
-                  style: GoogleFonts.inter(
-                    color: textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                  Text(
+                    'Ranked by semantic match to your profile · updated 5 min ago',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: textSecondary,
+                      fontSize: 10.5,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
 
             // Filter Chips (Web Only)
-            if (!isMobile) _buildFilterChipsWeb(cardBorder),
+            if (!isMobile) ...[
+              const SizedBox(width: 12),
+              Expanded(child: _buildFilterChipsWeb(cardBorder)),
+            ],
           ],
         ),
         const SizedBox(height: 16),
@@ -299,48 +338,57 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
           const SizedBox(height: 16),
         ],
 
-        // Jobs Grid/List
-        if (isMobile)
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: processedJobs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 16),
-            itemBuilder: (context, idx) {
-              final job = processedJobs[idx];
-              return _buildJobCard(
-                isMobile,
-                job,
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-              );
-            },
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 2.8,
-            ),
-            itemCount: processedJobs.length,
-            itemBuilder: (context, idx) {
-              final job = processedJobs[idx];
-              return _buildJobCard(
-                isMobile,
-                job,
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-              );
-            },
+        if (_loading) const Center(child: CircularProgressIndicator()),
+        if (_error != null)
+          Column(
+            children: [
+              Text('Could not load jobs: ${_error!}'),
+              TextButton(
+                onPressed: () => _loadJobs(page: _page),
+                child: const Text('Retry'),
+              ),
+            ],
           ),
+        if (!_loading && _error == null && processedJobs.isEmpty)
+          const Text('No active jobs found.'),
+        if (!_loading && _error == null)
+          if (isMobile)
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: processedJobs.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 14),
+              itemBuilder: (context, idx) {
+                final job = processedJobs[idx];
+                return CandidateJobCard(
+                  job: job,
+                  isMobile: isMobile,
+                  isHot: idx == 0,
+                  onApply: () => _openJobDetail(job.title, job.id),
+                );
+              },
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 14,
+                crossAxisSpacing: 14,
+                mainAxisExtent: 104,
+              ),
+              itemCount: processedJobs.length,
+              itemBuilder: (context, idx) {
+                final job = processedJobs[idx];
+                return CandidateJobCard(
+                  job: job,
+                  isMobile: isMobile,
+                  isHot: idx == 0,
+                  onApply: () => _openJobDetail(job.title, job.id),
+                );
+              },
+            ),
       ],
     );
   }
@@ -349,53 +397,25 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
   Widget _buildFilterChipsWeb(Color cardBorder) {
     final chips = ['Best match', 'Newest', 'Remote', 'Lahore'];
 
-    return Row(
-      children: chips.map((chip) {
-        final isSelected = _selectedFilter == chip;
-        return Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedFilter = chip;
-              });
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? Colors.white : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isSelected ? AppColors.dashboardTeal : cardBorder,
-                  width: 1.5,
-                ),
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: AppColors.dashboardTeal.withValues(
-                            alpha: 0.15,
-                          ),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ]
-                    : [],
-              ),
-              child: Text(
-                chip,
-                style: GoogleFonts.inter(
-                  color: isSelected
-                      ? const Color(0xFF0F172A)
-                      : const Color(0xFF64748B),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12.5,
-                ),
-              ),
+    return SingleChildScrollView(
+      key: const Key('job-feed-filter-scroll'),
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: chips.map((chip) {
+          final isSelected =
+              _selectedFilter == chip ||
+              (_selectedFilter == 'All jobs' && chip == 'Best match');
+          return Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: _HoverableFilterChip(
+              chip: chip,
+              isSelected: isSelected,
+              onTap: () => _selectFilter(chip),
             ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -404,42 +424,20 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     final chips = ['Best match', 'Newest', 'Remote', 'Lahore'];
 
     return SingleChildScrollView(
+      key: const Key('job-feed-filter-scroll'),
       scrollDirection: Axis.horizontal,
       child: Row(
         children: chips.map((chip) {
-          final isSelected = _selectedFilter == chip;
+          final isSelected =
+              _selectedFilter == chip ||
+              (_selectedFilter == 'All jobs' && chip == 'Best match');
 
           return Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(
-                chip,
-                style: GoogleFonts.inter(
-                  color: isSelected
-                      ? const Color(0xFF0F172A)
-                      : const Color(0xFF64748B),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12.5,
-                ),
-              ),
-              selected: isSelected,
-              onSelected: (val) {
-                if (val) {
-                  setState(() {
-                    _selectedFilter = chip;
-                  });
-                }
-              },
-              selectedColor: AppColors.dashboardTeal.withValues(alpha: 0.15),
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: isSelected ? AppColors.dashboardTeal : cardBorder,
-                  width: 1.5,
-                ),
-              ),
-              showCheckmark: false,
+            child: _HoverableFilterChip(
+              chip: chip,
+              isSelected: isSelected,
+              onTap: () => _selectFilter(chip),
             ),
           );
         }).toList(),
@@ -447,498 +445,11 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     );
   }
 
-  // ── JOB CARD ───────────────────────────────────────────────────────────────
-  Widget _buildJobCard(
-    bool isMobile,
-    Map<String, dynamic> job,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    final String? jobId = job['id'] as String?;
-    final String title = job['title'];
-    final String company = job['company'];
-    final String location = job['location'];
-    final String salary = job['salary'];
-    final int score = job['score'];
-    final List<String> skills = List<String>.from(job['skills']);
-    final bool isTopMatch = score == 92; // ML Engineer top match
-
-    // Score band colors
-    Color ringColor = const Color(0xFFEF4444); // <55 Red
-    if (score >= 85) {
-      ringColor = const Color(0xFF10B981); // Emerald
-    } else if (score >= 70) {
-      ringColor = AppColors.dashboardTeal; // Teal
-    } else if (score >= 55) {
-      ringColor = const Color(0xFFF59E0B); // Gold
-    }
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () => _openJobDetail(title, jobId),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isTopMatch ? AppColors.dashboardTeal : cardBorder,
-              width: isTopMatch ? 2.0 : 1.5,
-            ),
-            boxShadow: [
-              if (isTopMatch)
-                BoxShadow(
-                  color: AppColors.dashboardTeal.withValues(alpha: 0.08),
-                  blurRadius: 16,
-                  spreadRadius: 2,
-                )
-              else
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Match Ring
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 52,
-                        height: 52,
-                        child: CircularProgressIndicator(
-                          value: score / 100,
-                          strokeWidth: 4,
-                          backgroundColor: const Color(0xFFE2E8F0),
-                          valueColor: AlwaysStoppedAnimation<Color>(ringColor),
-                        ),
-                      ),
-                      Text(
-                        '$score',
-                        style: GoogleFonts.spaceGrotesk(
-                          color: textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Job details to the right
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: GoogleFonts.spaceGrotesk(
-                            color: textPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          company,
-                          style: GoogleFonts.inter(
-                            color: textSecondary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$location · $salary',
-                          style: GoogleFonts.inter(
-                            color: textSecondary,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Apply Button (Web Only)
-                  if (!isMobile) _buildApplyButton(title, jobId),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Skill Chips row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: skills.map((skill) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            skill,
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF475569),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-
-                  // Apply Button (Mobile Only)
-                  if (isMobile) _buildApplyButton(title, jobId),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildApplyButton(String title, [String? jobId]) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.dashboardTeal,
-        foregroundColor: const Color(0xFF0F172A),
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      ),
-      onPressed: () => _openJobDetail(title, jobId),
-      child: Text(
-        'Apply',
-        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12),
-      ),
-    );
-  }
-
-  void _openJobDetail(String title, [String? jobId]) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => CandidateJobDetailScreen(jobTitle: title, jobId: jobId),
-      ),
-    );
+  void _openJobDetail(String title, String jobId) {
+    Navigator.of(context).pushReplacementNamed('/candidate/jobs/$jobId');
   }
 
   // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
-  Widget _buildLeftRail(BuildContext context) {
-    final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.home_rounded, 'label': 'Home', 'route': '/candidate/home'},
-      {
-        'icon': Icons.track_changes_rounded,
-        'label': 'Applications',
-        'route': '/candidate/applications',
-      },
-      {
-        'icon': Icons.grid_view_rounded,
-        'label': 'Jobs',
-        'route': '/candidate/jobs',
-      },
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'label': 'Interviews',
-        'route': '/candidate/interviews',
-      },
-      {
-        'icon': Icons.description_rounded,
-        'label': 'Resumes',
-        'route': '/candidate/resumes',
-      },
-      {
-        'icon': Icons.adjust_rounded,
-        'label': 'Settings',
-        'route': '/candidate/settings',
-      },
-    ];
-
-    return Container(
-      width: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              },
-              child: SvgPicture.asset('assets/images/logo.svg', height: 48),
-            ),
-          ),
-          const SizedBox(height: 40),
-
-          // Nav Items
-          Expanded(
-            child: ListView.separated(
-              itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
-              itemBuilder: (context, index) {
-                final isSelected = index == _activeNavIndex;
-                final item = navItems[index];
-                final bool hasBadge = index == 2 || index == 3;
-                final String badgeVal = index == 2 ? "3" : "1";
-
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Active glowing orb
-                      if (isSelected)
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.dashboardTeal,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.dashboardTeal.withValues(
-                                  alpha: 0.4,
-                                ),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      Tooltip(
-                        message: item['label'],
-                        waitDuration: const Duration(milliseconds: 350),
-                        preferBelow: false,
-                        verticalOffset: 24,
-                        margin: const EdgeInsets.only(left: 45),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () {
-                              if (!isSelected) {
-                                if (index == 0) {
-                                  Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const CandidateHomeScreen(),
-                                    ),
-                                  );
-                                } else if (index == 1) {
-                                  Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const CandidateApplicationsScreen(),
-                                    ),
-                                  );
-                                } else if (index == 2) {
-                                  Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const CandidateJobFeedScreen(),
-                                    ),
-                                  );
-                                } else if (index == 3) {
-                                  _showInterviewOptions(context);
-                                } else if (index == 4) {
-                                  Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const CandidateResumeManagementScreen(),
-                                    ),
-                                  );
-                                } else {
-                                  Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
-                                  );
-                                }
-                              }
-                            },
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: Center(
-                                child: Icon(
-                                  item['icon'],
-                                  color: isSelected
-                                      ? const Color(0xFF0F172A)
-                                      : const Color(0xFF64748B),
-                                  size: 19,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Badge Sit on Top-Right Corner
-                      if (hasBadge)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.dashboardTeal,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Text(
-                              badgeVal,
-                              style: const TextStyle(
-                                color: Color(0xFF0F172A),
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Avatar bottom with Account Menu
-          PopupMenuButton<String>(
-            tooltip: 'Account Menu',
-            onSelected: (value) {
-              if (value == 'candidate_home') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateHomeScreen(),
-                  ),
-                );
-              } else if (value == 'candidate_apps') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateApplicationsScreen(),
-                  ),
-                );
-              } else if (value == 'candidate_profile') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
-                );
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'candidate_home',
-                child: Text(
-                  'Candidate Home',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_home',
-                child: Text(
-                  'Candidate Home',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_apps',
-                child: Text(
-                  'Candidate Applications',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_profile',
-                child: Text(
-                  'Profile & Settings',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-            child: Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFE6F7F5),
-                border: Border.all(
-                  color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  'MR',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF32BAB1),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
   Widget _buildMobileBottomDock() {
     final List<Map<String, dynamic>> dockItems = [
@@ -1007,7 +518,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   );
                 } else {
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateProfileSettingsScreen(),
+                    ),
                   );
                 }
               }
@@ -1155,6 +668,11 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                 ),
                 child: TextField(
                   controller: _searchController,
+                  onChanged: (_) => _queueSearch(),
+                  onSubmitted: (_) {
+                    _searchDebounce?.cancel();
+                    _loadJobs();
+                  },
                   style: GoogleFonts.inter(
                     color: const Color(0xFF0F172A),
                     fontSize: 13,
@@ -1297,7 +815,10 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Interviews Section',
-          style: GoogleFonts.spaceGrotesk(color: Colors.white, fontWeight: FontWeight.bold),
+          style: GoogleFonts.spaceGrotesk(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1330,15 +851,22 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                 backgroundColor: const Color(0xFF1E293B),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateInterviewLobbyScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateInterviewLobbyScreen(),
+                  ),
                 );
               },
-              child: Text('Interview Lobby (CD-05)', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              child: Text(
+                'Interview Lobby (CD-05)',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
             ),
             const SizedBox(height: 12),
             ElevatedButton(
@@ -1354,10 +882,15 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateFeedbackReportScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateFeedbackReportScreen(),
+                  ),
                 );
               },
-              child: Text('Feedback Report (CD-07)', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              child: Text(
+                'Feedback Report (CD-07)',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -1387,4 +920,70 @@ class GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _HoverableFilterChip extends StatefulWidget {
+  final String chip;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _HoverableFilterChip({
+    required this.chip,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  State<_HoverableFilterChip> createState() => _HoverableFilterChipState();
+}
+
+class _HoverableFilterChipState extends State<_HoverableFilterChip> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = widget.isSelected;
+
+    // Teal-tinted background (rgba(46,230,200,.12)) + teal border + teal text.
+    final selectedBg = const Color(0xFF2EE6C8).withValues(alpha: 0.12);
+    final selectedText = AppColors.dashboardTeal;
+
+    // Inactive: white/near-white background, --tx3 text.
+    // Hover: light background tint.
+    final inactiveBg = _hovered
+        ? Colors.black.withValues(alpha: 0.03)
+        : Colors.white;
+    final inactiveText = const Color(0xFF64748B);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? selectedBg : inactiveBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.dashboardTeal
+                  : const Color(0xFFE2E8F0),
+              width: 1.5,
+            ),
+          ),
+          child: Text(
+            widget.chip,
+            style: GoogleFonts.inter(
+              color: isSelected ? selectedText : inactiveText,
+              fontWeight: FontWeight.bold,
+              fontSize: 12.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

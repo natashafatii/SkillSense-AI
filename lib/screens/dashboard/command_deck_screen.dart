@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,15 +7,18 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../services/auth_service.dart';
+import '../../services/job_service.dart';
+import '../../services/application_service.dart';
+import '../../services/interview_service.dart';
+import '../../models/job.dart';
+import '../../models/application.dart';
+import '../../models/interview.dart';
+
 // Global shared state for badges and notifications
 class AppNavState {
-  static int unreadInterviews = 3;
-  static bool hasUnreadNotifications = true;
-  static List<String> notifications = [
-    "New application received for Senior Django Dev from Sarah Ahmed.",
-    "Ayesha Khalid completed the behavioral interview module.",
-    "Interview with Bilal Mahmood is starting in 5 minutes.",
-  ];
+  static int unreadInterviews = 0;
+  static bool hasUnreadNotifications = false;
+  static List<String> notifications = [];
 }
 
 class CommandDeckScreen extends StatefulWidget {
@@ -25,14 +29,141 @@ class CommandDeckScreen extends StatefulWidget {
 }
 
 class _CommandDeckScreenState extends State<CommandDeckScreen>
-    with TickerProviderStateMixin {
-  
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  List<Job> _jobs = const [];
+  List<Application> _applications = const [];
+  List<Interview> _interviews = const [];
+  bool _loadingDashboard = true;
+  bool _loadingApplications = true;
+  bool _loadingInterviews = true;
+  bool _refreshingDashboard = false;
+  String? _dashboardError;
+  String? _applicationsError;
+  String? _interviewsError;
+  Timer? _refreshTimer;
+
+  bool get _hasData => _jobs.isNotEmpty || _applications.isNotEmpty;
+  List<Job> get _activeJobs =>
+      _jobs.where((job) => job.status == JobStatus.active).toList();
+  List<Interview> get _todayInterviews {
+    final now = DateTime.now();
+    return _interviews.where((interview) {
+      final date = interview.scheduledAt?.toLocal();
+      return date != null &&
+          date.year == now.year &&
+          date.month == now.month &&
+          date.day == now.day;
+    }).toList()..sort((a, b) => a.scheduledAt!.compareTo(b.scheduledAt!));
+  }
+
+  int get _thisWeekApplications => _applications.where((application) {
+    final date = application.createdAt.toLocal();
+    return !date.isAfter(DateTime.now()) &&
+        !date.isBefore(DateTime.now().subtract(const Duration(days: 7)));
+  }).length;
+
+  String _pipelineStage(Application application) =>
+      switch ((application.rawStatus ?? application.status.value)
+          .toUpperCase()) {
+        'PENDING' => 'APPLIED',
+        'SCREENED' => 'SCREENING',
+        'DECISION' => 'DECIDED',
+        final status => status,
+      };
+
+  Future<({List<Application> applications, String? error})>
+  _loadAllApplications(List<Job> jobs) async {
+    final all = <Application>[];
+    final failures = <String>[];
+    for (final job in jobs) {
+      try {
+        all.addAll(await ApplicationService.listAllForJob(job.id));
+      } catch (error) {
+        debugPrint(
+          'Command Deck applications for job ${job.id} failed: $error',
+        );
+        failures.add(job.title);
+      }
+    }
+    return (
+      applications: all,
+      error: failures.isEmpty
+          ? null
+          : 'Could not load applications for ${failures.join(', ')}.',
+    );
+  }
+
+  Future<void> _refreshDashboard() async {
+    if (_refreshingDashboard) return;
+    _refreshingDashboard = true;
+    try {
+      final jobs = await JobService.listAllJobs();
+      if (!mounted) return;
+      setState(() {
+        _jobs = jobs;
+        _loadingDashboard = false;
+        _dashboardError = null;
+      });
+      final loaded = await _loadAllApplications(jobs);
+      if (!mounted) return;
+      setState(() {
+        _applications = loaded.applications;
+        _applicationsError = loaded.error;
+        _loadingApplications = false;
+        _filteredSearchData = _searchData;
+      });
+      if (jobs.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _interviews = const [];
+            _interviewsError = null;
+            _loadingInterviews = false;
+          });
+        }
+        return;
+      }
+      try {
+        final interviews = await InterviewService.listAll();
+        if (mounted) {
+          setState(() {
+            _interviews = interviews;
+            _interviewsError = null;
+            _loadingInterviews = false;
+          });
+        }
+      } catch (error) {
+        debugPrint('Command Deck interviews request failed: $error');
+        if (mounted) {
+          setState(() {
+            _interviewsError = error.toString();
+            _loadingInterviews = false;
+          });
+        }
+      }
+    } catch (error) {
+      debugPrint('Command Deck jobs request failed: $error');
+      if (mounted) {
+        setState(() {
+          _dashboardError = error.toString();
+          _loadingDashboard = false;
+        });
+      }
+    } finally {
+      _refreshingDashboard = false;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshDashboard();
+  }
+
   // Navigation & Search State
   final int _activeNavIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final FocusNode _keyboardFocusNode = FocusNode();
-  
+
   bool _isSearchDropdownOpen = false;
   bool _isNotificationDropdownOpen = false;
   bool _isSearchFocused = false;
@@ -40,7 +171,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   // Animations
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-  
+
   late AnimationController _ringController;
   late Animation<double> _ringAnimation;
 
@@ -56,27 +187,38 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   String? _hoveredPipelineStage;
   Offset? _pipelineTooltipOffset;
 
-  // Mock Autocomplete Search Data
-  final List<Map<String, String>> _searchData = [
-    {'title': 'Ayesha Khalid', 'type': 'Applicant', 'route': '/report'},
-    {'title': 'Bilal Mahmood', 'type': 'Applicant', 'route': '/report'},
-    {'title': 'Natasha Usman', 'type': 'Applicant', 'route': '/report'},
-    {'title': 'Senior Django Dev', 'type': 'Job', 'route': '/pipeline'},
-    {'title': 'Frontend (React)', 'type': 'Job', 'route': '/pipeline'},
-    {'title': 'ML / AI Engineer', 'type': 'Job', 'route': '/pipeline'},
+  List<Map<String, String>> get _searchData => [
+    ..._applications.map(
+      (app) => {
+        'title': app.candidateName?.trim().isNotEmpty == true
+            ? app.candidateName!.trim()
+            : app.candidateEmail.split('@').first,
+        'type': 'Applicant',
+        'route': '/report',
+      },
+    ),
+    ..._jobs.map(
+      (job) => {'title': job.title, 'type': 'Job', 'route': '/pipeline'},
+    ),
   ];
   List<Map<String, String>> _filteredSearchData = [];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshDashboard();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refreshDashboard(),
+    );
     _filteredSearchData = List.from(_searchData);
 
     // Setup pulsing live animation
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
+    )..forward();
     _pulseAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
@@ -86,9 +228,10 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-    _ringAnimation = Tween<double>(begin: 0.0, end: 0.71).animate(
-      CurvedAnimation(parent: _ringController, curve: Curves.easeOut),
-    );
+    _ringAnimation = Tween<double>(
+      begin: 0.0,
+      end: 0.71,
+    ).animate(CurvedAnimation(parent: _ringController, curve: Curves.easeOut));
     _ringController.forward();
 
     // Listen for focus changes to style the search field
@@ -124,15 +267,28 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     }
     setState(() {
       _filteredSearchData = _searchData
-          .where((item) =>
-              item['title']!.toLowerCase().contains(query.toLowerCase()) ||
-              item['type']!.toLowerCase().contains(query.toLowerCase()))
+          .where(
+            (item) =>
+                item['title']!.toLowerCase().contains(query.toLowerCase()) ||
+                item['type']!.toLowerCase().contains(query.toLowerCase()),
+          )
           .toList();
     });
   }
 
+  String _getUserInitials() {
+    final first = AuthService.firstName;
+    final last = AuthService.lastName;
+    final initials =
+        '${first.isEmpty ? '' : first[0]}${last.isEmpty ? '' : last[0]}'
+            .toUpperCase();
+    return initials.isEmpty ? 'R' : initials;
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _refreshTimer?.cancel();
     _pulseController.dispose();
     _ringController.dispose();
     _searchController.dispose();
@@ -155,8 +311,10 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       onKeyEvent: (node, event) {
         // Check for Meta/Control + K
         final bool isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
-        final bool isControlPressed = HardwareKeyboard.instance.isControlPressed;
-        if ((isMetaPressed || isControlPressed) && event.logicalKey == LogicalKeyboardKey.keyK) {
+        final bool isControlPressed =
+            HardwareKeyboard.instance.isControlPressed;
+        if ((isMetaPressed || isControlPressed) &&
+            event.logicalKey == LogicalKeyboardKey.keyK) {
           _searchFocusNode.requestFocus();
           setState(() {
             _isSearchDropdownOpen = true;
@@ -199,7 +357,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   height: 400,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.dashboardBlue.withOpacity(0.04),
+                    color: AppColors.dashboardBlue.withValues(alpha: 0.04),
                   ),
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
@@ -216,9 +374,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   Expanded(
                     child: Row(
                       children: [
-                        // Left Nav Rail (Web Only)
-                        if (!isMobile) _buildLeftRail(context),
-
                         // Main Workspace
                         Expanded(
                           child: Column(
@@ -234,23 +389,56 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                         left: isMobile ? 16 : 24,
                                         right: isMobile ? 16 : 24,
                                         top: 16,
-                                        bottom: isMobile ? 100 : 32, // extra bottom pad on mobile for dock
+                                        bottom: isMobile
+                                            ? 100
+                                            : 32, // extra bottom pad on mobile for dock
                                       ),
-                                      child: isMobile
-                                          ? _buildMobileVerticalStack(currentTheme)
-                                          : _buildWebDashboardLayout(currentTheme),
+                                      child: _loadingDashboard
+                                          ? const Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            )
+                                          : _dashboardError != null && !_hasData
+                                          ? Center(
+                                              child: Column(
+                                                children: [
+                                                  const Text(
+                                                    'Could not load Command Deck.',
+                                                  ),
+                                                  TextButton(
+                                                    onPressed:
+                                                        _refreshDashboard,
+                                                    child: const Text('Retry'),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                          : isMobile
+                                          ? _buildMobileVerticalStack(
+                                              currentTheme,
+                                            )
+                                          : _buildWebDashboardLayout(
+                                              currentTheme,
+                                            ),
                                     ),
 
                                     // Floating Autocomplete Search Dropdown
                                     if (_isSearchDropdownOpen)
-                                      _buildSearchAutocompleteDropdown(isMobile, currentTheme),
+                                      _buildSearchAutocompleteDropdown(
+                                        isMobile,
+                                        currentTheme,
+                                      ),
 
                                     // Floating Notifications Dropdown
                                     if (_isNotificationDropdownOpen)
-                                      _buildNotificationsDropdown(isMobile, currentTheme),
+                                      _buildNotificationsDropdown(
+                                        isMobile,
+                                        currentTheme,
+                                      ),
 
                                     // Custom Tooltip for Pipeline bars
-                                    if (_hoveredPipelineStage != null && _pipelineTooltipOffset != null)
+                                    if (_hoveredPipelineStage != null &&
+                                        _pipelineTooltipOffset != null)
                                       Positioned(
                                         left: _pipelineTooltipOffset!.dx,
                                         top: _pipelineTooltipOffset!.dy - 45,
@@ -278,55 +466,207 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   // ── WEB LAYOUT ─────────────────────────────────────────────────────────────
   Widget _buildWebDashboardLayout(DeckTheme theme) {
-    return Column(
+    if (_hasData) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeroCard(theme),
+          const SizedBox(height: 20),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _buildApplicationsPanel(theme, false)),
+              const SizedBox(width: 20),
+              Expanded(child: _buildInterviewsPanel(theme, false)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          if (_applicationsError == null && !_loadingApplications)
+            _buildPipelineCard(theme),
+          const SizedBox(height: 20),
+          _buildOpenRolesSection(theme, false),
+        ],
+      );
+    }
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildHeroAndApplicantsRow(theme),
-        const SizedBox(height: 24),
-        _buildPipelineAndInterviewsRow(theme),
-        const SizedBox(height: 24),
-        _buildOpenRolesSection(theme, false),
+        Expanded(flex: 135, child: _buildHeroCard(theme)),
+        const SizedBox(width: 24),
+        Expanded(
+          flex: 200,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _buildTopApplicantsEmptyCard(theme)),
+                  const SizedBox(width: 24),
+                  Expanded(child: _buildInterviewsTodayEmptyCard(theme)),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildGettingStartedPanel(theme, isMobile: false),
+            ],
+          ),
+        ),
       ],
     );
   }
 
   // ── MOBILE LAYOUT ──────────────────────────────────────────────────────────
   Widget _buildMobileVerticalStack(DeckTheme theme) {
+    if (_hasData) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeroCard(theme),
+          const SizedBox(height: 20),
+          _buildApplicationsPanel(theme, true),
+          const SizedBox(height: 20),
+          _buildInterviewsPanel(theme, true),
+          const SizedBox(height: 20),
+          if (_applicationsError == null && !_loadingApplications)
+            _buildPipelineCard(theme),
+          const SizedBox(height: 20),
+          _buildOpenRolesSection(theme, true),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Hero Card (reflowed: greeting + monitor banner + 64px ring + side-by-side stats)
         _buildMobileHeroCard(theme),
         const SizedBox(height: 20),
-
-        // Top Applicants
-        _buildTopApplicantsCard(theme, true),
-        const SizedBox(height: 20),
-
-        // Interviews Today
-        _buildInterviewsTodayCard(theme, true),
-        const SizedBox(height: 20),
-
-        // Pipeline Flow Funnel
-        _buildPipelineCard(theme),
-        const SizedBox(height: 20),
-
-        // Open Roles section with horizontal scroll snapping row
-        _buildOpenRolesSection(theme, true),
+        _buildGettingStartedPanel(theme, isMobile: true),
         const SizedBox(height: 20),
       ],
     );
   }
 
+  Widget _buildApplicationsPanel(DeckTheme theme, bool isMobile) {
+    if (_loadingApplications) {
+      return _buildGlassCard(
+        theme: theme,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_applicationsError != null)
+          _buildGlassCard(
+            theme: theme,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Applications unavailable',
+                  style: GoogleFonts.inter(
+                    color: theme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _applicationsError!,
+                  style: GoogleFonts.inter(
+                    color: theme.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+                TextButton(
+                  onPressed: _refreshDashboard,
+                  child: const Text('Retry applications'),
+                ),
+              ],
+            ),
+          ),
+        if (_applicationsError != null && _applications.isNotEmpty)
+          const SizedBox(height: 12),
+        if (_applications.isNotEmpty)
+          _buildTopApplicantsCard(theme, isMobile)
+        else if (_applicationsError == null)
+          _buildTopApplicantsEmptyCard(theme),
+      ],
+    );
+  }
+
+  Widget _buildInterviewsPanel(DeckTheme theme, bool isMobile) {
+    if (_loadingInterviews) {
+      return _buildGlassCard(
+        theme: theme,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_interviewsError != null) {
+      return _buildGlassCard(
+        theme: theme,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Interviews unavailable',
+              style: GoogleFonts.inter(
+                color: theme.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Could not load today\'s interviews.',
+              style: GoogleFonts.inter(
+                color: theme.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            TextButton(
+              onPressed: _refreshDashboard,
+              child: const Text('Retry interviews'),
+            ),
+          ],
+        ),
+      );
+    }
+    return _todayInterviews.isEmpty
+        ? _buildInterviewsTodayEmptyCard(theme)
+        : _buildInterviewsTodayCard(theme, isMobile);
+  }
+
   // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
+  // Legacy rail is kept for reference while the shared recruiter rail owns navigation.
+  // ignore: unused_element
   Widget _buildLeftRail(BuildContext context) {
     final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'route': '/dashboard'},
+      {
+        'icon': Icons.dashboard_rounded,
+        'label': 'Dashboard',
+        'route': '/dashboard',
+      },
       {'icon': Icons.menu_book_rounded, 'label': 'Jobs', 'route': '/pipeline'},
-      {'icon': Icons.calendar_month_rounded, 'label': 'Interviews', 'route': '/schedule'},
-      {'icon': Icons.emoji_events_outlined, 'label': 'Rankings', 'route': '/rankings'},
-      {'icon': Icons.analytics_outlined, 'label': 'Analytics', 'route': '/analytics'},
-      {'icon': Icons.settings_outlined, 'label': 'Settings', 'route': '/settings'},
+      {
+        'icon': Icons.calendar_month_rounded,
+        'label': 'Interviews',
+        'route': '/schedule',
+      },
+      {
+        'icon': Icons.emoji_events_outlined,
+        'label': 'Rankings',
+        'route': '/rankings',
+      },
+      {
+        'icon': Icons.analytics_outlined,
+        'label': 'Analytics',
+        'route': '/analytics',
+      },
+      {
+        'icon': Icons.settings_outlined,
+        'label': 'Settings',
+        'route': '/settings',
+      },
     ];
 
     return Container(
@@ -362,7 +702,8 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 final item = navItems[index];
 
                 // Check for unread interview badges
-                final bool hasBadge = index == 2 && AppNavState.unreadInterviews > 0;
+                final bool hasBadge =
+                    index == 2 && AppNavState.unreadInterviews > 0;
 
                 return Center(
                   child: Stack(
@@ -379,7 +720,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                             color: AppColors.dashboardBlue,
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.dashboardBlue.withOpacity(0.4),
+                                color: AppColors.dashboardBlue.withValues(
+                                  alpha: 0.4,
+                                ),
                                 blurRadius: 12,
                                 spreadRadius: 2,
                               ),
@@ -405,17 +748,19 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                         child: MouseRegion(
                           cursor: SystemMouseCursors.click,
                           child: GestureDetector(
-                             onTap: () {
-                               if (index != _activeNavIndex) {
-                                 // Clear interviews badge on selection
-                                 if (index == 2) {
-                                   setState(() {
-                                     AppNavState.unreadInterviews = 0;
-                                   });
-                                 }
-                                 Navigator.of(context).pushReplacementNamed(item['route']);
-                               }
-                             },
+                            onTap: () {
+                              if (index != _activeNavIndex) {
+                                // Clear interviews badge on selection
+                                if (index == 2) {
+                                  setState(() {
+                                    AppNavState.unreadInterviews = 0;
+                                  });
+                                }
+                                Navigator.of(
+                                  context,
+                                ).pushReplacementNamed(item['route']);
+                              }
+                            },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               width: 38,
@@ -427,7 +772,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                               child: Center(
                                 child: Icon(
                                   item['icon'],
-                                  color: isSelected ? Colors.white : const Color(0xFF64748B),
+                                  color: isSelected
+                                      ? Colors.white
+                                      : const Color(0xFF64748B),
                                   size: 19,
                                 ),
                               ),
@@ -475,32 +822,61 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 Navigator.of(context).pushReplacementNamed('/settings');
               } else if (value == 'signout') {
                 final navigator = Navigator.of(context);
-                final signOut = AuthService.signOut(context);
-                if (navigator.mounted) {
-                  navigator.pushNamedAndRemoveUntil('/login', (_) => false);
+                try {
+                  await AuthService.signOut(context);
+                  if (navigator.mounted) {
+                    navigator.pushNamedAndRemoveUntil('/login', (_) => false);
+                  }
+                } catch (error) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Sign out failed: $error')),
+                    );
+                  }
                 }
-                await signOut;
               }
             },
             itemBuilder: (context) => [
               PopupMenuItem(
                 value: 'recruiter',
-                child: Text('Recruiter Workspace', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Recruiter Workspace',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               PopupMenuItem(
                 value: 'org',
-                child: Text('Organization & Team', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Organization & Team',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               PopupMenuItem(
                 value: 'settings',
-                child: Text('Settings', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Settings',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'signout',
                 child: Row(
                   children: [
-                    const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+                    const Icon(
+                      Icons.logout_rounded,
+                      color: Colors.redAccent,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Sign Out',
@@ -525,7 +901,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
               ),
               child: Center(
                 child: Text(
-                  'AR',
+                  _getUserInitials(),
                   style: GoogleFonts.inter(
                     color: AppColors.dashboardBlue,
                     fontSize: 12.5,
@@ -543,107 +919,126 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   // ── BOTTOM DOCK NAVIGATION (Mobile Dark Theme) ─────────────────────────────
   Widget _buildBottomDock(BuildContext context, DeckTheme theme) {
     final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'route': '/dashboard'},
+      {
+        'icon': Icons.dashboard_rounded,
+        'label': 'Dashboard',
+        'route': '/dashboard',
+      },
       {'icon': Icons.menu_book_rounded, 'label': 'Jobs', 'route': '/pipeline'},
-      {'icon': Icons.calendar_month_rounded, 'label': 'Interviews', 'route': '/schedule'},
-      {'icon': Icons.emoji_events_outlined, 'label': 'Rankings', 'route': '/rankings'},
-      {'icon': Icons.analytics_outlined, 'label': 'Analytics', 'route': '/analytics'},
+      {
+        'icon': Icons.calendar_month_rounded,
+        'label': 'Interviews',
+        'route': '/schedule',
+      },
+      {
+        'icon': Icons.emoji_events_outlined,
+        'label': 'Rankings',
+        'route': '/rankings',
+      },
+      {
+        'icon': Icons.analytics_outlined,
+        'label': 'Analytics',
+        'route': '/analytics',
+      },
     ];
 
-    return Container(
+    return Padding(
       padding: EdgeInsets.only(
-        left: 12,
-        right: 12,
-        top: 10,
-        bottom: MediaQuery.of(context).padding.bottom + 10,
+        left: 14,
+        right: 14,
+        bottom: MediaQuery.of(context).padding.bottom + 14,
       ),
-      decoration: BoxDecoration(
-        color: theme.cardBg,
-        border: Border(top: BorderSide(color: theme.border, width: 1.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(navItems.length, (index) {
-          final isSelected = _activeNavIndex == index;
-          final item = navItems[index];
-          final bool hasBadge = index == 2 && AppNavState.unreadInterviews > 0;
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: theme.cardBg,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: theme.border, width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: List.generate(navItems.length, (index) {
+            final isSelected = _activeNavIndex == index;
+            final item = navItems[index];
+            final bool hasBadge =
+                index == 2 && AppNavState.unreadInterviews > 0;
 
-          return GestureDetector(
-            onTap: () {
-              if (index != _activeNavIndex) {
-                if (index == 2) {
-                  setState(() {
-                    AppNavState.unreadInterviews = 0;
-                  });
+            return GestureDetector(
+              onTap: () {
+                if (index != _activeNavIndex) {
+                  if (index == 2) {
+                    setState(() {
+                      AppNavState.unreadInterviews = 0;
+                    });
+                  }
+                  Navigator.of(context).pushReplacementNamed(item['route']);
                 }
-                Navigator.of(context).pushReplacementNamed(item['route']);
-              }
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: isSelected ? AppColors.dashboardBlue : Colors.transparent,
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: AppColors.dashboardBlue.withOpacity(0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: isSelected
+                      ? AppColors.dashboardBlue
+                      : Colors.transparent,
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.dashboardBlue.withValues(
+                              alpha: 0.3,
+                            ),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(
+                          item['icon'],
+                          color: isSelected
+                              ? Colors.white
+                              : theme.textSecondary,
+                          size: 20,
                         ),
-                      ]
-                    : [],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Icon(
-                        item['icon'],
-                        color: isSelected ? Colors.white : theme.textSecondary,
-                        size: 20,
-                      ),
-                      if (hasBadge)
-                        Positioned(
-                          top: -3,
-                          right: -3,
-                          child: Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(
-                              color: AppColors.dashboardRed,
-                              shape: BoxShape.circle,
+                        if (hasBadge)
+                          Positioned(
+                            top: -3,
+                            right: -3,
+                            child: Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                color: AppColors.dashboardRed,
+                                shape: BoxShape.circle,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                  if (isSelected) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      item['label'],
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      ],
                     ),
+                    if (isSelected) ...[const SizedBox(height: 4)],
                   ],
-                ],
+                ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -652,7 +1047,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   Widget _buildTopBar(bool isMobile, DeckTheme theme) {
     if (isMobile) {
       return Container(
-        height: 56,
+        height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: theme.cardBg,
@@ -663,8 +1058,8 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           children: [
             Row(
               children: [
-                SvgPicture.asset('assets/images/logo.svg', height: 24),
-                const SizedBox(width: 10),
+                SvgPicture.asset('assets/images/logo.svg', height: 26),
+                const SizedBox(width: 8),
                 Text(
                   'Deck',
                   style: GoogleFonts.spaceGrotesk(
@@ -672,51 +1067,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                   ),
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                // Search Trigger (icon only)
-                IconButton(
-                  icon: Icon(Icons.search_rounded, color: theme.textPrimary, size: 20),
-                  onPressed: () {
-                    setState(() {
-                      _isSearchDropdownOpen = !_isSearchDropdownOpen;
-                      if (_isSearchDropdownOpen) {
-                        _searchFocusNode.requestFocus();
-                      }
-                    });
-                  },
-                ),
-
-                // Notifications Bell Trigger
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.notifications_none_rounded, color: theme.textPrimary, size: 20),
-                      onPressed: () {
-                        setState(() {
-                          _isNotificationDropdownOpen = !_isNotificationDropdownOpen;
-                          AppNavState.hasUnreadNotifications = false;
-                        });
-                      },
-                    ),
-                    if (AppNavState.hasUnreadNotifications)
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            color: AppColors.dashboardRed,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                  ],
                 ),
               ],
             ),
@@ -777,22 +1127,38 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: _isSearchFocused ? AppColors.dashboardBlue : const Color(0xFFE2E8F0),
+                    color: _isSearchFocused
+                        ? AppColors.dashboardBlue
+                        : const Color(0xFFE2E8F0),
                     width: _isSearchFocused ? 1.8 : 1.0,
                   ),
                 ),
                 child: TextField(
                   controller: _searchController,
                   focusNode: _searchFocusNode,
-                  style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 13),
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF0F172A),
+                    fontSize: 13,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(color: const Color(0xFF64748B), fontSize: 13),
-                    prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 16),
+                    hintStyle: GoogleFonts.inter(
+                      color: const Color(0xFF64748B),
+                      fontSize: 13,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: Color(0xFF64748B),
+                      size: 16,
+                    ),
                     suffixIcon: Container(
                       width: 32,
                       alignment: Alignment.center,
-                      margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
+                      margin: const EdgeInsets.only(
+                        right: 6,
+                        top: 4,
+                        bottom: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(4),
@@ -907,12 +1273,17 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
-                    style: GoogleFonts.inter(color: theme.textPrimary, fontSize: 13),
+                    style: GoogleFonts.inter(
+                      color: theme.textPrimary,
+                      fontSize: 13,
+                    ),
                     decoration: InputDecoration(
                       hintText: 'Type to filter...',
                       hintStyle: GoogleFonts.inter(color: theme.textSecondary),
                       prefixIcon: const Icon(Icons.search_rounded, size: 16),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                 ),
@@ -938,13 +1309,19 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                           fontSize: 10,
                         ),
                       ),
-                      trailing: Icon(Icons.arrow_forward_ios_rounded, size: 10, color: theme.textSecondary),
+                      trailing: Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 10,
+                        color: theme.textSecondary,
+                      ),
                       onTap: () {
                         setState(() {
                           _isSearchDropdownOpen = false;
                           _searchController.clear();
                         });
-                        Navigator.of(context).pushReplacementNamed(item['route']!);
+                        Navigator.of(
+                          context,
+                        ).pushReplacementNamed(item['route']!);
                       },
                     );
                   },
@@ -988,7 +1365,11 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.close_rounded, size: 16, color: theme.textSecondary),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: theme.textSecondary,
+                    ),
                     onPressed: () {
                       setState(() {
                         _isNotificationDropdownOpen = false;
@@ -1038,6 +1419,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   // ── PIPELINE COUNT HOVER TOOLTIP ──────────────────────────────────────────
   Widget _buildPipelineStageTooltip() {
+    final count = _applications
+        .where((app) => _pipelineStage(app) == _hoveredPipelineStage)
+        .length;
     return Material(
       elevation: 4,
       borderRadius: BorderRadius.circular(6),
@@ -1045,7 +1429,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: Text(
-          'Exact Count: ${_hoveredPipelineStage == 'APPLIED' ? 127 : _hoveredPipelineStage == 'SCREENED' ? 91 : _hoveredPipelineStage == 'SHORTLIST' ? 22 : _hoveredPipelineStage == 'INTERVIEW' ? 9 : 2}',
+          'Exact Count: $count',
           style: GoogleFonts.jetBrainsMono(
             color: Colors.white,
             fontSize: 10.5,
@@ -1068,9 +1452,8 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Eyebrow & Greeting
           Text(
-            'DASHBOARD · 09:12',
+            'COMMAND DECK',
             style: GoogleFonts.jetBrainsMono(
               color: AppColors.dashboardBlue,
               fontSize: 9.5,
@@ -1079,37 +1462,48 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            'Welcome back.',
+            'Welcome, ${AuthService.firstName.isNotEmpty ? AuthService.firstName : "User"}.',
             style: GoogleFonts.spaceGrotesk(
               color: theme.textPrimary,
-              fontSize: 24,
+              fontSize: 19,
               fontWeight: FontWeight.w700,
+              letterSpacing: -0.03,
             ),
           ),
-          const SizedBox(height: 14),
-
-          // Live Interview Banner
-          _buildLiveAlertCard(theme),
-          const SizedBox(height: 18),
-
-          // Stats reflow: 64px ring + 4 metrics side-by-side underneath
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildCircularMatchProgress(theme, 64),
-            ],
+          const SizedBox(height: 8),
+          Text(
+            'Post your first role to start receiving applicants.',
+            style: GoogleFonts.inter(color: theme.textSecondary, fontSize: 12),
           ),
-          const SizedBox(height: 16),
-          Divider(color: theme.divider, height: 1),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildMetricTile(theme, '127', 'Applicants'),
-              _buildMetricTile(theme, '4', 'Roles'),
-              _buildMetricTile(theme, '3', 'Today'),
-              _buildMetricTile(theme, '+23', 'Week', isHighlight: true),
-            ],
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF4F46E5), Color(0xFF3B82F6)],
+                ),
+              ),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pushReplacementNamed('/create-role');
+                },
+                child: Text(
+                  '+ Post your first job',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1145,6 +1539,17 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   // Hero Card (Web)
   Widget _buildHeroCard(DeckTheme theme) {
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12
+        ? 'Morning'
+        : hour < 17
+        ? 'Afternoon'
+        : 'Evening';
+    final urgent = _todayInterviews.isNotEmpty
+        ? '${_todayInterviews.length} interview${_todayInterviews.length == 1 ? '' : 's'} scheduled today.'
+        : _applications.isNotEmpty
+        ? '${_applications.length} application${_applications.length == 1 ? '' : 's'} ready to review.'
+        : '${_activeJobs.length} open role${_activeJobs.length == 1 ? '' : 's'} accepting applications.';
     return _buildGlassCard(
       theme: theme,
       hasAuroraGlow: true,
@@ -1152,7 +1557,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            AppConstants.deckHeroEyebrow,
+            'COMMAND DECK',
             style: GoogleFonts.jetBrainsMono(
               color: AppColors.dashboardBlue,
               fontSize: 10.5,
@@ -1162,34 +1567,64 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            AppConstants.deckTitle,
+            _hasData
+                ? '$greeting, ${AuthService.firstName.isNotEmpty ? AuthService.firstName : "User"}.'
+                : 'Welcome, ${AuthService.firstName.isNotEmpty ? AuthService.firstName : "User"}.',
             style: GoogleFonts.spaceGrotesk(
               color: theme.textPrimary,
-              fontSize: 32,
+              fontSize: 25,
               fontWeight: FontWeight.w700,
+              letterSpacing: -0.03,
               height: 1.15,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            AppConstants.deckSubtitle,
+            _hasData
+                ? urgent
+                : 'Post your first role to start receiving matched applicants.',
             style: GoogleFonts.inter(
               color: theme.textSecondary,
-              fontSize: 13.5,
+              fontSize: 12,
               height: 1.45,
             ),
           ),
-          const SizedBox(height: 20),
-          _buildLiveAlertCard(theme),
+          if (!_hasData) ...[
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4F46E5), Color(0xFF3B82F6)],
+                  ),
+                ),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).pushReplacementNamed('/create-role');
+                  },
+                  child: Text(
+                    '+ Post your first job',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _buildCircularMatchProgress(theme, 80),
-              const SizedBox(width: 28),
-              Expanded(child: _buildMetricsGrid(theme)),
-            ],
-          ),
+          Divider(color: theme.divider, height: 1),
+          const SizedBox(height: 24),
+          _buildMetricsGrid(theme),
         ],
       ),
     );
@@ -1260,9 +1695,14 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
-                  color: _hoveredOpenMonitor ? const Color(0xFF1D4ED8) : AppColors.dashboardBlue,
+                  color: _hoveredOpenMonitor
+                      ? const Color(0xFF1D4ED8)
+                      : AppColors.dashboardBlue,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -1337,17 +1777,47 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       children: [
         Row(
           children: [
-            Expanded(child: _buildMetricTile(theme, '4', AppConstants.deckOpenRoles)),
+            Expanded(
+              child: _buildMetricTile(
+                theme,
+                '${_activeJobs.length}',
+                'OPEN ROLES',
+              ),
+            ),
             const SizedBox(width: 16),
-            Expanded(child: _buildMetricTile(theme, '127', AppConstants.deckApplicants)),
+            Expanded(
+              child: _buildMetricTile(
+                theme,
+                _applicationsError == null && !_loadingApplications
+                    ? '${_applications.length}'
+                    : '—',
+                'APPLICANTS',
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildMetricTile(theme, '3', AppConstants.deckToday)),
+            Expanded(
+              child: _buildMetricTile(
+                theme,
+                _interviewsError == null && !_loadingInterviews
+                    ? '${_todayInterviews.length}'
+                    : '—',
+                'TODAY',
+              ),
+            ),
             const SizedBox(width: 16),
-            Expanded(child: _buildMetricTile(theme, '+23', AppConstants.deckThisWeek, isHighlight: true)),
+            Expanded(
+              child: _buildMetricTile(
+                theme,
+                _applicationsError == null && !_loadingApplications
+                    ? '$_thisWeekApplications'
+                    : '—',
+                'THIS WEEK',
+              ),
+            ),
           ],
         ),
       ],
@@ -1360,13 +1830,17 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     String label, {
     bool isHighlight = false,
   }) {
+    final bool isMuted = value == '0' || value == '—';
     return Column(
+      key: Key('deck-metric-$label'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           value,
           style: GoogleFonts.spaceGrotesk(
-            color: isHighlight ? AppColors.dashboardTeal : theme.textPrimary,
+            color: isMuted
+                ? theme.textSecondary
+                : (isHighlight ? AppColors.dashboardTeal : theme.textPrimary),
             fontSize: 22,
             fontWeight: FontWeight.w700,
           ),
@@ -1387,97 +1861,131 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   // Top Applicants list card
   Widget _buildTopApplicantsCard(DeckTheme theme, bool isMobile) {
-    final List<Map<String, dynamic>> applicants = [
-      {
-        'initials': 'AK',
-        'name': 'Ayesha Khalid',
-        'sub': 'Senior Django Dev · 3d',
-        'score': 91,
-        'badge': 'STRONG YES',
-        'badgeColor': AppColors.dashboardTeal,
-      },
-      {
-        'initials': 'BM',
-        'name': 'Bilal Mahmood',
-        'sub': 'Senior Django Dev · 4d',
-        'score': 84,
-        'badge': 'YES',
-        'badgeColor': AppColors.dashboardBlue,
-      },
-      {
-        'initials': 'NU',
-        'name': 'Natasha Usman',
-        'sub': 'Full Stack Dev · 2d',
-        'score': 73,
-        'badge': 'YES',
-        'badgeColor': AppColors.dashboardBlue,
-      },
-    ];
+    final applicants = [..._applications]
+      ..sort((a, b) => (b.resumeScore ?? -1).compareTo(a.resumeScore ?? -1));
+    final ranked = applicants.take(5).toList();
 
     return _buildGlassCard(
       theme: theme,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    AppConstants.deckTopApplicants,
-                    style: GoogleFonts.spaceGrotesk(
-                      color: theme.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      color: AppColors.dashboardBlue.withOpacity(0.08),
-                    ),
-                    child: Text(
-                      AppConstants.deckSbertRanked,
-                      style: GoogleFonts.jetBrainsMono(
-                        color: AppColors.dashboardBlue,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              // All Link with hover underline
-              MouseRegion(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final allLink = MouseRegion(
                 onEnter: (_) => setState(() => _hoveredAllApplicants = true),
                 onExit: (_) => setState(() => _hoveredAllApplicants = false),
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pushReplacementNamed('/pipeline');
-                  },
-                  child: Text(
-                    AppConstants.deckAllLink,
-                    style: GoogleFonts.inter(
-                      color: AppColors.dashboardBlue,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      decoration: _hoveredAllApplicants ? TextDecoration.underline : TextDecoration.none,
+                  onTap: () =>
+                      Navigator.of(context).pushReplacementNamed('/pipeline'),
+                  child: SizedBox(
+                    width: 68,
+                    child: Text(
+                      'All ${_applications.length} ›',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: GoogleFonts.inter(
+                        color: AppColors.dashboardBlue,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        decoration: _hoveredAllApplicants
+                            ? TextDecoration.underline
+                            : TextDecoration.none,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              );
+              final titleAndBadge = Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      AppConstants.deckTopApplicants,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.spaceGrotesk(
+                        color: theme.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        color: AppColors.dashboardBlue.withValues(alpha: 0.08),
+                      ),
+                      child: Text(
+                        AppConstants.deckSbertRanked,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.jetBrainsMono(
+                          color: AppColors.dashboardBlue,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+              if (constraints.maxWidth < 300) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [titleAndBadge, const SizedBox(height: 6), allLink],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: titleAndBadge),
+                  const SizedBox(width: 8),
+                  allLink,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 18),
           Column(
-            children: List.generate(applicants.length, (index) {
-              final item = applicants[index];
+            children: List.generate(ranked.length, (index) {
+              final item = ranked[index];
               final bool isHovered = _hoveredApplicantIndex == index;
+              final name = (item.candidateName?.trim().isNotEmpty ?? false)
+                  ? item.candidateName!.trim()
+                  : item.candidateEmail.split('@').first;
+              final initials = name
+                  .trim()
+                  .split(RegExp(r'\s+'))
+                  .where((part) => part.isNotEmpty)
+                  .take(2)
+                  .map((part) => part[0].toUpperCase())
+                  .join();
+              final score = item.resumeScore?.round().clamp(0, 100);
+              final scoreColor = score == null
+                  ? theme.textSecondary
+                  : score >= 85
+                  ? AppColors.dashboardTeal
+                  : score >= 70
+                  ? AppColors.dashboardBlue
+                  : score >= 55
+                  ? AppColors.dashboardAmber
+                  : AppColors.dashboardRed;
+              final badge = score == null
+                  ? 'UNSCORED'
+                  : score >= 85
+                  ? 'STRONG YES'
+                  : score >= 70
+                  ? 'YES'
+                  : score >= 55
+                  ? 'MAYBE'
+                  : 'NO';
 
               return MouseRegion(
                 onEnter: (_) => setState(() => _hoveredApplicantIndex = index),
@@ -1492,13 +2000,20 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     transform: isHovered
                         ? (Matrix4.translationValues(0, -3, 0))
                         : Matrix4.identity(),
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: isHovered ? theme.bg.withOpacity(0.5) : Colors.transparent,
+                      color: isHovered
+                          ? theme.bg.withValues(alpha: 0.5)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border: Border(
                         bottom: BorderSide(
-                          color: index != applicants.length - 1 ? theme.divider : Colors.transparent,
+                          color: index != ranked.length - 1
+                              ? theme.divider
+                              : Colors.transparent,
                           width: 1,
                         ),
                       ),
@@ -1514,7 +2029,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                           ),
                           child: Center(
                             child: Text(
-                              item['initials'],
+                              initials.isEmpty ? '?' : initials,
                               style: GoogleFonts.spaceGrotesk(
                                 color: theme.textSecondary,
                                 fontSize: 12.5,
@@ -1529,7 +2044,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                item['name'],
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.inter(
                                   color: theme.textPrimary,
                                   fontSize: 14,
@@ -1538,7 +2055,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                item['sub'],
+                                item.jobTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.inter(
                                   color: theme.textSecondary,
                                   fontSize: 12,
@@ -1547,9 +2066,10 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                             ],
                           ),
                         ),
-                        _buildSmallScoreRing(theme, item['score'], item['badgeColor']),
+                        if (score != null)
+                          _buildSmallScoreRing(theme, score, scoreColor),
                         const SizedBox(width: 16),
-                        _buildStatusBadge(item['badge'], item['badgeColor']),
+                        _buildStatusBadge(badge, scoreColor),
                       ],
                     ),
                   ),
@@ -1592,9 +2112,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(0.2), width: 1),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
       ),
       child: Text(
         label,
@@ -1635,13 +2155,26 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   }
 
   Widget _buildPipelineCard(DeckTheme theme) {
-    final List<Map<String, dynamic>> stages = [
-      {'name': 'APPLIED', 'count': 127, 'pct': 1.0, 'color': AppColors.dashboardBlue},
-      {'name': 'SCREENED', 'count': 91, 'pct': 0.71, 'color': AppColors.dashboardBlue},
-      {'name': 'SHORTLIST', 'count': 22, 'pct': 0.17, 'color': AppColors.dashboardBlue},
-      {'name': 'INTERVIEW', 'count': 9, 'pct': 0.07, 'color': AppColors.dashboardTeal},
-      {'name': 'SELECTED', 'count': 2, 'pct': 0.015, 'color': AppColors.dashboardTeal},
+    const names = [
+      'APPLIED',
+      'SCREENING',
+      'SHORTLISTED',
+      'INTERVIEWED',
+      'DECIDED',
     ];
+    final stages = names.map((name) {
+      final count = _applications
+          .where((app) => _pipelineStage(app) == name)
+          .length;
+      return <String, dynamic>{
+        'name': name,
+        'count': count,
+        'pct': _applications.isEmpty ? 0.0 : count / _applications.length,
+        'color': name == 'DECIDED' || name == 'INTERVIEWED'
+            ? AppColors.dashboardTeal
+            : AppColors.dashboardBlue,
+      };
+    }).toList();
 
     return _buildGlassCard(
       theme: theme,
@@ -1660,7 +2193,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 ),
               ),
               Text(
-                '1.6%',
+                '${_applications.isEmpty ? 0 : (stages.last['count'] as int) * 100 ~/ _applications.length}%',
                 style: GoogleFonts.jetBrainsMono(
                   color: theme.textSecondary,
                   fontSize: 12,
@@ -1714,7 +2247,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                             value: stage['pct'],
                             minHeight: 6,
                             backgroundColor: theme.divider,
-                            valueColor: AlwaysStoppedAnimation<Color>(stage['color']),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              stage['color'],
+                            ),
                           ),
                         ),
                       ),
@@ -1743,11 +2278,28 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   }
 
   Widget _buildInterviewsTodayCard(DeckTheme theme, bool isMobile) {
-    final List<Map<String, dynamic>> slots = [
-      {'time': '09:00', 'name': 'Ayesha K.', 'status': 'SCORED', 'color': AppColors.dashboardTeal, 'live': false},
-      {'time': '11:30', 'name': 'Bilal M.', 'status': 'LIVE', 'color': AppColors.dashboardRed, 'live': true},
-      {'time': '14:00', 'name': 'Natasha U.', 'status': 'NEXT', 'color': const Color(0xFF64748B), 'live': false},
-    ];
+    final slots = _todayInterviews.map((interview) {
+      Application? application;
+      for (final item in _applications) {
+        if (item.id == interview.applicationId) {
+          application = item;
+          break;
+        }
+      }
+      final date = interview.scheduledAt!.toLocal();
+      final name = application?.candidateName?.trim().isNotEmpty == true
+          ? application!.candidateName!.trim()
+          : application?.candidateEmail.split('@').first ?? 'Candidate';
+      final live = interview.status.toUpperCase() == 'LIVE';
+      return <String, dynamic>{
+        'time':
+            '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
+        'name': name,
+        'status': interview.status.toUpperCase(),
+        'color': live ? AppColors.dashboardRed : AppColors.dashboardTeal,
+        'live': live,
+      };
+    }).toList();
 
     return _buildGlassCard(
       theme: theme,
@@ -1806,13 +2358,20 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     transform: isHovered
                         ? (Matrix4.translationValues(0, -3, 0))
                         : Matrix4.identity(),
-                    padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 13,
+                      horizontal: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: isHovered ? theme.bg.withOpacity(0.5) : Colors.transparent,
+                      color: isHovered
+                          ? theme.bg.withValues(alpha: 0.5)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border: Border(
                         bottom: BorderSide(
-                          color: index != slots.length - 1 ? theme.divider : Colors.transparent,
+                          color: index != slots.length - 1
+                              ? theme.divider
+                              : Colors.transparent,
                           width: 1,
                         ),
                       ),
@@ -1846,7 +2405,10 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                             builder: (context, child) {
                               return Opacity(
                                 opacity: _pulseAnimation.value,
-                                child: _buildStatusBadge(slot['status'], slot['color']),
+                                child: _buildStatusBadge(
+                                  slot['status'],
+                                  slot['color'],
+                                ),
                               );
                             },
                           )
@@ -1866,12 +2428,26 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   // ── OPEN ROLES SECTION ─────────────────────────────────────────────────────
   Widget _buildOpenRolesSection(DeckTheme theme, bool isMobile) {
-    final List<Map<String, dynamic>> roles = [
-      {'title': 'Senior Django Dev', 'apps': 48, 'shortlisted': 12, 'color': AppColors.dashboardTeal, 'pct': 0.70},
-      {'title': 'Frontend (React)', 'apps': 31, 'shortlisted': 5, 'color': AppColors.dashboardAmber, 'pct': 0.40},
-      {'title': 'ML / AI Engineer', 'apps': 29, 'shortlisted': 3, 'color': AppColors.dashboardRed, 'pct': 0.25},
-      {'title': 'Full Stack Dev', 'apps': 19, 'shortlisted': 2, 'color': AppColors.dashboardBlue, 'pct': 0.15},
-    ];
+    final maxApplicants = _activeJobs.fold<int>(
+      0,
+      (max, job) => job.applicantCount > max ? job.applicantCount : max,
+    );
+    final roles = _activeJobs.map((job) {
+      final shortlisted = _applications
+          .where(
+            (app) =>
+                app.job == job.id &&
+                (app.rawStatus ?? '').toUpperCase() == 'SHORTLISTED',
+          )
+          .length;
+      return <String, dynamic>{
+        'title': job.title,
+        'apps': job.applicantCount,
+        'shortlisted': shortlisted,
+        'color': AppColors.dashboardBlue,
+        'pct': maxApplicants == 0 ? 0.0 : job.applicantCount / maxApplicants,
+      };
+    }).toList();
 
     final Widget sectionHeader = Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1891,14 +2467,17 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           onExit: (_) => setState(() => _hoveredManageRoles = false),
           cursor: SystemMouseCursors.click,
           child: GestureDetector(
-            onTap: () => Navigator.of(context).pushReplacementNamed('/create-role'),
+            onTap: () =>
+                Navigator.of(context).pushReplacementNamed('/create-role'),
             child: Text(
               AppConstants.deckManage,
               style: GoogleFonts.inter(
                 color: AppColors.dashboardBlue,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                decoration: _hoveredManageRoles ? TextDecoration.underline : TextDecoration.none,
+                decoration: _hoveredManageRoles
+                    ? TextDecoration.underline
+                    : TextDecoration.none,
               ),
             ),
           ),
@@ -1917,15 +2496,19 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             height: 140,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              physics: const PageScrollPhysics(), // Horizontal snapping behavior
+              physics:
+                  const PageScrollPhysics(), // Horizontal snapping behavior
               itemCount: roles.length,
               itemBuilder: (context, idx) {
                 final role = roles[idx];
                 return Container(
-                  width: MediaQuery.of(context).size.width * 0.78, // ~78% viewport width so next peeks
+                  width:
+                      MediaQuery.of(context).size.width *
+                      0.78, // ~78% viewport width so next peeks
                   margin: const EdgeInsets.only(right: 12, bottom: 8),
                   child: GestureDetector(
-                    onTap: () => Navigator.pushReplacementNamed(context, '/pipeline'),
+                    onTap: () =>
+                        Navigator.pushReplacementNamed(context, '/pipeline'),
                     child: _buildGlassCard(
                       theme: theme,
                       padding: const EdgeInsets.all(16),
@@ -1943,7 +2526,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${role['apps']} apps · ${role['shortlisted']} shortlisted',
+                            '${role['apps']} apps · ${_applicationsError == null ? role['shortlisted'] : '—'} shortlisted',
                             style: GoogleFonts.inter(
                               color: theme.textSecondary,
                               fontSize: 12,
@@ -1962,7 +2545,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                   value: val,
                                   minHeight: 5,
                                   backgroundColor: theme.divider,
-                                  valueColor: AlwaysStoppedAnimation<Color>(role['color']),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    role['color'],
+                                  ),
                                 ),
                               );
                             },
@@ -1995,7 +2580,8 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             }
 
             final double spacing = 16.0;
-            final double cardWidth = (width - (crossAxisCount - 1) * spacing) / crossAxisCount;
+            final double cardWidth =
+                (width - (crossAxisCount - 1) * spacing) / crossAxisCount;
 
             return Wrap(
               spacing: spacing,
@@ -2011,7 +2597,8 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     onExit: (_) => setState(() => _hoveredRoleIndex = null),
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
-                      onTap: () => Navigator.pushReplacementNamed(context, '/pipeline'),
+                      onTap: () =>
+                          Navigator.pushReplacementNamed(context, '/pipeline'),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         transform: isHovered
@@ -2033,7 +2620,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '${role['apps']} apps · ${role['shortlisted']} shortlisted',
+                                '${role['apps']} apps · ${_applicationsError == null ? role['shortlisted'] : '—'} shortlisted',
                                 style: GoogleFonts.inter(
                                   color: theme.textSecondary,
                                   fontSize: 12.5,
@@ -2043,7 +2630,10 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
                               // Progress bar animating from 0 on mount
                               TweenAnimationBuilder<double>(
-                                tween: Tween<double>(begin: 0.0, end: role['pct']),
+                                tween: Tween<double>(
+                                  begin: 0.0,
+                                  end: role['pct'],
+                                ),
                                 duration: const Duration(milliseconds: 850),
                                 builder: (context, val, child) {
                                   return ClipRRect(
@@ -2052,7 +2642,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                       value: val,
                                       minHeight: 5,
                                       backgroundColor: theme.divider,
-                                      valueColor: AlwaysStoppedAnimation<Color>(role['color']),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        role['color'],
+                                      ),
                                     ),
                                   );
                                 },
@@ -2072,6 +2664,326 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     );
   }
 
+  // ── EMPTY STATE PANELS (RD-16) ─────────────────────────────────────────────
+  Widget _buildTopApplicantsEmptyCard(DeckTheme theme) {
+    return _buildGlassCard(
+      theme: theme,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Top applicants',
+            style: GoogleFonts.inter(
+              color: theme.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Center(
+            child: Column(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: theme.border),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.adjust_rounded,
+                      size: 16,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No applicants yet',
+                  style: GoogleFonts.inter(
+                    color: theme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Ranked by match the moment your first role goes live.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: theme.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInterviewsTodayEmptyCard(DeckTheme theme) {
+    return _buildGlassCard(
+      theme: theme,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Interviews today',
+            style: GoogleFonts.inter(
+              color: theme.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Center(
+            child: Column(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: theme.border),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.adjust_rounded,
+                      size: 16,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Nothing scheduled',
+                  style: GoogleFonts.inter(
+                    color: theme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Booked interviews will show up here.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: theme.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGettingStartedPanel(DeckTheme theme, {bool isMobile = false}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.border, width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text(
+              'Getting started',
+              style: GoogleFonts.inter(
+                color: theme.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Divider(color: theme.border, height: 1),
+          _buildChecklistRow(
+            theme: theme,
+            step: 1,
+            title: 'Post your first job',
+            subtitle:
+                'Title, skills and a scoring threshold — takes about 3 minutes.',
+            actionLabel: 'Post a job',
+            isActive: true,
+            isMobile: isMobile,
+            onTap: () =>
+                Navigator.of(context).pushReplacementNamed('/create-role'),
+          ),
+          Divider(color: theme.border, height: 1),
+          _buildChecklistRow(
+            theme: theme,
+            step: 2,
+            title: 'Set up your scoring model',
+            subtitle: 'Weight the signals that matter most for this workspace.',
+            actionLabel: 'Configure',
+            isActive: false,
+            isMobile: isMobile,
+            onTap: () =>
+                Navigator.of(context).pushReplacementNamed('/settings'),
+          ),
+          Divider(color: theme.border, height: 1),
+          _buildChecklistRow(
+            theme: theme,
+            step: 3,
+            title: 'Invite your team',
+            subtitle: 'Bring in co-recruiters to share the pipeline.',
+            actionLabel: 'Invite',
+            isActive: false,
+            isMobile: isMobile,
+            onTap: () => Navigator.of(context).pushReplacementNamed('/org'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChecklistRow({
+    required DeckTheme theme,
+    required int step,
+    required String title,
+    required String subtitle,
+    required String actionLabel,
+    required bool isActive,
+    required bool isMobile,
+    required VoidCallback onTap,
+  }) {
+    final Widget circle = Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isActive ? AppColors.dashboardRed : Colors.transparent,
+        border: isActive ? null : Border.all(color: theme.border),
+      ),
+      child: Center(
+        child: Text(
+          '$step',
+          style: GoogleFonts.inter(
+            color: isActive ? Colors.white : theme.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+
+    if (isMobile) {
+      return InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            children: [
+              circle,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: theme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          circle,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: theme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.inter(
+                    color: theme.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          if (isActive)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3B82F6),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: onTap,
+              child: Text(
+                actionLabel,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          else
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.textPrimary,
+                side: BorderSide(color: theme.border),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: onTap,
+              child: Text(
+                actionLabel,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   // ── GLASS CARD BASE ────────────────────────────────────────────────────────
   Widget _buildGlassCard({
     required DeckTheme theme,
@@ -2086,24 +2998,32 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
         borderRadius: BorderRadius.circular(16),
         gradient: hasAuroraGlow && theme == DeckTheme.light
             ? const LinearGradient(
-                colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFC), Color(0xFFEEF2FF)],
+                colors: [
+                  Color(0xFFFFFFFF),
+                  Color(0xFFF8FAFC),
+                  Color(0xFFEEF2FF),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               )
             : null,
         border: Border.all(
-          color: hasAuroraGlow && theme == DeckTheme.light ? const Color(0xFFC7D2FE) : theme.border,
+          color: hasAuroraGlow && theme == DeckTheme.light
+              ? const Color(0xFFC7D2FE)
+              : theme.border,
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(theme == DeckTheme.dark ? 0.2 : 0.02),
+            color: Colors.black.withValues(
+              alpha: theme == DeckTheme.dark ? 0.2 : 0.02,
+            ),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
           if (hasAuroraGlow && theme == DeckTheme.light)
             BoxShadow(
-              color: const Color(0xFF818CF8).withOpacity(0.1),
+              color: const Color(0xFF818CF8).withValues(alpha: 0.1),
               blurRadius: 24,
               offset: const Offset(0, 8),
             ),
@@ -2163,7 +3083,7 @@ class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color.withOpacity(0.2)
+      ..color = color.withValues(alpha: 0.2)
       ..strokeWidth = 1;
 
     const double step = 48.0;

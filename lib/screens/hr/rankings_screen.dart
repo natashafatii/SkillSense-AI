@@ -143,7 +143,6 @@ class _RankingsScreenState extends State<RankingsScreen> {
             child: Row(
               children: [
                 // 1. LEFT RAIL (Web Only)
-                if (!isMobile) _buildLeftRail(context),
 
                 // 2. MAIN WORKSPACE
                 Expanded(
@@ -1039,6 +1038,8 @@ class _RankingsScreenState extends State<RankingsScreen> {
   }
 
   // ── WEB LEFT RAIL NAVIGATION ───────────────────────────────────────────────
+  // Legacy rail is kept for reference while the shared recruiter rail owns navigation.
+  // ignore: unused_element
   Widget _buildLeftRail(BuildContext context) {
     final List<Map<String, dynamic>> navItems = [
       {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'route': '/dashboard'},

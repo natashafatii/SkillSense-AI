@@ -20,6 +20,7 @@ class ResumeService {
   /// In-memory cache of the active parsed resume detail (for CD-04 / CD-10 reuse).
   static ResumeDetail? _cachedDetail;
   static String? _cachedDetailId;
+  static String? _cachedDefaultResumeId;
 
   /// Cached profile coverage response data
   static Map<String, dynamic>? _cachedProfileCoverage;
@@ -73,6 +74,8 @@ class ResumeService {
         ),
       );
 
+      _cachedDefaultResumeId = null;
+
       return Map<String, dynamic>.from(response.data as Map);
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
@@ -94,11 +97,11 @@ class ResumeService {
       final detail = ResumeDetail.fromJson(
         response.data as Map<String, dynamic>,
       );
-      // Only cache once fully parsed — keep polling until then.
+      // A PARSED response without extracted skills still needs a later refresh.
       if (epoch != SessionScope.generation) {
         throw StateError('Session changed.');
       }
-      if (!detail.isPending) {
+      if (detail.isFailed || (detail.isParsed && detail.skills != null)) {
         _cachedDetail = detail;
         _cachedDetailId = resumeId;
       }
@@ -117,6 +120,7 @@ class ResumeService {
     Duration interval = const Duration(seconds: 2),
     Duration timeout = const Duration(seconds: 90),
     Function(int elapsedSeconds)? onTick,
+    Future<ResumeDetail> Function(String)? fetchDetail,
   }) async {
     final stopWatch = Stopwatch()..start();
 
@@ -125,12 +129,20 @@ class ResumeService {
         onTick(stopWatch.elapsed.inSeconds);
       }
       try {
-        final detail = await getResumeDetail(resumeId);
-        if (!detail.isPending) {
+        final detail =
+            await (fetchDetail?.call(resumeId) ?? getResumeDetail(resumeId));
+        if (detail.isFailed) {
+          throw const ApiException(
+            statusCode: 422,
+            message: 'Resume parsing failed.',
+          );
+        }
+        if (detail.isParsed) {
           return detail;
         }
-      } catch (_) {
-        // Continue polling on transient network error.
+      } on ApiException catch (e) {
+        if (e.statusCode == 422) rethrow;
+        // Transient request errors may recover before the deadline.
       }
       await Future.delayed(interval);
     }
@@ -148,10 +160,11 @@ class ResumeService {
   /// Pass `{ 'is_default': true }` to set the active/default resume.
   static Future<Map<String, dynamic>> patchResume(
     String resumeId,
-    Map<String, dynamic> fields,
-  ) async {
+    Map<String, dynamic> fields, {
+    Dio? client,
+  }) async {
     try {
-      final dio = await ApiClient.getInstance();
+      final dio = client ?? await ApiClient.getInstance();
       final response = await dio.patch(
         '/candidates/resumes/$resumeId/',
         data: fields,
@@ -160,8 +173,11 @@ class ResumeService {
       // so screens like CD-04 / CD-10 fetch the latest active resume.
       _cachedDetail = null;
       _cachedDetailId = null;
+      _cachedDefaultResumeId = null;
 
-      return Map<String, dynamic>.from(response.data as Map);
+      return response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
     }
@@ -169,11 +185,7 @@ class ResumeService {
 
   /// Convenience wrapper: PATCH is_default = true for the given resume.
   static Future<void> setDefaultResume(String resumeId) async {
-    try {
-      await patchResume(resumeId, {'is_default': true});
-    } on DioException catch (_) {
-      // Gracefully handle if field name differs on backend.
-    } catch (_) {}
+    await patchResume(resumeId, {'is_default': true});
   }
 
   // ── PUT (full replace) ────────────────────────────────────────────────────
@@ -207,6 +219,7 @@ class ResumeService {
         _cachedDetail = null;
         _cachedDetailId = null;
       }
+      _cachedDefaultResumeId = null;
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
     }
@@ -262,6 +275,7 @@ class ResumeService {
     _cachedProfileCoverage = null;
     _cachedDetail = null;
     _cachedDetailId = null;
+    _cachedDefaultResumeId = null;
   }
 
   /// Returns the cached [ResumeDetail] if available (for CD-04 / CD-10).
@@ -271,8 +285,9 @@ class ResumeService {
   /// If [cachedDetail] is missing but [ResumeManager] indicates there's an active resume,
   /// this fetches it. If no active resume exists in [ResumeManager], this returns null.
   static Future<ResumeDetail?> ensureActiveDetailCached() async {
-    if (_cachedDetail != null && !_cachedDetail!.isPending)
-      return _cachedDetail;
+    if (_cachedDefaultResumeId != null) {
+      return getResumeDetail(_cachedDefaultResumeId!);
+    }
 
     try {
       final dio = await ApiClient.getInstance();
@@ -293,7 +308,7 @@ class ResumeService {
       );
       final activeId = active['id']?.toString();
       if (activeId == null) return null;
-
+      _cachedDefaultResumeId = activeId;
       return await getResumeDetail(activeId);
     } catch (_) {
       return null;

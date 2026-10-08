@@ -233,7 +233,8 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          (currentLeft['eyebrow'] as String).toUpperCase(),
+                                          (currentLeft['eyebrow'] as String)
+                                              .toUpperCase(),
                                           style: GoogleFonts.jetBrainsMono(
                                             color: const Color(0xFF7BA5FF),
                                             fontSize: 10,
@@ -332,158 +333,160 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                     ),
                                     child: ConstrainedBox(
                                       constraints: const BoxConstraints(
-                                        maxWidth:
-                                            Responsive.rightPanelContentMaxWidth,
+                                        maxWidth: Responsive
+                                            .rightPanelContentMaxWidth,
                                       ),
                                       child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.start,
                                         children: [
                                           const SizedBox(height: 40),
                                           // HR Badge
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                          color: AppColors.webRoleHr.withValues(
-                                            alpha: 0.1,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          AppConstants.hrBadge,
-                                          style: GoogleFonts.inter(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.webRoleHr,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 24),
-
-                                      // Icon Card
-                                      Container(
-                                        width: 72,
-                                        height: 72,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(
-                                                alpha: 0.05,
-                                              ),
-                                              blurRadius: 20,
-                                              offset: const Offset(0, 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 6,
                                             ),
-                                          ],
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: Icon(
-                                          _getPageIcon(_currentPage),
-                                          color: AppColors.webRoleHr,
-                                          size: 32,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 24),
-
-                                      // Page Title
-                                      Text(
-                                        _getPageTitle(_currentPage),
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.fraunces(
-                                          fontSize: 26,
-                                          fontWeight: FontWeight.w700,
-                                          color: const Color(0xFF0F172A),
-                                          height: 1.2,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 10),
-
-                                      // Page Subtitle
-                                      Text(
-                                        _getPageSubtitle(_currentPage),
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 14,
-                                          color: const Color(0xFF64748B),
-                                          height: 1.5,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 28),
-
-                                      // Dynamic Card Preview
-                                      _buildRightCardPreview(_currentPage),
-                                      const SizedBox(height: 28),
-
-                                      // Pagination Dots
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: List.generate(_totalPages, (
-                                          index,
-                                        ) {
-                                          final bool isActive =
-                                              index == _currentPage;
-                                          return GestureDetector(
-                                            onTap: () => setState(
-                                              () => _currentPage = index,
-                                            ),
-                                            child: AnimatedContainer(
-                                              duration: const Duration(
-                                                milliseconds: 250,
-                                              ),
-                                              margin:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                  ),
-                                              width: isActive ? 20 : 7,
-                                              height: 7,
-                                              decoration: BoxDecoration(
-                                                color: isActive
-                                                    ? AppColors.webRoleHr
-                                                    : const Color(0xFFCBD5E1),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
-                                            ),
-                                          );
-                                        }),
-                                      ),
-                                      const SizedBox(height: 28),
-
-                                      // Next / Finish CTA
-                                      SizedBox(
-                                        width: double.infinity,
-                                        height: 48,
-                                        child: ElevatedButton(
-                                          onPressed: _nextPage,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor:
-                                                AppColors.webRoleHr,
-                                            foregroundColor: Colors.white,
-                                            elevation: 0,
-                                            shape: RoundedRectangleBorder(
+                                            decoration: BoxDecoration(
                                               borderRadius:
-                                                  BorderRadius.circular(24),
+                                                  BorderRadius.circular(20),
+                                              color: AppColors.webRoleHr
+                                                  .withValues(alpha: 0.1),
+                                            ),
+                                            child: Text(
+                                              AppConstants.hrBadge,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.webRoleHr,
+                                              ),
                                             ),
                                           ),
-                                          child: Text(
-                                            _currentPage == 3
-                                                ? AppConstants.hrCreateAccount
-                                                : AppConstants.hrNextButton,
+                                          const SizedBox(height: 24),
+
+                                          // Icon Card
+                                          Container(
+                                            width: 72,
+                                            height: 72,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.05),
+                                                  blurRadius: 20,
+                                                  offset: const Offset(0, 8),
+                                                ),
+                                              ],
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Icon(
+                                              _getPageIcon(_currentPage),
+                                              color: AppColors.webRoleHr,
+                                              size: 32,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 24),
+
+                                          // Page Title
+                                          Text(
+                                            _getPageTitle(_currentPage),
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.fraunces(
+                                              fontSize: 26,
+                                              fontWeight: FontWeight.w700,
+                                              color: const Color(0xFF0F172A),
+                                              height: 1.2,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+
+                                          // Page Subtitle
+                                          Text(
+                                            _getPageSubtitle(_currentPage),
+                                            textAlign: TextAlign.center,
                                             style: GoogleFonts.inter(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                              color: const Color(0xFF64748B),
+                                              height: 1.5,
                                             ),
                                           ),
-                                        ),
-                                      ),
+                                          const SizedBox(height: 28),
+
+                                          // Dynamic Card Preview
+                                          _buildRightCardPreview(_currentPage),
+                                          const SizedBox(height: 28),
+
+                                          // Pagination Dots
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: List.generate(_totalPages, (
+                                              index,
+                                            ) {
+                                              final bool isActive =
+                                                  index == _currentPage;
+                                              return GestureDetector(
+                                                onTap: () => setState(
+                                                  () => _currentPage = index,
+                                                ),
+                                                child: AnimatedContainer(
+                                                  duration: const Duration(
+                                                    milliseconds: 250,
+                                                  ),
+                                                  margin:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 4,
+                                                      ),
+                                                  width: isActive ? 20 : 7,
+                                                  height: 7,
+                                                  decoration: BoxDecoration(
+                                                    color: isActive
+                                                        ? AppColors.webRoleHr
+                                                        : const Color(
+                                                            0xFFCBD5E1,
+                                                          ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        ),
+                                                  ),
+                                                ),
+                                              );
+                                            }),
+                                          ),
+                                          const SizedBox(height: 28),
+
+                                          // Next / Finish CTA
+                                          SizedBox(
+                                            width: double.infinity,
+                                            height: 48,
+                                            child: ElevatedButton(
+                                              onPressed: _nextPage,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    AppColors.webRoleHr,
+                                                foregroundColor: Colors.white,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(24),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                _currentPage == 3
+                                                    ? AppConstants
+                                                          .hrCreateAccount
+                                                    : AppConstants.hrNextButton,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),

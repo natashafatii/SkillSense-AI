@@ -45,9 +45,16 @@ dependencies:
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.2
 
+# Passkeys (used by Clerk) brings in ua_client_hints. Keep its native plugin
+# unchanged while using the local dart:js_interop web patch for Wasm builds.
+dependency_overrides:
+  ua_client_hints:
+    path: third_party/ua_client_hints
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  ua_client_hints: ^1.7.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

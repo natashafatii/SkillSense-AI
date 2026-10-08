@@ -26,7 +26,9 @@ enum AppThemeMode { daylight, night, auto }
 class CandidateProfileSettingsScreen extends StatefulWidget {
   static AppThemeMode currentTheme = AppThemeMode.daylight;
 
-  const CandidateProfileSettingsScreen({super.key});
+  final Future<CandidateProfile> Function()? loadProfile;
+
+  const CandidateProfileSettingsScreen({super.key, this.loadProfile});
 
   @override
   State<CandidateProfileSettingsScreen> createState() =>
@@ -51,6 +53,12 @@ class _CandidateProfileSettingsScreenState
   String? _profileError;
 
   CandidateProfile? _candidateProfile;
+  final _editPhoneController = TextEditingController();
+  final _editLocationController = TextEditingController();
+  final _editLinkedinController = TextEditingController();
+  final _editPortfolioController = TextEditingController();
+  final _editExperienceController = TextEditingController();
+  final _editHeadlineController = TextEditingController();
 
   @override
   void initState() {
@@ -71,7 +79,9 @@ class _CandidateProfileSettingsScreenState
       _profileError = null;
     });
     try {
-      final profile = await ProfileService.getCandidateProfile();
+      final profile =
+          await (widget.loadProfile?.call() ??
+              ProfileService.getCandidateProfile());
       if (mounted) {
         setState(() {
           _candidateProfile = profile;
@@ -81,9 +91,16 @@ class _CandidateProfileSettingsScreenState
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         if (!mounted) return;
-        await AuthService.signOut(context);
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/login');
+        try {
+          await AuthService.signOut(context);
+          if (mounted) Navigator.of(context).pushReplacementNamed('/login');
+        } catch (error) {
+          if (mounted) {
+            setState(() {
+              _isLoadingProfile = false;
+              _profileError = 'Sign out failed: $error';
+            });
+          }
         }
         return;
       }
@@ -106,6 +123,12 @@ class _CandidateProfileSettingsScreenState
   @override
   void dispose() {
     _strengthController.dispose();
+    _editPhoneController.dispose();
+    _editLocationController.dispose();
+    _editLinkedinController.dispose();
+    _editPortfolioController.dispose();
+    _editExperienceController.dispose();
+    _editHeadlineController.dispose();
     super.dispose();
   }
 
@@ -126,7 +149,7 @@ class _CandidateProfileSettingsScreenState
     );
   }
 
-  void _showEditProfileDialog(BuildContext context) {
+  Future<void> _showEditProfileDialog(BuildContext context) async {
     final currentPhone = _candidateProfile?.phone ?? '';
     final currentLocation = _candidateProfile?.location ?? '';
     final currentLinkedin = _candidateProfile?.linkedinUrl ?? '';
@@ -134,18 +157,29 @@ class _CandidateProfileSettingsScreenState
     final currentExp = _candidateProfile?.yearsExperience?.toString() ?? '';
     final currentHeadline = _candidateProfile?.headline ?? '';
 
-    final phoneController = TextEditingController(text: currentPhone);
-    final locationController = TextEditingController(text: currentLocation);
-    final linkedinController = TextEditingController(text: currentLinkedin);
-    final portfolioController = TextEditingController(text: currentPortfolio);
-    final expController = TextEditingController(text: currentExp);
-    final headlineController = TextEditingController(text: currentHeadline);
+    final phoneController = _editPhoneController..text = currentPhone;
+    final locationController = _editLocationController..text = currentLocation;
+    final linkedinController = _editLinkedinController..text = currentLinkedin;
+    final portfolioController = _editPortfolioController
+      ..text = currentPortfolio;
+    final expController = _editExperienceController..text = currentExp;
+    final headlineController = _editHeadlineController..text = currentHeadline;
 
     String? errorMessage;
     Map<String, dynamic> fieldErrors = {};
     bool isSaving = false;
 
-    showDialog(
+    Future<void> closeDialog(
+      BuildContext dialogContext, [
+      CandidateProfile? result,
+    ]) async {
+      FocusScope.of(dialogContext).unfocus();
+      WidgetsBinding.instance.scheduleFrame();
+      await WidgetsBinding.instance.endOfFrame;
+      if (dialogContext.mounted) Navigator.of(dialogContext).pop(result);
+    }
+
+    final updatedProfile = await showDialog<CandidateProfile>(
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
@@ -256,7 +290,7 @@ class _CandidateProfileSettingsScreenState
             ),
             actions: [
               TextButton(
-                onPressed: isSaving ? null : () => Navigator.pop(context),
+                onPressed: isSaving ? null : () => closeDialog(context),
                 child: Text(
                   'Cancel',
                   style: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
@@ -322,7 +356,7 @@ class _CandidateProfileSettingsScreenState
                           }
 
                           if (patchData.isEmpty) {
-                            if (context.mounted) Navigator.pop(context);
+                            if (context.mounted) await closeDialog(context);
                             return;
                           }
 
@@ -331,27 +365,26 @@ class _CandidateProfileSettingsScreenState
                                 patchData,
                               );
 
-                          if (mounted) {
-                            setState(() {
-                              _candidateProfile = updatedProfile;
-                            });
-                          }
-
                           if (context.mounted) {
-                            _showToast('Profile updated successfully.');
-                            Navigator.pop(context);
+                            await closeDialog(context, updatedProfile);
                           }
                         } on ApiException catch (e) {
                           if (e.statusCode == 401) {
                             if (context.mounted) {
-                              Navigator.pop(context); // Close dialog
+                              await closeDialog(context);
                             }
                             if (mounted) {
-                              await AuthService.signOut(this.context);
-                              if (mounted) {
-                                Navigator.of(
-                                  this.context,
-                                ).pushReplacementNamed('/login');
+                              try {
+                                await AuthService.signOut(this.context);
+                                if (mounted) {
+                                  Navigator.of(
+                                    this.context,
+                                  ).pushReplacementNamed('/login');
+                                }
+                              } catch (error) {
+                                if (mounted) {
+                                  _showToast('Sign out failed: $error');
+                                }
                               }
                             }
                             return;
@@ -405,6 +438,10 @@ class _CandidateProfileSettingsScreenState
         },
       ),
     );
+    if (mounted && updatedProfile != null) {
+      setState(() => _candidateProfile = updatedProfile);
+      _showToast('Profile updated successfully.');
+    }
   }
 
   void _requestDataExport() {
@@ -850,13 +887,14 @@ class _CandidateProfileSettingsScreenState
                           );
                         }
 
-                        final fn = profile?.user.firstName?.trim() ?? '';
-                        final ln = profile?.user.lastName?.trim() ?? '';
-                        final email = profile?.user.email.trim() ?? '';
+                        final shownProfile = _candidateProfile ?? profile;
+                        final fn = shownProfile?.user.firstName?.trim() ?? '';
+                        final ln = shownProfile?.user.lastName?.trim() ?? '';
+                        final email = shownProfile?.user.email.trim() ?? '';
 
                         String fullName = '';
                         if (fn.isNotEmpty || ln.isNotEmpty) {
-                          fullName = '${fn} ${ln}'.trim();
+                          fullName = '$fn $ln'.trim();
                         } else if (email.isNotEmpty) {
                           final prefix = email.split('@').first;
                           fullName = prefix.isNotEmpty
@@ -880,21 +918,33 @@ class _CandidateProfileSettingsScreenState
                         Widget buildMissing(String label) {
                           return Row(
                             children: [
-                              Text(
-                                '${label}: ',
-                                style: GoogleFonts.inter(
-                                  color: textSecondary,
-                                  fontSize: 12,
+                              Flexible(
+                                flex: 3,
+                                child: Text(
+                                  '$label: ',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    color: textSecondary,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
-                              Text(
-                                'Not added ',
-                                style: GoogleFonts.inter(
-                                  color: textSecondary.withValues(alpha: 0.6),
-                                  fontSize: 12,
-                                  fontStyle: FontStyle.italic,
+                              const SizedBox(width: 4),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  'Not added ',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    color: textSecondary.withValues(alpha: 0.6),
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                  ),
                                 ),
                               ),
+                              const SizedBox(width: 4),
                               InkWell(
                                 onTap: () => _showEditProfileDialog(context),
                                 child: Text(
@@ -944,7 +994,7 @@ class _CandidateProfileSettingsScreenState
                                       final uri = Uri.parse(
                                         url.startsWith('http')
                                             ? url
-                                            : 'https://${url}',
+                                            : 'https://$url',
                                       );
                                       if (await canLaunchUrl(uri)) {
                                         await launchUrl(
@@ -1017,9 +1067,10 @@ class _CandidateProfileSettingsScreenState
                                     ],
                                   ),
                                 ),
-
+                                const SizedBox(width: 8),
                                 OutlinedButton(
                                   style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(84, 34),
                                     foregroundColor: textPrimary,
                                     side: BorderSide(color: cardBorder),
                                     shape: RoundedRectangleBorder(
@@ -1045,19 +1096,24 @@ class _CandidateProfileSettingsScreenState
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                Text(
-                                  email.isNotEmpty
-                                      ? '${email} · Candidate Profile'
-                                      : 'Candidate Profile',
-                                  style: GoogleFonts.inter(
-                                    color: textSecondary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
+                                Expanded(
+                                  child: Text(
+                                    email.isNotEmpty
+                                        ? '$email · Candidate Profile'
+                                        : 'Candidate Profile',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(
+                                      color: textSecondary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                                 if (email.endsWith('@example.com'))
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8.0),
+                                  const SizedBox(width: 8),
+                                if (email.endsWith('@example.com'))
+                                  Flexible(
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 6,
@@ -1072,6 +1128,8 @@ class _CandidateProfileSettingsScreenState
                                       ),
                                       child: Text(
                                         'Placeholder email - please update',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: GoogleFonts.inter(
                                           color: Colors.amber[900],
                                           fontSize: 10,
@@ -1090,6 +1148,8 @@ class _CandidateProfileSettingsScreenState
                               if (_candidateProfile!.headline.isNotEmpty)
                                 Text(
                                   _candidateProfile!.headline,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.inter(
                                     color: textPrimary,
                                     fontSize: 13,
@@ -1116,11 +1176,11 @@ class _CandidateProfileSettingsScreenState
                                       ? loc
                                       : 'Location not added';
                                   final yrsStr = yrs != null
-                                      ? '${yrs} yrs'
+                                      ? '$yrs yrs'
                                       : 'Experience not added';
                                   return buildIconRow(
                                     Icons.location_on_outlined,
-                                    '${locStr} · ${yrsStr}',
+                                    '$locStr · $yrsStr',
                                   );
                                 },
                               ),
@@ -1450,6 +1510,8 @@ class _CandidateProfileSettingsScreenState
             children: [
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
                   color: textPrimary,
                   fontSize: 13.5,
@@ -1459,6 +1521,8 @@ class _CandidateProfileSettingsScreenState
               const SizedBox(height: 2),
               Text(
                 desc,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(color: textSecondary, fontSize: 11.5),
               ),
             ],
@@ -1505,14 +1569,17 @@ class _CandidateProfileSettingsScreenState
 
           // Theme Selector Row
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
+                flex: 2,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Theme',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         color: textPrimary,
                         fontSize: 13.5,
@@ -1522,6 +1589,8 @@ class _CandidateProfileSettingsScreenState
                     const SizedBox(height: 2),
                     Text(
                       'Night · Daylight · follow system',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         color: textSecondary,
                         fontSize: 11.5,
@@ -1531,7 +1600,14 @@ class _CandidateProfileSettingsScreenState
                 ),
               ),
               const SizedBox(width: 8),
-              _buildThemeChips(isNightMode),
+              Expanded(
+                flex: 5,
+                child: SingleChildScrollView(
+                  key: const Key('profile-theme-chip-scroll'),
+                  scrollDirection: Axis.horizontal,
+                  child: _buildThemeChips(isNightMode),
+                ),
+              ),
             ],
           ),
           const Divider(height: 24, color: Color(0xFFF1F5F9)),
@@ -1546,6 +1622,8 @@ class _CandidateProfileSettingsScreenState
                   children: [
                     Text(
                       'Signed in with Clerk',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         color: textPrimary,
                         fontSize: 13.5,
@@ -1555,6 +1633,8 @@ class _CandidateProfileSettingsScreenState
                     const SizedBox(height: 2),
                     Text(
                       'Google SSO · session 30d',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         color: textSecondary,
                         fontSize: 11.5,
@@ -1600,6 +1680,8 @@ class _CandidateProfileSettingsScreenState
                   children: [
                     Text(
                       'Download my data',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         color: textPrimary,
                         fontSize: 13.5,
@@ -1609,6 +1691,8 @@ class _CandidateProfileSettingsScreenState
                     const SizedBox(height: 2),
                     Text(
                       'Interviews, scores, recordings',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         color: textSecondary,
                         fontSize: 11.5,
@@ -2074,6 +2158,7 @@ class _CandidateProfileSettingsScreenState
 
           return GestureDetector(
             onTap: () {
+              FocusManager.instance.primaryFocus?.unfocus();
               if (index == 0) {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
@@ -2333,11 +2418,14 @@ class _CandidateProfileSettingsScreenState
                 badgeColor: AppColors.dashboardTeal,
                 cardBorder: cardBorder,
                 isNightMode: isNightMode,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateNotificationsScreen(),
-                  ),
-                ),
+                onTap: () {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateNotificationsScreen(),
+                    ),
+                  );
+                },
               ),
               const SizedBox(width: 10),
 
@@ -2347,11 +2435,14 @@ class _CandidateProfileSettingsScreenState
                 hasBadge: false,
                 cardBorder: cardBorder,
                 isNightMode: isNightMode,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateProfileSettingsScreen(),
-                  ),
-                ),
+                onTap: () {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateProfileSettingsScreen(),
+                    ),
+                  );
+                },
               ),
               const SizedBox(width: 10),
 
@@ -2365,11 +2456,19 @@ class _CandidateProfileSettingsScreenState
                 ),
                 onPressed: () async {
                   final navigator = Navigator.of(context);
-                  final signOut = AuthService.signOut(context);
-                  if (navigator.mounted) {
-                    navigator.pushNamedAndRemoveUntil('/login', (_) => false);
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await AuthService.signOut(context);
+                    if (navigator.mounted) {
+                      navigator.pushNamedAndRemoveUntil('/login', (_) => false);
+                    }
+                  } catch (error) {
+                    if (messenger.mounted) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Sign out failed: $error')),
+                      );
+                    }
                   }
-                  await signOut;
                 },
               ),
             ],

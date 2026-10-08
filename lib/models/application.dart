@@ -9,21 +9,24 @@ enum ApplicationStatus {
   const ApplicationStatus(this.value);
 
   static ApplicationStatus fromString(String val) {
-    return ApplicationStatus.values.firstWhere(
-      (e) => e.value == val.toUpperCase(),
-      orElse: () => ApplicationStatus.applied,
-    );
+    return switch (val.toUpperCase()) {
+      'PENDING' || 'APPLIED' => ApplicationStatus.applied,
+      'SCREENING' || 'SCREENED' || 'SHORTLISTED' => ApplicationStatus.screened,
+      'INTERVIEWED' => ApplicationStatus.interviewed,
+      'DECIDED' || 'DECISION' => ApplicationStatus.decision,
+      _ => throw FormatException('Unknown application status: $val'),
+    };
   }
 
   /// Returns the single next valid status in the forward-only lifecycle.
   ///
   /// Returns null if already in terminal state ('DECISION').
   ApplicationStatus? get nextStatus => switch (this) {
-        ApplicationStatus.applied => ApplicationStatus.screened,
-        ApplicationStatus.screened => ApplicationStatus.interviewed,
-        ApplicationStatus.interviewed => ApplicationStatus.decision,
-        ApplicationStatus.decision => null,
-      };
+    ApplicationStatus.applied => ApplicationStatus.screened,
+    ApplicationStatus.screened => ApplicationStatus.interviewed,
+    ApplicationStatus.interviewed => ApplicationStatus.decision,
+    ApplicationStatus.decision => null,
+  };
 }
 
 /// Job Application model — mirrors Django's [ApplicationDetailSerializer]
@@ -36,6 +39,13 @@ class Application {
   final String jobTitle;
   final String? resumeId;
   final ApplicationStatus status;
+  final String? rawStatus;
+  final String? candidateName;
+  final double? resumeScore;
+  final double? technicalScore;
+  final double? behavioralScore;
+  final double? communicationScore;
+  final String? outcome;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -47,11 +57,21 @@ class Application {
     required this.jobTitle,
     this.resumeId,
     required this.status,
+    this.rawStatus,
+    this.candidateName,
+    this.resumeScore,
+    this.technicalScore,
+    this.behavioralScore,
+    this.communicationScore,
+    this.outcome,
     required this.createdAt,
     this.updatedAt,
   });
 
   factory Application.fromJson(Map<String, dynamic> json) {
+    final rawStatus = json['status'] as String;
+    final scores = json['scores'] is Map ? json['scores'] as Map : const {};
+    double? numeric(dynamic value) => value is num ? value.toDouble() : null;
     return Application(
       id: json['id'] as String,
       candidate: json['candidate'] as String? ?? '',
@@ -59,7 +79,20 @@ class Application {
       job: json['job'] as String? ?? '',
       jobTitle: json['job_title'] as String? ?? '',
       resumeId: json['resume_id'] as String?,
-      status: ApplicationStatus.fromString(json['status'] as String? ?? 'APPLIED'),
+      status: ApplicationStatus.fromString(rawStatus),
+      rawStatus: rawStatus,
+      candidateName: (json['candidate_name'] ?? json['name']) as String?,
+      resumeScore: numeric(
+        json['resume_score'] ?? json['match_score'] ?? json['score'],
+      ),
+      technicalScore: numeric(json['technical_score'] ?? scores['technical']),
+      behavioralScore: numeric(
+        json['behavioral_score'] ?? scores['behavioral'],
+      ),
+      communicationScore: numeric(
+        json['communication_score'] ?? scores['communication'],
+      ),
+      outcome: json['outcome'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: json['updated_at'] != null
           ? DateTime.tryParse(json['updated_at'] as String)
@@ -68,5 +101,6 @@ class Application {
   }
 
   @override
-  String toString() => 'Application($jobTitle, candidate=$candidateEmail, status=${status.value})';
+  String toString() =>
+      'Application($jobTitle, candidate=$candidateEmail, status=${status.value})';
 }

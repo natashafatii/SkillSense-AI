@@ -27,6 +27,7 @@ class LoginScreen extends StatefulWidget {
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
+
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   bool _obscurePassword = true;
@@ -103,11 +104,12 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
 
       if (result.status == SignInResultStatus.verificationRequired) {
-        final mismatch = await Navigator.of(context).push<RoleMismatchException>(
-          MaterialPageRoute(
-            builder: (_) => EmailVerificationScreen.signIn(email: email),
-          ),
-        );
+        final mismatch = await Navigator.of(context)
+            .push<RoleMismatchException>(
+              MaterialPageRoute(
+                builder: (_) => EmailVerificationScreen.signIn(email: email),
+              ),
+            );
         if (mounted && mismatch != null) {
           setState(() => _loginError = mismatch.toString());
         }
@@ -118,20 +120,39 @@ class _LoginScreenState extends State<LoginScreen>
 
       _snack('Login successful!');
       final userData = AuthService.currentUserData;
-      
+
       final fn = (userData?['first_name'] ?? '').toString().trim();
       final ln = (userData?['last_name'] ?? '').toString().trim();
-      
+
       final cFn = (AuthService.clerkFirstName ?? '').trim();
       final cLn = (AuthService.clerkLastName ?? '').trim();
 
       if (fn.isEmpty && ln.isEmpty) {
         if (cFn.isNotEmpty || cLn.isNotEmpty) {
-          // We have the name from Clerk, but it's missing in the backend. 
-          // PATCH silently and avoid the modal.
+          // We have the name from Clerk, but it's missing in the backend.
+          // Keep the backend's current profile visible if Clerk name sync fails.
           try {
             await AuthService.updateUserProfile(firstName: cFn, lastName: cLn);
-          } catch (_) {}
+          } catch (error) {
+            if (!mounted) return;
+            await showDialog<void>(
+              context: context,
+              builder: (dialogContext) => AlertDialog(
+                title: const Text('Name was not saved'),
+                content: Text(
+                  'Your Clerk name could not be confirmed by the profile API. '
+                  'The saved backend name is unchanged. $error',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Continue'),
+                  ),
+                ],
+              ),
+            );
+            if (!mounted) return;
+          }
         } else {
           if (mounted) {
             await showDialog(
@@ -144,8 +165,10 @@ class _LoginScreenState extends State<LoginScreen>
       }
 
       final updatedUserData = AuthService.currentUserData;
-      final role = (updatedUserData?['role']?.toString().toUpperCase()) ?? AuthService.getUserRole().toUpperCase();
-      
+      final role =
+          (updatedUserData?['role']?.toString().toUpperCase()) ??
+          AuthService.getUserRole().toUpperCase();
+
       if (role == 'RECRUITER' || role == 'ADMIN') {
         if (!mounted) return;
         Navigator.pushReplacementNamed(context, '/dashboard');
@@ -218,22 +241,24 @@ class _LoginScreenState extends State<LoginScreen>
                           onSetPassword: (result) async {
                             if (result.status ==
                                 SignInResultStatus.verificationRequired) {
-                              final mismatch = await Navigator.push<RoleMismatchException>(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      EmailVerificationScreen.signIn(
-                                    email: email,
-                                  ),
-                                ),
-                              );
+                              final mismatch =
+                                  await Navigator.push<RoleMismatchException>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          EmailVerificationScreen.signIn(
+                                            email: email,
+                                          ),
+                                    ),
+                                  );
                               if (mismatch != null) throw mismatch;
                               return;
                             }
                             await AuthService.fetchCurrentUser();
                             if (!mounted) return;
                             _snack('Password updated successfully.');
-                            final route = AuthService.getUserRole() == 'RECRUITER'
+                            final route =
+                                AuthService.getUserRole() == 'RECRUITER'
                                 ? '/dashboard'
                                 : '/candidate/home';
                             Navigator.pushNamedAndRemoveUntil(
@@ -335,157 +360,161 @@ class _LoginScreenState extends State<LoginScreen>
               // ── Same gradient background as WelcomeScreen & RoleSelectionScreen ──
               const GradientBackground(),
 
-          // ── Scrollable content ──────────────────────────────────────────
-          SafeArea(
-            child: FadeTransition(
-              opacity: _fade,
-              child: ScrollConfiguration(
-                behavior: ScrollConfiguration.of(
-                  context,
-                ).copyWith(scrollbars: false),
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: SlideTransition(
-                    position: _slide,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // ── Small logo ─────────────────────────────────
-                          const SizedBox(height: 28),
-                          Center(
-                            child: SvgPicture.asset(
-                              'assets/images/logo.svg',
-                              width: 80,
-                              height: 80,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          const SizedBox(height: 28),
-
-                          // ── Bold black title ───────────────────────────
-                          Text(
-                            AppConstants.loginTitle,
-                            style: GoogleFonts.publicSans(
-                              fontSize: 34,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF1A1A1A),
-                              height: 1.15,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-
-                          // ── Grey subtitle ──────────────────────────────
-                          Text(
-                            AppConstants.loginSubtitle,
-                            style: GoogleFonts.publicSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w400,
-                              color: const Color(0xFF888888),
-                            ),
-                          ),
-                          const SizedBox(height: 28),
-
-                          // ── Email field (standalone on bg) ─────────────
-                          TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            style: GoogleFonts.publicSans(
-                              fontSize: 15,
-                              color: const Color(0xFF1A1A1A),
-                            ),
-                            decoration: _fieldDecor(AppConstants.emailHint),
-                          ),
-                          const SizedBox(height: 14),
-
-                          // ── Password field ─────────────────────────────
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            style: GoogleFonts.publicSans(
-                              fontSize: 15,
-                              color: const Color(0xFF1A1A1A),
-                            ),
-                            decoration: _fieldDecor(
-                              AppConstants.passwordHint,
-                              suffix: IconButton(
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  color: AppColors.textGrey,
-                                  size: 20,
-                                ),
-                                onPressed: () => setState(
-                                  () => _obscurePassword = !_obscurePassword,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-
-                          // ── Remember me + Forgot Password ──────────────
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // ── Scrollable content ──────────────────────────────────────────
+              SafeArea(
+                child: FadeTransition(
+                  opacity: _fade,
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(
+                      context,
+                    ).copyWith(scrollbars: false),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: SlideTransition(
+                        position: _slide,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Flexible(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: Checkbox(
-                                        value: _rememberMe,
-                                        activeColor: AppColors.buttonBlue,
-                                        materialTapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        side: BorderSide(
-                                          color: const Color(0xFFBBBBBB),
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        onChanged: (v) => setState(
-                                          () => _rememberMe = v ?? false,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      child: Text(
-                                        AppConstants.rememberMe,
-                                        style: GoogleFonts.publicSans(
-                                          fontSize: 13,
-                                          color: const Color(0xFF555555),
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
+                              // ── Small logo ─────────────────────────────────
+                              const SizedBox(height: 28),
+                              Center(
+                                child: SvgPicture.asset(
+                                  'assets/images/logo.svg',
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.contain,
                                 ),
                               ),
-                              TextButton(
-                                onPressed: _openForgotPassword,
-                                style: TextButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: Size.zero,
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
+                              const SizedBox(height: 28),
+
+                              // ── Bold black title ───────────────────────────
+                              Text(
+                                AppConstants.loginTitle,
+                                style: GoogleFonts.publicSans(
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF1A1A1A),
+                                  height: 1.15,
                                 ),
-                                child: Text(
-                                  AppConstants.forgotPassword,
-                                  style: GoogleFonts.publicSans(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.linkBlue,
+                              ),
+                              const SizedBox(height: 6),
+
+                              // ── Grey subtitle ──────────────────────────────
+                              Text(
+                                AppConstants.loginSubtitle,
+                                style: GoogleFonts.publicSans(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w400,
+                                  color: const Color(0xFF888888),
+                                ),
+                              ),
+                              const SizedBox(height: 28),
+
+                              // ── Email field (standalone on bg) ─────────────
+                              TextFormField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                style: GoogleFonts.publicSans(
+                                  fontSize: 15,
+                                  color: const Color(0xFF1A1A1A),
+                                ),
+                                decoration: _fieldDecor(AppConstants.emailHint),
+                              ),
+                              const SizedBox(height: 14),
+
+                              // ── Password field ─────────────────────────────
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: _obscurePassword,
+                                style: GoogleFonts.publicSans(
+                                  fontSize: 15,
+                                  color: const Color(0xFF1A1A1A),
+                                ),
+                                decoration: _fieldDecor(
+                                  AppConstants.passwordHint,
+                                  suffix: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                      color: AppColors.textGrey,
+                                      size: 20,
+                                    ),
+                                    onPressed: () => setState(
+                                      () =>
+                                          _obscurePassword = !_obscurePassword,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 22),
+                              const SizedBox(height: 6),
+
+                              // ── Remember me + Forgot Password ──────────────
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Flexible(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: Checkbox(
+                                            value: _rememberMe,
+                                            activeColor: AppColors.buttonBlue,
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
+                                            side: BorderSide(
+                                              color: const Color(0xFFBBBBBB),
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            onChanged: (v) => setState(
+                                              () => _rememberMe = v ?? false,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            AppConstants.rememberMe,
+                                            style: GoogleFonts.publicSans(
+                                              fontSize: 13,
+                                              color: const Color(0xFF555555),
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: _openForgotPassword,
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text(
+                                      AppConstants.forgotPassword,
+                                      style: GoogleFonts.publicSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppColors.linkBlue,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 22),
 
                               if (_loginError != null) ...[
                                 Container(
@@ -512,186 +541,186 @@ class _LoginScreenState extends State<LoginScreen>
                                 const SizedBox(height: 12),
                               ],
 
-                          // ── Log In button ──────────────────────────────
-                          SizedBox(
-                            height: 56,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _login,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.buttonBlue,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                              // ── Log In button ──────────────────────────────
+                              SizedBox(
+                                height: 56,
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _login,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.buttonBlue,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2.5,
+                                          ),
+                                        )
+                                      : Text(
+                                          AppConstants.logIn,
+                                          style: GoogleFonts.publicSans(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                 ),
                               ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2.5,
-                                      ),
-                                    )
-                                  : Text(
-                                      AppConstants.logIn,
+                              const SizedBox(height: 24),
+
+                              // ── Or divider ─────────────────────────────────
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Divider(
+                                      color: AppColors.dividerGrey,
+                                      thickness: 1,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                    ),
+                                    child: Text(
+                                      AppConstants.orDivider,
                                       style: GoogleFonts.publicSans(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        color: AppColors.textGrey,
                                       ),
                                     ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-
-                          // ── Or divider ─────────────────────────────────
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Divider(
-                                  color: AppColors.dividerGrey,
-                                  thickness: 1,
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                ),
-                                child: Text(
-                                  AppConstants.orDivider,
-                                  style: GoogleFonts.publicSans(
-                                    fontSize: 13,
-                                    color: AppColors.textGrey,
                                   ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Divider(
-                                  color: AppColors.dividerGrey,
-                                  thickness: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-
-                          // ── Continue with Google ───────────────────────
-                          GestureDetector(
-                            onTap: () =>
-                                _snack(AppConstants.continueWithGoogle),
-                            child: Container(
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: AppColors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: AppColors.socialBorder,
-                                  width: 1.2,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SvgPicture.asset(
-                                    'assets/icons/google.svg',
-                                    width: 24,
-                                    height: 24,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    AppConstants.continueWithGoogle,
-                                    style: GoogleFonts.publicSans(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textDark,
+                                  Expanded(
+                                    child: Divider(
+                                      color: AppColors.dividerGrey,
+                                      thickness: 1,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
+                              const SizedBox(height: 20),
 
-                          // ── Continue with Facebook ─────────────────────
-                          GestureDetector(
-                            onTap: () =>
-                                _snack(AppConstants.continueWithFacebook),
-                            child: Container(
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: AppColors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: AppColors.socialBorder,
-                                  width: 1.2,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SvgPicture.asset(
-                                    'assets/icons/facebook.svg',
-                                    width: 24,
-                                    height: 24,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    AppConstants.continueWithFacebook,
-                                    style: GoogleFonts.publicSans(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textDark,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-
-                          // ── Don't have an account? Sign Up ─────────────
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                AppConstants.noAccount,
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 14,
-                                  color: AppColors.textGrey,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
+                              // ── Continue with Google ───────────────────────
                               GestureDetector(
-                                onTap: () {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/signup/role',
-                                  );
-                                },
-                                child: Text(
-                                  AppConstants.signUp,
-                                  style: GoogleFonts.publicSans(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.linkBlue,
+                                onTap: () =>
+                                    _snack(AppConstants.continueWithGoogle),
+                                child: Container(
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.white,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: AppColors.socialBorder,
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SvgPicture.asset(
+                                        'assets/icons/google.svg',
+                                        width: 24,
+                                        height: 24,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        AppConstants.continueWithGoogle,
+                                        style: GoogleFonts.publicSans(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.textDark,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 14),
+
+                              // ── Continue with Facebook ─────────────────────
+                              GestureDetector(
+                                onTap: () =>
+                                    _snack(AppConstants.continueWithFacebook),
+                                child: Container(
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.white,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: AppColors.socialBorder,
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SvgPicture.asset(
+                                        'assets/icons/facebook.svg',
+                                        width: 24,
+                                        height: 24,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        AppConstants.continueWithFacebook,
+                                        style: GoogleFonts.publicSans(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.textDark,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+
+                              // ── Don't have an account? Sign Up ─────────────
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    AppConstants.noAccount,
+                                    style: GoogleFonts.publicSans(
+                                      fontSize: 14,
+                                      color: AppColors.textGrey,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.pushNamed(
+                                        context,
+                                        '/signup/role',
+                                      );
+                                    },
+                                    child: Text(
+                                      AppConstants.signUp,
+                                      style: GoogleFonts.publicSans(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.linkBlue,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 36),
                             ],
                           ),
-                          const SizedBox(height: 36),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
       },
     );
   }

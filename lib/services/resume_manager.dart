@@ -48,14 +48,35 @@ class ResumeManager {
         return;
       }
 
+      final existingNames = <String, String>{};
+      if (_cachedResumes != null) {
+        for (var r in _cachedResumes!) {
+          if (r['id'] != null && r['filename'] != null) {
+            existingNames[r['id'].toString()] = r['filename'].toString();
+          }
+        }
+      }
+
+      final usedVersions = <String>{};
+      var nextVersion = 1;
       final normalised = apiList.map((r) {
         final String id = (r['id'] ?? '').toString();
         final String rawFilename =
             (r['file_name'] ?? r['filename'] ?? 'resume.pdf').toString();
-        final String filename = rawFilename.replaceAllMapped(
+        String filename = rawFilename.replaceAllMapped(
           RegExp(r'_([a-zA-Z0-9]{7})(\.[a-zA-Z0-9]+)$'),
           (match) => match.group(2)!,
         );
+
+        final nameWithoutExt = filename
+            .replaceAll('.pdf', '')
+            .replaceAll('.docx', '');
+        if (RegExp(r'^[0-9a-fA-F\-]{32,}$').hasMatch(nameWithoutExt)) {
+          if (existingNames.containsKey(id)) {
+            filename = existingNames[id]!;
+          }
+        }
+
         final String filesize = (r['file_size'] ?? r['filesize'] ?? '')
             .toString();
         final String uploadedAt = (r['uploaded_at'] ?? r['uploadedAt'] ?? '')
@@ -73,9 +94,16 @@ class ResumeManager {
             ? Map<String, dynamic>.from(r['extracted'] as Map)
             : null;
 
+        var version = (r['version'] ?? '').toString();
+        if (version.isEmpty || usedVersions.contains(version)) {
+          do {
+            version = 'v${nextVersion++}';
+          } while (usedVersions.contains(version));
+        }
+        usedVersions.add(version);
         return <String, dynamic>{
           'id': id,
-          'version': r['version'] ?? '',
+          'version': version,
           'filename': filename,
           'filesize': filesize,
           'uploadedAt': uploadedAt,
@@ -87,18 +115,12 @@ class ResumeManager {
         };
       }).toList();
 
-      // Ensure exactly one active resume (first is_default if none flagged).
-      if (!normalised.any((r) => r['active'] == true) &&
-          normalised.isNotEmpty) {
-        normalised.first['active'] = true;
-      }
-
       _cachedResumes = normalised;
       _cachedUserId = AuthService.currentUserId;
       resumesNotifier.value = List.from(normalised);
       _persist();
     } catch (_) {
-      // On failure keep whatever was in localStorage / memory.
+      rethrow;
     }
   }
 
@@ -232,7 +254,7 @@ class ResumeManager {
     getResumes();
 
     final existingIdx = _cachedResumes!.indexWhere(
-      (r) => r['filename'] == filename || (apiId != null && r['id'] == apiId),
+      (r) => apiId != null && r['id'] == apiId,
     );
 
     if (existingIdx != -1) {
@@ -243,13 +265,28 @@ class ResumeManager {
       _cachedResumes![existingIdx]['uploadedAt'] = DateTime.now()
           .toIso8601String();
       if (coverage != null) _cachedResumes![existingIdx]['coverage'] = coverage;
-      if (extracted != null)
+      if (extracted != null) {
         _cachedResumes![existingIdx]['extracted'] = extracted;
+      }
       _cachedResumes![existingIdx]['status'] = status;
-      if (processingError != null)
+      if (processingError != null) {
         _cachedResumes![existingIdx]['processingError'] = processingError;
+      }
     } else {
-      final newVersionNum = _cachedResumes!.length + 1;
+      final newVersionNum =
+          _cachedResumes!
+              .map(
+                (r) =>
+                    int.tryParse(
+                      (r['version'] ?? '').toString().replaceFirst(
+                        RegExp(r'^v'),
+                        '',
+                      ),
+                    ) ??
+                    0,
+              )
+              .fold<int>(0, (max, n) => n > max ? n : max) +
+          1;
       final newVersionKey = 'v$newVersionNum';
 
       for (var r in _cachedResumes!) {
@@ -295,23 +332,17 @@ class ResumeManager {
     _persist();
   }
 
-  static void setActive(String versionOrId) {
+  static void setActive(String resumeId) {
     getResumes();
     for (var r in _cachedResumes!) {
-      r['active'] = (r['version'] == versionOrId || r['id'] == versionOrId);
+      r['active'] = r['id'] == resumeId;
     }
     _persist();
   }
 
-  static void deleteResume(String versionOrId) {
+  static void deleteResume(String resumeId) {
     getResumes();
-    _cachedResumes!.removeWhere(
-      (r) => r['version'] == versionOrId || r['id'] == versionOrId,
-    );
-    if (_cachedResumes!.isNotEmpty &&
-        !_cachedResumes!.any((r) => r['active'] == true)) {
-      _cachedResumes!.first['active'] = true;
-    }
+    _cachedResumes!.removeWhere((r) => r['id'] == resumeId);
     _persist();
   }
 

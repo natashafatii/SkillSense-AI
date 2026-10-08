@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../constants/app_colors.dart';
 import '../../services/resume_manager.dart';
@@ -26,8 +25,13 @@ class _CandidateResumeManagementScreenState
 
   // Right-panel list loading state
   bool _isLoadingList = true;
+  String? _listError;
+  bool _mutatingResume = false;
 
   // Uploading and Parsing State
+  bool _hasStagedFile = false;
+  List<int>? _stagedFileBytes;
+  bool _autoCommitOnParse = false;
   bool _isUploading = false;
   double _uploadProgress = 0.0;
   bool _isParsing = false;
@@ -40,7 +44,6 @@ class _CandidateResumeManagementScreenState
   int _parsingElapsedSeconds = 0;
 
   // Parsed Response Data (from API — no hardcoded values)
-  Map<String, dynamic>? _stagedCoverage;
   Map<String, dynamic>? _stagedExtracted;
 
   // Dynamic persistent resumes list loaded from ResumeManager
@@ -56,9 +59,17 @@ class _CandidateResumeManagementScreenState
 
   /// Fetches the canonical resume list from the API on page load.
   Future<void> _loadResumeList() async {
-    setState(() => _isLoadingList = true);
-    await ResumeManager.loadFromApi();
-    if (mounted) setState(() => _isLoadingList = false);
+    setState(() {
+      _isLoadingList = true;
+      _listError = null;
+    });
+    try {
+      await ResumeManager.loadFromApi();
+    } catch (e) {
+      if (mounted) setState(() => _listError = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoadingList = false);
+    }
   }
 
   @override
@@ -67,65 +78,38 @@ class _CandidateResumeManagementScreenState
     super.dispose();
   }
 
-  void _setActiveResume(Map<String, dynamic> selectedVersion) async {
-    final String apiId = (selectedVersion['id'] ?? '').toString();
-    final String versionOrId =
-        (selectedVersion['version'] != null &&
-            selectedVersion['version'].toString().isNotEmpty)
-        ? selectedVersion['version'].toString()
-        : apiId;
-
-    setState(() {
-      ResumeManager.setActive(versionOrId);
-    });
-
-    if (selectedVersion['id'] != null) {
-      try {
-        await ResumeService.patchResume(selectedVersion['id'].toString(), {
-          'is_default': true,
-        });
-      } catch (_) {
-        // Best-effort — local state is already updated.
+  Future<void> _setActiveResume(Map<String, dynamic> selected) async {
+    final id = (selected['id'] ?? '').toString();
+    if (id.isEmpty) return;
+    try {
+      ResumeManager.setActive(id);
+      if (ResumeManager.getActiveResume()['id'] != id) {
+        throw StateError('Failed to set default resume locally.');
+      }
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Default resume updated to ${selected['filename']}'),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not set default resume: $e')),
+        );
       }
     }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        content: Row(
-          children: [
-            const Icon(
-              Icons.check_circle_rounded,
-              color: Color(0xFF17CBAC),
-              size: 18,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Default active resume updated to "${selectedVersion['filename']}"',
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _removeResume(Map<String, dynamic> resume) async {
     final String apiId = (resume['id'] ?? '').toString();
-    final String versionOrId =
-        (resume['version'] != null && resume['version'].toString().isNotEmpty)
-        ? resume['version'].toString()
-        : apiId;
-    if (apiId.isEmpty && versionOrId.isEmpty) return;
+    if (apiId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot delete: Resume ID is empty.')),
+      );
+      return;
+    }
 
     final bool? confirm = await showDialog<bool>(
       context: context,
@@ -160,43 +144,63 @@ class _CandidateResumeManagementScreenState
 
     if (confirm != true) return;
 
-    if (apiId.isNotEmpty) {
-      try {
-        await ResumeService.deleteResume(apiId);
-      } catch (e) {
-        if (!mounted) return;
-        if (e is ApiException) {
-          if (e.statusCode == 401) {
-            await AuthService.signOut(context);
-            if (!mounted) return;
-            Navigator.of(context).pushReplacementNamed('/sign-in');
-            return;
-          } else if (e.statusCode == 404) {
-            // Already deleted on server, proceed to remove from UI
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Network error. Please try again.'),
-                backgroundColor: Colors.redAccent,
-              ),
-            );
-            return;
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Network error. Please try again.'),
-              backgroundColor: Colors.redAccent,
+    try {
+      // 1. Delete on the backend
+      await ResumeService.deleteResume(apiId);
+    } catch (e) {
+      if (!mounted) return;
+      if (e is ApiException && e.statusCode == 404) {
+        // Ignore 404, it's already gone
+      } else if (e is ApiException && e.statusCode == 409) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Cannot delete this resume because it has been submitted for an application.',
             ),
-          );
-          return;
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      } else {
+        String errorMessage = e.toString();
+        if (e is ApiException) {
+          errorMessage = e.message;
         }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting resume: $errorMessage'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
       }
     }
 
-    setState(() {
-      ResumeManager.deleteResume(versionOrId);
-    });
+    if (!mounted) return;
+
+    // 2. Eagerly remove from local UI
+    try {
+      ResumeManager.deleteResume(apiId);
+      setState(() {});
+    } catch (e) {
+      // ignore local cache errors
+    }
+
+    // 3. Sync with backend
+    try {
+      await ResumeManager.loadFromApi();
+      if (ResumeManager.getResumes().any((r) => r['id'] == apiId)) {
+        throw StateError('The server still lists this resume.');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Warning: $e')));
+      }
+    }
+
+    if (mounted) setState(() {});
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -232,7 +236,19 @@ class _CandidateResumeManagementScreenState
             : (platformFile.path != null
                   ? File(platformFile.path!).readAsBytesSync()
                   : <int>[]);
-        _startRealUploadFlow(platformFile.name, '$sizeMb MB', bytes);
+        setState(() {
+          _stagedFilename = platformFile.name;
+          _stagedFilesize = '$sizeMb MB';
+          _stagedFileBytes = bytes;
+          _hasStagedFile = true;
+          _isUploading = false;
+          _uploadProgress = 0.0;
+          _isParsing = false;
+          _parseCompleted = false;
+          _isFailed = false;
+          _failureErrorMessage = '';
+          _stagedExtracted = null;
+        });
       }
     } catch (e) {
       if (!mounted) return;
@@ -242,6 +258,13 @@ class _CandidateResumeManagementScreenState
           backgroundColor: Colors.redAccent,
         ),
       );
+    }
+  }
+
+  void _startUploadFlowFromButton() {
+    if (_stagedFileBytes != null) {
+      _autoCommitOnParse = true;
+      _startRealUploadFlow(_stagedFilename, _stagedFilesize, _stagedFileBytes!);
     }
   }
 
@@ -273,7 +296,6 @@ class _CandidateResumeManagementScreenState
       _isFailed = false;
       _failureErrorMessage = '';
       _parsingElapsedSeconds = 0;
-      _stagedCoverage = null;
       _stagedExtracted = null;
     });
 
@@ -336,7 +358,6 @@ class _CandidateResumeManagementScreenState
         });
       } else {
         // Derive all values from the real API response — no hardcoded numbers.
-        final coverage = ResumeService.coverageFromDetail(detail);
         final skills = detail.skills ?? [];
         final roles =
             detail.experience
@@ -358,13 +379,17 @@ class _CandidateResumeManagementScreenState
         setState(() {
           _isParsing = false;
           _parseCompleted = true;
-          _stagedCoverage = coverage.map((k, v) => MapEntry(k, v));
           _stagedExtracted = {
             'skills': skills,
             'roles': roles,
             'years_experience': yrs > 0 ? yrs : null,
           };
         });
+
+        if (_autoCommitOnParse) {
+          _autoCommitOnParse = false;
+          _commitStagedResume();
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -376,40 +401,49 @@ class _CandidateResumeManagementScreenState
     }
   }
 
-  void _commitStagedResume() {
-    // Only callable when parsing has successfully completed.
-    if (!_parseCompleted) return;
-
-    setState(() {
+  Future<void> _commitStagedResume() async {
+    if (!_parseCompleted ||
+        _stagedResumeId == null ||
+        _stagedResumeId!.isEmpty) {
+      return;
+    }
+    final id = _stagedResumeId!;
+    try {
       ResumeManager.addResume(
         _stagedFilename,
         _stagedFilesize,
-        apiId: _stagedResumeId,
-        coverage: _stagedCoverage,
-        extracted: _stagedExtracted,
-        status: _isFailed ? 'failed' : 'parsed',
-        processingError: _failureErrorMessage,
+        apiId: id,
+        status: 'parsed',
       );
+      await ResumeManager.loadFromApi();
+      ResumeManager.setActive(id);
+      if (ResumeManager.getActiveResume()['id'] != id) {
+        throw StateError('Failed to set the default resume locally.');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Resume parsed, but setting it as default failed: $e',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
       _parseCompleted = false;
+      _hasStagedFile = false;
+      _stagedFileBytes = null;
       _isParsing = false;
       _isUploading = false;
       _isFailed = false;
       _uploadProgress = 0.0;
     });
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          'Resume "$_stagedFilename" set as your active resume!',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+      SnackBar(content: Text('Resume $_stagedFilename confirmed as default.')),
     );
   }
 
@@ -480,14 +514,11 @@ class _CandidateResumeManagementScreenState
                                   top: 20,
                                   bottom: isMobile ? 100 : 32,
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (isMobile)
-                                      _buildMobileLayout(hasResumes)
-                                    else
-                                      _buildWebLayout(hasResumes),
-                                  ],
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) =>
+                                      isMobile || constraints.maxWidth < 1050
+                                      ? _buildMobileLayout(hasResumes)
+                                      : _buildWebLayout(hasResumes),
                                 ),
                               ),
                             ),
@@ -668,12 +699,10 @@ class _CandidateResumeManagementScreenState
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Left Column: Add a resume Card (677.83px layout width)
-        SizedBox(width: 677.83, child: _buildAddResumeCard()),
+        // Divide the available canvas rather than assuming its full width.
+        Expanded(flex: 678, child: _buildAddResumeCard()),
         const SizedBox(width: 14),
-
-        // Right Column: Your resumes Card (484.17px layout width)
-        SizedBox(width: 484.17, child: _buildYourResumesCard(hasResumes)),
+        Expanded(flex: 484, child: _buildYourResumesCard(hasResumes)),
       ],
     );
   }
@@ -756,7 +785,7 @@ class _CandidateResumeManagementScreenState
                     cursor: SystemMouseCursors.click,
                     child: Container(
                       width: double.infinity,
-                      height: 206.78,
+                      constraints: const BoxConstraints(minHeight: 206.78),
                       padding: const EdgeInsets.symmetric(
                         vertical: 38,
                         horizontal: 20,
@@ -773,6 +802,7 @@ class _CandidateResumeManagementScreenState
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           // ⇪ Upload Icon Container (44x44px white box)
                           Container(
@@ -804,25 +834,33 @@ class _CandidateResumeManagementScreenState
                           const SizedBox(height: 8),
 
                           // Text: Drag & drop your resume here
-                          Text(
-                            'Drag & drop your resume here',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF1B2740),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 280),
+                            child: Text(
+                              'Drag & drop your resume here',
+                              textAlign: TextAlign.center,
+                              softWrap: true,
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFF1B2740),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 4),
 
                           // Text: PDF or DOCX, up to 5MB
-                          Text(
-                            'PDF or DOCX, up to 5MB',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF7A88A3),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w500,
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 280),
+                            child: Text(
+                              'PDF or DOCX, up to 5MB',
+                              textAlign: TextAlign.center,
+                              softWrap: true,
+                              style: GoogleFonts.spaceGrotesk(
+                                color: const Color(0xFF7A88A3),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -870,7 +908,11 @@ class _CandidateResumeManagementScreenState
 
                 const SizedBox(height: 16),
 
-                if (_isUploading || _isParsing || _isFailed || _parseCompleted)
+                if (_hasStagedFile ||
+                    _isUploading ||
+                    _isParsing ||
+                    _isFailed ||
+                    _parseCompleted)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -917,6 +959,8 @@ class _CandidateResumeManagementScreenState
                               children: [
                                 Text(
                                   _stagedFilename,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.inter(
                                     color: const Color(0xFF1B2740),
                                     fontSize: 12,
@@ -925,6 +969,8 @@ class _CandidateResumeManagementScreenState
                                 ),
                                 Text(
                                   _stagedFilesize,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.spaceGrotesk(
                                     color: const Color(0xFF7A88A3),
                                     fontSize: 10.5,
@@ -937,7 +983,13 @@ class _CandidateResumeManagementScreenState
 
                           // Progress percentage text: 62%
                           Text(
-                            '${(_uploadProgress * 100).toInt()}%',
+                            (_hasStagedFile &&
+                                    !_isUploading &&
+                                    !_isParsing &&
+                                    !_parseCompleted &&
+                                    !_isFailed)
+                                ? 'READY'
+                                : '${(_uploadProgress * 100).toInt()}%',
                             style: GoogleFonts.jetBrainsMono(
                               color: const Color(0xFF4A5875),
                               fontSize: 11,
@@ -1030,13 +1082,19 @@ class _CandidateResumeManagementScreenState
                                   Text(
                                     _isFailed
                                         ? "Couldn't read this file — try a text-based PDF."
-                                        : (_isParsing
-                                              ? (_parsingElapsedSeconds > 10
-                                                    ? 'Still processing — this can take a moment.'
-                                                    : 'Parsing with AI…')
-                                              : _parseCompleted
-                                              ? 'AI Resume Parsing Complete'
-                                              : 'Preparing AI feature extraction…'),
+                                        : (_hasStagedFile &&
+                                                  !_isUploading &&
+                                                  !_isParsing &&
+                                                  !_parseCompleted
+                                              ? 'Ready to upload and parse'
+                                              : (_isParsing
+                                                    ? (_parsingElapsedSeconds >
+                                                              10
+                                                          ? 'Still processing — this can take a moment.'
+                                                          : 'Parsing with AI…')
+                                                    : _parseCompleted
+                                                    ? 'AI Resume Parsing Complete'
+                                                    : 'Uploading resume…')),
                                     style: GoogleFonts.inter(
                                       color: _isFailed
                                           ? const Color(0xFF991B1B)
@@ -1050,10 +1108,15 @@ class _CandidateResumeManagementScreenState
                                         ? (_failureErrorMessage.isNotEmpty
                                               ? _failureErrorMessage
                                               : 'Text extraction or AI parsing failed')
-                                        : (_stagedExtracted != null &&
-                                                  _parseCompleted
-                                              ? '${(_stagedExtracted!['skills'] as List?)?.length ?? 0} skills · ${(_stagedExtracted!['roles'] as List?)?.length ?? 0} roles · ${_stagedExtracted!['years_experience'] ?? 4} yrs experience'
-                                              : 'Extracting skills, roles & experience'),
+                                        : (_hasStagedFile &&
+                                                  !_isUploading &&
+                                                  !_isParsing &&
+                                                  !_parseCompleted
+                                              ? 'Click "Use this resume" to begin extraction'
+                                              : (_stagedExtracted != null &&
+                                                        _parseCompleted
+                                                    ? '${(_stagedExtracted!['skills'] as List?)?.length ?? 0} skills · ${(_stagedExtracted!['roles'] as List?)?.length ?? 0} roles · ${_stagedExtracted!['years_experience'] ?? 4} yrs experience'
+                                                    : 'Extracting skills, roles & experience')),
                                     style: GoogleFonts.spaceGrotesk(
                                       color: _isFailed
                                           ? const Color(0xFFB91C1C)
@@ -1101,6 +1164,7 @@ class _CandidateResumeManagementScreenState
                                   InkWell(
                                     onTap: () {
                                       setState(() {
+                                        _hasStagedFile = false;
                                         _isFailed = false;
                                         _isUploading = false;
                                         _isParsing = false;
@@ -1136,7 +1200,14 @@ class _CandidateResumeManagementScreenState
                                   ),
                                 ),
                                 child: Text(
-                                  _parseCompleted ? 'READY' : 'PARSING…',
+                                  (_hasStagedFile &&
+                                          !_isUploading &&
+                                          !_isParsing &&
+                                          !_parseCompleted)
+                                      ? 'STAGED'
+                                      : (_parseCompleted
+                                            ? 'READY'
+                                            : 'PARSING…'),
                                   style: GoogleFonts.jetBrainsMono(
                                     color: _parseCompleted
                                         ? const Color(0xFF0B6B4A)
@@ -1154,7 +1225,13 @@ class _CandidateResumeManagementScreenState
 
                       // Button: Use this resume
                       InkWell(
-                        onTap: _parseCompleted ? _commitStagedResume : null,
+                        onTap:
+                            (_hasStagedFile &&
+                                !_isUploading &&
+                                !_isParsing &&
+                                !_parseCompleted)
+                            ? _startUploadFlowFromButton
+                            : (_parseCompleted ? _commitStagedResume : null),
                         borderRadius: BorderRadius.circular(11),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
@@ -1167,7 +1244,12 @@ class _CandidateResumeManagementScreenState
                               end: Alignment.bottomRight,
                             ),
                             borderRadius: BorderRadius.circular(11),
-                            boxShadow: _parseCompleted
+                            boxShadow:
+                                (_parseCompleted ||
+                                    (_hasStagedFile &&
+                                        !_isUploading &&
+                                        !_isParsing &&
+                                        !_isFailed))
                                 ? const [
                                     BoxShadow(
                                       color: Color.fromRGBO(15, 184, 155, 0.8),
@@ -1179,7 +1261,14 @@ class _CandidateResumeManagementScreenState
                                 : [],
                           ),
                           child: Opacity(
-                            opacity: _parseCompleted ? 1.0 : 0.45,
+                            opacity:
+                                (_parseCompleted ||
+                                    (_hasStagedFile &&
+                                        !_isUploading &&
+                                        !_isParsing &&
+                                        !_isFailed))
+                                ? 1.0
+                                : 0.45,
                             child: Center(
                               child: Text(
                                 'Use this resume',
@@ -1200,11 +1289,16 @@ class _CandidateResumeManagementScreenState
                         child: Text(
                           _isFailed
                               ? 'Parsing failed — please re-upload a clean text PDF or DOCX'
-                              : (_parseCompleted
-                                    ? 'Parsing complete — resume ready for applications!'
-                                    : (_parsingElapsedSeconds > 10
-                                          ? 'Still processing — this can take a moment.'
-                                          : 'Unlocks once parsing finishes — usually 3–6 seconds')),
+                              : (_hasStagedFile &&
+                                        !_isUploading &&
+                                        !_isParsing &&
+                                        !_parseCompleted
+                                    ? 'Click to upload and use this resume'
+                                    : (_parseCompleted
+                                          ? 'Parsing complete — resume ready for applications!'
+                                          : (_parsingElapsedSeconds > 10
+                                                ? 'Still processing — this can take a moment.'
+                                                : 'Unlocks once parsing finishes — usually 3–6 seconds'))),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.spaceGrotesk(
                             color: _isFailed
@@ -1265,18 +1359,22 @@ class _CandidateResumeManagementScreenState
               ),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Your resumes',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF1B2740),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.125,
+                Expanded(
+                  child: Text(
+                    'Your resumes',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF1B2740),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.125,
+                    ),
                   ),
                 ),
-                if (hasResumes)
+                const SizedBox(width: 8),
+                if (hasResumes && _listError == null)
                   Text(
                     '${_resumes.length} saved',
                     style: GoogleFonts.spaceGrotesk(
@@ -1290,6 +1388,11 @@ class _CandidateResumeManagementScreenState
           ),
 
           // Conditional Render: Resumes List, Loading Spinner, OR Empty State
+          if (_listError != null) ...[
+            Text('Could not load resumes: ${_listError!}'),
+            TextButton(onPressed: _loadResumeList, child: const Text('Retry')),
+          ],
+          if (_mutatingResume) const LinearProgressIndicator(),
           if (_isLoadingList)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
@@ -1306,7 +1409,7 @@ class _CandidateResumeManagementScreenState
                 ),
               ),
             )
-          else if (hasResumes)
+          else if (_listError == null && hasResumes)
             Column(
               children: List.generate(_resumes.length, (index) {
                 final r = _resumes[index];
@@ -1374,6 +1477,8 @@ class _CandidateResumeManagementScreenState
                           children: [
                             Text(
                               filenameStr,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
                                 color: const Color(0xFF1B2740),
                                 fontSize: 12,
@@ -1383,6 +1488,8 @@ class _CandidateResumeManagementScreenState
                             const SizedBox(height: 2),
                             Text(
                               dateStr,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.spaceGrotesk(
                                 color: const Color(0xFF7A88A3),
                                 fontSize: 10.5,
@@ -1495,45 +1602,58 @@ class _CandidateResumeManagementScreenState
                   ),
                   const SizedBox(height: 14),
 
-                  Text(
-                    'No resumes uploaded yet',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF1B2740),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    child: Text(
+                      'No resumes uploaded yet',
+                      textAlign: TextAlign.center,
+                      softWrap: true,
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF1B2740),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),
 
-                  Text(
-                    'Upload your first resume using the form on the left to extract skills, experience, and unlock automated AI match scoring.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.spaceGrotesk(
-                      color: const Color(0xFF7A88A3),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      height: 1.45,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    child: Text(
+                      'Upload your first resume using the form on the left to extract skills, experience, and unlock automated AI match scoring.',
+                      textAlign: TextAlign.center,
+                      softWrap: true,
+                      style: GoogleFonts.spaceGrotesk(
+                        color: const Color(0xFF7A88A3),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        height: 1.45,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
 
                   // Helper chip
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE6F7F5),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Supports PDF & DOCX up to 5MB',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: AppColors.dashboardTeal,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE6F7F5),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Supports PDF & DOCX up to 5MB',
+                        textAlign: TextAlign.center,
+                        softWrap: true,
+                        style: GoogleFonts.spaceGrotesk(
+                          color: AppColors.dashboardTeal,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -1546,282 +1666,6 @@ class _CandidateResumeManagementScreenState
   }
 
   // ── LEFT RAIL NAVIGATION (Web Navigation Sidebar) ─────────────────────────
-  Widget _buildLeftRail(BuildContext context) {
-    final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.home_rounded, 'label': 'Home', 'route': '/candidate/home'},
-      {
-        'icon': Icons.track_changes_rounded,
-        'label': 'Applications',
-        'route': '/candidate/applications',
-      },
-      {
-        'icon': Icons.grid_view_rounded,
-        'label': 'Jobs',
-        'route': '/candidate/jobs',
-      },
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'label': 'Interviews',
-        'route': '/candidate/interviews',
-      },
-      {
-        'icon': Icons.description_rounded,
-        'label': 'Resumes',
-        'route': '/candidate/resumes',
-      },
-      {
-        'icon': Icons.adjust_rounded,
-        'label': 'Settings',
-        'route': '/candidate/profile',
-      },
-    ];
-
-    return Container(
-      width: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              },
-              child: SvgPicture.asset('assets/images/logo.svg', height: 48),
-            ),
-          ),
-          const SizedBox(height: 40),
-
-          // Nav Items
-          Expanded(
-            child: ListView.separated(
-              itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
-              itemBuilder: (context, index) {
-                final isSelected = index == _activeNavIndex;
-                final item = navItems[index];
-                final bool hasBadge = index == 2 || index == 3;
-                final String badgeVal = index == 2 ? "3" : "1";
-
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Active glowing orb
-                      if (isSelected)
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.dashboardTeal,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.dashboardTeal.withValues(
-                                  alpha: 0.4,
-                                ),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      Tooltip(
-                        message: item['label'] as String,
-                        waitDuration: const Duration(milliseconds: 350),
-                        preferBelow: false,
-                        verticalOffset: 24,
-                        margin: const EdgeInsets.only(left: 45),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () {
-                              if (index == 0) {
-                                Navigator.of(
-                                  context,
-                                ).pushReplacementNamed('/candidate/home');
-                              } else if (index == 1) {
-                                Navigator.of(context).pushReplacementNamed(
-                                  '/candidate/applications',
-                                );
-                              } else if (index == 2) {
-                                Navigator.of(
-                                  context,
-                                ).pushReplacementNamed('/candidate/jobs');
-                              } else if (index == 3) {
-                                _showInterviewOptions(context);
-                              } else if (index == 4) {
-                                // Already on Resumes
-                              } else {
-                                Navigator.of(
-                                  context,
-                                ).pushReplacementNamed('/candidate/profile');
-                              }
-                            },
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    if (isSelected)
-                                      Container(
-                                        width: 3,
-                                        height: 12,
-                                        margin: const EdgeInsets.only(right: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0F172A),
-                                          borderRadius: BorderRadius.circular(
-                                            1,
-                                          ),
-                                        ),
-                                      ),
-                                    Icon(
-                                      item['icon'] as IconData,
-                                      color: isSelected
-                                          ? const Color(0xFF0F172A)
-                                          : const Color(0xFF64748B),
-                                      size: 19,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      if (hasBadge)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.dashboardTeal,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Text(
-                              badgeVal,
-                              style: const TextStyle(
-                                color: Color(0xFF0F172A),
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Account Menu
-          PopupMenuButton<String>(
-            tooltip: 'Account Menu',
-            onSelected: (value) {
-              if (value == 'candidate_home') {
-                Navigator.of(context).pushReplacementNamed('/candidate/home');
-              } else if (value == 'candidate_apps') {
-                Navigator.of(
-                  context,
-                ).pushReplacementNamed('/candidate/applications');
-              } else if (value == 'candidate_profile') {
-                Navigator.of(
-                  context,
-                ).pushReplacementNamed('/candidate/profile');
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'candidate_home',
-                child: Text(
-                  'Candidate Home',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_apps',
-                child: Text(
-                  'Candidate Applications',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_profile',
-                child: Text(
-                  'Profile & Settings',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-            child: Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFE6F7F5),
-                border: Border.all(
-                  color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  'MR',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF32BAB1),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
   Widget _buildMobileBottomDock() {
     final List<Map<String, dynamic>> dockItems = [

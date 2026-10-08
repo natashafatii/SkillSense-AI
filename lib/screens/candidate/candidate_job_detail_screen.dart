@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
@@ -12,25 +11,49 @@ import 'candidate_notifications_screen.dart';
 import 'candidate_profile_settings_screen.dart';
 import 'candidate_resume_management_screen.dart';
 
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import '../../services/application_service.dart';
 import '../../services/resume_service.dart';
-import '../../services/resume_manager.dart';
 import '../../models/resume_detail.dart';
 import '../../services/api_exception.dart';
-import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
+import '../../services/resume_manager.dart';
+import 'dart:async';
 import '../../models/job.dart';
+import '../../models/job_skill_match.dart';
+import '../../models/application.dart';
 
 class CandidateJobDetailScreen extends StatefulWidget {
   final String jobTitle;
-  final String? jobId;
+  final String jobId;
+  final Future<Job> Function(String id)? loadJob;
+  final Future<List<JobSkill>> Function(String id)? loadJobSkills;
+  final Future<ResumeDetail?> Function()? loadActiveResume;
+  final Future<List<Map<String, dynamic>>> Function()? loadApplyResumes;
+  final Future<ResumeDetail> Function(String id)? loadApplyResumeDetail;
+  final Future<(String, Uint8List)?> Function()? pickResume;
+  final Future<Application> Function(
+    String jobId,
+    String? resumeId,
+    String? fileName,
+    Uint8List? bytes,
+  )?
+  submitApplication;
+  final Future<ResumeDetail> Function(String id)? pollResume;
 
   const CandidateJobDetailScreen({
     super.key,
-    this.jobTitle = 'ML Engineer',
-    this.jobId,
+    this.jobTitle = '',
+    required this.jobId,
+    this.loadJob,
+    this.loadJobSkills,
+    this.loadActiveResume,
+    this.loadApplyResumes,
+    this.loadApplyResumeDetail,
+    this.pickResume,
+    this.submitApplication,
+    this.pollResume,
   });
 
   @override
@@ -38,95 +61,145 @@ class CandidateJobDetailScreen extends StatefulWidget {
       _CandidateJobDetailScreenState();
 }
 
-class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
-    with SingleTickerProviderStateMixin {
+class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
+  bool _needsParsing(ResumeDetail detail) =>
+      detail.isPending || (detail.isParsed && detail.skills == null);
+
   final int _activeNavIndex = 2; // Jobs is index 2
-  late AnimationController _animController;
-  late Animation<double> _progressAnimation;
   bool _isApplied = false;
   bool _isSubmitting = false;
+  String? _applicationId;
+  String? _applicationStateMessage;
 
   ResumeDetail? _resumeDetail;
+  ResumeDetail? _applicationResumeDetail;
   bool _isLoadingResume = true;
+  bool _isLoadingSkills = true;
+  List<JobSkill>? _jobSkills;
+  bool _skillsFailed = false;
   Job? _job;
   bool _isLoadingJob = true;
+  String? _jobError;
+  int _jobRequest = 0;
+  int _submissionRequest = 0;
 
   @override
   void initState() {
     super.initState();
     _loadData();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _progressAnimation = Tween<double>(begin: 0, end: 92).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
-    );
-    _animController.forward();
   }
 
   @override
-  void dispose() {
-    _animController.dispose();
-    super.dispose();
+  void didUpdateWidget(covariant CandidateJobDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.jobId == widget.jobId) return;
+    _jobRequest++;
+    _submissionRequest++;
+    _job = null;
+    _jobSkills = null;
+    _skillsFailed = false;
+    _isLoadingSkills = true;
+    _resumeDetail = null;
+    _isLoadingResume = true;
+    _jobError = null;
+    _isLoadingJob = true;
+    _isApplied = false;
+    _isSubmitting = false;
+    _applicationId = null;
+    _applicationResumeDetail = null;
+    _applicationStateMessage = null;
+    _loadData();
   }
 
   Future<void> _loadData() async {
+    final request = ++_jobRequest;
+    final jobId = widget.jobId;
     try {
-      final job = await JobService.getJob(_effectiveJobId);
-      if (mounted) {
+      if (jobId.trim().isEmpty) throw StateError('Missing job ID.');
+      final job =
+          await (widget.loadJob?.call(jobId) ?? JobService.getJob(jobId));
+      if (mounted && request == _jobRequest && jobId == widget.jobId) {
         setState(() {
           _job = job;
           _isLoadingJob = false;
         });
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && request == _jobRequest && jobId == widget.jobId) {
         setState(() {
           _isLoadingJob = false;
+          _jobError = 'Unable to load this job.';
         });
       }
     }
 
     try {
-      final detail = await ResumeService.ensureActiveDetailCached();
-      if (mounted) {
+      final detail =
+          await (widget.loadActiveResume?.call() ??
+              ResumeService.ensureActiveDetailCached());
+      if (mounted && request == _jobRequest && jobId == widget.jobId) {
         setState(() {
           _resumeDetail = detail;
           _isLoadingResume = false;
         });
-        if (detail != null && detail.isPending && detail.id != null) {
-          _pollActiveResume(detail.id!);
+        if (detail != null && _needsParsing(detail)) {
+          _pollActiveResume(detail.id, request);
+        }
+        if (detail != null) {
+          _loadJobSkills(jobId, request);
+        } else {
+          setState(() => _isLoadingSkills = false);
         }
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && request == _jobRequest && jobId == widget.jobId) {
         setState(() {
           _isLoadingResume = false;
+          _isLoadingSkills = false;
         });
       }
     }
   }
 
-  Future<void> _pollActiveResume(String id) async {
+  Future<void> _loadJobSkills(String jobId, int request) async {
     try {
-      final detail = await ResumeService.pollResumeUntilReady(id);
-      if (mounted) {
+      final skills =
+          await (widget.loadJobSkills?.call(jobId) ??
+              JobService.getJobSkills(jobId));
+      if (mounted && request == _jobRequest && jobId == widget.jobId) {
         setState(() {
-          _resumeDetail = detail;
+          _jobSkills = skills;
+          _isLoadingSkills = false;
         });
       }
     } catch (_) {
-      // Ignore
+      if (mounted && request == _jobRequest && jobId == widget.jobId) {
+        setState(() {
+          _skillsFailed = true;
+          _isLoadingSkills = false;
+        });
+      }
     }
   }
 
-  String get _effectiveJobId {
-    if (widget.jobId != null && widget.jobId!.isNotEmpty) {
-      return widget.jobId!;
+  Future<void> _pollActiveResume(String id, int request) async {
+    while (mounted &&
+        request == _jobRequest &&
+        _resumeDetail != null &&
+        _needsParsing(_resumeDetail!)) {
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted || request != _jobRequest) return;
+      try {
+        final detail =
+            await (widget.pollResume?.call(id) ??
+                ResumeService.getResumeDetail(id));
+        if (mounted && request == _jobRequest && _resumeDetail?.id == id) {
+          setState(() => _resumeDetail = detail);
+        }
+      } catch (_) {
+        // Transient request errors retry on the next tick.
+      }
     }
-    // Fallback to active backend seed job ID (Backend Engineer)
-    return '4d6baf7e-07e4-4614-93f9-daef1916ca43';
   }
 
   void _applyJob() {
@@ -134,53 +207,28 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
   }
 
   void _showApplyModal() {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 900;
-    final String companyInfo = 'NeuralTech · Remote';
-
-    List<Map<String, dynamic>> resumes = ResumeManager.getResumes();
-    if (resumes.isEmpty) {
-      resumes = [
-        {
-          'version': 'v2',
-          'filename': 'cv_ml_focus.pdf',
-          'coverage': '95% coverage',
-          'isDefault': true,
-          'active': true,
-        },
-        {
-          'version': 'v1',
-          'filename': 'cv_general.pdf',
-          'coverage': '88% coverage',
-          'isDefault': false,
-          'active': false,
-        },
-      ];
-    } else {
-      resumes = resumes.map((r) {
-        final String fn = (r['filename'] ?? 'cv_ml_focus.pdf').toString();
-        final bool isAct = r['active'] == true;
-        String cov = '';
-        if (r['coverage'] is Map) {
-          final exp = r['coverage']['experience'] ?? 95;
-          cov = '$exp% coverage';
-        } else if (r['coverage'] is String) {
-          cov = r['coverage'] as String;
-        } else {
-          cov = fn.contains('ml') ? '95% coverage' : '88% coverage';
-        }
-        return {...r, 'coverage': cov, 'isDefault': isAct};
-      }).toList();
+    if (_job == null || !_job!.isActive) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This job is unavailable for applications.'),
+        ),
+      );
+      return;
     }
+    final modalJobId = _job!.id;
+    final isMobile = MediaQuery.of(context).size.width < 900;
 
-    Widget modalContent = _ApplyModalWidget(
-      jobTitle: widget.jobTitle,
-      companyInfo: companyInfo,
-      resumes: resumes,
+    Widget buildModal(BuildContext dialogContext) => _ApplyModalWidget(
+      jobTitle: _job!.title,
+      companyInfo: '${_job!.recruiterCompany} · ${_job!.location}',
+      loadResumes: widget.loadApplyResumes,
+      loadResumeDetail: widget.loadApplyResumeDetail,
       isMobile: isMobile,
-      job: _job,
-      onSubmit: (fileToSend) async {
-        await _submitApplicationAndPoll(fileToSend, true);
+      onSubmit: (resumeId, name, bytes) {
+        Navigator.of(dialogContext).pop();
+        if (mounted && widget.jobId == modalJobId && _job?.id == modalJobId) {
+          _submitApplicationAndPoll(resumeId, name, bytes);
+        }
       },
     );
 
@@ -189,112 +237,105 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        barrierColor: const Color(0xFF05080F).withOpacity(0.6),
-        builder: (ctx) => modalContent,
+        builder: buildModal,
       );
     } else {
-      showGeneralDialog(
-        context: context,
-        barrierDismissible: true,
-        barrierLabel: 'Dismiss',
-        barrierColor: const Color(0xFF05080F).withOpacity(0.6),
-        transitionDuration: const Duration(milliseconds: 200),
-        pageBuilder: (ctx, anim1, anim2) {
-          return BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Center(
-              child: Material(color: Colors.transparent, child: modalContent),
-            ),
-          );
-        },
-      );
+      showDialog(context: context, builder: buildModal);
     }
   }
 
   Future<void> _submitApplicationAndPoll(
-    File resumeFile,
-    bool consentGiven,
+    String? resumeId,
+    String? fileName,
+    Uint8List? bytes,
   ) async {
+    if (!mounted || _isSubmitting || _job == null) return;
+    final request = ++_submissionRequest;
+    final jobId = _job!.id;
     setState(() => _isSubmitting = true);
-
-    // Show Progress Dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 20),
-            Text('Submitting & analyzing resume...'),
-          ],
-        ),
-      ),
-    );
-
+    Application? submitted;
     try {
-      final app = await ApplicationService.submitApplication(
-        jobId: _effectiveJobId,
-        resumeFile: resumeFile,
-        consentGiven: consentGiven,
-      );
-
-      setState(() => _isApplied = true);
-
-      if (app.resumeId != null && app.resumeId!.isNotEmpty) {
-        // Poll for parsed results
-        final parsedDetail = await ResumeService.pollResumeUntilReady(
-          app.resumeId!,
-        );
-
-        if (mounted) {
-          Navigator.pop(context); // Close progress dialog
-          _showParsingSuccessDialog(parsedDetail);
-        }
-      } else {
-        if (mounted) {
-          Navigator.pop(context);
-          _showParsingSuccessDialog(
-            ResumeDetail(
-              id: 'mock-resume-id',
-              status: ResumeStatus.parsed,
-              matchScore: 92.0,
-              matchedSkills: [
-                'Python',
-                'PyTorch',
-                'Docker',
-                'SQL',
-                'AWS',
-                'CI/CD',
-              ],
-              missingSkills: ['Feature stores', 'Kubeflow'],
-            ),
-          );
-        }
+      submitted =
+          await (widget.submitApplication?.call(
+                jobId,
+                resumeId,
+                fileName,
+                bytes,
+              ) ??
+              ApplicationService.submitApplication(
+                jobId: jobId,
+                resumeId: resumeId,
+                fileName: fileName,
+                fileBytes: bytes,
+                consentGiven: true,
+              ));
+      if (!mounted || request != _submissionRequest || widget.jobId != jobId) {
+        return;
       }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(
-          context,
-        ); // Always dismiss progress dialog on any exception
-        setState(() => _isApplied = true);
-
-        final detail = ResumeDetail(
-          id: 'mock-resume-id',
-          status: ResumeStatus.parsed,
-          matchScore: 92.0,
-          matchedSkills: ['Python', 'PyTorch', 'Docker', 'SQL', 'AWS', 'CI/CD'],
-          missingSkills: ['Feature stores', 'Kubeflow'],
+      setState(() {
+        _applicationId = submitted!.id;
+        _isApplied = true;
+      });
+      if (submitted.resumeId == null || submitted.resumeId!.isEmpty) {
+        _showApplicationState(
+          'Application submitted',
+          'ID: ${submitted.id}. Resume parsing is pending; no resume ID was returned.',
         );
+        return;
+      }
+      _showApplicationState(
+        'Application submitted',
+        'ID: ${submitted.id}. Resume parsing is pending.',
+      );
+      final detail =
+          await (widget.pollResume?.call(submitted.resumeId!) ??
+              ResumeService.pollResumeUntilReady(submitted.resumeId!));
+      if (!mounted || request != _submissionRequest || widget.jobId != jobId) {
+        return;
+      }
+      if (detail.isParsed) {
+        setState(() {
+          _applicationResumeDetail = detail;
+          _applicationStateMessage =
+              'Resume parsing complete for application ${submitted!.id}.';
+        });
         _showParsingSuccessDialog(detail);
       }
+    } catch (e) {
+      if (!mounted || request != _submissionRequest || widget.jobId != jobId) {
+        return;
+      }
+      final message = e is ApiException ? e.message : e.toString();
+      if (submitted == null) {
+        _showApplicationState('Application failed', message);
+      } else {
+        _showApplicationState(
+          e is ApiException && e.statusCode == 408
+              ? 'Resume parsing is still pending'
+              : 'Resume parsing failed',
+          'Application ID: ${submitted.id}. $message',
+        );
+      }
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      if (mounted && request == _submissionRequest) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
+  void _showApplicationState(String title, String message) {
+    if (!mounted) return;
+    setState(() => _applicationStateMessage = '$title. $message');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text('$title. $message'),
+      ),
+    );
+  }
+
   void _showParsingSuccessDialog(ResumeDetail detail) {
-    final score = detail.matchScore?.round() ?? 0;
+    final score = detail.matchScore?.round();
     final matchedSkills = detail.matchedSkills ?? [];
 
     showDialog(
@@ -307,7 +348,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
             const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
             const SizedBox(width: 10),
             Text(
-              'Application & Matching Complete!',
+              'Resume parsing complete',
               style: GoogleFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -320,7 +361,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Your resume has been parsed and matched against this job description.',
+              'Your resume was parsed. Any displayed match data came from the API.',
               style: GoogleFonts.inter(
                 fontSize: 13,
                 color: const Color(0xFF64748B),
@@ -335,31 +376,34 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.dashboardTeal,
-                    ),
-                    child: Center(
-                      child: Text(
-                        '$score%',
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontSize: 16,
+                  if (score != null)
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.dashboardTeal,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '$score%',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     ),
-                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'SBERT Match Score',
+                          score == null
+                              ? 'Match score unavailable'
+                              : 'Match score',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -410,6 +454,27 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingJob) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_job == null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_jobError ?? 'Job unavailable.'),
+              TextButton(
+                onPressed: () => Navigator.of(
+                  context,
+                ).pushReplacementNamed('/candidate/jobs'),
+                child: const Text('Back to jobs'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 900;
 
@@ -624,6 +689,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildCompactHeaderBlock(
@@ -633,7 +699,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
             cardBorder,
             false,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           _buildDescriptionTextSection(textPrimary, textSecondary),
           const SizedBox(height: 24),
           _buildRequirementsSection(textPrimary, textSecondary),
@@ -649,6 +715,26 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
     Color cardBorder,
     bool isMobile,
   ) {
+    final int daysAgo = _job == null
+        ? 0
+        : DateTime.now().difference(_job!.createdAt).inDays;
+    final String timeAgo = daysAgo == 0 ? 'today' : '${daysAgo}d ago';
+    final String salary = _job != null
+        ? _getSalaryStr(_job!.experienceLevel)
+        : '';
+
+    String initials = '??';
+    if (_job?.recruiterCompany.isNotEmpty == true) {
+      final parts = _job!.recruiterCompany.trim().split(' ');
+      if (parts.length > 1 && parts[1].isNotEmpty) {
+        initials = '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+      } else if (_job!.recruiterCompany.length > 1) {
+        initials = _job!.recruiterCompany.substring(0, 2).toUpperCase();
+      } else {
+        initials = _job!.recruiterCompany[0].toUpperCase();
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -657,21 +743,18 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
             GestureDetector(
               onTap: () => _showCompanyTooltip(context),
               child: Container(
-                width: isMobile ? 42 : 48,
-                height: isMobile ? 42 : 48,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE6F7F5),
+                  color: AppColors.dashboardTeal.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
-                  ),
                 ),
                 child: Center(
                   child: Text(
-                    'NT',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: const Color(0xFF32BAB1),
-                      fontSize: isMobile ? 16 : 18,
+                    initials,
+                    style: GoogleFonts.inter(
+                      color: AppColors.dashboardTeal.withValues(alpha: 0.8),
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -684,17 +767,20 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.jobTitle,
+                    _job?.title ?? 'Job unavailable',
                     style: GoogleFonts.spaceGrotesk(
                       color: textPrimary,
-                      fontSize: isMobile ? 18 : 22,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: -0.025,
                     ),
                   ),
                   GestureDetector(
                     onTap: () => _showCompanyTooltip(context),
                     child: Text(
-                      'NeuralTech · Remote · PKR 250–350k · posted 3d ago',
+                      _job == null
+                          ? ''
+                          : '${_job!.recruiterCompany} · ${_job!.location} · $salary · posted $timeAgo',
                       style: GoogleFonts.inter(
                         color: textSecondary,
                         fontSize: isMobile ? 12 : 13,
@@ -712,9 +798,11 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
           spacing: 8,
           runSpacing: 8,
           children: [
-            _buildTagChip('Full-time'),
-            _buildTagChip('Remote'),
-            _buildTagChip('Senior'),
+            if (_job != null)
+              _buildTagChip(
+                _job!.jobType.value == 'ONSITE' ? 'Full-time' : 'Remote',
+              ),
+            if (_job != null) _buildTagChip(_job!.experienceLevel.value),
             _buildTagChip('AI voice interview'),
           ],
         ),
@@ -722,19 +810,31 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
     );
   }
 
+  String _getSalaryStr(ExperienceLevel level) {
+    switch (level) {
+      case ExperienceLevel.entry:
+        return '\$60k - \$80k';
+      case ExperienceLevel.mid:
+        return '\$90k - \$130k';
+      case ExperienceLevel.senior:
+        return '\$140k - \$190k';
+    }
+  }
+
   Widget _buildTagChip(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Text(
         text,
         style: GoogleFonts.inter(
-          color: const Color(0xFF475569),
+          color: const Color(0xFF64748B),
           fontSize: 11.5,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -747,20 +847,20 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
         Text(
           'ABOUT THE ROLE',
           style: GoogleFonts.spaceGrotesk(
-            color: textPrimary,
+            color: const Color(0xFF64748B),
             fontSize: 12,
             fontWeight: FontWeight.bold,
-            letterSpacing: 0.8,
+            letterSpacing: 1.5,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Text(
-          'Own the training and serving pipeline for our recommendation models — PyTorch, feature stores, and MLOps on AWS. You will pair with two data scientists and ship weekly.',
+          _job?.description ?? _jobError ?? 'Job unavailable.',
           style: GoogleFonts.inter(
-            color: textSecondary,
+            color: const Color(0xFF475569),
             fontSize: 14,
-            height: 1.5,
-            fontWeight: FontWeight.w500,
+            height: 1.6,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ],
@@ -768,57 +868,109 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
   }
 
   Widget _buildRequirementsSection(Color textPrimary, Color textSecondary) {
-    final reqs = [
-      '4+ years Python in production',
-      'PyTorch or TF at scale',
-      'MLOps (Docker, CI, monitoring)',
-      'strong SQL',
-    ];
+    final reqs =
+        _job?.requirements
+            .split('\n')
+            .where((line) => line.trim().isNotEmpty)
+            .toList() ??
+        <String>[];
+
+    final bool hasReqs = reqs.isNotEmpty;
+    final bool hasSkills =
+        _job != null &&
+        (_job!.skillsRequired.isNotEmpty || _job!.jobSkills.isNotEmpty);
+
+    if (!hasReqs && !hasSkills) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'REQUIREMENTS',
-          style: GoogleFonts.spaceGrotesk(
-            color: textPrimary,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.8,
+        if (hasReqs) ...[
+          Text(
+            'REQUIREMENTS',
+            style: GoogleFonts.spaceGrotesk(
+              color: const Color(0xFF64748B),
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.5,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Column(
-          children: reqs.map((req) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '•  ',
-                    style: GoogleFonts.inter(
-                      color: AppColors.dashboardTeal,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      req,
+          const SizedBox(height: 12),
+          Column(
+            children: reqs.map((req) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '•  ',
                       style: GoogleFonts.inter(
-                        color: textSecondary,
-                        fontSize: 13.5,
-                        height: 1.4,
-                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
+                    Expanded(
+                      child: Text(
+                        req,
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF475569),
+                          fontSize: 14,
+                          height: 1.5,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+        if (hasReqs && hasSkills) const SizedBox(height: 24),
+        if (hasSkills) ...[
+          Text(
+            'SKILLS REQUIRED',
+            style: GoogleFonts.spaceGrotesk(
+              color: const Color(0xFF64748B),
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children:
+                (_job!.jobSkills.isNotEmpty
+                        ? _job!.jobSkills.map((s) => s.skillName).toList()
+                        : _job!.skillsRequired)
+                    .map((skill) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Text(
+                          skill,
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF334155),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    })
+                    .toList(),
+          ),
+        ],
       ],
     );
   }
@@ -830,122 +982,210 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
     Color cardBg,
     Color cardBorder,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.dashboardTeal, width: 2.0),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.dashboardTeal.withValues(alpha: 0.08),
-            blurRadius: 16,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Animated circular score indicator
-          AnimatedBuilder(
-            animation: _progressAnimation,
-            builder: (context, child) {
-              final double value = _progressAnimation.value;
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 104,
-                    height: 104,
-                    child: CircularProgressIndicator(
-                      value: value / 100,
-                      strokeWidth: 7,
-                      backgroundColor: const Color(0xFFE2E8F0),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppColors.dashboardTeal,
-                      ),
+    final double? score = _resumeDetail?.matchScore;
+    final bool hasScore = score != null;
+    final ringColor = hasScore ? _getRingColor(score) : Colors.transparent;
+
+    return Stack(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: hasScore
+                  ? const Color(0xFF2EE6C8).withValues(alpha: 0.4)
+                  : cardBorder,
+              width: hasScore ? 1.0 : 1.5,
+            ),
+            boxShadow: hasScore
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF2EE6C8).withValues(alpha: 0.4),
+                      blurRadius: 44,
+                      spreadRadius: -18,
+                      offset: Offset.zero,
                     ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+          ),
+          child: Column(
+            children: [
+              if (hasScore) ...[
+                SizedBox(
+                  width: 104,
+                  height: 104,
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Text(
-                        '${value.toInt()}',
-                        style: GoogleFonts.spaceGrotesk(
-                          color: textPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      TweenAnimationBuilder<double>(
+                        tween: Tween<double>(begin: 0, end: 1),
+                        duration: const Duration(milliseconds: 1000),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, child) {
+                          return CustomPaint(
+                            size: const Size(104, 104),
+                            painter: _RingPainter(
+                              progress: (score / 100) * value,
+                              ringColor: ringColor,
+                              trackColor: const Color(
+                                0xFFF1F5F9,
+                              ), // Lighter track for this UI
+                            ),
+                          );
+                        },
                       ),
-                      Text(
-                        'MATCH',
-                        style: GoogleFonts.spaceGrotesk(
-                          color: textSecondary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${score.round()}',
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: textPrimary,
+                              height: 1.0,
+                            ),
+                          ),
+                          Text(
+                            'MATCH',
+                            style: GoogleFonts.inter(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF94A3B8),
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Excellent match',
+                  style: GoogleFonts.inter(
+                    color: textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'Top 4% of jobs for your profile',
+                  style: GoogleFonts.inter(
+                    color: textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ] else ...[
+                Text(
+                  'No verified score',
+                  style: GoogleFonts.spaceGrotesk(
+                    color: textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Match unavailable',
+                  style: GoogleFonts.inter(
+                    color: textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
 
-          Text(
-            'Excellent match',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            'Top 4% of jobs for your profile',
-            style: GoogleFonts.inter(
-              color: textSecondary,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 20),
+              // Apply Button
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.dashboardTeal.withValues(alpha: 0.3),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.dashboardTeal,
+                    shadowColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 44),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: _isApplied || _isSubmitting || _job == null
+                      ? null
+                      : _applyJob,
+                  child: Text(
+                    _isApplied
+                        ? 'Applied · ${_applicationId ?? ''}'
+                        : (_isSubmitting
+                              ? 'Submitting...'
+                              : (hasScore
+                                    ? 'Apply with default resume'
+                                    : 'Apply with a resume')),
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                ),
+              ),
+              if (_applicationStateMessage != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _applicationStateMessage!,
+                  style: GoogleFonts.inter(fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              const SizedBox(height: 12),
 
-          // Apply Button
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.dashboardTeal,
-              foregroundColor: const Color(0xFF0F172A),
-              elevation: 0,
-              minimumSize: const Size(double.infinity, 44),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+              Text(
+                'Applying starts AI screening immediately',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF64748B),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        if (hasScore)
+          Positioned(
+            top: 0,
+            left: 16,
+            right: 16,
+            height: 2,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF17CBAC), Color(0xFF3B82F6)],
+                ),
               ),
             ),
-            onPressed: _isApplied ? null : _applyJob,
-            child: Text(
-              _isApplied
-                  ? 'Application Submitted'
-                  : 'Apply with default resume',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.bold,
-                fontSize: 13.5,
-              ),
-            ),
           ),
-          const SizedBox(height: 10),
-
-          Text(
-            'Applying starts AI screening immediately',
-            style: GoogleFonts.inter(
-              color: textSecondary,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -957,7 +1197,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
     Color cardBorder,
     bool isMobile,
   ) {
-    if (_isLoadingResume || _isLoadingJob) {
+    if (_isLoadingResume || _isLoadingJob || _isLoadingSkills) {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -1063,7 +1303,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
       );
     }
 
-    if (_resumeDetail!.isPending) {
+    if (_needsParsing(_resumeDetail!)) {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -1085,7 +1325,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
             ),
             const SizedBox(width: 16),
             Text(
-              'Analysing your resume…',
+              'Parsing your resume…',
               style: GoogleFonts.inter(
                 color: textSecondary,
                 fontSize: 14,
@@ -1144,40 +1384,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
       );
     }
 
-    List<String> matched = _resumeDetail!.matchedSkills ?? [];
-    List<String> missing = _resumeDetail!.missingSkills ?? [];
-    double computedScore = _resumeDetail!.matchScore ?? 0.0;
-
-    if (matched.isEmpty && missing.isEmpty) {
-      final resumeSkills =
-          _resumeDetail!.skills?.map((s) => s.toLowerCase()).toSet() ?? {};
-      List<String> requiredSkills = _job?.skillsRequired ?? [];
-      if (requiredSkills.isEmpty) {
-        requiredSkills = [
-          'Python',
-          'Docker',
-          'Kubeflow',
-          'PyTorch',
-          'SQL',
-          'AWS',
-          'CI/CD',
-          'Feature stores',
-          'C++',
-        ];
-      }
-
-      if (requiredSkills.isNotEmpty) {
-        matched = requiredSkills
-            .where((req) => resumeSkills.contains(req.toLowerCase()))
-            .toList();
-        missing = requiredSkills
-            .where((req) => !resumeSkills.contains(req.toLowerCase()))
-            .toList();
-        computedScore = (matched.length / requiredSkills.length) * 100;
-      }
-    }
-
-    if (matched.isEmpty && missing.isEmpty) {
+    if (_skillsFailed || _jobSkills == null) {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -1186,7 +1393,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
           border: Border.all(color: cardBorder, width: 1.5),
         ),
         child: Text(
-          'Apply first to see which skills match this role.',
+          'Unable to load required skills. Reopen this job to try again.',
           style: GoogleFonts.inter(
             color: textSecondary,
             fontSize: 14,
@@ -1195,6 +1402,15 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
         ),
       );
     }
+
+    final match = JobSkillMatch.cached(
+      jobId: widget.jobId,
+      resumeId: _resumeDetail!.id,
+      jobSkills: _jobSkills!.map((skill) => skill.skillName).toList(),
+      resumeSkills: _resumeDetail!.skills ?? const [],
+    );
+    final matched = match.matched;
+    final missing = match.missing;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -1214,6 +1430,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
                 'Why you match',
@@ -1223,59 +1440,34 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              if (computedScore > 0) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '· ${computedScore.round()}% match',
-                  style: GoogleFonts.inter(
-                    color: AppColors.dashboardTeal,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE6F7F5),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'SBERT',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: const Color(0xFF32BAB1),
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
             ],
           ),
+          const SizedBox(height: 16),
+          Divider(color: cardBorder, height: 1, thickness: 1),
           const SizedBox(height: 16),
 
           // MATCHED
           Text(
             'MATCHED · ${matched.length}',
             style: GoogleFonts.spaceGrotesk(
-              color: textSecondary,
+              color: const Color(0xFF94A3B8),
               fontSize: 11.5,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: matched.map((m) {
               return Tooltip(
-                message: 'Found in your resume: Verified skill.',
+                message: 'Found in your parsed resume.',
                 preferBelow: false,
                 child: GestureDetector(
                   onTap: () {
                     if (isMobile) {
-                      _showChipToast('Matched skill: $m verified in resume');
+                      _showChipToast('Matched skill: $m found in resume');
                     }
                   },
                   child: Chip(
@@ -1303,13 +1495,13 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
           Text(
             'MISSING · ${missing.length}',
             style: GoogleFonts.spaceGrotesk(
-              color: textSecondary,
+              color: const Color(0xFF94A3B8),
               fontSize: 11.5,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -1343,15 +1535,15 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
             }).toList(),
           ),
           const SizedBox(height: 20),
+          Divider(color: cardBorder, height: 1, thickness: 1),
+          const SizedBox(height: 12),
 
           // Coaching note
           Text(
             'Missing skills lower your match by ~5 points — worth naming in your first answer.',
             style: GoogleFonts.inter(
-              color: textSecondary,
-              fontSize: 12.5,
-              fontStyle: FontStyle.italic,
-              height: 1.4,
+              color: const Color(0xFF64748B),
+              fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1361,57 +1553,19 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
   }
 
   void _showCompanyTooltip(BuildContext context) {
+    final job = _job;
+    if (job == null) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'NeuralTech',
-          style: GoogleFonts.spaceGrotesk(
-            fontWeight: FontWeight.bold,
-            color: const Color(0xFF0F172A),
-          ),
+          job.recruiterCompany.isEmpty ? job.title : job.recruiterCompany,
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Size: 150 - 500 employees',
-              style: GoogleFonts.inter(
-                fontSize: 13.5,
-                color: const Color(0xFF475569),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Industry: Artificial Intelligence & SaaS',
-              style: GoogleFonts.inter(
-                fontSize: 13.5,
-                color: const Color(0xFF475569),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Website: neuraltech.ai',
-              style: GoogleFonts.inter(
-                fontSize: 13.5,
-                color: const Color(0xFF475569),
-              ),
-            ),
-          ],
-        ),
+        content: Text('${job.title} · ${job.location}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Close',
-              style: GoogleFonts.inter(
-                color: AppColors.dashboardTeal,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -1434,290 +1588,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
   }
 
   // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
-  Widget _buildLeftRail(BuildContext context) {
-    final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.home_rounded, 'label': 'Home', 'route': '/candidate/home'},
-      {
-        'icon': Icons.track_changes_rounded,
-        'label': 'Applications',
-        'route': '/candidate/applications',
-      },
-      {
-        'icon': Icons.grid_view_rounded,
-        'label': 'Jobs',
-        'route': '/candidate/jobs',
-      },
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'label': 'Interviews',
-        'route': '/candidate/interviews',
-      },
-      {
-        'icon': Icons.adjust_rounded,
-        'label': 'Settings',
-        'route': '/candidate/settings',
-      },
-    ];
-
-    return Container(
-      width: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              },
-              child: SvgPicture.asset('assets/images/logo.svg', height: 48),
-            ),
-          ),
-          const SizedBox(height: 40),
-
-          // Nav Items
-          Expanded(
-            child: ListView.separated(
-              itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
-              itemBuilder: (context, index) {
-                final isSelected = index == _activeNavIndex;
-                final item = navItems[index];
-                final bool hasBadge = index == 2 || index == 3;
-                final String badgeVal = index == 2 ? "3" : "1";
-
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Active glowing orb
-                      if (isSelected)
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.dashboardTeal,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.dashboardTeal.withValues(
-                                  alpha: 0.4,
-                                ),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      Tooltip(
-                        message: item['label'],
-                        waitDuration: const Duration(milliseconds: 350),
-                        preferBelow: false,
-                        verticalOffset: 24,
-                        margin: const EdgeInsets.only(left: 45),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () {
-                              if (index == 0) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) => const CandidateHomeScreen(),
-                                  ),
-                                );
-                              } else if (index == 1) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateApplicationsScreen(),
-                                  ),
-                                );
-                              } else if (index == 2) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateJobFeedScreen(),
-                                  ),
-                                );
-                              } else if (index == 3) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateInterviewLobbyScreen(),
-                                  ),
-                                );
-                              } else {
-                                _showMockNavigation(item['route']);
-                              }
-                            },
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    // Child seam indicator inside Jobs tab
-                                    if (isSelected)
-                                      Container(
-                                        width: 3,
-                                        height: 12,
-                                        margin: const EdgeInsets.only(right: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF0F172A),
-                                          borderRadius: BorderRadius.circular(
-                                            1,
-                                          ),
-                                        ),
-                                      ),
-                                    Icon(
-                                      item['icon'],
-                                      color: isSelected
-                                          ? const Color(0xFF0F172A)
-                                          : const Color(0xFF64748B),
-                                      size: 19,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Badge
-                      if (hasBadge)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.dashboardTeal,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Text(
-                              badgeVal,
-                              style: const TextStyle(
-                                color: Color(0xFF0F172A),
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Account Menu
-          PopupMenuButton<String>(
-            tooltip: 'Account Menu',
-            onSelected: (value) {
-              if (value == 'candidate_home') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateHomeScreen(),
-                  ),
-                );
-              } else if (value == 'candidate_apps') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateApplicationsScreen(),
-                  ),
-                );
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'candidate_home',
-                child: Text(
-                  'Candidate Home',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_home',
-                child: Text(
-                  'Candidate Home',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_apps',
-                child: Text(
-                  'Candidate Applications',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-            child: Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFE6F7F5),
-                border: Border.all(
-                  color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  'MR',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF32BAB1),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
   Widget _buildMobileBottomDock() {
     final List<Map<String, dynamic>> dockItems = [
@@ -2117,6 +1987,61 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen>
       ),
     );
   }
+
+  Color _getRingColor(double score) {
+    if (score == 0) return const Color(0xFFCBD5E1);
+    if (score >= 85) return const Color(0xFF10B981);
+    if (score >= 70) return const Color(0xFF32BAB1);
+    if (score >= 55) return const Color(0xFFF59E0B);
+    return const Color(0xFFEF4444);
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  final double progress;
+  final Color ringColor;
+  final Color trackColor;
+
+  _RingPainter({
+    required this.progress,
+    required this.ringColor,
+    required this.trackColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - 8) / 2; // 8px stroke width
+
+    // Track
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8;
+    canvas.drawCircle(center, radius, trackPaint);
+
+    // Progress
+    final progressPaint = Paint()
+      ..color = ringColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -1.5708, // -90 degrees in radians
+      progress * 2 * 3.14159,
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.ringColor != ringColor ||
+        oldDelegate.trackColor != trackColor;
+  }
 }
 
 class GridPainter extends CustomPainter {
@@ -2145,159 +2070,197 @@ class GridPainter extends CustomPainter {
 class _ApplyModalWidget extends StatefulWidget {
   final String jobTitle;
   final String companyInfo;
-  final List<Map<String, dynamic>> resumes;
+  final Future<List<Map<String, dynamic>>> Function()? loadResumes;
+  final Future<ResumeDetail> Function(String id)? loadResumeDetail;
+  final void Function(String? resumeId, String? fileName, Uint8List? fileBytes)
+  onSubmit;
   final bool isMobile;
-  final Function(File) onSubmit;
-  final Job? job;
 
   const _ApplyModalWidget({
-    Key? key,
     required this.jobTitle,
     required this.companyInfo,
-    required this.resumes,
-    required this.isMobile,
+    this.loadResumes,
+    this.loadResumeDetail,
     required this.onSubmit,
-    this.job,
-  }) : super(key: key);
+    required this.isMobile,
+  });
 
   @override
   State<_ApplyModalWidget> createState() => _ApplyModalWidgetState();
 }
 
 class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
-  late String selectedVersion;
-  final TextEditingController noteController = TextEditingController();
+  List<Map<String, dynamic>> _resumes = [];
+  String? _selectedResumeId;
+  bool _isLoadingResumes = true;
 
-  ResumeDetail? parsedData;
-  bool isFetchingParsed = false;
-  String parsedError = '';
-  String? currentFetchingId;
+  ResumeDetail? _parsedDetail;
+  bool _isLoadingDetail = false;
+  String? _detailError;
+  Timer? _pollingTimer;
+
+  final TextEditingController _noteController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    selectedVersion = widget.resumes
-        .firstWhere(
-          (r) => r['active'] == true || r['isDefault'] == true,
-          orElse: () => widget.resumes.first,
-        )['version']
-        .toString();
-    _fetchForSelected();
+    _loadResumes();
   }
 
   @override
   void dispose() {
-    noteController.dispose();
+    _pollingTimer?.cancel();
+    _noteController.dispose();
     super.dispose();
   }
 
-  void _fetchForSelected() {
-    final r = widget.resumes.firstWhere(
-      (r) => r['version'] == selectedVersion,
-      orElse: () => widget.resumes.first,
-    );
-    final apiId = (r['id'] ?? '').toString();
-    _fetchParsedData(apiId);
-  }
-
-  Future<void> _fetchParsedData(String apiId) async {
-    if (apiId == currentFetchingId) return;
-    currentFetchingId = apiId;
-
-    if (apiId.isEmpty || apiId.startsWith('res_')) {
-      if (mounted) {
-        setState(() {
-          parsedData = null;
-          isFetchingParsed = false;
-          parsedError = 'No resume data available yet.';
-        });
-      }
-      return;
-    }
-
-    if (mounted) {
-      setState(() {
-        isFetchingParsed = true;
-        parsedError = '';
-        parsedData = null;
-      });
-    }
-
+  Future<void> _loadResumes() async {
     try {
-      final detail = await ResumeService.pollResumeUntilReady(apiId);
-      if (currentFetchingId != apiId) return;
-      if (mounted) {
-        setState(() {
-          isFetchingParsed = false;
-          parsedData = detail;
-          if (detail.status == ResumeStatus.failed) {
-            parsedError =
-                'We couldn\'t parse your resume — try re-uploading a text-based PDF.';
-          }
-        });
+      final resumes = widget.loadResumes != null
+          ? await widget.loadResumes!()
+          : await (() async {
+              await ResumeManager.loadFromApi();
+              return ResumeManager.getResumes();
+            })();
+      if (!mounted) return;
+      setState(() {
+        _resumes = resumes;
+        _isLoadingResumes = false;
+        if (_resumes.isNotEmpty) {
+          final def = _resumes.firstWhere(
+            (r) => r['active'] == true,
+            orElse: () => _resumes.first,
+          );
+          _selectedResumeId = def['id'].toString();
+        }
+      });
+      if (_selectedResumeId != null) {
+        _fetchParsedDetail(_selectedResumeId!);
       }
     } catch (e) {
-      if (currentFetchingId != apiId) return;
-      if (e is ApiException) {
-        if (e.statusCode == 401) {
-          Navigator.pop(context);
-          AuthService.signOut(context);
-          Navigator.of(context).pushReplacementNamed('/sign-in');
-        } else if (e.statusCode == 403) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("You're not authorized to view this resume."),
-            ),
-          );
-        } else if (e.statusCode == 404) {
-          if (mounted) {
-            setState(() {
-              parsedData = null;
-              isFetchingParsed = false;
-              parsedError = "No resume data available yet.";
-            });
-          }
-        } else {
-          if (mounted) {
-            setState(() {
-              isFetchingParsed = false;
-              parsedData = null;
-              parsedError = 'Network error: ${e.message}';
-            });
-          }
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            isFetchingParsed = false;
-            parsedData = null;
-            parsedError = 'Network error: $e';
-          });
-        }
+      if (mounted) setState(() => _isLoadingResumes = false);
+    }
+  }
+
+  Future<void> _fetchParsedDetail(String id) async {
+    setState(() {
+      _isLoadingDetail = true;
+      _detailError = null;
+    });
+    try {
+      final cached = widget.loadResumeDetail == null
+          ? ResumeService.cachedDetail
+          : null;
+      if (cached != null && cached.id == id && !cached.isPending) {
+        setState(() {
+          _parsedDetail = cached;
+          _isLoadingDetail = false;
+        });
+        return;
+      }
+
+      final detail = await (widget.loadResumeDetail?.call(id) ??
+          ResumeService.getResumeDetail(id));
+      if (!mounted || _selectedResumeId != id) return;
+
+      setState(() {
+        _parsedDetail = detail;
+        _isLoadingDetail = false;
+      });
+      if (detail.isPending) {
+        _startPolling(id);
+      }
+    } catch (e) {
+      if (mounted && _selectedResumeId == id) {
+        setState(() {
+          _detailError = e.toString();
+          _isLoadingDetail = false;
+        });
       }
     }
   }
 
-  Widget _buildParsedSection() {
-    if (isFetchingParsed) {
+  void _startPolling(String id) {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      try {
+        final detail = await (widget.loadResumeDetail?.call(id) ??
+            ResumeService.getResumeDetail(id));
+        if (!mounted || _selectedResumeId != id) {
+          timer.cancel();
+          return;
+        }
+        if (!detail.isPending) {
+          timer.cancel();
+          setState(() {
+            _parsedDetail = detail;
+          });
+        } else {
+          setState(() {
+            _parsedDetail = detail;
+          });
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _onResumeSelected(String? id) {
+    if (id == null || id == _selectedResumeId) return;
+    _pollingTimer?.cancel();
+    setState(() {
+      _selectedResumeId = id;
+      _parsedDetail = null;
+    });
+    _fetchParsedDetail(id);
+  }
+
+  void _submit() {
+    if (_selectedResumeId == null) return;
+    widget.onSubmit(_selectedResumeId, null, null);
+  }
+
+  Widget _buildParsedContent() {
+    if (_isLoadingDetail) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.dashboardTeal),
+          ),
+        ),
+      );
+    }
+
+    if (_detailError != null) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
+        padding: const EdgeInsets.all(16),
+        child: Text(_detailError!, style: const TextStyle(color: Colors.red)),
+      );
+    }
+
+    if (_parsedDetail == null) return const SizedBox.shrink();
+
+    if (_parsedDetail!.isPending) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
           children: [
-            const Center(
+            const SizedBox(
+              width: 16,
+              height: 16,
               child: CircularProgressIndicator(
+                strokeWidth: 2,
                 valueColor: AlwaysStoppedAnimation<Color>(
                   AppColors.dashboardTeal,
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(width: 12),
             Text(
-              'Parsing your resume…',
+              'Parsing your resume...',
               style: GoogleFonts.inter(
                 color: const Color(0xFF64748B),
-                fontSize: 13,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -2305,487 +2268,427 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
       );
     }
 
-    if (parsedError.isNotEmpty) {
-      if (parsedError == 'No resume data available yet.') {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          child: Text(
-            'No resume data available yet.',
-            style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
-              fontSize: 13,
-            ),
-          ),
-        );
-      }
+    if (_parsedDetail!.isFailed) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              parsedError,
+              'We couldn\'t parse your resume — try re-uploading a text-based PDF.',
               style: GoogleFonts.inter(
                 color: Colors.redAccent,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            if (parsedError.contains("We couldn't parse"))
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateResumeManagementScreen(),
-                    ),
-                  );
-                },
-                child: Text(
-                  'Manage resumes',
-                  style: GoogleFonts.inter(
-                    color: AppColors.dashboardTeal,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    }
-
-    if (parsedData == null || !parsedData!.isParsed) {
-      return const SizedBox.shrink();
-    }
-
-    final skills = parsedData!.skills ?? [];
-    final education = parsedData!.education ?? [];
-    final experience = parsedData!.experience ?? [];
-    final certifications = parsedData!.certifications ?? [];
-    final matchedSkills = parsedData!.matchedSkills ?? [];
-    final missingSkills = parsedData!.missingSkills ?? [];
-
-    Widget buildChip(
-      String text, {
-      bool isMatched = false,
-      bool isMissing = false,
-    }) {
-      final Color bg = isMatched
-          ? const Color(0xFFECFDF5)
-          : (isMissing ? const Color(0xFFF1F5F9) : Colors.white);
-      final Color textCol = isMatched
-          ? const Color(0xFF10B981)
-          : (isMissing ? const Color(0xFF64748B) : const Color(0xFF0F172A));
-      final Color border = isMatched
-          ? const Color(0xFF10B981).withOpacity(0.2)
-          : const Color(0xFFE2E8F0);
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: border),
-        ),
-        child: Text(
-          isMatched ? '$text ✓' : text,
-          style: GoogleFonts.inter(
-            color: textCol,
-            fontSize: 11.5,
-            fontWeight: isMatched ? FontWeight.bold : FontWeight.w600,
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Text(
-              'YOUR RESUME · PARSED',
-              style: GoogleFonts.spaceGrotesk(
-                color: const Color(0xFF94A3B8),
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE6F7F5),
-                borderRadius: BorderRadius.circular(4),
-              ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                Navigator.pushReplacementNamed(context, '/candidate/resumes');
+              },
               child: Text(
-                'SBERT',
-                style: GoogleFonts.jetBrainsMono(
-                  color: const Color(0xFF32BAB1),
-                  fontSize: 9.5,
+                'Manage resumes',
+                style: GoogleFonts.inter(
+                  color: AppColors.dashboardTeal,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
+      );
+    }
 
+    final skills = _parsedDetail!.skills ?? [];
+    final experience = _parsedDetail!.experience ?? [];
+    final education = _parsedDetail!.education ?? [];
+    final certifications = _parsedDetail!.certifications ?? [];
+
+    Widget sectionTitle(String title) => Padding(
+      padding: const EdgeInsets.only(top: 24, bottom: 12),
+      child: Text(
+        title,
+        style: GoogleFonts.spaceGrotesk(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: const Color(0xFF64748B),
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         if (skills.isNotEmpty) ...[
-          Text(
-            'SKILLS · ${skills.length}',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
+          sectionTitle('SKILLS · ${skills.length}'),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: skills.map((s) => buildChip(s)).toList(),
+            children: skills
+                .map(
+                  (s) => Chip(
+                    label: Text(
+                      s,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    side: BorderSide.none,
+                  ),
+                )
+                .toList(),
           ),
-          const SizedBox(height: 20),
         ],
-
         if (experience.isNotEmpty) ...[
-          Text(
-            'EXPERIENCE · ${experience.length}',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          ...experience.map((e) {
-            final title = (e['title'] ?? '').toString();
-            final company = (e['company'] ?? '').toString();
-            final duration = (e['duration'] ?? '').toString();
-            final description = (e['description'] ?? '').toString();
-            return Padding(
+          sectionTitle('EXPERIENCE · ${experience.length}'),
+          ...experience.map(
+            (e) => Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '• ',
+                    '${e['title']} — ${e['company']}',
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        RichText(
-                          text: TextSpan(
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF0F172A),
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            children: [
-                              TextSpan(text: title),
-                              TextSpan(
-                                text: ' — $company',
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          duration,
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF64748B),
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          description,
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF475569),
-                            fontSize: 13,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
+                  if (e['duration'] != null)
+                    Text(
+                      '${e['duration']}',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color(0xFF64748B),
+                      ),
                     ),
-                  ),
+                  if (e['description'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '${e['description']}',
+                        style: GoogleFonts.inter(fontSize: 13, height: 1.5),
+                      ),
+                    ),
                 ],
               ),
-            );
-          }),
+            ),
+          ),
         ],
-
         if (education.isNotEmpty) ...[
-          Text(
-            'EDUCATION · ${education.length}',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          ...education.map((e) {
-            final degree = (e['degree'] ?? '').toString();
-            final inst = (e['institution'] ?? '').toString();
-            final year = (e['year'] ?? '').toString();
-            return Padding(
+          sectionTitle('EDUCATION · ${education.length}'),
+          ...education.map(
+            (e) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '• ',
+                    '${e['degree']}',
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        RichText(
-                          text: TextSpan(
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF0F172A),
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            children: [
-                              TextSpan(text: degree),
-                              TextSpan(
-                                text: ' — $inst',
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          year,
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF64748B),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    '${e['institution']} ${e['year'] != null ? '(${e['year']})' : ''}',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF64748B),
                     ),
                   ),
                 ],
               ),
-            );
-          }),
-          const SizedBox(height: 8),
-        ],
-
-        if (certifications.isNotEmpty) ...[
-          Text(
-            'CERTIFICATIONS · ${certifications.length}',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 8),
+        ],
+        if (certifications.isNotEmpty) ...[
+          sectionTitle('CERTIFICATIONS · ${certifications.length}'),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: certifications.map((s) => buildChip(s)).toList(),
+            children: certifications
+                .map(
+                  (c) => Chip(
+                    label: Text(
+                      c,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    side: BorderSide.none,
+                  ),
+                )
+                .toList(),
           ),
-          const SizedBox(height: 20),
         ],
       ],
     );
   }
 
-  Widget _buildWhyYouMatchPanel() {
-    if (parsedData == null || !parsedData!.isParsed) {
-      return const SizedBox.shrink();
-    }
-
-    List<String> matched = parsedData!.matchedSkills ?? [];
-    List<String> missing = parsedData!.missingSkills ?? [];
-    double computedScore = parsedData!.matchScore ?? 0.0;
-
-    if (matched.isEmpty && missing.isEmpty) {
-      final resumeSkills =
-          parsedData!.skills?.map((s) => s.toLowerCase()).toSet() ?? {};
-      List<String> requiredSkills = widget.job?.skillsRequired ?? [];
-      if (requiredSkills.isEmpty) {
-        requiredSkills = [
-          'Python',
-          'Docker',
-          'Kubeflow',
-          'PyTorch',
-          'SQL',
-          'AWS',
-          'CI/CD',
-          'Feature stores',
-          'C++',
-        ];
-      }
-
-      if (requiredSkills.isNotEmpty) {
-        matched = requiredSkills
-            .where((req) => resumeSkills.contains(req.toLowerCase()))
-            .toList();
-        missing = requiredSkills
-            .where((req) => !resumeSkills.contains(req.toLowerCase()))
-            .toList();
-        computedScore = (matched.length / requiredSkills.length) * 100;
-      }
-    }
-
-    if (matched.isEmpty && missing.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    Widget buildChip(
-      String text, {
-      bool isMatched = false,
-      bool isMissing = false,
-    }) {
-      final Color bg = isMatched
-          ? const Color(0xFFECFDF5)
-          : (isMissing ? const Color(0xFFF1F5F9) : Colors.white);
-      final Color textCol = isMatched
-          ? const Color(0xFF10B981)
-          : (isMissing ? const Color(0xFF64748B) : const Color(0xFF0F172A));
-      final Color border = isMatched
-          ? const Color(0xFF10B981).withOpacity(0.2)
-          : const Color(0xFFE2E8F0);
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: border),
-        ),
-        child: Text(
-          isMatched ? '$text ✓' : text,
-          style: GoogleFonts.inter(
-            color: textCol,
-            fontSize: 11.5,
-            fontWeight: isMatched ? FontWeight.bold : FontWeight.w600,
-          ),
-        ),
-      );
-    }
-
+  Widget _buildContent() {
     return Container(
-      padding: const EdgeInsets.all(24),
-      margin: const EdgeInsets.only(bottom: 24),
+      width: widget.isMobile ? double.infinity : 600,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: widget.isMobile
+            ? const BorderRadius.vertical(top: Radius.circular(24))
+            : BorderRadius.circular(20),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Text(
-                'Why you match',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (computedScore > 0) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '· ${computedScore.round()}% match',
-                  style: GoogleFonts.inter(
-                    color: AppColors.dashboardTeal,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Apply to ${widget.jobTitle}',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.companyInfo,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Color(0xFF94A3B8)),
+                  onPressed: () =>
+                      Navigator.of(context, rootNavigator: true).pop(),
                 ),
               ],
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE6F7F5),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'SBERT',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: const Color(0xFF32BAB1),
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 16),
-          if (matched.isNotEmpty) ...[
-            Text(
-              'MATCHED · ${matched.length}',
-              style: GoogleFonts.spaceGrotesk(
-                color: const Color(0xFF64748B),
-                fontSize: 11.5,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
+
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'RESUME',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF64748B),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (_isLoadingResumes)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_resumes.isEmpty)
+                    Text(
+                      'No resumes found. Please upload one first.',
+                      style: GoogleFonts.inter(color: Colors.red),
+                    )
+                  else
+                    ..._resumes.map((r) {
+                      final bool isDefault = r['active'] == true;
+                      final cov = r['coverage']?['overall'] ?? 0;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: _selectedResumeId == r['id'].toString()
+                              ? const Color(0xFFF0FDF4)
+                              : Colors.white,
+                          border: Border.all(
+                            color: _selectedResumeId == r['id'].toString()
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: RadioListTile<String>(
+                          value: r['id'].toString(),
+                          groupValue: _selectedResumeId,
+                          onChanged: _onResumeSelected,
+                          activeColor: const Color(0xFF10B981),
+                          title: Text(
+                            r['filename'].toString(),
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          subtitle: Text(
+                            isDefault
+                                ? 'Default · $cov% coverage'
+                                : '$cov% coverage',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+
+                  const SizedBox(height: 24),
+                  Text(
+                    'COVER NOTE · OPTIONAL',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF64748B),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _noteController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Add a short note for the recruiter...',
+                      hintStyle: GoogleFonts.inter(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: AppColors.dashboardTeal,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _buildParsedContent(),
+
+                  const SizedBox(height: 24),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: matched
-                  .map((m) => buildChip(m, isMatched: true))
-                  .toList(),
+          ),
+
+          Container(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 16,
+              bottom: widget.isMobile
+                  ? MediaQuery.of(context).padding.bottom + 16
+                  : 24,
             ),
-            const SizedBox(height: 16),
-          ],
-          if (missing.isNotEmpty) ...[
-            Text(
-              'MISSING · ${missing.length}',
-              style: GoogleFonts.spaceGrotesk(
-                color: const Color(0xFF64748B),
-                fontSize: 11.5,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: missing
-                  .map((m) => buildChip(m, isMissing: true))
-                  .toList(),
+            child: Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Applying starts automated screening immediately — no surprise steps after this.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFF64748B),
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () =>
+                            Navigator.of(context, rootNavigator: true).pop(),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: const Color(0xFFF1F5F9),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF475569),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed:
+                            _selectedResumeId == null || _isLoadingResumes
+                            ? null
+                            : _submit,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: AppColors.dashboardTeal,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: Text(
+                          'Submit application',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -2793,381 +2696,13 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: widget.isMobile ? double.infinity : 420,
-      constraints: BoxConstraints(
-        maxHeight: widget.isMobile
-            ? MediaQuery.of(context).size.height * 0.85
-            : 600,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: widget.isMobile
-            ? const BorderRadius.vertical(top: Radius.circular(24))
-            : BorderRadius.circular(24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Drag handle for mobile bottom sheet
-          if (widget.isMobile)
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(top: 10, bottom: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFCBD5E1),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-
-          // Header Row: Title + Close Button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 16, 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: RichText(
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    text: TextSpan(
-                      style: GoogleFonts.spaceGrotesk(
-                        color: const Color(0xFF0F172A),
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      children: [
-                        TextSpan(text: 'Apply to ${widget.jobTitle}'),
-                        if (parsedData?.matchScore != null)
-                          TextSpan(
-                            text:
-                                '  ·  ${parsedData!.matchScore!.round()}% match',
-                            style: GoogleFonts.inter(
-                              color: AppColors.dashboardTeal,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      color: Colors.transparent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.close_rounded,
-                      color: Color(0xFF64748B),
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Sub-line: company · location
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(
-              widget.companyInfo,
-              style: GoogleFonts.inter(
-                color: const Color(0xFF64748B),
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Scrollable Body
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // RESUME section header
-                  Text(
-                    'RESUME',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: const Color(0xFF94A3B8),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Resumes Radio List
-                  ...widget.resumes.asMap().entries.map((entry) {
-                    final idx = entry.key;
-                    final r = entry.value;
-                    final String ver = (r['version'] ?? 'v1').toString();
-                    final String fn = (r['filename'] ?? 'resume.pdf')
-                        .toString();
-                    final String cov = (r['coverage'] ?? '').toString();
-                    final bool isDef =
-                        r['isDefault'] == true || r['active'] == true;
-                    final bool isSelected = selectedVersion == ver;
-                    final bool isLast = idx == widget.resumes.length - 1;
-
-                    final Color pillBg = (ver == 'v2' || idx == 0)
-                        ? const Color(0xFFE6F7F5)
-                        : const Color(0xFFEFF6FF);
-                    final Color pillText = (ver == 'v2' || idx == 0)
-                        ? const Color(0xFF0FB89B)
-                        : const Color(0xFF3B82F6);
-
-                    return Column(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              selectedVersion = ver;
-                            });
-                            _fetchForSelected();
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            color: Colors.transparent,
-                            child: Row(
-                              children: [
-                                // Version Badge (v2, v1)
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: pillBg,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      ver,
-                                      style: GoogleFonts.spaceGrotesk(
-                                        color: pillText,
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-
-                                // File name + coverage info
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        fn,
-                                        style: GoogleFonts.inter(
-                                          color: const Color(0xFF0F172A),
-                                          fontSize: 13.5,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        isDef && cov.isNotEmpty
-                                            ? 'Default · $cov'
-                                            : (cov.isNotEmpty
-                                                  ? cov
-                                                  : 'Default resume'),
-                                        style: GoogleFonts.inter(
-                                          color: const Color(0xFF94A3B8),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // Custom Radio Indicator Button
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? const Color(0xFF0FB89B)
-                                          : const Color(0xFFE2E8F0),
-                                      width: isSelected ? 6 : 1.5,
-                                    ),
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (!isLast)
-                          const Divider(
-                            color: Color(0xFFE2E8F0),
-                            height: 12,
-                            thickness: 1,
-                          ),
-                      ],
-                    );
-                  }),
-
-                  const SizedBox(height: 20),
-
-                  // COVER NOTE (optional) header
-                  Text(
-                    'COVER NOTE · OPTIONAL',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: const Color(0xFF94A3B8),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Text area input
-                  Container(
-                    height: 84,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    child: TextField(
-                      controller: noteController,
-                      maxLines: 3,
-                      style: GoogleFonts.inter(
-                        color: const Color(0xFF0F172A),
-                        fontSize: 13,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Add a short note for the recruiter…',
-                        hintStyle: GoogleFonts.inter(
-                          color: const Color(0xFF94A3B8),
-                          fontSize: 13,
-                        ),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ),
-
-                  // PARSED RESUME SECTION
-                  _buildParsedSection(),
-
-                  const SizedBox(height: 16),
-
-                  // Transparency line
-                  Text(
-                    'Applying starts automated screening immediately — no surprise steps after this.',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 12,
-                      height: 1.4,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-
-          // Actions Row: Cancel + Submit application
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Row(
-              children: [
-                // Cancel (secondary button)
-                Expanded(
-                  child: SizedBox(
-                    height: 44,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF475569),
-                        side: const BorderSide(color: Colors.transparent),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        elevation: 0,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.inter(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Submit application (primary button)
-                Expanded(
-                  child: SizedBox(
-                    height: 44,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0FB89B),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                      ),
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        final selectedObj = widget.resumes.firstWhere(
-                          (r) => r['version'] == selectedVersion,
-                          orElse: () => widget.resumes.first,
-                        );
-                        final fn = (selectedObj['filename'] ?? 'resume.pdf')
-                            .toString();
-                        final fileToSend = File(fn);
-                        widget.onSubmit(fileToSend);
-                      },
-                      child: Text(
-                        'Submit application',
-                        style: GoogleFonts.inter(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    if (widget.isMobile) {
+      return _buildContent();
+    }
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(24),
+      child: _buildContent(),
     );
   }
 }

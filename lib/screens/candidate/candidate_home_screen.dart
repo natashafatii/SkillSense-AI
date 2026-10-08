@@ -20,7 +20,16 @@ import '../../services/resume_manager.dart';
 import '../../widgets/candidate_side_nav.dart';
 
 class CandidateHomeScreen extends StatefulWidget {
-  const CandidateHomeScreen({super.key});
+  final Future<List<Application>> Function()? loadApplications;
+  final Future<List<Job>> Function()? loadJobs;
+  final Future<void> Function()? loadUser;
+
+  const CandidateHomeScreen({
+    super.key,
+    this.loadApplications,
+    this.loadJobs,
+    this.loadUser,
+  });
 
   @override
   State<CandidateHomeScreen> createState() => _CandidateHomeScreenState();
@@ -32,9 +41,6 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
 
   // Search input control
   final TextEditingController _searchController = TextEditingController();
-
-  // User name loaded dynamically
-  String _userName = '';
 
   // Backend data
   List<Application> _recentApplications = [];
@@ -53,10 +59,14 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
 
   Future<void> _loadApplications() async {
     try {
-      final result = await ApplicationService.listApplications(pageSize: 3);
+      final applications =
+          await (widget.loadApplications?.call() ??
+              ApplicationService.listApplications(
+                pageSize: 3,
+              ).then((result) => result.results));
       if (mounted) {
         setState(() {
-          _recentApplications = result.results;
+          _recentApplications = applications;
           _loadingApplications = false;
         });
       }
@@ -67,13 +77,15 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
 
   Future<void> _loadMatchedJobs() async {
     try {
-      final result = await JobService.listJobs(
-        status: JobStatus.active,
-        pageSize: 3,
-      );
+      final jobs =
+          await (widget.loadJobs?.call() ??
+              JobService.listJobs(
+                status: JobStatus.active,
+                pageSize: 3,
+              ).then((result) => result.results));
       if (mounted) {
         setState(() {
-          _matchedJobs = result.results;
+          _matchedJobs = jobs;
           _loadingJobs = false;
         });
       }
@@ -84,33 +96,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
 
   Future<void> _loadUser() async {
     try {
-      await AuthService.fetchCurrentUser();
-      final user = AuthService.currentUserData;
-      if (user != null && mounted) {
-        final firstName = user['first_name']?.toString().trim();
-        final lastName = user['last_name']?.toString().trim();
-        final email = user['email']?.toString().trim();
-
-        String resolved = '';
-        if (firstName != null && firstName.isNotEmpty) {
-          resolved = firstName;
-        } else if (lastName != null && lastName.isNotEmpty) {
-          resolved = lastName;
-        } else if (email != null && email.isNotEmpty) {
-          final prefix = email.split('@').first;
-          resolved = prefix.isNotEmpty
-              ? prefix[0].toUpperCase() + prefix.substring(1)
-              : email;
-        }
-
-        if (resolved.isNotEmpty) {
-          setState(() {
-            _userName = resolved;
-          });
-        }
-      }
+      await (widget.loadUser?.call() ?? AuthService.fetchCurrentUser());
     } catch (_) {
-      // Graceful error handling
+      // The home screen can still load its other server-backed sections.
     }
   }
 
@@ -632,11 +620,11 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
               // Countdown timer boxes
               Row(
                 children: [
-                  _buildCountdownBox('02', 'DAYS', isMobile),
-                  const SizedBox(width: 12),
-                  _buildCountdownBox('14', 'HOURS', isMobile),
-                  const SizedBox(width: 12),
-                  _buildCountdownBox('37', 'MIN', isMobile),
+                  Expanded(child: _buildCountdownBox('02', 'DAYS', isMobile)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildCountdownBox('14', 'HOURS', isMobile)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildCountdownBox('37', 'MIN', isMobile)),
                 ],
               ),
               const SizedBox(height: 24),
@@ -706,7 +694,6 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
 
   Widget _buildCountdownBox(String value, String label, bool isMobile) {
     return Container(
-      width: isMobile ? 68 : 80,
       height: isMobile ? 58 : 64,
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
@@ -901,16 +888,20 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Applications',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    'Applications',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.spaceGrotesk(
+                      color: textPrimary,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
+                if (_recentApplications.isNotEmpty) const SizedBox(width: 6),
                 if (_recentApplications.isNotEmpty)
                   Text(
                     'All >',
@@ -994,28 +985,34 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     bool isInterview,
   ) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A),
-                fontSize: 12.5,
-                fontWeight: FontWeight.bold,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF0F172A),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            Text(
-              company,
-              style: GoogleFonts.inter(
-                color: const Color(0xFF64748B),
-                fontSize: 11,
+              Text(
+                company,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF64748B),
+                  fontSize: 11,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+        const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
@@ -1026,6 +1023,8 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           ),
           child: Text(
             status,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: GoogleFonts.inter(
               color: isInterview
                   ? const Color(0xFF065F46)
@@ -1319,52 +1318,61 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 ),
                 Text(
                   company,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     color: const Color(0xFF64748B),
                     fontSize: 11,
                   ),
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        tag1,
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF64748B),
-                          fontSize: 9.5,
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Text(
+                          tag1,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF64748B),
+                            fontSize: 9.5,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        tag2,
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF64748B),
-                          fontSize: 9.5,
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Text(
+                          tag2,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF64748B),
+                            fontSize: 9.5,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),

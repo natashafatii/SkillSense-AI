@@ -1,1571 +1,1083 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import '../../constants/app_colors.dart';
-import '../dashboard/command_deck_screen.dart' show GridPainter;
 
+import '../../models/application.dart';
+import '../../models/interview.dart';
+import '../../models/job.dart';
+import '../../services/api_exception.dart';
+import '../../services/application_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/interview_service.dart';
+import '../../services/job_service.dart';
+
+/// Recruiter scheduling console for shortlisted applications.
 class ScheduleInterviewScreen extends StatefulWidget {
-  const ScheduleInterviewScreen({super.key});
+  final String? jobId;
+  final String? applicationId;
+  final Future<List<Job>> Function()? loadJobs;
+  final Future<List<Application>> Function(String jobId)? loadForJob;
+  final Future<Application> Function(String applicationId)? loadApplication;
+  final Future<List<Interview>> Function(String jobId)? loadBooked;
+  final Future<Interview> Function(String applicationId, DateTime scheduledAt)?
+  sendInvite;
+
+  const ScheduleInterviewScreen({
+    super.key,
+    this.jobId,
+    this.applicationId,
+    this.loadJobs,
+    this.loadForJob,
+    this.loadApplication,
+    this.loadBooked,
+    this.sendInvite,
+  });
 
   @override
-  State<ScheduleInterviewScreen> createState() => _ScheduleInterviewScreenState();
+  State<ScheduleInterviewScreen> createState() =>
+      _ScheduleInterviewScreenState();
 }
 
 class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
-  final TextEditingController _searchController = TextEditingController();
-
-  // Days list with concurrency booked load count
-  final List<Map<String, dynamic>> _days = [
-    {'day': 'MON', 'num': '11', 'booked': 6, 'limit': 10, 'selected': false, 'expanded': false},
-    {'day': 'TUE', 'num': '12', 'booked': 4, 'limit': 10, 'selected': false, 'expanded': false},
-    {'day': 'WED', 'num': '13', 'booked': 8, 'limit': 10, 'selected': true, 'expanded': true},
-    {'day': 'THU', 'num': '14', 'booked': 0, 'limit': 10, 'selected': false, 'expanded': false},
-    {'day': 'FRI', 'num': '15', 'booked': 5, 'limit': 10, 'selected': false, 'expanded': false},
+  static const _ink = Color(0xFF17233B);
+  static const _muted = Color(0xFF8190A8);
+  static const _edge = Color(0xFFE4EAF3);
+  static const _blue = Color(0xFF4268F0);
+  static const _slots = <(int, int)>[
+    (9, 0),
+    (10, 30),
+    (11, 30),
+    (13, 0),
+    (14, 0),
+    (15, 30),
+    (17, 0),
   ];
+  static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
-  // Map of daily slots with three states: 'free', 'selected', 'taken'
-  // Taken slots remain visible (struck-through, muted) for density inspection.
-  late Map<int, List<Map<String, dynamic>>> _slotsPerDay;
+  List<Job> _jobs = [];
+  List<Application> _awaiting = [];
+  List<Interview>? _booked;
+  final Set<String> _scheduledIds = {};
+  final Map<String, String> _rowErrors = {};
+  String? _jobId;
+  String? _applicationId;
+  String? _busyApplicationId;
+  String? _error;
+  bool _loading = true;
+  int _request = 0;
+  late DateTime _monday;
+  late int _selectedDay;
+  DateTime? _selectedSlot;
 
-  // Candidates awaiting schedule
-  final List<Map<String, dynamic>> _candidates = [
-    {
-      'initials': 'AK',
-      'name': 'Ayesha Khalid',
-      'desc': 'Shortlisted 2d ago · 91',
-      'slot': '13:00 Wed',
-      'color': const Color(0xFFEFF6FF),
-      'textCol': AppColors.dashboardBlue,
-    },
-    {
-      'initials': 'FF',
-      'name': 'F. Fatima',
-      'desc': 'Shortlisted 1d ago · 78',
-      'slot': 'Slot',
-      'color': Colors.white,
-      'textCol': const Color(0xFF475569),
-    },
-    {
-      'initials': 'ZA',
-      'name': 'Z. Abdullah',
-      'desc': 'Shortlisted 5h ago · 74',
-      'slot': 'Slot',
-      'color': Colors.white,
-      'textCol': const Color(0xFF475569),
-    },
-  ];
-
-  int _selectedDayIndex = 2; // Default to Wednesday
-  int _selectedCandidateIndex = 0; // Default to first candidate
+  Interview? _interview;
+  List<InterviewQuestion> _questions = [];
+  final Map<String, TextEditingController> _questionTexts = {};
+  bool _questionsWorking = false;
+  String? _questionError;
+  String? _questionNotice;
 
   @override
   void initState() {
     super.initState();
-    _slotsPerDay = {
-      0: [
-        {'time': '09:00', 'state': 'taken'},
-        {'time': '10:30', 'state': 'free'},
-        {'time': '13:00', 'state': 'taken'},
-        {'time': '15:30', 'state': 'free'},
-      ],
-      1: [
-        {'time': '09:00', 'state': 'taken'},
-        {'time': '10:30', 'state': 'free'},
-        {'time': '13:00', 'state': 'free'},
-        {'time': '15:30', 'state': 'taken'},
-      ],
-      2: [
-        {'time': '09:00', 'state': 'taken'},
-        {'time': '10:30', 'state': 'free'},
-        {'time': '11:30', 'state': 'taken'},
-        {'time': '13:00', 'state': 'selected'},
-        {'time': '14:00', 'state': 'taken'},
-        {'time': '15:30', 'state': 'free'},
-        {'time': '17:00', 'state': 'free'},
-      ],
-      3: [
-        {'time': '09:00', 'state': 'free'},
-        {'time': '10:30', 'state': 'free'},
-        {'time': '13:00', 'state': 'free'},
-        {'time': '15:30', 'state': 'free'},
-      ],
-      4: [
-        {'time': '09:00', 'state': 'taken'},
-        {'time': '10:30', 'state': 'taken'},
-        {'time': '13:00', 'state': 'free'},
-        {'time': '15:30', 'state': 'free'},
-      ],
-    };
+    _jobId = widget.jobId;
+    _applicationId = widget.applicationId;
+    _monday = _weekStart(DateTime.now());
+    _selectedDay = _initialDay();
+    _loadJobs();
+  }
+
+  @override
+  void didUpdateWidget(covariant ScheduleInterviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.jobId != widget.jobId) {
+      _jobId = widget.jobId;
+      _applicationId = widget.applicationId;
+      _selectedSlot = null;
+      _loadJobs();
+    }
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    for (final controller in _questionTexts.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  void _selectDay(int index) {
-    setState(() {
-      for (int i = 0; i < _days.length; i++) {
-        _days[i]['selected'] = i == index;
-      }
-      _selectedDayIndex = index;
-    });
+  DateTime _weekStart(DateTime now) {
+    final monday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
+    if (now.weekday > 5 || (now.weekday == 5 && now.hour >= 17)) {
+      return monday.add(const Duration(days: 7));
+    }
+    return monday;
   }
 
-  void _selectSlot(int dayIndex, int slotIndex) {
-    final slot = _slotsPerDay[dayIndex]![slotIndex];
-    if (slot['state'] == 'taken') return; // Struck-through and taken: disabled
+  int _initialDay() {
+    final now = DateTime.now();
+    for (var day = 0; day < 5; day++) {
+      final date = _monday.add(Duration(days: day));
+      final last = DateTime(date.year, date.month, date.day, 17);
+      if (last.isAfter(now)) return day;
+    }
+    return 4;
+  }
 
+  Future<void> _loadJobs() async {
+    final request = ++_request;
     setState(() {
-      // Clear previous selection for this day
-      for (var s in _slotsPerDay[dayIndex]!) {
-        if (s['state'] == 'selected') {
-          s['state'] = 'free';
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final jobs = List<Job>.from(
+        await (widget.loadJobs?.call() ?? JobService.listAllJobs()),
+      );
+      if (!mounted || request != _request) return;
+      final requested = _jobId;
+      if (requested != null && !jobs.any((job) => job.id == requested)) {
+        jobs.add(await JobService.getJob(requested));
+        if (!mounted || request != _request) return;
+      }
+      setState(() {
+        _jobs = jobs;
+        _jobId ??= jobs.isEmpty ? null : jobs.first.id;
+      });
+      await _loadAwaiting();
+    } catch (error) {
+      if (!mounted || request != _request) return;
+      if (await _handleUnauthorized(error)) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not load roles: $error';
+      });
+    }
+  }
+
+  Future<void> _loadAwaiting() async {
+    final request = ++_request;
+    final jobId = _jobId;
+    if (jobId == null || jobId.isEmpty) {
+      setState(() {
+        _awaiting = [];
+        _booked = null;
+        _loading = false;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+      _awaiting = [];
+      _booked = null;
+    });
+    try {
+      final applications =
+          await (widget.loadForJob?.call(jobId) ??
+              ApplicationService.listAllForJob(jobId, status: 'SHORTLISTED'));
+      if (!mounted || request != _request || jobId != _jobId) return;
+      final shortlisted =
+          applications
+              .where(
+                (app) =>
+                    app.job == jobId &&
+                    _isShortlisted(app) &&
+                    !_scheduledIds.contains(app.id),
+              )
+              .toList()
+            ..sort(
+              (a, b) =>
+                  b.updatedAt?.compareTo(a.updatedAt ?? a.createdAt) ??
+                  b.createdAt.compareTo(a.createdAt),
+            );
+      if (_applicationId != null &&
+          !shortlisted.any((app) => app.id == _applicationId)) {
+        final id = _applicationId!;
+        final selected =
+            await (widget.loadApplication?.call(id) ??
+                ApplicationService.getApplication(id));
+        if (!mounted || request != _request || jobId != _jobId) return;
+        if (selected.id == id &&
+            selected.job == jobId &&
+            _isShortlisted(selected) &&
+            !_scheduledIds.contains(id)) {
+          shortlisted.add(selected);
         }
       }
-      slot['state'] = 'selected';
+      setState(() {
+        _awaiting = shortlisted;
+        if (!shortlisted.any((app) => app.id == _applicationId)) {
+          _applicationId = null;
+        }
+        _loading = false;
+      });
+      _loadBookings(jobId, request);
+    } catch (error) {
+      if (!mounted || request != _request || jobId != _jobId) return;
+      if (await _handleUnauthorized(error)) return;
+      setState(() {
+        _error = 'Could not load shortlisted applications: $error';
+        _loading = false;
+      });
+    }
+  }
 
-      // Bind slot to selected candidate
-      final dayName = _days[dayIndex]['day'].substring(0, 1) +
-          _days[dayIndex]['day'].substring(1, 3).toLowerCase();
-      _candidates[_selectedCandidateIndex]['slot'] = '${slot['time']} $dayName';
-      _candidates[_selectedCandidateIndex]['color'] = const Color(0xFFEFF6FF);
-      _candidates[_selectedCandidateIndex]['textCol'] = AppColors.dashboardBlue;
+  bool _isShortlisted(Application app) =>
+      (app.rawStatus ?? app.status.value).toUpperCase() == 'SHORTLISTED';
+
+  Future<void> _loadBookings(String jobId, int request) async {
+    try {
+      final booked =
+          await (widget.loadBooked?.call(jobId) ??
+              InterviewService.listForJob(jobId));
+      if (!mounted || request != _request || jobId != _jobId) return;
+      setState(() => _booked = booked);
+    } catch (error) {
+      if (!mounted || request != _request || jobId != _jobId) return;
+      await _handleUnauthorized(error);
+      // Some backends do not expose a readable interview list. Unknown
+      // availability is shown as a dash rather than an invented count.
+    }
+  }
+
+  Future<bool> _handleUnauthorized(Object error) async {
+    if (error is! ApiException || error.statusCode != 401) return false;
+    try {
+      await AuthService.signOut();
+    } catch (_) {
+      // Navigate even if the identity provider already ended the session.
+    }
+    if (mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+    }
+    return true;
+  }
+
+  void _changeJob(String? id) {
+    if (id == null || id == _jobId) return;
+    setState(() {
+      _jobId = id;
+      _applicationId = null;
+      _selectedSlot = null;
+      _rowErrors.clear();
+      _interview = null;
     });
+    _loadAwaiting();
+  }
+
+  DateTime _dateFor(int day) => _monday.add(Duration(days: day));
+
+  DateTime _slotFor(int day, (int, int) time) {
+    final date = _dateFor(day);
+    return DateTime(date.year, date.month, date.day, time.$1, time.$2);
+  }
+
+  bool _sameMinute(DateTime a, DateTime b) =>
+      a.year == b.year &&
+      a.month == b.month &&
+      a.day == b.day &&
+      a.hour == b.hour &&
+      a.minute == b.minute;
+
+  bool _taken(DateTime slot) =>
+      _booked?.any((interview) {
+        final at = interview.scheduledAt?.toLocal();
+        return at != null && _sameMinute(at, slot);
+      }) ??
+      false;
+
+  int _bookedCount(int day) =>
+      _booked?.where((interview) {
+        final at = interview.scheduledAt?.toLocal();
+        final date = _dateFor(day);
+        return at != null &&
+            at.year == date.year &&
+            at.month == date.month &&
+            at.day == date.day;
+      }).length ??
+      0;
+
+  String _time(DateTime date) =>
+      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+
+  String _slotLabel(DateTime date) =>
+      '${_time(date)} ${_days[date.weekday - 1]}';
+
+  Future<void> _sendInvite(Application app) async {
+    final slot = _selectedSlot;
+    if (slot == null || !slot.isAfter(DateTime.now())) {
+      setState(() => _rowErrors[app.id] = 'Choose an available future slot.');
+      return;
+    }
+    if (app.job != _jobId || !_isShortlisted(app)) {
+      setState(
+        () => _rowErrors[app.id] = 'This application is no longer shortlisted.',
+      );
+      return;
+    }
+    setState(() {
+      _busyApplicationId = app.id;
+      _rowErrors.remove(app.id);
+    });
+    try {
+      final interview =
+          await (widget.sendInvite?.call(app.id, slot) ??
+              InterviewService.schedule(
+                applicationId: app.id,
+                scheduledAt: slot,
+              ));
+      if (!mounted || app.job != _jobId) return;
+      setState(() {
+        _interview = interview;
+        _scheduledIds.add(app.id);
+        _awaiting.removeWhere((item) => item.id == app.id);
+        _booked = [...?_booked, interview];
+        _applicationId = null;
+        _selectedSlot = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Interview invitation scheduled.')),
+      );
+      await _loadAwaiting();
+    } catch (error) {
+      if (!mounted) return;
+      if (await _handleUnauthorized(error)) return;
+      setState(() {
+        _rowErrors[app.id] = switch (error) {
+          ApiException(statusCode: 403) =>
+            "You're not authorized to schedule this interview.",
+          ApiException(statusCode: 400, :final message) => message,
+          ApiException(:final message) => message,
+          _ => 'Could not schedule this interview: $error',
+        };
+      });
+    } finally {
+      if (mounted) setState(() => _busyApplicationId = null);
+    }
+  }
+
+  Future<void> _refreshQuestions() async {
+    final id = _interview?.id;
+    if (id == null) return;
+    setState(() {
+      _questionsWorking = true;
+      _questionError = null;
+    });
+    try {
+      final questions = await InterviewService.getQuestions(id);
+      if (!mounted || _interview?.id != id) return;
+      for (final controller in _questionTexts.values) {
+        controller.dispose();
+      }
+      _questionTexts.clear();
+      for (final question in questions) {
+        _questionTexts[question.id] = TextEditingController(
+          text: question.text,
+        );
+      }
+      setState(() {
+        _questions = questions;
+        _questionNotice = questions.isEmpty
+            ? 'Generated questions are pending.'
+            : 'Review the generated questions before approval.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _questionError = 'Could not load questions: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _questionsWorking = false);
+    }
+  }
+
+  Future<void> _saveQuestions({required bool approve}) async {
+    final id = _interview?.id;
+    if (id == null || _questions.isEmpty) return;
+    final edited = _questions
+        .map(
+          (question) => InterviewQuestion(
+            id: question.id,
+            text: _questionTexts[question.id]!.text.trim(),
+            isApproved: approve || question.isApproved,
+          ),
+        )
+        .toList();
+    if (edited.any((question) => question.text.isEmpty)) {
+      setState(() => _questionError = 'Question text cannot be empty.');
+      return;
+    }
+    setState(() {
+      _questionsWorking = true;
+      _questionError = null;
+    });
+    try {
+      final confirmed = await InterviewService.saveQuestions(id, edited);
+      if (!mounted || _interview?.id != id) return;
+      setState(() {
+        _questions = confirmed;
+        _questionNotice = approve
+            ? 'Questions approved by the server.'
+            : 'Question edits saved by the server.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _questionError = 'Question update failed: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _questionsWorking = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth <= 768;
-
+    final compact = MediaQuery.sizeOf(context).width < 800;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Stack(
-        children: [
-          // ── BASE GRADIENT ──────────────────────────────────────────────────
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+      backgroundColor: const Color(0xFFF6F8FD),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _topBar(compact),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(compact ? 16 : 22),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1240),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_jobs.length > 1) ...[
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: DropdownButton<String>(
+                              value: _jobId,
+                              items: [
+                                for (final job in _jobs)
+                                  DropdownMenuItem(
+                                    value: job.id,
+                                    child: Text(job.title),
+                                  ),
+                              ],
+                              onChanged: _busyApplicationId == null
+                                  ? _changeJob
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        if (_loading)
+                          const LinearProgressIndicator(minHeight: 2),
+                        if (_error != null) ...[
+                          Text(
+                            _error!,
+                            style: const TextStyle(color: Color(0xFFDC354A)),
+                          ),
+                          TextButton(
+                            onPressed: _loadJobs,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                        if (!_loading && _jobs.isEmpty)
+                          _panel(
+                            child: const Text('No recruiter jobs available.'),
+                          )
+                        else if (compact)
+                          Column(
+                            children: [
+                              _weekPanel(),
+                              const SizedBox(height: 14),
+                              _awaitingPanel(),
+                              const SizedBox(height: 14),
+                              _invitationPanel(),
+                            ],
+                          )
+                        else
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 14,
+                                child: Column(
+                                  children: [
+                                    _weekPanel(),
+                                    const SizedBox(height: 14),
+                                    _invitationPanel(),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(flex: 10, child: _awaitingPanel()),
+                            ],
+                          ),
+                        if (_interview != null) ...[
+                          const SizedBox(height: 14),
+                          _questionPanel(),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _topBar(bool compact) => Container(
+    height: 55,
+    padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 22),
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      border: Border(bottom: BorderSide(color: _edge)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            'SCHEDULE INTERVIEW',
+            style: GoogleFonts.spaceGrotesk(
+              color: _ink,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
           ),
-
-          // ── GRID PATTERN OVERLAY (Web Only) ─────────────────────────────────
-          if (!isMobile) Positioned.fill(child: CustomPaint(painter: GridPainter())),
-
-          // ── MAIN WORKSPACE CONTENT ──────────────────────────────────────────
-          SafeArea(
-            bottom: false,
+        ),
+        if (!compact) ...[
+          Container(
+            width: 260,
+            height: 34,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              border: Border.all(color: _edge),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Row(
               children: [
-                // 1. LEFT RAIL (Web Only)
-                if (!isMobile) _buildLeftRail(context),
-
-                // 2. WORKSPACE
+                const Icon(Icons.search, size: 15, color: _muted),
+                const SizedBox(width: 5),
                 Expanded(
-                  child: Column(
-                    children: [
-                      // Top Bar (Web Only)
-                      if (!isMobile) _buildTopBar(),
-
-                      // Mobile Header (Mobile Only)
-                      if (isMobile) _buildMobileHeader(),
-
-                      // Layout views
-                      Expanded(
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 16 : 24,
-                            vertical: isMobile ? 12 : 8,
-                          ),
-                          child: isMobile ? _buildMobileLayout() : _buildWebLayout(),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'Search or jump to...',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(color: _muted, fontSize: 11),
                   ),
                 ),
               ],
             ),
           ),
-
-          // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────
-          if (isMobile)
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: _buildMobileBottomDock(),
-            ),
+          const SizedBox(width: 10),
         ],
+        const Icon(Icons.notifications_none_rounded, size: 19, color: _muted),
+        const SizedBox(width: 13),
+        const Icon(Icons.help_outline_rounded, size: 19, color: _muted),
+      ],
+    ),
+  );
+
+  Widget _weekPanel() => _panel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _heading('This week')),
+            Text(
+              '${_monday.month}/${_monday.day}–${_dateFor(4).month}/${_dateFor(4).day}',
+              style: GoogleFonts.inter(color: _muted, fontSize: 10),
+            ),
+          ],
+        ),
+        const Divider(height: 26, color: _edge),
+        Row(
+          children: [
+            for (var day = 0; day < 5; day++) ...[
+              if (day > 0) const SizedBox(width: 7),
+              Expanded(child: _dayCard(day)),
+            ],
+          ],
+        ),
+        const SizedBox(height: 16),
+        _tick('${_days[_selectedDay].toUpperCase()} SLOTS · AGENT CAPACITY'),
+        const SizedBox(height: 9),
+        Wrap(
+          spacing: 7,
+          runSpacing: 7,
+          children: [
+            for (final time in _slots) _slotChip(_slotFor(_selectedDay, time)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const Divider(height: 1, color: _edge),
+        const SizedBox(height: 11),
+        _tick('AGENT CONFIG'),
+        const SizedBox(height: 7),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            _configChip('Retell · voice EN-F2'),
+            _configChip('8 questions'),
+            _configChip('Proctoring on'),
+            _configChip('Recording on'),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _dayCard(int day) {
+    final date = _dateFor(day);
+    final selected = day == _selectedDay;
+    return InkWell(
+      onTap: _busyApplicationId == null
+          ? () => setState(() {
+              _selectedDay = day;
+              _selectedSlot = null;
+            })
+          : null,
+      borderRadius: BorderRadius.circular(11),
+      child: Container(
+        height: 72,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE5ECFF) : const Color(0xFFFCFDFF),
+          border: Border.all(color: selected ? const Color(0xFFBCD0FF) : _edge),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _tick(_days[day].toUpperCase()),
+            Text(
+              '${date.day}',
+              style: GoogleFonts.jetBrainsMono(
+                color: _ink,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              _booked == null ? '—' : '${_bookedCount(day)} booked',
+              style: GoogleFonts.inter(color: _muted, fontSize: 9),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // ── WEB LAYOUT ─────────────────────────────────────────────────────────────
-  Widget _buildWebLayout() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _slotChip(DateTime slot) {
+    final taken = _taken(slot) || !slot.isAfter(DateTime.now());
+    final selected = _selectedSlot != null && _sameMinute(_selectedSlot!, slot);
+    return ChoiceChip(
+      label: Text(
+        _time(slot),
+        style: GoogleFonts.jetBrainsMono(
+          fontSize: 10,
+          color: taken
+              ? const Color(0xFFADB8C9)
+              : selected
+              ? _blue
+              : _muted,
+          decoration: taken ? TextDecoration.lineThrough : null,
+        ),
+      ),
+      selected: selected,
+      onSelected: taken || _busyApplicationId != null
+          ? null
+          : (_) => setState(() {
+              _selectedSlot = slot;
+              _rowErrors.clear();
+            }),
+      selectedColor: const Color(0xFFE4ECFF),
+      backgroundColor: Colors.white,
+      side: BorderSide(color: selected ? const Color(0xFFBCD0FF) : _edge),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      showCheckmark: false,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  Widget _awaitingPanel() => _panel(
+    padding: EdgeInsets.zero,
+    hot: true,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildHeaderArea(),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left Panel (Calendar Grid + Invite settings)
-            Expanded(
-              flex: 3,
-              child: Column(
-                children: [
-                  _buildThisWeekCardWeb(),
-                  const SizedBox(height: 20),
-                  _buildInvitationCardWeb(),
-                ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 17, 16, 13),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Awaiting schedule',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: _ink,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              _configChip('SHORTLIST · ${_awaiting.length}', active: true),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: _edge),
+        if (!_loading && _awaiting.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(28),
+            child: Center(
+              child: Text(
+                'No shortlisted candidates yet',
+                style: GoogleFonts.inter(color: _muted, fontSize: 11),
               ),
             ),
-            const SizedBox(width: 20),
+          ),
+        for (var index = 0; index < _awaiting.length; index++) ...[
+          if (index > 0) const Divider(height: 1, color: _edge),
+          _candidateRow(_awaiting[index]),
+        ],
+      ],
+    ),
+  );
 
-            // Right Panel (Awaiting Queue)
+  Widget _candidateRow(Application app) {
+    final selected = _applicationId == app.id;
+    final busy = _busyApplicationId == app.id;
+    final name = _candidateName(app);
+    final date = app.updatedAt ?? app.createdAt;
+    final error = _rowErrors[app.id];
+    return InkWell(
+      onTap: _busyApplicationId == null
+          ? () => setState(() => _applicationId = app.id)
+          : null,
+      child: Container(
+        color: selected ? const Color(0xFFF7F9FF) : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 29,
+                  height: 29,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5ECFF),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    _initials(name),
+                    style: GoogleFonts.inter(
+                      color: _blue,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          color: _ink,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'Shortlisted ${_timeAgo(date)}${app.resumeScore == null ? '' : ' · ${_scoreText(app.resumeScore!)}'}',
+                        style: GoogleFonts.inter(color: _muted, fontSize: 9.5),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                FilledButton(
+                  onPressed: _selectedSlot != null && _busyApplicationId == null
+                      ? () => _sendInvite(app)
+                      : null,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(75, 31),
+                    padding: const EdgeInsets.symmetric(horizontal: 9),
+                    backgroundColor: _blue,
+                    textStyle: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: busy
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          _selectedSlot == null
+                              ? 'Pick slot'
+                              : _slotLabel(_selectedSlot!),
+                        ),
+                ),
+              ],
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 7),
+              Text(
+                error,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFFD64255),
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _candidateName(Application app) {
+    final name = app.candidateName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final prefix = app.candidateEmail
+        .split('@')
+        .first
+        .replaceAll(RegExp(r'[._-]+'), ' ')
+        .trim();
+    if (prefix.isEmpty) return 'Candidate';
+    return prefix
+        .split(RegExp(r'\s+'))
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
+
+  String _initials(String name) => name
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .take(2)
+      .map((part) => part[0].toUpperCase())
+      .join();
+
+  String _timeAgo(DateTime date) {
+    final delta = DateTime.now().difference(date);
+    if (delta.isNegative || delta.inMinutes < 1) return 'just now';
+    if (delta.inHours < 1) return '${delta.inMinutes}m ago';
+    if (delta.inDays < 1) return '${delta.inHours}h ago';
+    return '${delta.inDays}d ago';
+  }
+
+  String _scoreText(double score) => score == score.roundToDouble()
+      ? score.round().toString()
+      : score.toStringAsFixed(1);
+
+  Widget _invitationPanel() => _panel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _heading('Invitation'),
+        const Divider(height: 25, color: _edge),
+        Text(
+          'Candidate receives email + in-app invite with device-check link. '
+          'Auto-reminder 24h and 1h before.',
+          style: GoogleFonts.inter(color: _muted, fontSize: 10, height: 1.6),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
             Expanded(
-              flex: 2,
-              child: _buildAwaitingScheduleCardWeb(),
+              child: OutlinedButton(
+                onPressed: _applicationId != null && _selectedSlot != null
+                    ? () => showDialog<void>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Invitation preview'),
+                          content: Text(
+                            'Interview invitation for ${_candidateName(_awaiting.firstWhere((app) => app.id == _applicationId))} on '
+                            '${_selectedSlot!.toLocal()}.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : null,
+                child: const Text('Preview email'),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: FilledButton(
+                onPressed:
+                    _applicationId != null &&
+                        _selectedSlot != null &&
+                        _busyApplicationId == null
+                    ? () => _sendInvite(
+                        _awaiting.firstWhere((app) => app.id == _applicationId),
+                      )
+                    : null,
+                style: FilledButton.styleFrom(backgroundColor: _blue),
+                child: _busyApplicationId != null
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Send invite'),
+              ),
             ),
           ],
         ),
       ],
-    );
-  }
+    ),
+  );
 
-  // ── MOBILE LAYOUT (Stacked day-by-day expandable slots) ────────────────────
-  Widget _buildMobileLayout() {
-    return Column(
+  Widget _questionPanel() => _panel(
+    child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Candidate selection header
-        _buildMobileAwaitingQueue(),
-        const SizedBox(height: 16),
-
-        // Title Capacity
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        _heading('Generated questions'),
+        const SizedBox(height: 7),
+        Text(
+          'Interview ID: ${_interview!.id}',
+          style: GoogleFonts.jetBrainsMono(color: _muted, fontSize: 10),
+        ),
+        if (_questionNotice != null) Text(_questionNotice!),
+        if (_questionError != null)
+          Text(
+            _questionError!,
+            style: const TextStyle(color: Color(0xFFD64255)),
+          ),
+        TextButton(
+          onPressed: _questionsWorking ? null : _refreshQuestions,
+          child: const Text('Refresh generated questions'),
+        ),
+        for (final question in _questions)
+          TextField(
+            controller: _questionTexts[question.id],
+            maxLines: 2,
+            decoration: InputDecoration(
+              labelText:
+                  'Question ${question.id}${question.isApproved ? ' · approved' : ' · pending approval'}',
+            ),
+          ),
+        if (_questions.isNotEmpty)
+          Row(
             children: [
-              Text(
-                'Available days',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+              TextButton(
+                onPressed: _questionsWorking
+                    ? null
+                    : () => _saveQuestions(approve: false),
+                child: const Text('Save edits'),
               ),
-              Text(
-                'Cap: 10/day',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                ),
+              FilledButton(
+                onPressed: _questionsWorking
+                    ? null
+                    : () => _saveQuestions(approve: true),
+                child: const Text('Approve questions'),
               ),
             ],
           ),
-        ),
-
-        // Day list (collapsible list)
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _days.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final day = _days[index];
-            final bool isExpanded = day['expanded'];
-            final int booked = day['booked'];
-            final int limit = day['limit'];
-
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: day['selected'] ? AppColors.dashboardBlue : const Color(0xFFE2E8F0),
-                  width: day['selected'] ? 1.5 : 1,
-                ),
-              ),
-              child: Column(
-                children: [
-                  // Collapsible Day Header Row
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        day['expanded'] = !isExpanded;
-                        _selectDay(index);
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                '${day['day']} ${day['num']}',
-                                style: GoogleFonts.spaceGrotesk(
-                                  color: const Color(0xFF0F172A),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              if (day['selected'])
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.dashboardBlue,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              // Load Concurrency limit badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF1F5F9),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '$booked/$limit booked',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    color: const Color(0xFF64748B),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                                color: const Color(0xFF64748B),
-                                size: 20,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Slot chips shown when expanded
-                  if (isExpanded) ...[
-                    const Divider(color: Color(0xFFF1F5F9), height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: List.generate(_slotsPerDay[index]!.length, (sIdx) {
-                          final slot = _slotsPerDay[index]![sIdx];
-                          final String state = slot['state'];
-                          final String time = slot['time'];
-
-                          Color bg = Colors.white;
-                          Color textCol = const Color(0xFF475569);
-                          Border border = Border.all(color: const Color(0xFFCBD5E1), width: 1.2);
-                          TextDecoration textDec = TextDecoration.none;
-
-                          if (state == 'selected') {
-                            bg = const Color(0xFFEFF6FF);
-                            textCol = AppColors.dashboardBlue;
-                            border = Border.all(color: AppColors.dashboardBlue, width: 1.5);
-                          } else if (state == 'taken') {
-                            bg = const Color(0xFFF1F5F9);
-                            textCol = const Color(0xFF94A3B8);
-                            border = Border.all(color: const Color(0xFFE2E8F0), width: 1);
-                            textDec = TextDecoration.lineThrough;
-                          }
-
-                          return InkWell(
-                            onTap: () => _selectSlot(index, sIdx),
-                            child: Container(
-                              constraints: const BoxConstraints(minHeight: 44, minWidth: 70), // touch targets
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: bg,
-                                borderRadius: BorderRadius.circular(8),
-                                border: border,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  time,
-                                  style: GoogleFonts.jetBrainsMono(
-                                    color: textCol,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    decoration: textDec,
-                                    decorationColor: const Color(0xFF94A3B8),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-
-        // Mobile Invitation / Booking Lifecycle card
-        _buildMobileInvitationCard(),
-
-        const SizedBox(height: 110),
       ],
-    );
-  }
+    ),
+  );
 
-  // ── MOBILE AWAITING QUEUE CHIPS ────────────────────────────────────────────
-  Widget _buildMobileAwaitingQueue() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Awaiting schedule',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _candidates.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, idx) {
-              final cand = _candidates[idx];
-              final isSelected = _selectedCandidateIndex == idx;
-
-              return InkWell(
-                onTap: () {
-                  setState(() {
-                    _selectedCandidateIndex = idx;
-                  });
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFF8FAFC) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isSelected ? const Color(0xFFCBD5E1) : Colors.transparent,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF1F5F9),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            cand['initials'],
-                            style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              cand['name'],
-                              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              cand['desc'],
-                              style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.dashboardBlue : Colors.white,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFCBD5E1)),
-                        ),
-                        child: Text(
-                          cand['slot'],
-                          style: GoogleFonts.jetBrainsMono(
-                            color: isSelected ? Colors.white : const Color(0xFF475569),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── MOBILE INVITATION CARD ─────────────────────────────────────────────────
-  Widget _buildMobileInvitationCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Booking lifecycle',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Concise mobile lifecycle display text
-          Text(
-            'Invite sent → device-check link → reminders 24h/1h → 10-min no-show release',
-            style: GoogleFonts.inter(
-              color: const Color(0xFF475569),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Invitations Sent Successfully!')),
-                );
-                Navigator.of(context).pushReplacementNamed('/pipeline');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.dashboardBlue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                elevation: 0,
-              ),
-              child: Text(
-                'Send invite',
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── MOBILE APP HEADER ──────────────────────────────────────────────────────
-  Widget _buildMobileHeader() {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              SvgPicture.asset('assets/images/logo.svg', height: 26),
-              const SizedBox(width: 10),
-              Text(
-                'Schedule',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF475569)),
-            color: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            onSelected: (val) {
-              Navigator.of(context).pushReplacementNamed(val);
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: '/monitor',
-                child: Row(
-                  children: [
-                    const Icon(Icons.videocam_rounded, size: 18, color: Color(0xFF475569)),
-                    const SizedBox(width: 10),
-                    Text('Live Monitor', style: GoogleFonts.inter(fontSize: 13.5)),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: '/review',
-                child: Row(
-                  children: [
-                    const Icon(Icons.video_library_rounded, size: 18, color: Color(0xFF475569)),
-                    const SizedBox(width: 10),
-                    Text('Interview Review', style: GoogleFonts.inter(fontSize: 13.5)),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: '/settings',
-                child: Row(
-                  children: [
-                    const Icon(Icons.settings_outlined, size: 18, color: Color(0xFF475569)),
-                    const SizedBox(width: 10),
-                    Text('Settings', style: GoogleFonts.inter(fontSize: 13.5)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB HEADER AREA ────────────────────────────────────────────────────────
-  Widget _buildHeaderArea() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Schedule Interview',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.5,
-            ),
-          ),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/monitor');
-                },
-                icon: const Icon(Icons.videocam_rounded, size: 16),
-                label: Text(
-                  'Live Monitor',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.dashboardBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/review');
-                },
-                icon: const Icon(Icons.video_library_rounded, size: 16),
-                label: Text(
-                  'Interview Review',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB THIS WEEK CALENDAR GRID CARD ───────────────────────────────────────
-  Widget _buildThisWeekCardWeb() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'This week',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                '‹ May 11-17 ›',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Days row with 6/10 booked indicators
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final double cellWidth = (constraints.maxWidth - 4 * 12) / 5;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: List.generate(_days.length, (idx) {
-                  final day = _days[idx];
-                  final isSelected = day['selected'];
-
-                  return InkWell(
-                    onTap: () => _selectDay(idx),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: cellWidth,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected ? AppColors.dashboardBlue : const Color(0xFFE2E8F0),
-                          width: 1.5,
-                        ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.dashboardBlue.withValues(alpha: 0.08),
-                                  blurRadius: 10,
-                                  spreadRadius: 1,
-                                )
-                              ]
-                            : null,
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            day['day'],
-                            style: GoogleFonts.inter(
-                              color: isSelected ? AppColors.dashboardBlue : const Color(0xFF94A3B8),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            day['num'],
-                            style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF0F172A),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          // Agent booked loads vs limit cap count
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isSelected ? const Color(0x193B82F6) : const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '${day['booked']}/${day['limit']} booked',
-                              style: GoogleFonts.jetBrainsMono(
-                                color: isSelected ? AppColors.dashboardBlue : const Color(0xFF64748B),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-          const Divider(color: Color(0xFFF1F5F9), height: 1),
-          const SizedBox(height: 20),
-
-          // Daily time slots
-          Text(
-            '${_days[_selectedDayIndex]['day']}DAY INTERVIEW TIMESLOTS',
-            style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Slot Chips Wrap (never hide taken ones)
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: List.generate(_slotsPerDay[_selectedDayIndex]!.length, (sIdx) {
-              final slot = _slotsPerDay[_selectedDayIndex]![sIdx];
-              final String state = slot['state'];
-              final String time = slot['time'];
-
-              Color bg = Colors.white;
-              Color textCol = const Color(0xFF475569);
-              Border border = Border.all(color: const Color(0xFFCBD5E1), width: 1.2);
-              TextDecoration textDec = TextDecoration.none;
-
-              if (state == 'selected') {
-                bg = const Color(0xFFEFF6FF);
-                textCol = AppColors.dashboardBlue;
-                border = Border.all(color: AppColors.dashboardBlue, width: 1.5);
-              } else if (state == 'taken') {
-                bg = const Color(0xFFF1F5F9);
-                textCol = const Color(0xFF94A3B8);
-                border = Border.all(color: const Color(0xFFE2E8F0), width: 1);
-                textDec = TextDecoration.lineThrough;
-              }
-
-              return InkWell(
-                onTap: () => _selectSlot(_selectedDayIndex, sIdx),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(6),
-                    border: border,
-                  ),
-                  child: Text(
-                    time,
-                    style: GoogleFonts.jetBrainsMono(
-                      color: textCol,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      decoration: textDec,
-                      decorationColor: const Color(0xFF94A3B8),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB INVITATION CARD (Booking Lifecycle) ────────────────────────────────
-  Widget _buildInvitationCardWeb() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Invitation lifecycle policy',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Directly stated lifecycle operational rule text copy
-          Text(
-            'Stated rules: Invite sent → device-check link → reminder at 24h and 1h → slot auto-released after 10 min no-show.',
-            style: GoogleFonts.inter(
-              color: const Color(0xFF475569),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
-                  ),
-                  child: InkWell(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Email Preview Opened')),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(24),
-                    child: Center(
-                      child: Text(
-                        'Preview email',
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF475569),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF4F46E5), Color(0xFF3B82F6)],
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: InkWell(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Invitations Sent Successfully!')),
-                      );
-                      Navigator.of(context).pushReplacementNamed('/pipeline');
-                    },
-                    borderRadius: BorderRadius.circular(24),
-                    child: Center(
-                      child: Text(
-                        'Send invite',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB AWAITING SCHEDULE CARD ─────────────────────────────────────────────
-  Widget _buildAwaitingScheduleCardWeb() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Awaiting schedule',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              _buildSmallBadge(label: 'SHORTLIST', color: AppColors.dashboardBlue),
-            ],
-          ),
-          const SizedBox(height: 20),
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _candidates.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 14),
-            itemBuilder: (context, idx) {
-              final cand = _candidates[idx];
-              final isSelected = _selectedCandidateIndex == idx;
-
-              return InkWell(
-                onTap: () {
-                  setState(() {
-                    _selectedCandidateIndex = idx;
-                  });
-                },
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFF8FAFC) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isSelected ? const Color(0xFFE2E8F0) : Colors.transparent,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF1F5F9),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            cand['initials'],
-                            style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF475569),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              cand['name'],
-                              style: GoogleFonts.inter(
-                                color: const Color(0xFF0F172A),
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              cand['desc'],
-                              style: GoogleFonts.inter(
-                                color: const Color(0xFF64748B),
-                                fontSize: 11.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.dashboardBlue : Colors.white,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isSelected ? AppColors.dashboardBlue : const Color(0xFFCBD5E1),
-                          ),
-                        ),
-                        child: Text(
-                          cand['slot'],
-                          style: GoogleFonts.jetBrainsMono(
-                            color: isSelected ? Colors.white : const Color(0xFF475569),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSmallBadge({required String label, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.jetBrainsMono(
-          color: color,
-          fontSize: 8.5,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.1,
+  Widget _panel({
+    required Widget child,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
+    bool hot = false,
+  }) => Container(
+    padding: padding,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: _edge),
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF596B96).withValues(alpha: hot ? 0.12 : 0.06),
+          blurRadius: hot ? 26 : 16,
+          offset: const Offset(0, 7),
         ),
-      ),
-    );
-  }
-
-  // ── DOCK ON MOBILE ─────────────────────────────────────────────────────────
-  Widget _buildMobileBottomDock() {
-    if (MediaQuery.of(context).viewInsets.bottom > 0) {
-      return const SizedBox.shrink(); // Auto-hide
-    }
-
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildMobileDockItem(Icons.dashboard_rounded, '/dashboard', false),
-          _buildMobileDockItem(Icons.menu_book_rounded, '/pipeline', false),
-          _buildMobileDockItem(Icons.calendar_month_rounded, '/schedule', true), // active
-          _buildMobileDockItem(Icons.emoji_events_outlined, '/rankings', false),
-          _buildMobileDockItem(Icons.analytics_outlined, '/analytics', false),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileDockItem(IconData icon, String route, bool isActive) {
-    return GestureDetector(
-      onTap: () {
-        if (!isActive) {
-          Navigator.of(context).pushReplacementNamed(route);
-        }
-      },
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: isActive ? AppColors.dashboardBlue : Colors.transparent,
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: AppColors.dashboardBlue.withValues(alpha: 0.4),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : [],
-        ),
-        child: Icon(
-          icon,
-          color: isActive ? Colors.white : const Color(0xFF94A3B8),
-          size: 22,
-        ),
-      ),
-    );
-  }
-
-  // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
-  Widget _buildLeftRail(BuildContext context) {
-    final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'route': '/dashboard'},
-      {'icon': Icons.menu_book_rounded, 'label': 'Jobs', 'route': '/pipeline'},
-      {'icon': Icons.calendar_month_rounded, 'label': 'Interviews', 'route': '/schedule'},
-      {'icon': Icons.emoji_events_outlined, 'label': 'Rankings', 'route': '/rankings'},
-      {'icon': Icons.analytics_outlined, 'label': 'Analytics', 'route': '/analytics'},
-      {'icon': Icons.settings_outlined, 'label': 'Settings', 'route': '/settings'},
-    ];
-
-    return Container(
-      width: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              },
-              child: SvgPicture.asset('assets/images/logo.svg', height: 48),
-            ),
-          ),
-          const SizedBox(height: 40),
-
-          // Nav Items
-          Expanded(
-            child: ListView.separated(
-              itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
-              itemBuilder: (context, index) {
-                final isSelected = index == 2; // Interviews is active/selected (index 2)
-                final item = navItems[index];
-                final bool hasBadge = index == 1; // Jobs has unread item badge "18"
-
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Active glowing orb
-                      if (isSelected)
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.dashboardBlue,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.dashboardBlue.withValues(alpha: 0.4),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      Tooltip(
-                        message: item['label'],
-                        waitDuration: const Duration(milliseconds: 350),
-                        preferBelow: false,
-                        verticalOffset: 24,
-                        margin: const EdgeInsets.only(left: 45),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () {
-                              if (!isSelected) {
-                                Navigator.of(context).pushReplacementNamed(item['route']);
-                              }
-                            },
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: Center(
-                                child: Icon(
-                                  item['icon'],
-                                  color: isSelected ? Colors.white : const Color(0xFF64748B),
-                                  size: 19,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Badge Sit on Top-Right Corner
-                      if (hasBadge)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.dashboardBlue,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white, width: 1.5),
-                            ),
-                            child: const Text(
-                              '18',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Avatar bottom
-          Container(
-            width: 36,
-            height: 36,
-            margin: const EdgeInsets.only(bottom: 24),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFEFF6FF),
-              border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
-            ),
-            child: Center(
-              child: Text(
-                'AR',
-                style: GoogleFonts.inter(
-                  color: AppColors.dashboardBlue,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB TOP BAR ────────────────────────────────────────────────────────────
-  Widget _buildTopBar() {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Breadcrumbs
-          Row(
-            children: [
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pushReplacementNamed('/pipeline');
-                  },
-                  child: Text(
-                    'INTERVIEWS',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.8,
+      ],
+    ),
+    child: hot
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  height: 2,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFF20D9BD),
+                        Color(0xFF627AFF),
+                        Color(0xFFE0E7FF),
+                      ],
                     ),
                   ),
                 ),
-              ),
-              Text(
-                ' / ',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFFCBD5E1),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'SCHEDULE',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-
-          // Actions Search/Notifications
-          Row(
-            children: [
-              // Search Input
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Notification button
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: AppColors.dashboardRed,
-              ),
-              const SizedBox(width: 10),
-
-              // Language button
-              _buildTopBarIconButton(
-                icon: Icons.language_rounded,
-                hasBadge: false,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-  }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
-                ),
-              ),
+                child,
+              ],
             ),
-        ],
-      ),
-    );
-  }
+          )
+        : child,
+  );
+
+  Widget _heading(String label) => Text(
+    label,
+    style: GoogleFonts.inter(
+      color: _ink,
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+    ),
+  );
+
+  Widget _tick(String label) => Text(
+    label,
+    style: GoogleFonts.spaceGrotesk(
+      color: _muted,
+      fontSize: 9,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.2,
+    ),
+  );
+
+  Widget _configChip(String label, {bool active = false}) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: active ? const Color(0xFFE6EDFF) : Colors.white,
+      border: Border.all(color: active ? const Color(0xFFCAD8FF) : _edge),
+      borderRadius: BorderRadius.circular(13),
+    ),
+    child: Text(
+      label,
+      style: GoogleFonts.inter(color: active ? _blue : _muted, fontSize: 9),
+    ),
+  );
 }

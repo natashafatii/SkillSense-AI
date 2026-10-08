@@ -86,11 +86,18 @@ class _RoleGuardState extends State<RoleGuard> {
                   ),
                   TextButton(
                     onPressed: () async {
-                      await AuthService.signOut();
-                      if (context.mounted) {
-                        Navigator.of(
-                          context,
-                        ).pushNamedAndRemoveUntil('/login/role', (_) => false);
+                      try {
+                        await AuthService.signOut();
+                        if (context.mounted) {
+                          Navigator.of(context).pushNamedAndRemoveUntil(
+                            '/login/role',
+                            (_) => false,
+                          );
+                        }
+                      } catch (error) {
+                        if (context.mounted) {
+                          setState(() => _error = 'Sign out failed: $error');
+                        }
                       }
                     },
                     child: const Text('Back to login'),

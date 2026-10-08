@@ -290,7 +290,6 @@ class AppConstants {
   static const String deckThisWeek = 'THIS WEEK';
   static const String deckTopApplicants = 'Top applicants';
   static const String deckSbertRanked = 'SBERT RANKED';
-  static const String deckAllLink = 'All 127 >';
   static const String deckPipelineFlow = 'Pipeline flow';
   static const String deckInterviewsToday = 'Interviews today';
   static const String deckOpenRolesSection = 'Open roles';
