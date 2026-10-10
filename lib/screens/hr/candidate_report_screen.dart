@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/application.dart';
 import '../../models/resume_detail.dart';
+import '../../widgets/app_tooltip.dart';
 import '../../services/application_service.dart';
 import '../../services/resume_service.dart';
 
@@ -158,11 +159,14 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     ),
     child: Row(
       children: [
-        IconButton(
-          tooltip: 'Back',
-          onPressed: _back,
-          icon: const Icon(Icons.arrow_back_rounded, size: 20),
-          color: _ink,
+        AppTooltip(
+          message: 'Back',
+          position: TooltipPosition.bottom,
+          child: IconButton(
+            onPressed: _back,
+            icon: const Icon(Icons.arrow_back_rounded, size: 20),
+            color: _ink,
+          ),
         ),
         const SizedBox(width: 5),
         Expanded(
@@ -237,11 +241,14 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
           border: Border.all(color: _edge),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: IconButton(
-          tooltip: tooltip,
-          padding: EdgeInsets.zero,
-          onPressed: onPressed,
-          icon: Icon(icon, size: 18, color: const Color(0xFF52627D)),
+        child: AppTooltip(
+          message: tooltip,
+          position: TooltipPosition.bottom,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            onPressed: onPressed,
+            icon: Icon(icon, size: 18, color: const Color(0xFF52627D)),
+          ),
         ),
       );
 
@@ -583,18 +590,21 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
             ),
           ),
           if (copy)
-            IconButton(
-              tooltip: 'Copy $label',
-              visualDensity: VisualDensity.compact,
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: value));
-                if (mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('$label copied')));
-                }
-              },
-              icon: const Icon(Icons.copy_rounded, size: 15, color: _muted),
+            AppTooltip(
+              message: 'Copy $label',
+              position: TooltipPosition.top,
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: value));
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('$label copied')));
+                  }
+                },
+                icon: const Icon(Icons.copy_rounded, size: 15, color: _muted),
+              ),
             ),
         ],
       ),

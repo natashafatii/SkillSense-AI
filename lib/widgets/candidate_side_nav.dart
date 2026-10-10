@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../services/profile_service.dart';
 import '../models/candidate_profile.dart';
+import 'app_tooltip.dart';
 
 class CandidateSideNav extends StatefulWidget {
   final String currentRoute;
@@ -31,11 +32,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
   late bool _isExpanded;
   Timer? _hoverIntentTimer;
-  Timer? _tooltipTimer;
   int? _hoveredIndex;
-
-  final List<GlobalKey> _tileKeys = List.generate(5, (_) => GlobalKey());
-  OverlayEntry? _tooltipOverlayEntry;
 
   // Badge counts (clears on action)
   static int jobsBadgeCount = 3;
@@ -80,7 +77,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
   }
 
   void _expandOnlyDestination(int index) {
-    _removeTooltipOverlay();
     setState(() {
       _isExpanded = true;
       globalIsExpanded = true;
@@ -93,15 +89,12 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
   @override
   void dispose() {
-    _removeTooltipOverlay();
     _hoverIntentTimer?.cancel();
-    _tooltipTimer?.cancel();
     _keyboardFocusNode.dispose();
     super.dispose();
   }
 
   void _toggleExpanded() {
-    _removeTooltipOverlay();
     setState(() {
       _isExpanded = !_isExpanded;
       globalIsExpanded = _isExpanded;
@@ -114,8 +107,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
   void _onRailMouseExit() {
     _hoverIntentTimer?.cancel();
-    _tooltipTimer?.cancel();
-    _removeTooltipOverlay();
     if (_hoveredIndex != null) {
       setState(() {
         _hoveredIndex = null;
@@ -127,19 +118,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
     setState(() {
       _hoveredIndex = index;
     });
-    if (!_isExpanded) {
-      _tooltipTimer?.cancel();
-      _tooltipTimer = Timer(const Duration(milliseconds: 350), () {
-        if (mounted && _hoveredIndex == index && !_isExpanded) {
-          _showTooltipOverlay(index);
-        }
-      });
-    }
   }
 
   void _onTileMouseExit(int index) {
-    _tooltipTimer?.cancel();
-    _removeTooltipOverlay();
     if (_hoveredIndex == index) {
       setState(() {
         _hoveredIndex = null;
@@ -147,73 +128,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
     }
   }
 
-  void _showTooltipOverlay(int index) {
-    _removeTooltipOverlay();
-    if (!mounted) return;
-    final key = _tileKeys[index];
-    final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null || !renderBox.attached) return;
-
-    final offset = renderBox.localToGlobal(Offset.zero);
-    final dest = _destinations[index];
-
-    _tooltipOverlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: offset.dx + 52,
-        top: offset.dy + (renderBox.size.height - 28) / 2,
-        child: IgnorePointer(
-          child: Material(
-            color: Colors.transparent,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.15),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        blurRadius: 10,
-                        offset: const Offset(2, 2),
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    dest['label'],
-                    style: GoogleFonts.spaceGrotesk(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    Overlay.of(context).insert(_tooltipOverlayEntry!);
-  }
-
-  void _removeTooltipOverlay() {
-    _tooltipOverlayEntry?.remove();
-    _tooltipOverlayEntry = null;
-  }
-
   void _handleNavigation(String targetRoute, int parentIndex) {
-    _removeTooltipOverlay();
     FocusManager.instance.primaryFocus?.unfocus();
     // Clear badge when actioned
     if (parentIndex == 1) {
@@ -417,22 +332,26 @@ class _CandidateSideNavState extends State<CandidateSideNav>
           ),
 
           if (_isExpanded)
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: _toggleExpanded,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Icon(
-                    Icons.chevron_left_rounded,
-                    size: 16,
-                    color: Color(0xFF64748B),
+            AppTooltip(
+              message: 'Collapse sidebar',
+              position: TooltipPosition.bottom,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: _toggleExpanded,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: const Icon(
+                      Icons.chevron_left_rounded,
+                      size: 16,
+                      color: Color(0xFF64748B),
+                    ),
                   ),
                 ),
               ),
@@ -472,21 +391,26 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                     }
                     if (initials.isEmpty) initials = 'C';
 
-                    return Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE2F9F3),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFA7F3D0)),
-                      ),
-                      child: Center(
-                        child: Text(
-                          initials,
-                          style: GoogleFonts.spaceGrotesk(
-                            color: const Color(0xFF047857),
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                    return AppTooltip(
+                      message: fn.isNotEmpty ? '$fn $ln'.trim() : (email.isNotEmpty ? email : 'Account'),
+                      position: TooltipPosition.right,
+                      offset: 12.0,
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2F9F3),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFA7F3D0)),
+                        ),
+                        child: Center(
+                          child: Text(
+                            initials,
+                            style: GoogleFonts.spaceGrotesk(
+                              color: const Color(0xFF047857),
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
@@ -592,11 +516,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                           ],
                         ),
                       ),
-                      const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 16,
-                        color: Color(0xFF94A3B8),
-                      ),
+
                     ],
                   );
                 },
@@ -627,14 +547,17 @@ class _CandidateSideNavState extends State<CandidateSideNav>
     if (!_isExpanded) {
       // ── COLLAPSED STATE (60px wide rail) ──
       return Padding(
-        key: _tileKeys[index],
         padding: const EdgeInsets.symmetric(vertical: 3.0),
-        child: MouseRegion(
-          onEnter: (_) => _onTileMouseEnter(index),
-          onExit: (_) => _onTileMouseExit(index),
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            onTap: () {
+        child: AppTooltip(
+          message: dest['label'],
+          position: TooltipPosition.right,
+          offset: 12.0,
+          child: MouseRegion(
+            onEnter: (_) => _onTileMouseEnter(index),
+            onExit: (_) => _onTileMouseExit(index),
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
               _expandOnlyDestination(index);
               _handleNavigation(primaryRoute, index);
             },
@@ -720,7 +643,8 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -794,12 +718,10 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                       child: Text(
                         dest['label'],
                         style: GoogleFonts.spaceGrotesk(
-                          color: isParentActive
-                              ? const Color(0xFF0F172A)
-                              : const Color(0xFF475569),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.4,
+                          color: const Color(0xFF0F172A),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.46,
                         ),
                       ),
                     ),

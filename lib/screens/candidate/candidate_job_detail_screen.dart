@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
 import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
@@ -1945,34 +1946,49 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     Color? badgeColor,
     VoidCallback? onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(icon, color: const Color(0xFF475569), size: 18),
-            if (hasBadge)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: badgeColor ?? Colors.red,
-                    shape: BoxShape.circle,
+    String tooltip = '';
+    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+      tooltip = 'Notifications';
+    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
+      tooltip = 'Theme & settings';
+    } else if (icon == Icons.search || icon == Icons.search_rounded) {
+      tooltip = 'Search or jump to (⌘K)';
+    } else if (icon == Icons.help_outline) {
+      tooltip = 'Help & support';
+    }
+
+    return AppTooltip(
+      message: tooltip,
+      position: TooltipPosition.bottom,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, color: const Color(0xFF475569), size: 18),
+              if (hasBadge)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: badgeColor ?? Colors.red,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

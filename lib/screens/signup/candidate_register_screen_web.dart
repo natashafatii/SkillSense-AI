@@ -28,6 +28,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
   final VoidCallback onObscureToggle;
   final VoidCallback onObscureConfirmToggle;
   final ValueChanged<String>? onPhoneChanged;
+  final ValueChanged<bool>? onPhoneValidityChanged;
   final VoidCallback onRegister;
   final VoidCallback onGoogleSignIn;
   final VoidCallback onLoginTap;
@@ -52,6 +53,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
     required this.onObscureToggle,
     required this.onObscureConfirmToggle,
     this.onPhoneChanged,
+    this.onPhoneValidityChanged,
     required this.onRegister,
     required this.onGoogleSignIn,
     required this.onLoginTap,
@@ -217,13 +219,18 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             Flexible(
                                               child: Text(
                                                 AppConstants
-                                                    .candidateRegisterEyebrow.toUpperCase(),
-                                                style: GoogleFonts.jetBrainsMono(
-                                                  color: const Color(0xFF7BA5FF),
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 1.8,
-                                                ),
+                                                    .candidateRegisterEyebrow
+                                                    .toUpperCase(),
+                                                style:
+                                                    GoogleFonts.jetBrainsMono(
+                                                      color: const Color(
+                                                        0xFF7BA5FF,
+                                                      ),
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      letterSpacing: 1.8,
+                                                    ),
                                               ),
                                             ),
                                           ],
@@ -256,8 +263,11 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                   text: 'Your workspace,\nin ',
                                                 ),
                                                 WidgetSpan(
-                                                  alignment: PlaceholderAlignment.baseline,
-                                                  baseline: TextBaseline.alphabetic,
+                                                  alignment:
+                                                      PlaceholderAlignment
+                                                          .baseline,
+                                                  baseline:
+                                                      TextBaseline.alphabetic,
                                                   child: ShaderMask(
                                                     blendMode: BlendMode.srcIn,
                                                     shaderCallback: (bounds) =>
@@ -268,8 +278,8 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                             AppColors
                                                                 .webHeadlineFairlyEnd,
                                                           ],
-                                                          begin:
-                                                              Alignment.centerLeft,
+                                                          begin: Alignment
+                                                              .centerLeft,
                                                           end: Alignment
                                                               .centerRight,
                                                         ).createShader(bounds),
@@ -430,7 +440,8 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                       controller:
                                                           firstNameController,
                                                       focusNode: firstNameFocus,
-                                                      hintText: 'Enter your first name',
+                                                      hintText:
+                                                          'Enter your first name',
                                                     ),
                                                   ],
                                                 ),
@@ -449,7 +460,8 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                       controller:
                                                           lastNameController,
                                                       focusNode: lastNameFocus,
-                                                      hintText: 'Enter your last name',
+                                                      hintText:
+                                                          'Enter your last name',
                                                     ),
                                                   ],
                                                 ),
@@ -465,7 +477,8 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: emailController,
                                             focusNode: emailFocus,
-                                            hintText: 'Enter your email address',
+                                            hintText:
+                                                'Enter your email address',
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                           ),
@@ -480,7 +493,10 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             focusNode: phoneFocus,
                                             hintText: 'Enter your phone number',
                                             onPhoneChanged: onPhoneChanged,
-                                            focusColor: AppColors.candidatePrimary,
+                                            onValidityChanged:
+                                                onPhoneValidityChanged,
+                                            focusColor:
+                                                AppColors.candidatePrimary,
                                           ),
                                           const SizedBox(height: 14),
 
@@ -491,7 +507,8 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: passwordController,
                                             focusNode: passwordFocus,
-                                            hintText: 'Create a password (min 8 characters)',
+                                            hintText:
+                                                'Create a password (min 8 characters)',
                                             obscureText: obscurePassword,
                                             suffixIcon: GestureDetector(
                                               onTap: onObscureToggle,
@@ -508,14 +525,21 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           AnimatedBuilder(
                                             animation: passwordFocus,
                                             builder: (context, child) {
-                                              if (!passwordFocus.hasFocus) return const SizedBox.shrink();
+                                              if (!passwordFocus.hasFocus) {
+                                                return const SizedBox.shrink();
+                                              }
                                               return Padding(
-                                                padding: const EdgeInsets.only(top: 6, left: 4),
+                                                padding: const EdgeInsets.only(
+                                                  top: 6,
+                                                  left: 4,
+                                                ),
                                                 child: Text(
                                                   'Use at least 8 characters with a number',
                                                   style: GoogleFonts.inter(
                                                     fontSize: 12,
-                                                    color: const Color(0xFF64748B),
+                                                    color: const Color(
+                                                      0xFF64748B,
+                                                    ),
                                                   ),
                                                 ),
                                               );
@@ -597,29 +621,38 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               text: TextSpan(
                                                 style: GoogleFonts.inter(
                                                   fontSize: 12,
-                                                  color: const Color(0xFF64748B),
+                                                  color: const Color(
+                                                    0xFF64748B,
+                                                  ),
                                                   height: 1.5,
                                                 ),
                                                 children: [
                                                   const TextSpan(
-                                                    text: 'By continuing you agree to the ',
+                                                    text:
+                                                        'By continuing you agree to the ',
                                                   ),
                                                   TextSpan(
-                                                    text: 'Terms and Privacy Policy',
+                                                    text:
+                                                        'Terms and Privacy Policy',
                                                     style: GoogleFonts.inter(
-                                                      color: AppColors.webRoleCandidate,
-                                                      fontWeight: FontWeight.w600,
-                                                      decoration: TextDecoration.underline,
+                                                      color: AppColors
+                                                          .webRoleCandidate,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      decoration: TextDecoration
+                                                          .underline,
                                                     ),
-                                                    recognizer: TapGestureRecognizer()
-                                                      ..onTap = () {
-                                                        Navigator.push(
-                                                          context,
-                                                          MaterialPageRoute(
-                                                            builder: (_) => const TermsPrivacyScreen(),
-                                                          ),
-                                                        );
-                                                      },
+                                                    recognizer:
+                                                        TapGestureRecognizer()
+                                                          ..onTap = () {
+                                                            Navigator.push(
+                                                              context,
+                                                              MaterialPageRoute(
+                                                                builder: (_) =>
+                                                                    const TermsPrivacyScreen(),
+                                                              ),
+                                                            );
+                                                          },
                                                   ),
                                                   const TextSpan(text: '.'),
                                                 ],
@@ -634,34 +667,34 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               cursor: SystemMouseCursors.click,
                                               child: GestureDetector(
                                                 onTap: onLoginTap,
-                                              child: RichText(
-                                                text: TextSpan(
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 13,
-                                                    color: const Color(
-                                                      0xFF64748B,
-                                                    ),
-                                                  ),
-                                                  children: [
-                                                    TextSpan(
-                                                      text: AppConstants
-                                                          .alreadyAccountPrompt,
-                                                    ),
-                                                    TextSpan(
-                                                      text: AppConstants
-                                                          .loginLinkText,
-                                                      style: GoogleFonts.inter(
-                                                        color: AppColors
-                                                            .candidatePrimary,
-                                                        fontWeight:
-                                                            FontWeight.w600,
+                                                child: RichText(
+                                                  text: TextSpan(
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 13,
+                                                      color: const Color(
+                                                        0xFF64748B,
                                                       ),
                                                     ),
-                                                  ],
+                                                    children: [
+                                                      TextSpan(
+                                                        text: AppConstants
+                                                            .alreadyAccountPrompt,
+                                                      ),
+                                                      TextSpan(
+                                                        text: AppConstants
+                                                            .loginLinkText,
+                                                        style: GoogleFonts.inter(
+                                                          color: AppColors
+                                                              .candidatePrimary,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
                                           ),
                                         ],
                                       ),

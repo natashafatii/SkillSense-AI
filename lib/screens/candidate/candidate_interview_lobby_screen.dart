@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
 import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
@@ -10,6 +11,7 @@ import 'candidate_interview_session_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
 import 'candidate_notifications_screen.dart';
 import 'candidate_profile_settings_screen.dart';
+import '../../services/api_client.dart';
 
 class CandidateInterviewLobbyScreen extends StatefulWidget {
   const CandidateInterviewLobbyScreen({super.key});
@@ -34,11 +36,54 @@ class _CandidateInterviewLobbyScreenState
   Timer? _micTimer;
   Timer? _connectionTimer;
 
+  bool _isLoading = true;
+  bool _hasInterview = false;
+
   @override
   void initState() {
     super.initState();
-    _startCountdown();
-    _runDeviceChecks();
+    _checkInterviews();
+  }
+
+  Future<void> _checkInterviews() async {
+    try {
+      final dio = await ApiClient.getInstance();
+      final response = await dio.get('/interviews/', queryParameters: {'candidate': 'me'});
+      final data = response.data;
+      final List rows;
+      if (data is List) {
+        rows = data;
+      } else if (data is Map && data['results'] is List) {
+        rows = data['results'] as List;
+      } else {
+        rows = [];
+      }
+
+      if (rows.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasInterview = true;
+            _isLoading = false;
+          });
+          _startCountdown();
+          _runDeviceChecks();
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _hasInterview = false;
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _hasInterview = false;
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -199,28 +244,36 @@ class _CandidateInterviewLobbyScreenState
                               cardBorder,
                             ),
                             Expanded(
-                              child: SingleChildScrollView(
-                                physics: const BouncingScrollPhysics(),
-                                padding: EdgeInsets.only(
-                                  left: isMobile ? 16 : 24,
-                                  right: isMobile ? 16 : 24,
-                                  top: 16,
-                                  bottom: isMobile ? 100 : 32,
-                                ),
-                                child: isMobile
-                                    ? _buildMobileLayout(
-                                        textPrimary,
-                                        textSecondary,
-                                        cardBg,
-                                        cardBorder,
-                                      )
-                                    : _buildWebLayout(
-                                        textPrimary,
-                                        textSecondary,
-                                        cardBg,
-                                        cardBorder,
+                              child: _isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.dashboardTeal,
                                       ),
-                              ),
+                                    )
+                                  : !_hasInterview
+                                      ? _buildEmptyState(isMobile)
+                                      : SingleChildScrollView(
+                                          physics: const BouncingScrollPhysics(),
+                                          padding: EdgeInsets.only(
+                                            left: isMobile ? 16 : 24,
+                                            right: isMobile ? 16 : 24,
+                                            top: 16,
+                                            bottom: isMobile ? 100 : 32,
+                                          ),
+                                          child: isMobile
+                                              ? _buildMobileLayout(
+                                                  textPrimary,
+                                                  textSecondary,
+                                                  cardBg,
+                                                  cardBorder,
+                                                )
+                                              : _buildWebLayout(
+                                                  textPrimary,
+                                                  textSecondary,
+                                                  cardBg,
+                                                  cardBorder,
+                                                ),
+                                        ),
                             ),
                           ],
                         ),
@@ -241,6 +294,119 @@ class _CandidateInterviewLobbyScreenState
               child: _buildMobileBottomDock(),
             ),
         ],
+      ),
+    );
+  }
+
+  // ── EMPTY STATE ────────────────────────────────────────────────────────────
+  Widget _buildEmptyState(bool isMobile) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: isMobile ? 54 : 64,
+              height: isMobile ? 54 : 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(isMobile ? 17 : 20),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.radio_button_checked_rounded,
+                  size: isMobile ? 20 : 24,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isMobile ? 'Nothing scheduled' : 'No interview scheduled',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF0F172A),
+                fontSize: isMobile ? 15 : 18,
+                fontWeight: FontWeight.w700,
+                letterSpacing: isMobile ? -0.03 : -0.025,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: isMobile ? 280 : 380),
+              child: Text(
+                isMobile
+                    ? 'Invites appear here with a countdown.'
+                    : 'When a recruiter invites you, your device check and countdown appear here.',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF64748B),
+                  fontSize: isMobile ? 11 : 12.5,
+                  height: 1.65,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              height: isMobile ? 38 : 40,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF17CBAC).withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 22 : 26),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateApplicationsScreen(),
+                    ),
+                  );
+                },
+                child: Text(
+                  'View applications',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "You'll be notified when invited",
+              style: GoogleFonts.inter(
+                color: const Color(0xFF94A3B8),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w400,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -909,37 +1075,17 @@ class _CandidateInterviewLobbyScreenState
           border: Border(bottom: BorderSide(color: cardBorder, width: 1)),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: Icon(
-                    Icons.arrow_back_rounded,
-                    color: textPrimary,
-                    size: 20,
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => const CandidateHomeScreen(),
-                      ),
-                    );
-                  },
-                ),
-                Text(
-                  'Interview',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: Icon(Icons.search_rounded, color: textSecondary, size: 22),
-              onPressed: () => _showMockNavigation('/search'),
+            const Icon(Icons.auto_awesome, color: AppColors.dashboardBlue, size: 26),
+            const SizedBox(width: 8),
+            Text(
+              'Lobby',
+              style: GoogleFonts.inter(
+                color: textPrimary,
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.03,
+              ),
             ),
           ],
         ),
@@ -956,45 +1102,15 @@ class _CandidateInterviewLobbyScreenState
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Breadcrumbs: INTERVIEWS / BEFORE YOU START
           Row(
             children: [
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateHomeScreen(),
-                    ),
-                  );
-                },
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Text(
-                    'INTERVIEWS',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-              ),
               Text(
-                '  /  ',
+                'INTERVIEW LOBBY',
                 style: GoogleFonts.spaceGrotesk(
-                  color: textSecondary,
-                  fontSize: 13,
+                  color: const Color(0xFF64748B),
+                  fontSize: 10.5,
                   fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'BEFORE YOU START',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
+                  letterSpacing: 1.05,
                 ),
               ),
             ],
@@ -1093,34 +1209,49 @@ class _CandidateInterviewLobbyScreenState
     Color? badgeColor,
     VoidCallback? onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(icon, color: const Color(0xFF475569), size: 18),
-            if (hasBadge)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: badgeColor ?? Colors.red,
-                    shape: BoxShape.circle,
+    String tooltip = '';
+    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+      tooltip = 'Notifications';
+    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
+      tooltip = 'Theme & settings';
+    } else if (icon == Icons.search || icon == Icons.search_rounded) {
+      tooltip = 'Search or jump to (⌘K)';
+    } else if (icon == Icons.help_outline) {
+      tooltip = 'Help & support';
+    }
+
+    return AppTooltip(
+      message: tooltip,
+      position: TooltipPosition.bottom,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, color: const Color(0xFF475569), size: 18),
+              if (hasBadge)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: badgeColor ?? Colors.red,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

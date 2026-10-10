@@ -1,16 +1,16 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
 import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
 import 'candidate_job_feed_screen.dart';
-import 'candidate_profile_settings_screen.dart';
-import 'candidate_resume_management_screen.dart';
 import 'candidate_interview_lobby_screen.dart';
 import 'candidate_feedback_report_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
 import 'candidate_notifications_screen.dart';
+import '../../services/api_client.dart';
 
 class CandidateInterviewHistoryScreen extends StatefulWidget {
   const CandidateInterviewHistoryScreen({super.key});
@@ -23,11 +23,14 @@ class CandidateInterviewHistoryScreen extends StatefulWidget {
 class _CandidateInterviewHistoryScreenState
     extends State<CandidateInterviewHistoryScreen>
     with TickerProviderStateMixin {
-  final int _activeNavIndex = 3; // Interviews is index 3
+  final int _activeNavIndex = 4; // History is index 4
   late AnimationController _latestController;
   late AnimationController _bestController;
   late Animation<double> _latestAnimation;
   late Animation<double> _bestAnimation;
+
+  bool _isLoading = true;
+  bool _hasHistory = false;
 
   // History Items
   final List<Map<String, dynamic>> _history = [
@@ -96,6 +99,7 @@ class _CandidateInterviewHistoryScreenState
   @override
   void initState() {
     super.initState();
+    _checkHistory();
     _latestController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -112,9 +116,50 @@ class _CandidateInterviewHistoryScreenState
       begin: 0,
       end: 81,
     ).animate(CurvedAnimation(parent: _bestController, curve: Curves.easeOut));
+  }
 
-    _latestController.forward();
-    _bestController.forward();
+  Future<void> _checkHistory() async {
+    try {
+      final dio = await ApiClient.getInstance();
+      final response = await dio.get('/interviews/', queryParameters: {
+        'candidate': 'me',
+        'status': 'completed',
+      });
+      final data = response.data;
+      final List rows;
+      if (data is List) {
+        rows = data;
+      } else if (data is Map && data['results'] is List) {
+        rows = data['results'] as List;
+      } else {
+        rows = [];
+      }
+
+      if (rows.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasHistory = true;
+            _isLoading = false;
+          });
+          _latestController.forward();
+          _bestController.forward();
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _hasHistory = false;
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _hasHistory = false;
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -200,28 +245,36 @@ class _CandidateInterviewHistoryScreenState
                               cardBorder,
                             ),
                             Expanded(
-                              child: SingleChildScrollView(
-                                physics: const BouncingScrollPhysics(),
-                                padding: EdgeInsets.only(
-                                  left: isMobile ? 16 : 24,
-                                  right: isMobile ? 16 : 24,
-                                  top: 16,
-                                  bottom: isMobile ? 100 : 32,
-                                ),
-                                child: isMobile
-                                    ? _buildMobileLayout(
-                                        textPrimary,
-                                        textSecondary,
-                                        cardBg,
-                                        cardBorder,
-                                      )
-                                    : _buildWebLayout(
-                                        textPrimary,
-                                        textSecondary,
-                                        cardBg,
-                                        cardBorder,
+                              child: _isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.dashboardTeal,
                                       ),
-                              ),
+                                    )
+                                  : !_hasHistory
+                                      ? _buildEmptyState(isMobile)
+                                      : SingleChildScrollView(
+                                          physics: const BouncingScrollPhysics(),
+                                          padding: EdgeInsets.only(
+                                            left: isMobile ? 16 : 24,
+                                            right: isMobile ? 16 : 24,
+                                            top: 16,
+                                            bottom: isMobile ? 100 : 32,
+                                          ),
+                                          child: isMobile
+                                              ? _buildMobileLayout(
+                                                  textPrimary,
+                                                  textSecondary,
+                                                  cardBg,
+                                                  cardBorder,
+                                                )
+                                              : _buildWebLayout(
+                                                  textPrimary,
+                                                  textSecondary,
+                                                  cardBg,
+                                                  cardBorder,
+                                                ),
+                                        ),
                             ),
                           ],
                         ),
@@ -242,6 +295,121 @@ class _CandidateInterviewHistoryScreenState
               child: _buildMobileBottomDock(),
             ),
         ],
+      ),
+    );
+  }
+
+  // ── EMPTY STATE ────────────────────────────────────────────────────────────
+  Widget _buildEmptyState(bool isMobile) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: isMobile ? 54 : 64,
+              height: isMobile ? 54 : 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9), // --field
+                borderRadius: BorderRadius.circular(isMobile ? 17 : 20),
+                border: Border.all(color: const Color(0xFFE2E8F0)), // --edge2
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.view_headline_rounded, // document/list icon
+                  size: isMobile ? 20 : 24,
+                  color: const Color(0xFF64748B), // --tx2
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No interviews yet',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF0F172A), // --tx
+                fontSize: isMobile ? 15 : 18,
+                fontWeight: FontWeight.w700,
+                letterSpacing: isMobile ? -0.03 : -0.025,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: isMobile ? 280 : 380),
+              child: Text(
+                isMobile
+                    ? 'Completed interviews appear here.'
+                    : 'Completed interviews appear here with your score, trajectory and feedback links.',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF64748B), // --tx3
+                  fontSize: isMobile ? 11 : 12.5,
+                  height: 1.65,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              height: isMobile ? 38 : 40,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF17CBAC).withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 22 : 26),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateApplicationsScreen(),
+                    ),
+                  );
+                },
+                child: Text(
+                  'View applications',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600, // apprx 550
+                  ),
+                ),
+              ),
+            ),
+            if (!isMobile) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Scores appear after your first interview',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF94A3B8), // --tx4
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w400,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -894,14 +1062,10 @@ class _CandidateInterviewHistoryScreenState
   Widget _buildMobileBottomDock() {
     final List<Map<String, dynamic>> dockItems = [
       {'icon': Icons.home_rounded, 'route': '/candidate/home'},
-      {'icon': Icons.track_changes_rounded, 'route': '/candidate/applications'},
-      {'icon': Icons.grid_view_rounded, 'route': '/candidate/jobs'},
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'route': '/candidate/interviews',
-      },
-      {'icon': Icons.description_rounded, 'route': '/candidate/resumes'},
-      {'icon': Icons.adjust_rounded, 'route': '/candidate/settings'},
+      {'icon': Icons.adjust_rounded, 'route': '/candidate/jobs'},
+      {'icon': Icons.layers_rounded, 'route': '/candidate/applications'},
+      {'icon': Icons.radio_button_checked_rounded, 'route': '/candidate/interview-lobby'},
+      {'icon': Icons.history_rounded, 'route': '/candidate/interviews'},
     ];
 
     return Container(
@@ -931,36 +1095,26 @@ class _CandidateInterviewHistoryScreenState
             onTap: () {
               if (index == 0) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateHomeScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
                 );
               } else if (index == 1) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateApplicationsScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
                 );
               } else if (index == 2) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateJobFeedScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
                 );
               } else if (index == 3) {
-                _showInterviewOptions(context);
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const CandidateInterviewLobbyScreen()),
+                );
               } else if (index == 4) {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateResumeManagementScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const CandidateInterviewHistoryScreen()),
                 );
               } else {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateProfileSettingsScreen(),
-                  ),
-                );
+                _showMockNavigation(item['route']);
               }
             },
             child: Stack(
@@ -1052,23 +1206,17 @@ class _CandidateInterviewHistoryScreenState
           border: Border(bottom: BorderSide(color: cardBorder, width: 1)),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Text(
-                  'Interviews',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: Icon(Icons.search_rounded, color: textSecondary, size: 22),
-              onPressed: () => _showMockNavigation('/search'),
+            const Icon(Icons.auto_awesome, color: AppColors.dashboardBlue, size: 26),
+            const SizedBox(width: 8),
+            Text(
+              'History',
+              style: GoogleFonts.inter(
+                color: textPrimary,
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.03,
+              ),
             ),
           ],
         ),
@@ -1085,33 +1233,16 @@ class _CandidateInterviewHistoryScreenState
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Breadcrumbs: INTERVIEWS / HISTORY
+          // Breadcrumbs: INTERVIEW HISTORY
           Row(
             children: [
               Text(
-                'INTERVIEWS',
+                'INTERVIEW HISTORY',
                 style: GoogleFonts.spaceGrotesk(
-                  color: textSecondary,
-                  fontSize: 13,
+                  color: const Color(0xFF64748B),
+                  fontSize: 10.5,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              Text(
-                '  /  ',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'HISTORY',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
+                  letterSpacing: 1.05,
                 ),
               ),
             ],
@@ -1203,105 +1334,54 @@ class _CandidateInterviewHistoryScreenState
     Color? badgeColor,
     VoidCallback? onTap,
   }) {
-    return MouseRegion(
-      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 18),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: badgeColor ?? Colors.red,
-                      shape: BoxShape.circle,
+    String tooltip = '';
+    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+      tooltip = 'Notifications';
+    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
+      tooltip = 'Theme & settings';
+    } else if (icon == Icons.search || icon == Icons.search_rounded) {
+      tooltip = 'Search or jump to (⌘K)';
+    } else if (icon == Icons.help_outline) {
+      tooltip = 'Help & support';
+    } else if (icon == Icons.language_rounded) {
+      tooltip = 'Language';
+    }
+
+    return AppTooltip(
+      message: tooltip,
+      position: TooltipPosition.bottom,
+      child: MouseRegion(
+        cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(icon, color: const Color(0xFF475569), size: 18),
+                if (hasBadge)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: badgeColor ?? Colors.red,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showInterviewOptions(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Interviews Section',
-          style: GoogleFonts.spaceGrotesk(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.dashboardTeal,
-                foregroundColor: const Color(0xFF0F172A),
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateInterviewLobbyScreen(),
-                  ),
-                );
-              },
-              child: Text(
-                'Interview Lobby (CD-05)',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-              ),
+              ],
             ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Color(0xFF334155)),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateFeedbackReportScreen(),
-                  ),
-                );
-              },
-              child: Text(
-                'Feedback Report (CD-07)',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

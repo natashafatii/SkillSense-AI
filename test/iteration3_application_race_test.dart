@@ -74,7 +74,7 @@ void main() {
         loadJob: (id) async => job(id),
         loadActiveResume: () async => null,
         pickResume: () async => ('resume.pdf', bytes),
-        submitApplication: (_, _, _) => pending.future,
+        submitApplication: (_, __, ___, ____) => pending.future,
       ),
     );
     await tester.pumpWidget(screen('job-a'));

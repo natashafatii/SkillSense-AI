@@ -78,30 +78,6 @@ class _CandidateResumeManagementScreenState
     super.dispose();
   }
 
-  Future<void> _setActiveResume(Map<String, dynamic> selected) async {
-    final id = (selected['id'] ?? '').toString();
-    if (id.isEmpty) return;
-    try {
-      ResumeManager.setActive(id);
-      if (ResumeManager.getActiveResume()['id'] != id) {
-        throw StateError('Failed to set default resume locally.');
-      }
-      if (!mounted) return;
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Default resume updated to ${selected['filename']}'),
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not set default resume: $e')),
-        );
-      }
-    }
-  }
-
   void _removeResume(Map<String, dynamic> resume) async {
     final String apiId = (resume['id'] ?? '').toString();
     if (apiId.isEmpty) {
@@ -696,14 +672,19 @@ class _CandidateResumeManagementScreenState
 
   // ── WEB LAYOUT (Side-by-side columns matching Figma specifications) ────────
   Widget _buildWebLayout(bool hasResumes) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Divide the available canvas rather than assuming its full width.
-        Expanded(flex: 678, child: _buildAddResumeCard()),
-        const SizedBox(width: 14),
-        Expanded(flex: 484, child: _buildYourResumesCard(hasResumes)),
-      ],
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Divide the available canvas rather than assuming its full width.
+          Expanded(flex: 678, child: _buildAddResumeCard()),
+          const SizedBox(width: 14),
+          Expanded(
+            flex: 484,
+            child: _buildYourResumesCard(hasResumes, isWeb: true),
+          ),
+        ],
+      ),
     );
   }
 
@@ -713,7 +694,7 @@ class _CandidateResumeManagementScreenState
       children: [
         _buildAddResumeCard(),
         const SizedBox(height: 16),
-        _buildYourResumesCard(hasResumes),
+        _buildYourResumesCard(hasResumes, isWeb: false),
       ],
     );
   }
@@ -1320,7 +1301,7 @@ class _CandidateResumeManagementScreenState
   }
 
   // ── RIGHT CARD: YOUR RESUMES (DYNAMIC PREVIEW WHEN RESUMES EXIST vs EMPTY STATE) ─
-  Widget _buildYourResumesCard(bool hasResumes) {
+  Widget _buildYourResumesCard(bool hasResumes, {bool isWeb = false}) {
     return Container(
       decoration: BoxDecoration(
         color: const Color.fromRGBO(255, 255, 255, 0.72),
@@ -1527,32 +1508,7 @@ class _CandidateResumeManagementScreenState
                           ),
                         )
                       else
-                        InkWell(
-                          onTap: () => _setActiveResume(r),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            width: 41.78,
-                            height: 25,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: const Color.fromRGBO(38, 51, 77, 0.08),
-                                width: 0.88,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Use',
-                                style: GoogleFonts.inter(
-                                  color: const Color(0xFF4A5875),
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+                        const SizedBox(width: 41.78),
                       const SizedBox(width: 6),
 
                       // Delete Icon Button
@@ -1575,90 +1531,94 @@ class _CandidateResumeManagementScreenState
             )
           else
             // ── DYNAMIC PREVIEW: EMPTY STATE WHEN NO RESUMES ARE UPLOADED ────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Empty state graphic container
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color.fromRGBO(38, 51, 77, 0.08),
-                        width: 0.88,
-                      ),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.note_add_outlined,
-                        color: Color(0xFF7A88A3),
-                        size: 26,
-                      ),
-                    ),
+            Builder(
+              builder: (context) {
+                final emptyState = Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 40,
                   ),
-                  const SizedBox(height: 14),
-
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 300),
-                    child: Text(
-                      'No resumes uploaded yet',
-                      textAlign: TextAlign.center,
-                      softWrap: true,
-                      style: GoogleFonts.inter(
-                        color: const Color(0xFF1B2740),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 300),
-                    child: Text(
-                      'Upload your first resume using the form on the left to extract skills, experience, and unlock automated AI match scoring.',
-                      textAlign: TextAlign.center,
-                      softWrap: true,
-                      style: GoogleFonts.spaceGrotesk(
-                        color: const Color(0xFF7A88A3),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        height: 1.45,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Helper chip
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 300),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE6F7F5),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'Supports PDF & DOCX up to 5MB',
-                        textAlign: TextAlign.center,
-                        softWrap: true,
-                        style: GoogleFonts.spaceGrotesk(
-                          color: AppColors.dashboardTeal,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Empty state graphic container
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color.fromRGBO(38, 51, 77, 0.08),
+                              width: 0.88,
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.note_add_outlined,
+                              color: Color(0xFF7A88A3),
+                              size: 26,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 12),
+
+                        Text(
+                          'No resumes uploaded yet',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF1B2740),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 280),
+                          child: Text(
+                            'Upload your first resume using the form on the left to extract skills, experience, and unlock automated AI match scoring.',
+                            textAlign: TextAlign.center,
+                            softWrap: true,
+                            style: GoogleFonts.spaceGrotesk(
+                              color: const Color(0xFF7A88A3),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w500,
+                              height: 1.45,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Helper chip
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE6F7F5),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Supports PDF & DOCX up to 5MB',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.spaceGrotesk(
+                              color: AppColors.dashboardTeal,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                );
+                return isWeb ? Expanded(child: emptyState) : emptyState;
+              },
             ),
         ],
       ),

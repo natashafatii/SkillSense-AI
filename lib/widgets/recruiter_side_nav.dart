@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/auth_service.dart';
+import 'app_tooltip.dart';
 
 /// The destinations are shared by the desktop rail, mobile drawer and search.
 class RecruiterDestination {
@@ -42,7 +43,6 @@ const recruiterSections = <RecruiterSection>[
   ]),
 ];
 
-
 class RecruiterSideNav extends StatefulWidget {
   final String currentRoute;
   final bool inDrawer;
@@ -62,6 +62,8 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
   static const _accent = Color(0xFF2563EB);
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
+  static const _textSecondary = Color(0xFF475569);
+  static const _textTertiary = Color(0xFF94A3B8);
   static const _border = Color(0xFFE2E8F0);
 
   late bool _expanded;
@@ -70,7 +72,6 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
   late Set<int> _openSections;
   final _searchController = TextEditingController();
   final _searchFocus = FocusNode();
-  String _query = '';
 
   @override
   void initState() {
@@ -153,10 +154,9 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
     });
   }
 
-  Widget _tooltip(String label, Widget child) => Tooltip(
+  Widget _tooltip(String label, Widget child) => AppTooltip(
     message: label,
-    waitDuration: const Duration(milliseconds: 350),
-    preferBelow: false,
+    position: TooltipPosition.right,
     child: child,
   );
 
@@ -199,19 +199,23 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
             key: Key('recruiter-section-$index'),
             onTap: () => _toggleSection(index),
             borderRadius: BorderRadius.circular(8),
+            hoverColor: const Color(0xFFF1F5F9),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Row(
                 children: [
-                  Icon(section.icon, size: 15, color: _muted),
+                  Icon(section.icon, size: 14.5, color: _textSecondary),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
                       section.label,
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF4B5D7D),
+                        letterSpacing: 0.46,
+                        color: _ink,
                       ),
                     ),
                   ),
@@ -247,15 +251,15 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
   Widget _child(RecruiterDestination item) {
     final active = widget.currentRoute == item.route;
     return Padding(
-      padding: const EdgeInsets.only(left: 28),
+      padding: const EdgeInsets.only(left: 24),
       child: InkWell(
         key: Key('recruiter-${item.route.split('/').last}'),
         onTap: () => _navigate(item.route),
         borderRadius: BorderRadius.circular(7),
+        hoverColor: const Color(0xFFF1F5F9),
         child: Container(
-          height: 30,
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.only(left: 10),
+          padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
           decoration: BoxDecoration(
             color: active ? _accent.withValues(alpha: .09) : null,
             border: active
@@ -265,17 +269,18 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
           ),
           child: Text(
             item.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-              color: active ? _ink : _muted,
+              fontSize: 12,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              color: active ? _ink : _textSecondary,
             ),
           ),
         ),
       ),
     );
   }
-
 
   Widget _account() {
     return ValueListenableBuilder<Map<String, dynamic>?>(
@@ -288,10 +293,13 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
         final initials =
             '${first.isEmpty ? '' : first[0]}${last.isEmpty ? '' : last[0]}'
                 .toUpperCase();
-        return PopupMenuButton<String>(
-          key: const Key('recruiter-account'),
-          tooltip: 'Account menu',
-          onSelected: (value) async {
+        return AppTooltip(
+          message: name.isNotEmpty ? name : 'Account',
+          position: TooltipPosition.right,
+          child: PopupMenuButton<String>(
+            key: const Key('recruiter-account'),
+            tooltip: '',
+            onSelected: (value) async {
             if (value == 'settings') _navigate('/recruiter/settings');
             if (value == 'company') _navigate('/recruiter/company-team');
             if (value == 'signout') {
@@ -320,7 +328,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                   : MainAxisAlignment.center,
               children: [
                 CircleAvatar(
-                  radius: 17,
+                  radius: 16,
                   backgroundColor: const Color(0xFFE0E9FF),
                   child: Text(
                     initials.isEmpty ? 'R' : initials,
@@ -342,7 +350,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: _ink,
                           ),
@@ -351,22 +359,21 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                           email,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(fontSize: 9, color: _muted),
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: _textTertiary,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const Icon(
-                    Icons.keyboard_arrow_down,
-                    size: 14,
-                    color: _muted,
                   ),
                 ],
               ],
             ),
           ),
-        );
-      },
+        ),
+      );
+    },
     );
   }
 
@@ -431,17 +438,18 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                           children: [
                             Text(
                               'SkillSense',
-                              style: GoogleFonts.spaceGrotesk(
-                                fontSize: 13,
+                              style: GoogleFonts.inter(
+                                fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
+                                letterSpacing: -0.135,
                                 color: _ink,
                               ),
                             ),
                             Text(
                               'Recruiter workspace',
-                              style: GoogleFonts.inter(
-                                fontSize: 9,
-                                color: _muted,
+                              style: GoogleFonts.spaceGrotesk(
+                                fontSize: 10,
+                                color: _textTertiary,
                               ),
                             ),
                           ],
@@ -449,10 +457,11 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                       ),
                     ],
                     if (!widget.inDrawer)
-                      Tooltip(
+                      AppTooltip(
                         message: _expanded
-                            ? 'Collapse navigation'
+                            ? 'Collapse sidebar'
                             : 'Expand navigation',
+                        position: TooltipPosition.bottom,
                         child: InkWell(
                           key: const Key('recruiter-collapse'),
                           borderRadius: BorderRadius.circular(12),

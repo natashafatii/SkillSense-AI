@@ -1,5 +1,8 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/app_tooltip.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../models/job.dart';
@@ -21,15 +24,22 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   // Form Fields Controllers
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _salaryController = TextEditingController();
+  final TextEditingController _salaryMinController = TextEditingController();
+  final TextEditingController _salaryMaxController = TextEditingController();
   final TextEditingController _closesController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _requirementsController = TextEditingController();
+  final TextEditingController _skillInputController = TextEditingController();
+  final FocusNode _skillFocusNode = FocusNode();
+  DateTime? _selectedDeadline;
+  bool _showSkillSuggestions = false;
+  List<Job> _existingJobs = const [];
+  bool _previewJobsRequested = false;
   JobType _jobType = JobType.remote;
   ExperienceLevel _experienceLevel = ExperienceLevel.mid;
   String? _savedJobId;
   bool _saving = false;
-  Map<String, String> _fieldErrors = {};
+  final Map<String, String> _fieldErrors = {};
 
   // Skill chips with interactive multipliers
   final List<Map<String, dynamic>> _skills = [];
@@ -43,200 +53,54 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   double _threshold = 60.0; // Slider between 40 and 90
 
   @override
+  void initState() {
+    super.initState();
+    _titleController.addListener(_rebuildPreview);
+    _locationController.addListener(_rebuildPreview);
+    _skillInputController.addListener(_rebuildPreview);
+    _skillFocusNode.addListener(() {
+      if (_skillFocusNode.hasFocus) {
+        if (mounted) setState(() => _showSkillSuggestions = true);
+      } else {
+        Future.delayed(const Duration(milliseconds: 180), () {
+          if (mounted && !_skillFocusNode.hasFocus) {
+            setState(() => _showSkillSuggestions = false);
+          }
+        });
+      }
+    });
+  }
+
+  void _rebuildPreview() {
+    if (!_previewJobsRequested && _titleController.text.trim().isNotEmpty) {
+      _previewJobsRequested = true;
+      _loadPreviewJobs();
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadPreviewJobs() async {
+    try {
+      final jobs = await JobService.listAllJobs();
+      if (mounted) setState(() => _existingJobs = jobs);
+    } catch (_) {
+      // An estimate is shown only when comparable API data is available.
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     _titleController.dispose();
     _locationController.dispose();
-    _salaryController.dispose();
+    _salaryMinController.dispose();
+    _salaryMaxController.dispose();
     _closesController.dispose();
     _descController.dispose();
     _requirementsController.dispose();
+    _skillInputController.dispose();
+    _skillFocusNode.dispose();
     super.dispose();
-  }
-
-  // Add custom skill dialog
-  void _showAddSkillDialog() {
-    final TextEditingController textController = TextEditingController();
-    bool isAdding = false;
-    bool isRequired = true;
-    String? inlineError;
-
-    showDialog(
-      context: context,
-      barrierDismissible: !isAdding,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (builderContext, setDialogState) {
-            return AlertDialog(
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              title: Text(
-                'Add Skill',
-                style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.bold),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: textController,
-                    autofocus: true,
-                    enabled: !isAdding,
-                    style: GoogleFonts.inter(),
-                    decoration: InputDecoration(
-                      hintText: 'e.g. GraphQL, Flutter, AWS',
-                      hintStyle: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    value: isRequired,
-                    onChanged: isAdding
-                        ? null
-                        : (val) {
-                            setDialogState(() => isRequired = val ?? true);
-                          },
-                    title: Text(
-                      'Required skill',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                    activeColor: AppColors.dashboardBlue,
-                  ),
-                  if (inlineError != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        inlineError!,
-                        style: GoogleFonts.inter(
-                          color: Colors.red.shade600,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isAdding
-                      ? null
-                      : () => Navigator.pop(dialogContext),
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.inter(color: const Color(0xFF64748B)),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: isAdding
-                      ? null
-                      : () async {
-                          final String val = textController.text.trim();
-                          if (val.isEmpty) return;
-
-                          setDialogState(() {
-                            isAdding = true;
-                            inlineError = null;
-                          });
-
-                          try {
-                            if (_savedJobId != null) {
-                              final skill = await JobService.addSkillToJob(
-                                _savedJobId!,
-                                val,
-                                isRequired: isRequired,
-                              );
-                              if (dialogContext.mounted) {
-                                setState(() {
-                                  _skills.add({
-                                    'id': skill.id,
-                                    'name': skill.skillName,
-                                    'mult': 1,
-                                    'color': const Color(0xFF8B5CF6),
-                                    'is_required': skill.isRequired,
-                                  });
-                                });
-                                Navigator.pop(dialogContext);
-                              }
-                            } else {
-                              if (dialogContext.mounted) {
-                                setState(() {
-                                  _skills.add({
-                                    'id': null, // Staged locally, no ID yet
-                                    'name': val,
-                                    'mult': 1,
-                                    'color': const Color(0xFF8B5CF6),
-                                    'is_required': isRequired,
-                                  });
-                                });
-                                Navigator.pop(dialogContext);
-                              }
-                            }
-                          } catch (e) {
-                            if (!dialogContext.mounted) return;
-                            setDialogState(() {
-                              isAdding = false;
-                              if (e is ApiException) {
-                                if (e.statusCode == 401) {
-                                  Navigator.pop(dialogContext);
-                                  AuthService.signOut(dialogContext);
-                                } else if (e.statusCode == 400) {
-                                  inlineError = e.message;
-                                } else if (e.statusCode == 403) {
-                                  inlineError =
-                                      "You're not authorized to add skills to this job.";
-                                } else if (e.statusCode == 404) {
-                                  inlineError =
-                                      "Job not found — save the draft again first.";
-                                } else {
-                                  inlineError = e.message;
-                                }
-                              } else {
-                                inlineError = e.toString().replaceAll(
-                                  "Exception: ",
-                                  "",
-                                );
-                              }
-                            });
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.dashboardBlue,
-                  ),
-                  child: isAdding
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text(
-                          'Add',
-                          style: GoogleFonts.inter(color: Colors.white),
-                        ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   void _syncSkillsFromJob(Job saved) {
@@ -333,8 +197,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
 
           // ── MOBILE STICKY ACTIONS ───────────────────────────────────────────
           if (isMobile)
-            Align(
-              alignment: Alignment.bottomCenter,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
               child: _buildMobileActionBar(),
             ),
         ],
@@ -782,32 +648,52 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     required bool hasBadge,
     Color? badgeColor,
   }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
+    String tooltip = '';
+    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+      tooltip = 'Notifications';
+    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
+      tooltip = 'Theme & settings';
+    } else if (icon == Icons.search || icon == Icons.search_rounded) {
+      tooltip = 'Search or jump to (⌘K)';
+    } else if (icon == Icons.help_outline) {
+      tooltip = 'Help & support';
+    } else if (icon == Icons.language_rounded) {
+      tooltip = 'Language';
+    }
+
+    return AppTooltip(
+      message: tooltip,
+      position: TooltipPosition.bottom,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, color: const Color(0xFF475569), size: 18),
+              if (hasBadge)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: badgeColor ?? Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -884,26 +770,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               errorText: _fieldErrors['title'],
             ),
             const SizedBox(height: 14),
-            _buildFormField(
-              label: 'LOCATION',
-              controller: _locationController,
-              hint: 'e.g. Lahore · Hybrid',
-              errorText: _fieldErrors['location'],
-            ),
+            _buildLocationField(),
             const SizedBox(height: 14),
-            _buildFormField(
-              label: 'CLOSES',
-              controller: _closesController,
-              hint: 'YYYY-MM-DD',
-              errorText: _fieldErrors['deadline'],
-            ),
+            _buildDeadlineField(),
             const SizedBox(height: 14),
-            _buildFormField(
-              label: 'SALARY',
-              controller: _salaryController,
-              hint: 'e.g. \$80k - \$100k',
-              errorText: _fieldErrors['salary'],
-            ),
+            _buildSalaryFields(isMobile: true),
           ] else ...[
             Row(
               children: [
@@ -911,43 +782,24 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   child: _buildFormField(
                     label: 'ROLE TITLE',
                     controller: _titleController,
-                    hint: 'e.g. Senior Django Dev',
+                    hint: 'e.g. Senior Django Developer',
                     errorText: _fieldErrors['title'],
                   ),
                 ),
                 const SizedBox(width: 14),
-                Expanded(
-                  child: _buildFormField(
-                    label: 'LOCATION',
-                    controller: _locationController,
-                    hint: 'e.g. Lahore · Hybrid',
-                    errorText: _fieldErrors['location'],
-                  ),
-                ),
+                Expanded(child: _buildLocationField()),
               ],
             ),
             const SizedBox(height: 14),
             Row(
               children: [
-                Expanded(
-                  child: _buildFormField(
-                    label: 'CLOSES',
-                    controller: _closesController,
-                    hint: 'YYYY-MM-DD',
-                    errorText: _fieldErrors['deadline'],
-                  ),
-                ),
+                Expanded(child: _buildDeadlineField()),
                 const SizedBox(width: 14),
-                Expanded(
-                  child: _buildFormField(
-                    label: 'SALARY',
-                    controller: _salaryController,
-                    hint: 'e.g. \$80k - \$100k',
-                    errorText: _fieldErrors['salary'],
-                  ),
-                ),
+                const Expanded(child: SizedBox()),
               ],
             ),
+            const SizedBox(height: 14),
+            _buildSalaryFields(isMobile: false),
           ],
           const SizedBox(height: 20),
           const Divider(color: Color(0xFFE2E8F0), height: 1),
@@ -955,18 +807,45 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           _buildFormField(
             label: 'DESCRIPTION',
             controller: _descController,
-            hint: 'Describe the role and what the person will work on...',
-            maxLines: 4,
+            hint: 'Describe the role and what the person will work on…',
+            minLines: 3,
+            maxLines: 6,
             errorText: _fieldErrors['description'],
           ),
           const SizedBox(height: 14),
           _buildFormField(
             label: 'REQUIREMENTS',
             controller: _requirementsController,
-            hint:
-                'List must-have qualifications — e.g., 3+ years Python · Django/DRF · PostgreSQL · Docker.',
-            maxLines: 4,
+            hint: 'Add must-have qualifications — one per line',
+            minLines: 3,
+            maxLines: 6,
+            maxLength: 500,
+            focusColor: const Color(0xFF0D9488),
             errorText: _fieldErrors['requirements'],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'One requirement per line.',
+                  style: GoogleFonts.spaceGrotesk(
+                    color: const Color(0xFF94A3B8),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _requirementsController,
+                builder: (_, value, _) => Text(
+                  '${value.text.characters.length} / 500',
+                  style: GoogleFonts.jetBrainsMono(
+                    color: const Color(0xFF94A3B8),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           const Divider(color: Color(0xFFE2E8F0), height: 1),
@@ -975,7 +854,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             label: 'JOB TYPE',
             value: _jobType,
             values: JobType.values,
-            itemLabel: (value) => value.value,
+            itemLabel: (value) => switch (value) {
+              JobType.remote => 'Remote',
+              JobType.onsite => 'On-site',
+              JobType.hybrid => 'Hybrid',
+            },
             onChanged: (value) => setState(() => _jobType = value),
           ),
           const SizedBox(height: 14),
@@ -983,195 +866,19 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             label: 'EXPERIENCE LEVEL',
             value: _experienceLevel,
             values: ExperienceLevel.values,
-            itemLabel: (value) => value.value,
+            itemLabel: (value) => switch (value) {
+              ExperienceLevel.entry => 'Entry',
+              ExperienceLevel.mid => 'Mid',
+              ExperienceLevel.senior => 'Senior',
+            },
             onChanged: (value) => setState(() => _experienceLevel = value),
           ),
           const SizedBox(height: 20),
           const Divider(color: Color(0xFFE2E8F0), height: 1),
           const SizedBox(height: 20),
 
-          // REQUIRED SKILLS - WEIGHTED
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                isMobile
-                    ? 'REQUIRED SKILLS'
-                    : 'REQUIRED SKILLS (WEIGHTS ARE PREVIEW ONLY)',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Skill Chips wrap
-          if (_fieldErrors.containsKey('skills_required'))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: Text(
-                _fieldErrors['skills_required']!,
-                style: GoogleFonts.inter(
-                  color: Colors.red.shade600,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ..._skills.map((sk) {
-                final String name = sk['name'];
-                final int mult = sk['mult'];
-                final Color color = sk['color'];
-
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        sk['mult'] =
-                            (sk['mult'] % 3) + 1; // Cycle: 1 -> 2 -> 3 -> 1
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      constraints: const BoxConstraints(
-                        minHeight: 38,
-                      ), // Mobile-friendly size
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: color.withValues(alpha: 0.35),
-                          width: 1.2,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            name,
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF0F172A),
-                              fontSize: 13,
-                              fontWeight: sk['is_required'] == true
-                                  ? FontWeight.bold
-                                  : FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Multiplier badge in monospace
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '×$mult',
-                              style: GoogleFonts.jetBrainsMono(
-                                color: color,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          // Delete icon
-                          GestureDetector(
-                            onTap: () async {
-                              if (sk['id'] != null && _savedJobId != null) {
-                                try {
-                                  await JobService.deleteSkillFromJob(
-                                    _savedJobId!,
-                                    sk['id'],
-                                  );
-                                  if (mounted)
-                                    setState(() => _skills.remove(sk));
-                                } catch (e) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Failed to delete skill'),
-                                      ),
-                                    );
-                                  }
-                                }
-                              } else {
-                                setState(() => _skills.remove(sk));
-                              }
-                            },
-                            child: Icon(
-                              Icons.close_rounded,
-                              size: 14,
-                              color: color.withValues(alpha: 0.8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-
-              // Add Skill Button
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _showAddSkillDialog,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 38),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: const Color(0xFFCBD5E1),
-                        width: 1.2,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.add,
-                          size: 14,
-                          color: Color(0xFF64748B),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Add skill',
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF64748B),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          // SKILLS
+          _buildSkillsSection(isMobile: isMobile),
           const SizedBox(height: 20),
           const Divider(color: Color(0xFFE2E8F0), height: 1),
           const SizedBox(height: 20),
@@ -1276,6 +983,775 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     );
   }
 
+  Future<void> _pickDeadline() async {
+    final now = DateTime.now();
+    final first = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(const Duration(days: 1));
+    final initial =
+        _selectedDeadline != null && !_selectedDeadline!.isBefore(first)
+        ? _selectedDeadline!
+        : first;
+    final last = DateTime(now.year + 5, 12, 31);
+    DateTime? selected;
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      var choice = initial;
+      selected = await showCupertinoModalPopup<DateTime>(
+        context: context,
+        builder: (sheetContext) => Container(
+          height: 310,
+          color: CupertinoColors.systemBackground.resolveFrom(sheetContext),
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: CupertinoButton(
+                  onPressed: () => Navigator.of(sheetContext).pop(choice),
+                  child: const Text('Done'),
+                ),
+              ),
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: initial,
+                  minimumDate: first,
+                  maximumDate: last,
+                  onDateTimeChanged: (date) => choice = date,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      selected = await showDatePicker(
+        context: context,
+        initialDate: initial,
+        firstDate: first,
+        lastDate: last,
+      );
+    }
+    if (selected == null || !mounted) return;
+    final selectedDate = selected;
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    setState(() {
+      _selectedDeadline = selectedDate;
+      _closesController.text =
+          '${selectedDate.day} ${months[selectedDate.month - 1]} ${selectedDate.year}';
+      _fieldErrors.remove('deadline');
+    });
+  }
+
+  Widget _buildDeadlineField() => _buildFormField(
+    label: 'CLOSES',
+    controller: _closesController,
+    hint: 'Choose a closing date',
+    readOnly: true,
+    onTap: _pickDeadline,
+    suffixIcon: const Icon(Icons.calendar_today_outlined, size: 17),
+    errorText: _fieldErrors['deadline'],
+  );
+
+  Widget _buildLocationField() => _buildFormField(
+    label: 'LOCATION',
+    controller: _locationController,
+    hint: 'e.g. Lahore',
+    errorText: _fieldErrors['location'],
+    suffixIcon: PopupMenuButton<String>(
+      tooltip: 'Choose a location',
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+      onSelected: (city) => _locationController.text = city,
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'Lahore', child: Text('Lahore')),
+        PopupMenuItem(value: 'Karachi', child: Text('Karachi')),
+        PopupMenuItem(value: 'Islamabad', child: Text('Islamabad')),
+      ],
+    ),
+  );
+
+  String _salaryValue() {
+    final min = _salaryMinController.text.trim();
+    final max = _salaryMaxController.text.trim();
+    if (min.isEmpty && max.isEmpty) return '';
+    if (max.isEmpty) return 'PKR $min+';
+    return 'PKR $min–$max';
+  }
+
+  String _formatSalary(int amount) => amount.toString().replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (_) => ',',
+  );
+
+  Widget _buildSalaryFields({required bool isMobile}) {
+    Widget input(
+      String caption,
+      String fieldKey,
+      TextEditingController controller,
+    ) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Focus(
+          onFocusChange: (_) => setState(() {}),
+          child: Builder(
+            builder: (fieldContext) {
+              final focused = Focus.of(fieldContext).hasFocus;
+              final hasError = _fieldErrors['salary'] != null;
+              return Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(
+                    color: hasError
+                        ? const Color(0xFFDC2626)
+                        : focused
+                        ? const Color(0xFF0D9488)
+                        : const Color(0xFFE2E8F0),
+                    width: hasError || focused ? 1.5 : 1,
+                  ),
+                  boxShadow: focused
+                      ? [
+                          BoxShadow(
+                            color: const Color(
+                              0xFF0D9488,
+                            ).withValues(alpha: 0.13),
+                            spreadRadius: 3,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 54,
+                        height: double.infinity,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF0F5F7),
+                          border: Border(
+                            right: BorderSide(color: Color(0xFFE2E8F0)),
+                          ),
+                        ),
+                        child: Text(
+                          'PKR',
+                          style: GoogleFonts.spaceGrotesk(
+                            color: const Color(0xFF475569),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          key: Key(fieldKey),
+                          controller: controller,
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) =>
+                              setState(() => _fieldErrors.remove('salary')),
+                          inputFormatters: [
+                            TextInputFormatter.withFunction((
+                              oldValue,
+                              newValue,
+                            ) {
+                              final digits = newValue.text.replaceAll(
+                                RegExp(r'[^0-9]'),
+                                '',
+                              );
+                              final formatted = digits.replaceAllMapped(
+                                RegExp(r'\B(?=(\d{3})+(?!\d))'),
+                                (_) => ',',
+                              );
+                              return TextEditingValue(
+                                text: formatted,
+                                selection: TextSelection.collapsed(
+                                  offset: formatted.length,
+                                ),
+                              );
+                            }),
+                          ],
+                          style: GoogleFonts.jetBrainsMono(
+                            color: const Color(0xFF0F172A),
+                            fontSize: 13,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: '50,000',
+                            hintStyle: GoogleFonts.jetBrainsMono(
+                              color: const Color(0xFF94A3B8),
+                              fontSize: 13,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          caption,
+          style: GoogleFonts.inter(
+            color: const Color(0xFF94A3B8),
+            fontSize: 10.5,
+          ),
+        ),
+      ],
+    );
+    final bands = <(String, int, int?)>[
+      ('50k–80k', 50000, 80000),
+      ('80k–120k', 80000, 120000),
+      ('120k–200k', 120000, 200000),
+      ('200k+', 200000, null),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _fieldLabel('SALARY RANGE'),
+        const SizedBox(height: 6),
+        if (isMobile) ...[
+          input('Minimum', 'salary-min', _salaryMinController),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text(
+              'to',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF94A3B8),
+                fontSize: 11,
+              ),
+            ),
+          ),
+          input('Maximum', 'salary-max', _salaryMaxController),
+        ] else
+          Row(
+            children: [
+              Expanded(
+                child: input('Minimum', 'salary-min', _salaryMinController),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '–',
+                style: GoogleFonts.inter(color: const Color(0xFF64748B)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: input('Maximum', 'salary-max', _salaryMaxController),
+              ),
+            ],
+          ),
+        const SizedBox(height: 12),
+        _fieldLabel('QUICK RANGES'),
+        const SizedBox(height: 7),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: bands
+              .map<Widget>(
+                (band) => ChoiceChip(
+                  label: Text('PKR ${band.$1}'),
+                  selected:
+                      _salaryMinController.text == _formatSalary(band.$2) &&
+                      _salaryMaxController.text ==
+                          (band.$3 == null ? '' : _formatSalary(band.$3!)),
+                  selectedColor: const Color(0xFFDCF7F1),
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  showCheckmark: false,
+                  side: BorderSide(
+                    color:
+                        _salaryMinController.text == _formatSalary(band.$2) &&
+                            _salaryMaxController.text ==
+                                (band.$3 == null ? '' : _formatSalary(band.$3!))
+                        ? const Color(0xFF14B8A6)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 2,
+                  ),
+                  labelStyle: GoogleFonts.inter(
+                    fontSize: 10.5,
+                    color: const Color(0xFF475569),
+                  ),
+                  onSelected: (_) => setState(() {
+                    _salaryMinController.text = _formatSalary(band.$2);
+                    _salaryMaxController.text = band.$3 == null
+                        ? ''
+                        : _formatSalary(band.$3!);
+                    _fieldErrors.remove('salary');
+                  }),
+                ),
+              )
+              .toList(),
+        ),
+        if (_fieldErrors['salary'] != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              _fieldErrors['salary']!,
+              style: GoogleFonts.inter(
+                color: const Color(0xFFDC2626),
+                fontSize: 11,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _fieldLabel(String label) => Text(
+    label,
+    style: GoogleFonts.spaceGrotesk(
+      color: const Color(0xFF94A3B8),
+      fontSize: 10.5,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.05,
+    ),
+  );
+
+  List<String> get _popularSkills {
+    final title = _titleController.text.toLowerCase();
+    if (title.contains('design')) {
+      return const [
+        'Figma',
+        'UI Design',
+        'UX Research',
+        'Prototyping',
+        'Design Systems',
+        'Adobe XD',
+        'Accessibility',
+        'Illustrator',
+        'User Testing',
+        'Wireframing',
+      ];
+    }
+    if (title.contains('data') || title.contains('analyst')) {
+      return const [
+        'SQL',
+        'Python',
+        'Excel',
+        'Power BI',
+        'Tableau',
+        'Pandas',
+        'NumPy',
+        'Statistics',
+        'PostgreSQL',
+        'Looker',
+      ];
+    }
+    return const [
+      'Python',
+      'JavaScript',
+      'SQL',
+      'React',
+      'Django',
+      'Node.js',
+      'Docker',
+      'AWS',
+      'Flutter',
+      'TypeScript',
+    ];
+  }
+
+  List<String> get _suggestedSkills {
+    final title = _titleController.text.toLowerCase();
+    if (title.contains('django')) {
+      return const ['Django', 'DRF', 'PostgreSQL', 'Celery', 'Redis'];
+    }
+    if (title.contains('flutter') || title.contains('mobile')) {
+      return const ['Flutter', 'Dart', 'Firebase', 'Riverpod', 'REST APIs'];
+    }
+    if (title.contains('react') || title.contains('frontend')) {
+      return const ['React', 'TypeScript', 'Next.js', 'CSS', 'Jest'];
+    }
+    if (title.contains('data')) {
+      return const ['SQL', 'Python', 'Power BI', 'Pandas', 'ETL'];
+    }
+    return const [];
+  }
+
+  Future<void> _addSkill(String rawName) async {
+    final typed = rawName.trim();
+    final name = [..._popularSkills, ..._suggestedSkills].firstWhere(
+      (suggestion) => suggestion.toLowerCase() == typed.toLowerCase(),
+      orElse: () => typed,
+    );
+    if (name.isEmpty) return;
+    if (_skills.length >= 20) {
+      setState(() => _fieldErrors['skills_required'] = 'Maximum 20 skills.');
+      return;
+    }
+    if (_skills.any(
+      (skill) => skill['name'].toString().toLowerCase() == name.toLowerCase(),
+    )) {
+      _skillInputController.clear();
+      return;
+    }
+    final skill = <String, dynamic>{
+      'id': null,
+      'name': name,
+      'mult': 1,
+      'color': AppColors.dashboardTeal,
+      'is_required': true,
+    };
+    setState(() {
+      _skills.add(skill);
+      _skillInputController.clear();
+      _fieldErrors.remove('skills_required');
+    });
+    if (_savedJobId == null) return;
+    try {
+      final added = await JobService.addSkillToJob(_savedJobId!, name);
+      if (mounted) setState(() => skill['id'] = added.id);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _skills.remove(skill));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not add $name: $error')));
+      }
+    }
+  }
+
+  Future<void> _removeSkill(Map<String, dynamic> skill) async {
+    if (_savedJobId != null && skill['id'] != null) {
+      try {
+        await JobService.deleteSkillFromJob(_savedJobId!, skill['id'] as int);
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not remove skill: $error')),
+          );
+        }
+        return;
+      }
+    }
+    if (mounted) setState(() => _skills.remove(skill));
+  }
+
+  Future<void> _toggleSkillRequired(Map<String, dynamic> skill) async {
+    final required = skill['is_required'] != true;
+    if (_savedJobId != null && skill['id'] != null) {
+      try {
+        await JobService.deleteSkillFromJob(_savedJobId!, skill['id'] as int);
+        final added = await JobService.addSkillToJob(
+          _savedJobId!,
+          skill['name'].toString(),
+          isRequired: required,
+        );
+        if (mounted) {
+          setState(() {
+            skill['id'] = added.id;
+            skill['is_required'] = required;
+          });
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not update skill: $error')),
+          );
+        }
+      }
+    } else {
+      setState(() => skill['is_required'] = required);
+    }
+  }
+
+  Widget _buildSkillSuggestionsPanel({bool sheet = false}) {
+    final query = _skillInputController.text.trim().toLowerCase();
+    List<String> filter(List<String> names) => names
+        .where(
+          (name) =>
+              name.toLowerCase().startsWith(query) &&
+              !_skills.any(
+                (skill) =>
+                    skill['name'].toString().toLowerCase() ==
+                    name.toLowerCase(),
+              ),
+        )
+        .toList();
+    final popular = filter(_popularSkills);
+    final suggested = filter(_suggestedSkills);
+    final known = [
+      ..._popularSkills,
+      ..._suggestedSkills,
+    ].any((name) => name.toLowerCase() == query);
+    Widget section(String heading, List<String> names) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _fieldLabel(heading),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: names
+              .map(
+                (name) => ActionChip(
+                  label: Text(name),
+                  onPressed: _skills.length >= 20
+                      ? null
+                      : () {
+                          _addSkill(name);
+                          if (sheet) Navigator.of(context).pop();
+                        },
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
+    return Container(
+      constraints: BoxConstraints(maxHeight: sheet ? 420 : 290),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(11),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x140F172A),
+            blurRadius: 18,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      key: const Key('skill-suggestions-panel'),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (popular.isNotEmpty) section('POPULAR SKILLS', popular),
+            if (popular.isNotEmpty && suggested.isNotEmpty)
+              const SizedBox(height: 16),
+            if (suggested.isNotEmpty)
+              section('SUGGESTED FOR THIS ROLE', suggested),
+            if (query.isNotEmpty && !known && _skills.length < 20) ...[
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: () {
+                  _addSkill(_skillInputController.text);
+                  if (sheet) Navigator.of(context).pop();
+                },
+                icon: const Icon(Icons.add, size: 15),
+                label: Text("Add '${_skillInputController.text.trim()}'"),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openMobileSkillPicker() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Add skills',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _skillInputController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Type to search skills…',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (value) {
+                _addSkill(value);
+                Navigator.of(sheetContext).pop();
+              },
+            ),
+            const SizedBox(height: 12),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _skillInputController,
+              builder: (_, value, child) =>
+                  _buildSkillSuggestionsPanel(sheet: true),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSkillsSection({required bool isMobile}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _fieldLabel('SELECTED SKILLS · ${_skills.length} / 20'),
+      if (_skills.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        _buildSelectedSkillChips(isMobile),
+      ],
+      const SizedBox(height: 8),
+      if (isMobile)
+        OutlinedButton.icon(
+          onPressed: _skills.length >= 20 ? null : _openMobileSkillPicker,
+          icon: const Icon(Icons.search, size: 18),
+          label: const Text('Type to search skills…'),
+        )
+      else
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: _skillFocusNode.hasFocus
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF1E3A8A).withValues(alpha: 0.13),
+                      spreadRadius: 3,
+                    ),
+                  ]
+                : null,
+          ),
+          child: TextField(
+            controller: _skillInputController,
+            focusNode: _skillFocusNode,
+            enabled: _skills.length < 20,
+            onSubmitted: _addSkill,
+            decoration: InputDecoration(
+              hintText: 'Type to search skills…',
+              prefixIcon: const Icon(Icons.search, size: 18),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(11),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(11),
+                borderSide: const BorderSide(
+                  color: Color(0xFF1E3A8A),
+                  width: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ),
+      if (!isMobile && _showSkillSuggestions) ...[
+        const SizedBox(height: 6),
+        _buildSkillSuggestionsPanel(),
+      ],
+      if (_fieldErrors['skills_required'] != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            _fieldErrors['skills_required']!,
+            style: GoogleFonts.inter(
+              color: const Color(0xFFDC2626),
+              fontSize: 11,
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _buildSelectedSkillChips(bool isMobile) => Wrap(
+    key: const Key('selected-skills'),
+    spacing: 7,
+    runSpacing: 7,
+    children: _skills.map((skill) {
+      final required = skill['is_required'] == true;
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: isMobile ? MediaQuery.of(context).size.width - 72 : 320,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: required ? const Color(0xFFE6F7F5) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: required
+                  ? const Color(0xFF99E5DA)
+                  : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                fit: FlexFit.loose,
+                child: Text(
+                  skill['name'].toString(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 5),
+              InkWell(
+                onTap: () => _toggleSkillRequired(skill),
+                child: Text(
+                  required ? 'Required' : 'Optional',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    color: required
+                        ? const Color(0xFF0F8A78)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 5),
+              InkWell(
+                onTap: () => _removeSkill(skill),
+                child: const Icon(Icons.close, size: 14),
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList(),
+  );
+
   Widget _buildSelectField<T>({
     required String label,
     required T value,
@@ -1286,53 +1762,70 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            color: const Color(0xFF94A3B8),
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.05,
-          ),
-        ),
+        _fieldLabel(label),
         const SizedBox(height: 6),
-        DropdownButtonFormField<T>(
-          initialValue: value,
-          isExpanded: true,
-          style: GoogleFonts.inter(
-            color: const Color(0xFF0F172A),
-            fontSize: 13.5,
-          ),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(11),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(11),
-              borderSide: const BorderSide(
-                color: Color(0xFF1E3A8A),
-                width: 1.5,
+        Focus(
+          onFocusChange: (_) => setState(() {}),
+          child: Builder(
+            builder: (fieldContext) => Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: Focus.of(fieldContext).hasFocus
+                    ? [
+                        BoxShadow(
+                          color: const Color(
+                            0xFF1E3A8A,
+                          ).withValues(alpha: 0.13),
+                          spreadRadius: 3,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: DropdownButtonFormField<T>(
+                initialValue: value,
+                isExpanded: true,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF0F172A),
+                  fontSize: 13.5,
+                ),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(11),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(11),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF1E3A8A),
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+                items: values
+                    .map(
+                      (item) => DropdownMenuItem<T>(
+                        value: item,
+                        child: Text(itemLabel(item)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (item) {
+                  if (item != null) onChanged(item);
+                },
               ),
             ),
           ),
-          items: values
-              .map(
-                (item) => DropdownMenuItem<T>(
-                  value: item,
-                  child: Text(itemLabel(item)),
-                ),
-              )
-              .toList(),
-          onChanged: (item) {
-            if (item != null) onChanged(item);
-          },
+        ),
+        const SizedBox(height: 6),
+        _buildSmallBadge(
+          label: itemLabel(value),
+          color: AppColors.dashboardBlue,
         ),
       ],
     );
@@ -1342,21 +1835,19 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     required String label,
     required TextEditingController controller,
     required String hint,
+    int minLines = 1,
     int maxLines = 1,
+    int? maxLength,
+    Color focusColor = const Color(0xFF1E3A8A),
     String? errorText,
+    bool readOnly = false,
+    VoidCallback? onTap,
+    Widget? suffixIcon,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            color: const Color(0xFF94A3B8),
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.05,
-          ),
-        ),
+        _fieldLabel(label),
         const SizedBox(height: 6),
         Focus(
           onFocusChange: (_) => setState(() {}),
@@ -1369,9 +1860,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   boxShadow: focused
                       ? [
                           BoxShadow(
-                            color: const Color(
-                              0xFF1E3A8A,
-                            ).withValues(alpha: 0.13),
+                            color: focusColor.withValues(alpha: 0.13),
                             spreadRadius: 3,
                           ),
                         ]
@@ -1379,7 +1868,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                 ),
                 child: TextField(
                   controller: controller,
+                  readOnly: readOnly,
+                  onTap: onTap,
+                  minLines: minLines,
                   maxLines: maxLines,
+                  maxLength: maxLength,
                   style: GoogleFonts.inter(
                     color: const Color(0xFF0F172A),
                     fontSize: 13.5,
@@ -1389,6 +1882,8 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                     hintText: hint,
+                    counterText: maxLength == null ? null : '',
+                    suffixIcon: suffixIcon,
                     hintStyle: GoogleFonts.inter(
                       color: const Color(0xFF94A3B8),
                       fontSize: 13.5,
@@ -1399,12 +1894,19 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(11),
-                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      borderSide: BorderSide(
+                        color: errorText == null
+                            ? const Color(0xFFE2E8F0)
+                            : const Color(0xFFDC2626),
+                        width: errorText == null ? 1 : 1.5,
+                      ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(11),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF1E3A8A),
+                      borderSide: BorderSide(
+                        color: errorText == null
+                            ? focusColor
+                            : const Color(0xFFDC2626),
                         width: 1.5,
                       ),
                     ),
@@ -1433,6 +1935,38 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
 
   // ── LIVE ESTIMATED APPLICANTS PREVIEW CARD ──────────────────────────────────
   Widget _buildLivePreviewCard() {
+    final title = _titleController.text.trim();
+    final keywords = title
+        .toLowerCase()
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where(
+          (word) =>
+              word.length > 3 &&
+              !{
+                'senior',
+                'junior',
+                'developer',
+                'engineer',
+                'role',
+              }.contains(word),
+        )
+        .toSet();
+    final similar = keywords.isEmpty
+        ? <Job>[]
+        : _existingJobs
+              .where(
+                (job) =>
+                    job.status != JobStatus.draft &&
+                    keywords.any(
+                      (word) => job.title.toLowerCase().contains(word),
+                    ),
+              )
+              .toList();
+    final averageApplicants = similar.isEmpty
+        ? null
+        : (similar.fold<int>(0, (sum, job) => sum + job.applicantCount) /
+                  similar.length)
+              .round();
     return Stack(
       children: [
         Container(
@@ -1497,7 +2031,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Matching preview',
+                          title.isEmpty ? 'Matching preview' : title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
                             color: const Color(0xFF0F172A),
                             fontSize: 14,
@@ -1506,7 +2042,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Est. 40–60 applicants in week one based on 3 similar Lahore roles',
+                          averageApplicants == null
+                              ? 'Applicant estimate appears when a similar role exists.'
+                              : 'Avg. $averageApplicants applicants across ${similar.length} similar roles',
                           style: GoogleFonts.inter(
                             color: const Color(0xFF64748B),
                             fontSize: 12.5,
@@ -1518,6 +2056,23 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   ),
                 ],
               ),
+              if (_skills.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _skills
+                      .map(
+                        (skill) => _buildSmallBadge(
+                          label: skill['name'].toString(),
+                          color: skill['is_required'] == true
+                              ? AppColors.dashboardTeal
+                              : const Color(0xFF64748B),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
               const SizedBox(height: 16),
               const Divider(color: Color(0xFFF1F5F9), height: 1),
               const SizedBox(height: 16),
@@ -1622,42 +2177,27 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     if (_locationController.text.trim().isEmpty) return 'Enter a location.';
     if (_descController.text.trim().isEmpty) return 'Enter a description.';
 
-    final trimmedDate = _closesController.text.trim();
-    DateTime? deadline = DateTime.tryParse(trimmedDate);
-
-    if (deadline == null) {
-      final parts = trimmedDate.split('-');
-      if (parts.length == 3) {
-        final year = int.tryParse(parts[0]);
-        final month = int.tryParse(parts[1]);
-        final day = int.tryParse(parts[2]);
-        if (year != null &&
-            month != null &&
-            day != null &&
-            month >= 1 &&
-            month <= 12 &&
-            day >= 1 &&
-            day <= 31) {
-          deadline = DateTime(year, month, day);
-          if (deadline.year != year ||
-              deadline.month != month ||
-              deadline.day != day) {
-            deadline = null;
-          }
-        }
-      }
+    if (_selectedDeadline == null) return 'Choose a closing date.';
+    final today = DateTime.now();
+    if (!_selectedDeadline!.isAfter(
+      DateTime(today.year, today.month, today.day),
+    )) {
+      return 'Choose a future deadline.';
     }
-
-    if (deadline == null) return 'Enter a valid deadline in YYYY-MM-DD format.';
-    if (publishing && !deadline.isAfter(DateTime.now())) {
-      return 'Publishing requires a future deadline.';
+    final minSalary = int.tryParse(
+      _salaryMinController.text.replaceAll(',', ''),
+    );
+    final maxSalary = int.tryParse(
+      _salaryMaxController.text.replaceAll(',', ''),
+    );
+    if ((maxSalary != null && minSalary == null) ||
+        (minSalary != null && maxSalary != null && minSalary > maxSalary)) {
+      return 'Enter a valid salary range.';
     }
-    if (validateSkills && _skills.isEmpty) {
+    if (validateSkills &&
+        !_skills.any((skill) => skill['is_required'] == true)) {
       return 'Add at least one required skill.';
     }
-
-    _closesController.text =
-        "${deadline.year.toString().padLeft(4, '0')}-${deadline.month.toString().padLeft(2, '0')}-${deadline.day.toString().padLeft(2, '0')}";
     return null;
   }
 
@@ -1674,8 +2214,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         setState(() => _fieldErrors['location'] = error);
       } else if (error.contains('description')) {
         setState(() => _fieldErrors['description'] = error);
-      } else if (error.contains('deadline')) {
+      } else if (error.contains('deadline') || error.contains('closing date')) {
         setState(() => _fieldErrors['deadline'] = error);
+      } else if (error.contains('salary')) {
+        setState(() => _fieldErrors['salary'] = error);
       }
       ScaffoldMessenger.of(
         context,
@@ -1691,10 +2233,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         skillsRequired:
             [], // Force usage of addSkillToJob API to preserve is_required flags
         location: _locationController.text.trim(),
-        salary: _salaryController.text.trim(),
+        salary: _salaryValue(),
         jobType: _jobType,
         experienceLevel: _experienceLevel,
-        deadline: DateTime.parse(_closesController.text.trim()),
+        deadline: _selectedDeadline!,
       );
 
       Job saved;

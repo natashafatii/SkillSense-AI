@@ -431,156 +431,463 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     }
   }
 
+  bool get _showEmptyState => !_loading && (_jobs.isEmpty || (_booked != null && _booked!.isEmpty && _awaiting.isEmpty));
+
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 800;
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FD),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _topBar(compact),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(compact ? 16 : 22),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1240),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_jobs.length > 1) ...[
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: DropdownButton<String>(
-                              value: _jobId,
-                              items: [
-                                for (final job in _jobs)
-                                  DropdownMenuItem(
-                                    value: job.id,
-                                    child: Text(job.title),
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      _topBar(compact),
+                      Expanded(
+                        child: _showEmptyState
+                            ? _buildEmptyState(compact)
+                            : SingleChildScrollView(
+                                padding: EdgeInsets.all(compact ? 16 : 22),
+                                child: Center(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(maxWidth: 1240),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        if (_jobs.length > 1) ...[
+                                          Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: DropdownButton<String>(
+                                              value: _jobId,
+                                              items: [
+                                                for (final job in _jobs)
+                                                  DropdownMenuItem(
+                                                    value: job.id,
+                                                    child: Text(job.title),
+                                                  ),
+                                              ],
+                                              onChanged: _busyApplicationId == null
+                                                  ? _changeJob
+                                                  : null,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 14),
+                                        ],
+                                        if (_loading)
+                                          const LinearProgressIndicator(minHeight: 2),
+                                        if (_error != null) ...[
+                                          Text(
+                                            _error!,
+                                            style: const TextStyle(color: Color(0xFFDC354A)),
+                                          ),
+                                          TextButton(
+                                            onPressed: _loadJobs,
+                                            child: const Text('Retry'),
+                                          ),
+                                        ],
+                                        if (compact)
+                                          Column(
+                                            children: [
+                                              _weekPanel(),
+                                              const SizedBox(height: 14),
+                                              _awaitingPanel(),
+                                              const SizedBox(height: 14),
+                                              _invitationPanel(),
+                                            ],
+                                          )
+                                        else
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                flex: 14,
+                                                child: Column(
+                                                  children: [
+                                                    _weekPanel(),
+                                                    const SizedBox(height: 14),
+                                                    _invitationPanel(),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 14),
+                                              Expanded(flex: 10, child: _awaitingPanel()),
+                                            ],
+                                          ),
+                                        if (_interview != null) ...[
+                                          const SizedBox(height: 14),
+                                          _questionPanel(),
+                                        ],
+                                      ],
+                                    ),
                                   ),
-                              ],
-                              onChanged: _busyApplicationId == null
-                                  ? _changeJob
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                        if (_loading)
-                          const LinearProgressIndicator(minHeight: 2),
-                        if (_error != null) ...[
-                          Text(
-                            _error!,
-                            style: const TextStyle(color: Color(0xFFDC354A)),
-                          ),
-                          TextButton(
-                            onPressed: _loadJobs,
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                        if (!_loading && _jobs.isEmpty)
-                          _panel(
-                            child: const Text('No recruiter jobs available.'),
-                          )
-                        else if (compact)
-                          Column(
-                            children: [
-                              _weekPanel(),
-                              const SizedBox(height: 14),
-                              _awaitingPanel(),
-                              const SizedBox(height: 14),
-                              _invitationPanel(),
-                            ],
-                          )
-                        else
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 14,
-                                child: Column(
-                                  children: [
-                                    _weekPanel(),
-                                    const SizedBox(height: 14),
-                                    _invitationPanel(),
-                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 14),
-                              Expanded(flex: 10, child: _awaitingPanel()),
-                            ],
-                          ),
-                        if (_interview != null) ...[
-                          const SizedBox(height: 14),
-                          _questionPanel(),
-                        ],
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (compact)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildMobileBottomDock(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _topBar(bool compact) {
+    if (compact) {
+      return Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: _edge, width: 1)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.auto_awesome, color: Color(0xFF4D7BFA), size: 26),
+            const SizedBox(width: 8),
+            Text(
+              'Schedule',
+              style: GoogleFonts.inter(
+                color: _ink,
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.03,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _edge, width: 1)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'SCHEDULE INTERVIEW',
+            style: GoogleFonts.spaceGrotesk(
+              color: _muted,
+              fontSize: 10.5,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.05,
+            ),
+          ),
+          Row(
+            children: [
+              Container(
+                width: 260,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _edge, width: 1),
+                ),
+                child: TextField(
+                  style: GoogleFonts.inter(
+                    color: _ink,
+                    fontSize: 13,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Search or jump to...',
+                    hintStyle: GoogleFonts.inter(
+                      color: _muted,
+                      fontSize: 13,
                     ),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: _muted,
+                      size: 16,
+                    ),
+                    suffixIcon: Container(
+                      width: 32,
+                      alignment: Alignment.center,
+                      margin: const EdgeInsets.only(
+                        right: 6,
+                        top: 4,
+                        bottom: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: _edge),
+                      ),
+                      child: Text(
+                        '⌘K',
+                        style: GoogleFonts.jetBrainsMono(
+                          color: _muted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              _buildTopBarIconButton(
+                icon: Icons.notifications_none_rounded,
+                hasBadge: true,
+                badgeColor: const Color(0xFFEF4444),
+                onTap: () {},
+              ),
+              const SizedBox(width: 10),
+              _buildTopBarIconButton(
+                icon: Icons.settings_outlined,
+                hasBadge: false,
+                onTap: () {},
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopBarIconButton({
+    required IconData icon,
+    required bool hasBadge,
+    Color? badgeColor,
+    VoidCallback? onTap,
+  }) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _edge, width: 1),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(icon, color: const Color(0xFF475569), size: 18),
+          if (hasBadge)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: badgeColor ?? Colors.red,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool compact) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: compact ? 54 : 64,
+              height: compact ? 54 : 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(compact ? 17 : 20),
+                border: Border.all(color: _edge),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.calendar_month_rounded,
+                  size: compact ? 20 : 24,
+                  color: _muted,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              compact ? 'Nothing scheduled' : 'No interviews scheduled',
+              style: GoogleFonts.inter(
+                color: _ink,
+                fontSize: compact ? 15 : 18,
+                fontWeight: FontWeight.w700,
+                letterSpacing: compact ? -0.03 : -0.025,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: compact ? 280 : 380),
+              child: Text(
+                compact
+                    ? 'Booked interviews show up here.'
+                    : 'Invite a shortlisted candidate to book an AI interview. Booked slots appear here as a weekly agenda.',
+                style: GoogleFonts.inter(
+                  color: _muted,
+                  fontSize: compact ? 11 : 12.5,
+                  height: 1.65,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              height: compact ? 38 : 40,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF4D7BFA).withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 22 : 26),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pushReplacementNamed('/recruiter/schedule-interview');
+                },
+                child: Text(
+                  '＋ Schedule interview',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
+            if (!compact) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Needs at least one shortlisted candidate',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF94A3B8),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w400,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _topBar(bool compact) => Container(
-    height: 55,
-    padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 22),
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(bottom: BorderSide(color: _edge)),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            'SCHEDULE INTERVIEW',
-            style: GoogleFonts.spaceGrotesk(
-              color: _ink,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-            ),
+  Widget _buildMobileBottomDock() {
+    final List<Map<String, dynamic>> dockItems = [
+      {'icon': Icons.dashboard_rounded, 'route': '/recruiter/command-deck'},
+      {'icon': Icons.grid_view_rounded, 'route': '/recruiter/job-listings'},
+      {'icon': Icons.view_column_rounded, 'route': '/recruiter/pipeline'},
+      {'icon': Icons.radio_button_checked_rounded, 'route': '/recruiter/schedule-interview'},
+      {'icon': Icons.leaderboard_rounded, 'route': '/recruiter/rankings'},
+      {'icon': Icons.diamond_rounded, 'route': '/recruiter/analytics'},
+    ];
+    final int activeNavIndex = 0; // Dashboard is active
+
+    return Container(
+      key: const Key('schedule-mobile-dock'),
+      height: 64,
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
-        ),
-        if (!compact) ...[
-          Container(
-            width: 260,
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              border: Border.all(color: _edge),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: List.generate(dockItems.length, (index) {
+          final isSelected = index == activeNavIndex;
+          final item = dockItems[index];
+
+          return GestureDetector(
+            onTap: () {
+              if (!isSelected) {
+                Navigator.of(context).pushReplacementNamed(item['route']);
+              }
+            },
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
               children: [
-                const Icon(Icons.search, size: 15, color: _muted),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    'Search or jump to...',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(color: _muted, fontSize: 11),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected
+                        ? const Color(0xFF4D7BFA)
+                        : Colors.transparent,
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: const Color(0xFF4D7BFA).withValues(alpha: 0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Icon(
+                    item['icon'],
+                    color: isSelected
+                        ? Colors.white
+                        : const Color(0xFF94A3B8),
+                    size: 20,
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-        ],
-        const Icon(Icons.notifications_none_rounded, size: 19, color: _muted),
-        const SizedBox(width: 13),
-        const Icon(Icons.help_outline_rounded, size: 19, color: _muted),
-      ],
-    ),
-  );
+          );
+        }),
+      ),
+    );
+  }
 
   Widget _weekPanel() => _panel(
     child: Column(

@@ -81,6 +81,7 @@ class FakeSdk extends AuthServiceInterface {
 
   @override
   Future<void> signUp({
+    String? companyName,
     required String email,
     required String password,
     String? firstName,

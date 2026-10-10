@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/app_tooltip.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import 'candidate_home_screen.dart';
@@ -917,44 +918,39 @@ class _CandidateProfileSettingsScreenState
 
                         Widget buildMissing(String label) {
                           return Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Flexible(
-                                flex: 3,
-                                child: Text(
-                                  '$label: ',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    color: textSecondary,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
                               Expanded(
-                                flex: 2,
-                                child: Text(
-                                  'Not added ',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    color: textSecondary.withValues(alpha: 0.6),
-                                    fontSize: 12,
-                                    fontStyle: FontStyle.italic,
-                                  ),
+                                child: Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        '$label: ',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.inter(
+                                          color: textSecondary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Not added',
+                                      style: GoogleFonts.inter(
+                                        color: textSecondary.withValues(alpha: 0.6),
+                                        fontSize: 12,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              InkWell(
+                              _HoverableAddLink(
                                 onTap: () => _showEditProfileDialog(context),
-                                child: Text(
-                                  'Add',
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.dashboardTeal,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                baseColor: textSecondary,
+                                hoverColor: textPrimary,
                               ),
                             ],
                           );
@@ -2486,40 +2482,55 @@ class _CandidateProfileSettingsScreenState
     required bool isNightMode,
     VoidCallback? onTap,
   }) {
-    return MouseRegion(
-      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: isNightMode ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: cardBorder, width: 1),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(
-                icon,
-                color: isNightMode ? Colors.white : const Color(0xFF475569),
-                size: 18,
-              ),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: badgeColor ?? Colors.red,
-                      shape: BoxShape.circle,
+    String tooltip = '';
+    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+      tooltip = 'Notifications';
+    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
+      tooltip = 'Theme & settings';
+    } else if (icon == Icons.search || icon == Icons.search_rounded) {
+      tooltip = 'Search or jump to (⌘K)';
+    } else if (icon == Icons.help_outline) {
+      tooltip = 'Help & support';
+    }
+
+    return AppTooltip(
+      message: tooltip,
+      position: TooltipPosition.bottom,
+      child: MouseRegion(
+        cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isNightMode ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: cardBorder, width: 1),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  icon,
+                  color: isNightMode ? Colors.white : const Color(0xFF475569),
+                  size: 18,
+                ),
+                if (hasBadge)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: badgeColor ?? Colors.red,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2548,4 +2559,62 @@ class GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _HoverableAddLink extends StatefulWidget {
+  final VoidCallback onTap;
+  final Color baseColor;
+  final Color hoverColor;
+
+  const _HoverableAddLink({
+    required this.onTap,
+    required this.baseColor,
+    required this.hoverColor,
+  });
+
+  @override
+  State<_HoverableAddLink> createState() => _HoverableAddLinkState();
+}
+
+class _HoverableAddLinkState extends State<_HoverableAddLink> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: SizedBox(
+          width: 60,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.add,
+                  size: 10,
+                  color: _hovered ? widget.hoverColor : widget.baseColor,
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  'Add',
+                  style: GoogleFonts.inter(
+                    color: _hovered ? widget.hoverColor : widget.baseColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    decoration: _hovered ? TextDecoration.underline : TextDecoration.none,
+                    decorationColor: _hovered ? widget.hoverColor : widget.baseColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

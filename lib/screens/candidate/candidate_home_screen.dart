@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/app_tooltip.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../models/application.dart';
@@ -47,14 +48,45 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   List<Job> _matchedJobs = [];
   bool _loadingApplications = true;
   bool _loadingJobs = true;
+  bool _isLoading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _loadUser();
-    ResumeManager.getResumes();
-    _loadApplications();
-    _loadMatchedJobs();
+    _initializeData();
+  }
+
+  Future<void> _initializeData() async {
+    if (mounted) setState(() => _isLoading = true);
+
+    try {
+      // Ensure user is loaded first
+      await _loadUser();
+
+      final cachedResumes = ResumeManager.getResumes();
+      final bool hasCache = cachedResumes.isNotEmpty;
+
+      if (hasCache) {
+        // If we have cached resumes, we can show the UI immediately
+        // while we refresh in the background
+        if (mounted) setState(() => _isLoading = false);
+        ResumeManager.loadFromApi().catchError((_) {});
+        _loadApplications();
+        _loadMatchedJobs();
+      } else {
+        // No cache: wait for everything to load before showing UI
+        await Future.wait([
+          ResumeManager.loadFromApi(),
+          _loadApplications(),
+          _loadMatchedJobs(),
+        ]);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _hasError = true);
+    } finally {
+      if (mounted && _isLoading) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _loadApplications() async {
@@ -176,12 +208,54 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                               cardBorder,
                             ),
                             Expanded(
-                              child:
-                                  ValueListenableBuilder<
-                                    List<Map<String, dynamic>>
-                                  >(
-                                    valueListenable:
-                                        ResumeManager.resumesNotifier,
+                              child: _isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: Color(0xFF0FB89B),
+                                      ),
+                                    )
+                                  : _hasError
+                                      ? Center(
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                'Could not load data',
+                                                style: GoogleFonts.inter(
+                                                  color: const Color(0xFF64748B),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              ElevatedButton(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _isLoading = true;
+                                                    _hasError = false;
+                                                  });
+                                                  _initializeData();
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF0FB89B),
+                                                  foregroundColor: Colors.white,
+                                                  elevation: 0,
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 20,
+                                                    vertical: 12,
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(20),
+                                                  ),
+                                                ),
+                                                child: const Text('Retry'),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : ValueListenableBuilder<
+                                          List<Map<String, dynamic>>
+                                        >(
+                                          valueListenable:
+                                              ResumeManager.resumesNotifier,
                                     builder: (context, resumesList, child) {
                                       final bool hasUploadedResume =
                                           resumesList.isNotEmpty;
@@ -1682,36 +1756,51 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     Color? badgeColor,
     VoidCallback? onTap,
   }) {
-    return MouseRegion(
-      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 18),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: badgeColor ?? Colors.red,
-                      shape: BoxShape.circle,
+    String tooltip = '';
+    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+      tooltip = 'Notifications';
+    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
+      tooltip = 'Theme & settings';
+    } else if (icon == Icons.search || icon == Icons.search_rounded) {
+      tooltip = 'Search or jump to (⌘K)';
+    } else if (icon == Icons.help_outline) {
+      tooltip = 'Help & support';
+    }
+
+    return AppTooltip(
+      message: tooltip,
+      position: TooltipPosition.bottom,
+      child: MouseRegion(
+        cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(icon, color: const Color(0xFF475569), size: 18),
+                if (hasBadge)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: badgeColor ?? Colors.red,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

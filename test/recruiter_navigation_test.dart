@@ -7,6 +7,78 @@ import 'package:skillsense_ai/widgets/recruiter_scaffold.dart';
 import 'package:skillsense_ai/widgets/recruiter_side_nav.dart';
 
 void main() {
+  testWidgets('the shared shell owns one sidebar across recruiter routes', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final route in [
+      '/recruiter/command-deck',
+      '/recruiter/create-role',
+      '/recruiter/job-listings',
+      '/recruiter/analytics',
+    ]) {
+      await tester.pumpWidget(MaterialApp(
+        key: ValueKey(route),
+        home: RecruiterScaffold(currentRoute: route, body: Text(route)),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byType(RecruiterSideNav), findsOneWidget);
+      expect(
+        tester.getRect(find.text(route)).left,
+        greaterThanOrEqualTo(tester.getRect(find.byType(RecruiterSideNav)).right),
+      );
+    }
+  });
+
+  testWidgets('sidebar typography and account menu match the expanded design', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: RecruiterScaffold(
+          currentRoute: '/recruiter/create-role',
+          body: SizedBox.expand(),
+        ),
+      ),
+    );
+
+    expect(tester.widget<Text>(find.text('SkillSense')).style?.fontSize, 13.5);
+    expect(
+      tester.widget<Text>(find.text('Recruiter workspace')).style?.fontSize,
+      10,
+    );
+    expect(
+      tester.widget<Text>(find.text('OVERVIEW & ROLES')).style?.fontSize,
+      11.5,
+    );
+    final heading = tester.widget<Text>(find.text('OVERVIEW & ROLES'));
+    expect(heading.style?.fontWeight, FontWeight.w700);
+    expect(heading.style?.letterSpacing, 0.46);
+    expect(heading.style?.color, const Color(0xFF0F172A));
+    final active = tester.widget<Text>(find.text('Create a role'));
+    expect(active.style?.fontSize, 12);
+    expect(active.style?.fontWeight, FontWeight.w600);
+    final account = find.byKey(const Key('recruiter-account'));
+    expect(
+      find.descendant(
+        of: account,
+        matching: find.byIcon(Icons.keyboard_arrow_down),
+      ),
+      findsNothing,
+    );
+    await tester.tap(account);
+    await tester.pumpAndSettle();
+    expect(find.text('Theme & settings'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('every recruiter sub-item opens its own route', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -52,7 +124,7 @@ void main() {
               .widget<Text>(find.text(destination.label).first)
               .style
               ?.fontWeight,
-          FontWeight.w700,
+          FontWeight.w600,
         );
       }
     }
@@ -83,7 +155,7 @@ void main() {
 
     expect(find.text('Rankings'), findsOneWidget);
     final rankings = tester.widget<Text>(find.text('Rankings'));
-    expect(rankings.style?.fontWeight, FontWeight.w700);
+    expect(rankings.style?.fontWeight, FontWeight.w600);
 
     final wasOpen = find.text('Schedule interview').evaluate().isNotEmpty;
     await tester.tap(find.byKey(const Key('recruiter-section-2')));
@@ -107,14 +179,14 @@ void main() {
           .widget<Text>(find.text('Schedule interview').first)
           .style
           ?.fontWeight,
-      FontWeight.w700,
+      FontWeight.w600,
     );
 
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pumpAndSettle();
     expect(
       tester.widget<Text>(find.text('Rankings')).style?.fontWeight,
-      FontWeight.w700,
+      FontWeight.w600,
     );
   });
 
@@ -148,13 +220,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(RecruiterSideNav)).width, 272);
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const Key('recruiter-search')))
-          .focusNode
-          ?.hasFocus,
-      isTrue,
-    );
+    expect(find.text('PIPELINE & CANDIDATES'), findsOneWidget);
   });
 
   testWidgets('mobile menu exposes recruiter destinations', (tester) async {
@@ -172,22 +238,21 @@ void main() {
           currentRoute: '/recruiter/command-deck',
           body: SizedBox.expand(),
         ),
-      onGenerateRoute: (settings) => MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => RecruiterScaffold(
-          currentRoute: settings.name!,
-          body: Text(settings.name!),
+        onGenerateRoute: (settings) => MaterialPageRoute<void>(
+          settings: settings,
+          builder: (_) => RecruiterScaffold(
+            currentRoute: settings.name!,
+            body: Text(settings.name!),
+          ),
         ),
-      ),
       ),
     );
     await tester.tap(find.byKey(const Key('recruiter-menu')));
     await tester.pumpAndSettle();
     expect(find.byType(RecruiterSideNav), findsOneWidget);
     expect(find.text('Command deck'), findsOneWidget);
-    expect(find.text('Notifications'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('recruiter-notifications')));
+    await tester.tap(find.text('Job listings'));
     await tester.pumpAndSettle();
-    expect(find.text('/recruiter/notifications'), findsOneWidget);
+    expect(find.text('/recruiter/job-listings'), findsOneWidget);
   });
 }

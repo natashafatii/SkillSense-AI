@@ -38,7 +38,7 @@ void main() {
 
     final field = find.widgetWithText(
       TextField,
-      'List must-have qualifications — e.g., 3+ years Python · Django/DRF · PostgreSQL · Docker.',
+      'Add must-have qualifications — one per line',
     );
     await tester.ensureVisible(field);
     await tester.enterText(field, '3+ years Python · Django/DRF');

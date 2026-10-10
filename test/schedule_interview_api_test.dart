@@ -9,6 +9,8 @@ import 'package:skillsense_ai/screens/hr/schedule_interview_screen.dart';
 import 'package:skillsense_ai/services/api_exception.dart';
 import 'package:skillsense_ai/services/application_service.dart';
 import 'package:skillsense_ai/services/interview_service.dart';
+import 'package:skillsense_ai/widgets/recruiter_scaffold.dart';
+import 'package:skillsense_ai/widgets/recruiter_side_nav.dart';
 
 Map<String, dynamic> _appJson(
   String id,
@@ -50,6 +52,57 @@ Future<void> _pickAvailableSlot(WidgetTester tester) async {
 
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+
+  testWidgets('shared shell renders one recruiter nav beside schedule canvas', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      home: RecruiterScaffold(
+        currentRoute: '/recruiter/schedule-interview',
+        body: ScheduleInterviewScreen(
+          jobId: 'job-1',
+          loadJobs: () async => [_job()],
+          loadForJob: (_) async => [],
+          loadBooked: (_) async => [],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byType(RecruiterSideNav), findsOneWidget);
+    expect(tester.getSize(find.byType(RecruiterSideNav)).width, 272);
+    expect(tester.getRect(find.byType(ScheduleInterviewScreen)).left, 272);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mobile shell has one drawer nav and one schedule dock', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      home: RecruiterScaffold(
+        currentRoute: '/recruiter/schedule-interview',
+        body: ScheduleInterviewScreen(
+          jobId: 'job-1',
+          loadJobs: () async => [_job()],
+          loadForJob: (_) async => [],
+          loadBooked: (_) async => [],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('schedule-mobile-dock')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('recruiter-menu')));
+    await tester.pumpAndSettle();
+    expect(find.byType(RecruiterSideNav), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   test('shortlisted request includes job and status on every page', () async {
     final dio = Dio(BaseOptions(baseUrl: 'https://test.invalid'));
@@ -144,7 +197,7 @@ void main() {
             loads++;
             return applications;
           },
-          loadBooked: (_) async => [],
+          loadBooked: (_) async => sentSlot == null ? [] : [_interview(sentId!, sentSlot!)],
           sendInvite: (id, slot) async {
             sentId = id;
             sentSlot = slot;
