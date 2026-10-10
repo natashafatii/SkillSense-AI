@@ -453,7 +453,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   );
 
   Widget _scoreCard(Application app, ResumeDetail resume, bool compact) {
-    final score = resume.matchScore ?? app.resumeScore;
+    final score = app.resumeScore;
     final safeScore = score?.clamp(0.0, 100.0).toDouble();
     final band = safeScore == null ? null : _scoreBand(safeScore);
     final color = band?.$2 ?? _muted;

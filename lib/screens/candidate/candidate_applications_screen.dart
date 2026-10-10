@@ -1,11 +1,12 @@
+import 'candidate_job_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../constants/app_colors.dart';
 import '../../widgets/app_tooltip.dart';
 import '../../models/application.dart';
 import '../../models/paginated_response.dart';
 import '../../services/application_service.dart';
 import '../../widgets/candidate_side_nav.dart';
-import '../../constants/app_colors.dart';
 
 /// The candidate's server-backed application list.
 class CandidateApplicationsScreen extends StatefulWidget {
@@ -60,19 +61,33 @@ class _CandidateApplicationsScreenState
     }
   }
 
-  int get _activeCount =>
-      _applications.where((a) => a.status != ApplicationStatus.decision).length;
+  int get _activeCount => _applications
+      .where(
+        (a) =>
+            a.status != ApplicationStatus.decision &&
+            a.status != ApplicationStatus.rejected,
+      )
+      .length;
   int get _offersCount => _applications
       .where((a) => a.status == ApplicationStatus.decision)
       .length; // Placeholder logic
-  int get _closedCount =>
-      _applications.where((a) => a.status == ApplicationStatus.decision).length;
+  int get _closedCount => _applications
+      .where(
+        (a) =>
+            a.status == ApplicationStatus.decision ||
+            a.status == ApplicationStatus.rejected,
+      )
+      .length;
 
   List<Application> get _visibleApplications {
     return _applications.where((a) {
-      if (_filter == 'active') return a.status != ApplicationStatus.decision;
+      if (_filter == 'active')
+        return a.status != ApplicationStatus.decision &&
+            a.status != ApplicationStatus.rejected;
       if (_filter == 'offers') return a.status == ApplicationStatus.decision;
-      if (_filter == 'closed') return a.status == ApplicationStatus.decision;
+      if (_filter == 'closed')
+        return a.status == ApplicationStatus.decision ||
+            a.status == ApplicationStatus.rejected;
       return true;
     }).toList();
   }
@@ -91,37 +106,43 @@ class _CandidateApplicationsScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (wide)
-                  const CandidateSideNav(currentRoute: '/candidate/applications'),
+                  const CandidateSideNav(
+                    currentRoute: '/candidate/applications',
+                  ),
                 Expanded(
                   child: Column(
                     children: [
                       _buildTopBar(wide),
                       Expanded(
                         child: _loading
-                            ? const Center(child: CircularProgressIndicator(color: AppColors.dashboardTeal))
+                            ? const Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.dashboardTeal,
+                                ),
+                              )
                             : _error != null
-                                ? _buildErrorState()
-                                : _applications.isEmpty
-                                    ? _buildEmptyState(!wide)
-                                    : SingleChildScrollView(
-                                        padding: EdgeInsets.only(
-                                          left: wide ? 40 : 16,
-                                          right: wide ? 40 : 16,
-                                          top: 32,
-                                          bottom: wide ? 32 : 100,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            _buildHeader(),
-                                            const SizedBox(height: 32),
-                                            if (_visibleApplications.isEmpty)
-                                              _buildNoFilteredApplications()
-                                            else
-                                              _buildGrid(wide),
-                                          ],
-                                        ),
-                                      ),
+                            ? _buildErrorState()
+                            : _applications.isEmpty
+                            ? _buildEmptyState(!wide)
+                            : SingleChildScrollView(
+                                padding: EdgeInsets.only(
+                                  left: wide ? 40 : 16,
+                                  right: wide ? 40 : 16,
+                                  top: 32,
+                                  bottom: wide ? 32 : 100,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildHeader(),
+                                    const SizedBox(height: 32),
+                                    if (_visibleApplications.isEmpty)
+                                      _buildNoFilteredApplications()
+                                    else
+                                      _buildGrid(wide),
+                                  ],
+                                ),
+                              ),
                       ),
                     ],
                   ),
@@ -148,11 +169,17 @@ class _CandidateApplicationsScreenState
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: const BoxDecoration(
           color: Colors.white,
-          border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+          border: Border(
+            bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+          ),
         ),
         child: Row(
           children: [
-            const Icon(Icons.auto_awesome, color: AppColors.dashboardBlue, size: 26),
+            const Icon(
+              Icons.auto_awesome,
+              color: AppColors.dashboardBlue,
+              size: 26,
+            ),
             const SizedBox(width: 8),
             Text(
               'Applications',
@@ -310,9 +337,10 @@ class _CandidateApplicationsScreenState
   }
 
   Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.end,
+    return Wrap(
+      spacing: 24,
+      runSpacing: 16,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,7 +364,9 @@ class _CandidateApplicationsScreenState
             ),
           ],
         ),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             _buildFilterPill(
               'Active $_activeCount',
@@ -346,7 +376,7 @@ class _CandidateApplicationsScreenState
             ),
             const SizedBox(width: 12),
             _buildFilterPill(
-              'Offers $_offersCount',
+              'Decisions $_offersCount',
               'offers',
               Colors.white,
               const Color(0xFF64748B),
@@ -411,7 +441,10 @@ class _CandidateApplicationsScreenState
       ),
       itemCount: _visibleApplications.length,
       itemBuilder: (context, index) {
-        return ApplicationCard(application: _visibleApplications[index]);
+        return ApplicationCard(
+          application: _visibleApplications[index],
+          onChanged: () => _load(page: _page),
+        );
       },
     );
   }
@@ -563,8 +596,14 @@ class _CandidateApplicationsScreenState
       {'icon': Icons.home_rounded, 'route': '/candidate/home'},
       {'icon': Icons.adjust_rounded, 'route': '/candidate/jobs'},
       {'icon': Icons.grid_view_rounded, 'route': '/candidate/applications'},
-      {'icon': Icons.radio_button_checked_rounded, 'route': '/candidate/interview-lobby'}, // Intervew Hub
-      {'icon': Icons.person_outline_rounded, 'route': '/candidate/profile'}, // Profile
+      {
+        'icon': Icons.radio_button_checked_rounded,
+        'route': '/candidate/interview-lobby',
+      }, // Intervew Hub
+      {
+        'icon': Icons.person_outline_rounded,
+        'route': '/candidate/profile',
+      }, // Profile
     ];
     final int activeNavIndex = 2; // Applications is index 2
 
@@ -592,7 +631,7 @@ class _CandidateApplicationsScreenState
           return GestureDetector(
             onTap: () {
               if (index != activeNavIndex) {
-                 Navigator.of(context).pushReplacementNamed(item['route']);
+                Navigator.of(context).pushReplacementNamed(item['route']);
               }
             },
             child: Stack(
@@ -644,7 +683,8 @@ class _CandidateApplicationsScreenState
 class ApplicationCard extends StatelessWidget {
   final Application application;
 
-  const ApplicationCard({super.key, required this.application});
+  final VoidCallback? onChanged;
+  const ApplicationCard({super.key, required this.application, this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -653,120 +693,139 @@ class ApplicationCard extends StatelessWidget {
     final statusBg = statusColor.withValues(alpha: 0.1);
 
     String subtext = '';
-    String companyName = 'DataFlow';
+    String companyName = 'Application';
     if (application.status == ApplicationStatus.applied) {
-      subtext = 'Applied 2d ago';
-      companyName = 'DataFlow';
+      subtext = application.assessment?['status'] == 'FAILED'
+          ? 'Processing failed — tap to resolve'
+          : 'Tap to view screening progress';
+      companyName = 'Application';
     } else if (application.status == ApplicationStatus.screened) {
-      subtext = 'Screening in progress';
-      companyName = 'CodeCraft';
+      subtext = 'Shortlisted for interview scheduling';
+      companyName = 'Application';
     } else if (application.status == ApplicationStatus.interviewed) {
       subtext = 'Interview Wed 13:00';
-      companyName = 'TechVerse';
+      companyName = 'Application';
+    } else if (application.status == ApplicationStatus.underReview) {
+      subtext = 'Recruiter review required';
+    } else if (application.status == ApplicationStatus.rejected) {
+      subtext = 'Application not selected';
     } else {
-      subtext = 'Offer received';
-      companyName = 'NeuralTech';
+      subtext = 'Decision recorded';
+      companyName = 'Application';
     }
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return InkWell(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CandidateJobDetailScreen(jobId: application.job),
           ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          if (application.status == ApplicationStatus.interviewed)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 3,
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF10B981), Color(0xFF3B82F6)],
+        );
+        onChanged?.call();
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            if (application.status == ApplicationStatus.interviewed)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 3,
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF10B981), Color(0xFF3B82F6)],
+                    ),
                   ),
                 ),
               ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            application.jobTitle.isEmpty
-                                ? 'Job ${application.job}'
-                                : application.jobTitle,
-                            style: GoogleFonts.inter(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF1E293B),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              application.jobTitle.isEmpty
+                                  ? 'Job ${application.job}'
+                                  : application.jobTitle,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF1E293B),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$companyName · $subtext',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: const Color(0xFF64748B),
-                              fontWeight: FontWeight.w500,
+                            const SizedBox(height: 4),
+                            Text(
+                              '$companyName · $subtext',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusBg,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: statusColor.withValues(alpha: 0.2),
+                          ],
                         ),
                       ),
-                      child: Text(
-                        statusText,
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
-                          color: statusColor,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusBg,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: statusColor.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Text(
+                          statusText,
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.0,
+                            color: statusColor,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                _ProgressBar(
-                  status: application.status,
-                  themeColor: statusColor,
-                ),
-              ],
+                    ],
+                  ),
+                  const Spacer(),
+                  _ProgressBar(
+                    status: application.status,
+                    themeColor: statusColor,
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -775,6 +834,9 @@ class ApplicationCard extends StatelessWidget {
     switch (status) {
       case ApplicationStatus.applied:
         return const Color(0xFFFBBF24); // Yellow
+      case ApplicationStatus.rejected:
+        return const Color(0xFFEF4444);
+      case ApplicationStatus.underReview:
       case ApplicationStatus.screened:
         return const Color(0xFF94A3B8); // Grey
       case ApplicationStatus.interviewed:
@@ -789,11 +851,15 @@ class ApplicationCard extends StatelessWidget {
       case ApplicationStatus.applied:
         return 'APPLIED';
       case ApplicationStatus.screened:
-        return 'IN REVIEW';
+        return 'SHORTLISTED';
+      case ApplicationStatus.underReview:
+        return 'UNDER REVIEW';
+      case ApplicationStatus.rejected:
+        return 'REJECTED';
       case ApplicationStatus.interviewed:
         return 'INTERVIEW';
       case ApplicationStatus.decision:
-        return 'OFFER'; // Simplified for UI demonstration
+        return 'DECISION';
     }
   }
 }
@@ -806,7 +872,7 @@ class _ProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stages = ['APPLIED', 'SCREENED', 'INTERVIEW', 'DECISION'];
+    final stages = ['APPLIED', 'SHORTLISTED', 'INTERVIEW', 'DECISION'];
     int currentIndex = _getStatusIndex(status);
 
     return LayoutBuilder(
@@ -861,6 +927,8 @@ class _ProgressBar extends StatelessWidget {
     switch (s) {
       case ApplicationStatus.applied:
         return 0;
+      case ApplicationStatus.underReview:
+      case ApplicationStatus.rejected:
       case ApplicationStatus.screened:
         return 1;
       case ApplicationStatus.interviewed:
@@ -919,7 +987,6 @@ class _ProgressBar extends StatelessWidget {
     );
   }
 }
-
 
 class CandidateApplicationJobLink extends StatelessWidget {
   final String jobId;

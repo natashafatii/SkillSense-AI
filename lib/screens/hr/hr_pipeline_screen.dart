@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'screening_policy_screen.dart';
+import '../application_screening_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -5,7 +8,6 @@ import '../../models/application.dart';
 import '../../models/job.dart';
 import '../../services/application_service.dart';
 import '../../services/job_service.dart';
-import 'candidate_report_screen.dart';
 import 'schedule_interview_screen.dart';
 
 /// Recruiter Kanban board scoped to one job and backed by its applications.
@@ -33,10 +35,11 @@ class HrPipelineScreen extends StatefulWidget {
 class _HrPipelineScreenState extends State<HrPipelineScreen> {
   static const _stages = [
     'APPLIED',
-    'SCREENING',
+    'UNDER_REVIEW',
     'SHORTLISTED',
     'INTERVIEWED',
     'DECIDED',
+    'REJECTED',
   ];
   static const _stageColors = [
     Color(0xFF64748B),
@@ -44,6 +47,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
     Color(0xFF22CDB1),
     Color(0xFF7C6CF2),
     Color(0xFF10B981),
+    Color(0xFFEF4444),
   ];
 
   List<Job> _jobs = [];
@@ -55,12 +59,42 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   String? _error;
   bool _loading = true;
   int _selection = 0;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _jobId = widget.jobId;
     _loadJobs();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted &&
+          ModalRoute.of(context)?.isCurrent == true &&
+          !_loading &&
+          _jobId != null &&
+          _applications.any((a) => a.status == ApplicationStatus.applied)) {
+        _selectJob(_jobId!, refresh: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _editPolicy(Job job) async {
+    final updated = await Navigator.push<Job>(
+      context,
+      MaterialPageRoute(builder: (_) => ScreeningPolicyScreen(job: job)),
+    );
+    if (mounted && updated != null)
+      setState(
+        () => _jobs = [
+          for (final existing in _jobs)
+            existing.id == updated.id ? updated : existing,
+        ],
+      );
   }
 
   @override
@@ -147,7 +181,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   String _columnFor(Application app) =>
       switch ((app.rawStatus ?? app.status.value).toUpperCase()) {
         'PENDING' || 'APPLIED' => 'APPLIED',
-        'SCREENED' || 'SCREENING' => 'SCREENING',
+        'SCREENED' => 'SHORTLISTED',
+        'SCREENING' || 'UNDER_REVIEW' => 'UNDER_REVIEW',
+        'REJECTED' => 'REJECTED',
         'SHORTLISTED' => 'SHORTLISTED',
         'INTERVIEWED' => 'INTERVIEWED',
         'DECISION' || 'DECIDED' => 'DECIDED',
@@ -185,86 +221,19 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   }
 
   Future<void> _showApplication(Application app) async {
-    try {
-      final detail =
-          await (widget.loadApplication?.call(app.id) ??
-              ApplicationService.getApplication(app.id));
-      if (!mounted) return;
-      showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(_candidateName(detail)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(detail.candidateEmail),
-              const SizedBox(height: 8),
-              Text('Status: ${detail.rawStatus ?? detail.status.value}'),
-              Text('Applied ${_timeAgo(detail.createdAt)}'),
-            ],
-          ),
-          actions: [
-            if (detail.resumeId?.isNotEmpty == true)
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CandidateReportScreen(
-                        applicationId: detail.id,
-                        resumeId: detail.resumeId,
-                      ),
-                    ),
-                  );
-                },
-                child: const Text('Resume report'),
-              ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Close'),
-            ),
-          ],
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ApplicationScreeningScreen(
+          applicationId: app.id,
+          loadApplication: widget.loadApplication,
         ),
-      );
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load application: $error')),
-        );
-      }
-    }
+      ),
+    );
+    if (mounted && _jobId == app.job) await _selectJob(app.job, refresh: true);
   }
 
-  Future<void> _shortlist(Application app) async {
-    try {
-      final updated =
-          await (widget.advanceApplication?.call(app.id, 'SHORTLISTED') ??
-              ApplicationService.advanceToStatus(
-                applicationId: app.id,
-                status: 'SHORTLISTED',
-              ));
-      if (_columnFor(updated) != 'SHORTLISTED') {
-        throw StateError('The server did not confirm the shortlist.');
-      }
-      if (!mounted || _jobId != app.job) return;
-      final next = [
-        for (final current in _applications)
-          current.id == app.id ? updated : current,
-      ];
-      setState(() {
-        _applications = next;
-        _cache[app.job] = next;
-      });
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not shortlist candidate: $error')),
-        );
-      }
-    }
-  }
+  Future<void> _shortlist(Application app) => _showApplication(app);
 
   void _schedule(Application app) {
     Navigator.push(
@@ -297,6 +266,18 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
               letterSpacing: 0.6,
             ),
           ),
+        ),
+        if (job != null)
+          TextButton(
+            onPressed: () => _editPolicy(job),
+            child: const Text('Screening policy'),
+          ),
+        IconButton(
+          tooltip: 'Refresh applications',
+          onPressed: _jobId == null || _loading
+              ? null
+              : () => _selectJob(_jobId!, refresh: true),
+          icon: const Icon(Icons.refresh),
         ),
         const SizedBox(width: 16),
         const Icon(
@@ -662,21 +643,25 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   }
 
   Widget _cardFooter(Application app, String stage) {
-    if (stage == 'APPLIED') {
+    if (stage == 'APPLIED' || stage == 'REJECTED') {
       return Align(
         alignment: Alignment.centerRight,
         child: OutlinedButton(
           onPressed: () => _showApplication(app),
-          child: const Text('View'),
+          child: Text(
+            app.assessment?['status'] == 'FAILED'
+                ? 'Resolve error'
+                : 'View screening',
+          ),
         ),
       );
     }
-    if (stage == 'SCREENING') {
+    if (stage == 'UNDER_REVIEW') {
       return Align(
         alignment: Alignment.centerRight,
         child: OutlinedButton(
           onPressed: () => _shortlist(app),
-          child: const Text('Shortlist'),
+          child: const Text('Review screening'),
         ),
       );
     }

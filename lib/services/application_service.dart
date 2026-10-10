@@ -15,6 +15,7 @@ class ApplicationService {
   static Future<List<Application>> listAllForJob(
     String jobId, {
     String? status,
+    bool? eligibleForInterview,
     Dio? client,
   }) async {
     if (jobId.isEmpty) throw ArgumentError('Job ID is required.');
@@ -23,6 +24,7 @@ class ApplicationService {
       final result = await listApplications(
         jobId: jobId,
         status: status,
+        eligibleForInterview: eligibleForInterview,
         page: page,
         client: client,
       );
@@ -30,6 +32,33 @@ class ApplicationService {
       if (!result.hasNext) return applications;
     }
     throw StateError('Application pagination did not finish.');
+  }
+
+  static Future<Application> screeningAction(
+    Application app,
+    String action, {
+    String reason = '',
+    String? resumeId,
+    bool consent = false,
+    Dio? client,
+  }) async {
+    try {
+      final dio = client ?? await ApiClient.getInstance();
+      final response = await dio.post(
+        '/applications/${app.id}/$action/',
+        data: {
+          'expected_version': app.version,
+          if (action == 'shortlist' || action == 'reject') 'reason': reason,
+          if (resumeId != null) 'resume_id': resumeId,
+          if (resumeId != null) 'consent_given': consent,
+        },
+      );
+      return Application.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
+    }
   }
 
   static const maxResumeBytes = 5 * 1024 * 1024;
@@ -196,6 +225,7 @@ class ApplicationService {
   static Future<PaginatedResponse<Application>> listApplications({
     String? jobId,
     String? status,
+    bool? eligibleForInterview,
     int page = 1,
     int? pageSize,
     Dio? client,
@@ -206,6 +236,8 @@ class ApplicationService {
         '/applications/',
         queryParameters: {
           'page': page,
+          if (eligibleForInterview != null)
+            'eligible_for_interview': eligibleForInterview.toString(),
           if (pageSize != null) 'page_size': pageSize,
           if (jobId != null && jobId.isNotEmpty) 'job': jobId,
           if (status != null && status.isNotEmpty) 'status': status,

@@ -66,7 +66,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       switch ((application.rawStatus ?? application.status.value)
           .toUpperCase()) {
         'PENDING' => 'APPLIED',
-        'SCREENED' => 'SCREENING',
+        'SCREENED' || 'SHORTLISTED' => 'SHORTLISTED',
+        'UNDER_REVIEW' => 'SCREENING',
+        'REJECTED' => 'DECIDED',
         'DECISION' => 'DECIDED',
         final status => status,
       };

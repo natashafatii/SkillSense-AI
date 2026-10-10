@@ -50,6 +50,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   int _situationalQuestions = 2;
 
   // Screening threshold value
+  bool _autoShortlist = true;
   double _threshold = 60.0; // Slider between 40 and 90
 
   @override
@@ -649,7 +650,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     Color? badgeColor,
   }) {
     String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+    if (icon == Icons.notifications_none_rounded ||
+        icon == Icons.notifications_outlined ||
+        icon == Icons.notifications) {
       tooltip = 'Notifications';
     } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
       tooltip = 'Theme & settings';
@@ -2077,7 +2080,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               const Divider(color: Color(0xFFF1F5F9), height: 1),
               const SizedBox(height: 16),
               Text(
-                'Screening threshold ${_threshold.toInt()} · below-threshold applications auto-file to Pending.',
+                'Screening threshold ${_threshold.toInt()} · non-passing applications follow the saved screening policy.',
                 style: GoogleFonts.inter(
                   color: const Color(0xFF64748B),
                   fontSize: 12,
@@ -2157,11 +2160,22 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           const SizedBox(height: 16),
 
           Text(
-            'Preview: interviews unlock at ${_threshold.toInt()}+ resume match.',
+            'Auto-shortlist requires ${_threshold.toInt()}+ match and verified mandatory requirements.',
             style: GoogleFonts.inter(
               color: const Color(0xFF64748B),
               fontSize: 12.5,
               fontWeight: FontWeight.w500,
+            ),
+          ),
+          Material(
+            color: Colors.transparent,
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Automatically shortlist qualifying applicants',
+              ),
+              value: _autoShortlist,
+              onChanged: (value) => setState(() => _autoShortlist = value),
             ),
           ),
         ],
@@ -2227,6 +2241,8 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     setState(() => _saving = true);
     try {
       final payload = Job.writePayload(
+        screeningThreshold: _threshold,
+        autoShortlistEnabled: _autoShortlist,
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         requirements: _requirementsController.text.trim(),

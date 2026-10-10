@@ -177,7 +177,11 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     try {
       final applications =
           await (widget.loadForJob?.call(jobId) ??
-              ApplicationService.listAllForJob(jobId, status: 'SHORTLISTED'));
+              ApplicationService.listAllForJob(
+                jobId,
+                status: 'SHORTLISTED',
+                eligibleForInterview: true,
+              ));
       if (!mounted || request != _request || jobId != _jobId) return;
       final shortlisted =
           applications
