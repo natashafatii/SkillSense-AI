@@ -107,7 +107,10 @@ class _LoginScreenState extends State<LoginScreen>
         final mismatch = await Navigator.of(context)
             .push<RoleMismatchException>(
               MaterialPageRoute(
-                builder: (_) => EmailVerificationScreen.signIn(email: email),
+                builder: (_) => EmailVerificationScreen.signIn(
+                  email: email,
+                  role: widget.selectedRole ?? '',
+                ),
               ),
             );
         if (mounted && mismatch != null) {
@@ -248,6 +251,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       builder: (_) =>
                                           EmailVerificationScreen.signIn(
                                             email: email,
+                                            role: widget.selectedRole ?? '',
                                           ),
                                     ),
                                   );

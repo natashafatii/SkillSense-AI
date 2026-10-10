@@ -1,3 +1,4 @@
+import '../application_screening_screen.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -13,7 +14,6 @@ import 'candidate_profile_settings_screen.dart';
 import 'candidate_resume_management_screen.dart';
 
 import 'dart:typed_data';
-import 'package:file_picker/file_picker.dart';
 import '../../services/application_service.dart';
 import '../../services/resume_service.dart';
 import '../../models/resume_detail.dart';
@@ -73,7 +73,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
   String? _applicationStateMessage;
 
   ResumeDetail? _resumeDetail;
-  ResumeDetail? _applicationResumeDetail;
   bool _isLoadingResume = true;
   bool _isLoadingSkills = true;
   List<JobSkill>? _jobSkills;
@@ -107,7 +106,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     _isApplied = false;
     _isSubmitting = false;
     _applicationId = null;
-    _applicationResumeDetail = null;
     _applicationStateMessage = null;
     _loadData();
   }
@@ -297,7 +295,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       }
       if (detail.isParsed) {
         setState(() {
-          _applicationResumeDetail = detail;
           _applicationStateMessage =
               'Resume parsing complete for application ${submitted!.id}.';
         });
@@ -990,7 +987,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     Color cardBg,
     Color cardBorder,
   ) {
-    final double? score = _resumeDetail?.matchScore;
+    final double? score = null;
     final bool hasScore = score != null;
     final ringColor = hasScore ? _getRingColor(score) : Colors.transparent;
 
@@ -2116,6 +2113,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
   List<Map<String, dynamic>> _resumes = [];
   String? _selectedResumeId;
   bool _isLoadingResumes = true;
+  bool _consentGiven = false;
 
   ResumeDetail? _parsedDetail;
   bool _isLoadingDetail = false;
@@ -2182,8 +2180,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
         return;
       }
 
-      final detail = await (widget.loadResumeDetail?.call(id) ??
-          ResumeService.getResumeDetail(id));
+      final detail =
+          await (widget.loadResumeDetail?.call(id) ??
+              ResumeService.getResumeDetail(id));
       if (!mounted || _selectedResumeId != id) return;
 
       setState(() {
@@ -2207,8 +2206,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
       try {
-        final detail = await (widget.loadResumeDetail?.call(id) ??
-            ResumeService.getResumeDetail(id));
+        final detail =
+            await (widget.loadResumeDetail?.call(id) ??
+                ResumeService.getResumeDetail(id));
         if (!mounted || _selectedResumeId != id) {
           timer.cancel();
           return;
@@ -2238,7 +2238,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
   }
 
   void _submit() {
-    if (_selectedResumeId == null) return;
+    if (_selectedResumeId == null || !_consentGiven) return;
     widget.onSubmit(_selectedResumeId, null, null);
   }
 
@@ -2557,27 +2557,27 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                           borderRadius: BorderRadius.circular(12),
                           clipBehavior: Clip.antiAlias,
                           child: RadioListTile<String>(
-                          value: r['id'].toString(),
-                          groupValue: _selectedResumeId,
-                          onChanged: _onResumeSelected,
-                          activeColor: const Color(0xFF10B981),
-                          title: Text(
-                            r['filename'].toString(),
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                            value: r['id'].toString(),
+                            groupValue: _selectedResumeId,
+                            onChanged: _onResumeSelected,
+                            activeColor: const Color(0xFF10B981),
+                            title: Text(
+                              r['filename'].toString(),
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            subtitle: Text(
+                              isDefault
+                                  ? 'Default · $cov% coverage'
+                                  : '$cov% coverage',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: const Color(0xFF64748B),
+                              ),
                             ),
                           ),
-                          subtitle: Text(
-                            isDefault
-                                ? 'Default · $cov% coverage'
-                                : '$cov% coverage',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
                         ),
                       );
                     }),
@@ -2666,6 +2666,18 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     ),
                   ],
                 ),
+                Material(
+                  color: Colors.transparent,
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _consentGiven,
+                    onChanged: (value) =>
+                        setState(() => _consentGiven = value ?? false),
+                    title: const Text(
+                      'I agree to send my resume text to Google Gemini for parsing and application screening.',
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -2693,7 +2705,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed:
-                            _selectedResumeId == null || _isLoadingResumes
+                            _selectedResumeId == null ||
+                                _isLoadingResumes ||
+                                !_consentGiven
                             ? null
                             : _submit,
                         style: ElevatedButton.styleFrom(

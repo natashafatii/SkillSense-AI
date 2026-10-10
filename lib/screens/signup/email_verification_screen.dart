@@ -21,9 +21,11 @@ class EmailVerificationScreen extends StatefulWidget {
     required this.role,
   }) : isSignIn = false;
 
-  const EmailVerificationScreen.signIn({super.key, required this.email})
-    : role = '',
-      isSignIn = true;
+  const EmailVerificationScreen.signIn({
+    super.key,
+    required this.email,
+    required this.role,
+  }) : isSignIn = true;
 
   @override
   State<EmailVerificationScreen> createState() =>

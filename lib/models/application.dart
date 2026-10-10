@@ -1,7 +1,9 @@
 /// Application status enum matching Django [Application.Status].
 enum ApplicationStatus {
   applied('APPLIED'),
-  screened('SCREENED'),
+  screened('SHORTLISTED'),
+  underReview('UNDER_REVIEW'),
+  rejected('REJECTED'),
   interviewed('INTERVIEWED'),
   decision('DECISION');
 
@@ -11,7 +13,9 @@ enum ApplicationStatus {
   static ApplicationStatus fromString(String val) {
     return switch (val.toUpperCase()) {
       'PENDING' || 'APPLIED' => ApplicationStatus.applied,
-      'SCREENING' || 'SCREENED' || 'SHORTLISTED' => ApplicationStatus.screened,
+      'SCREENED' || 'SHORTLISTED' => ApplicationStatus.screened,
+      'SCREENING' || 'UNDER_REVIEW' => ApplicationStatus.underReview,
+      'REJECTED' => ApplicationStatus.rejected,
       'INTERVIEWED' => ApplicationStatus.interviewed,
       'DECIDED' || 'DECISION' => ApplicationStatus.decision,
       _ => throw FormatException('Unknown application status: $val'),
@@ -25,13 +29,18 @@ enum ApplicationStatus {
     ApplicationStatus.applied => ApplicationStatus.screened,
     ApplicationStatus.screened => ApplicationStatus.interviewed,
     ApplicationStatus.interviewed => ApplicationStatus.decision,
-    ApplicationStatus.decision => null,
+    ApplicationStatus.decision || ApplicationStatus.rejected => null,
+    ApplicationStatus.underReview => ApplicationStatus.screened,
   };
 }
 
 /// Job Application model — mirrors Django's [ApplicationDetailSerializer]
 /// and [ApplicationListSerializer].
 class Application {
+  final int version;
+  final Map<String, dynamic>? assessment;
+  final List<String> allowedActions;
+  final bool eligibleForInterview;
   final String id;
   final String candidate;
   final String candidateEmail;
@@ -50,6 +59,10 @@ class Application {
   final DateTime? updatedAt;
 
   const Application({
+    this.version = 1,
+    this.assessment,
+    this.allowedActions = const [],
+    this.eligibleForInterview = false,
     required this.id,
     required this.candidate,
     required this.candidateEmail,
@@ -71,8 +84,16 @@ class Application {
   factory Application.fromJson(Map<String, dynamic> json) {
     final rawStatus = json['status'] as String;
     final scores = json['scores'] is Map ? json['scores'] as Map : const {};
-    double? numeric(dynamic value) => value is num ? value.toDouble() : null;
+    double? numeric(dynamic value) =>
+        value is num ? value.toDouble() : double.tryParse('$value');
     return Application(
+      version: (json['version'] as num?)?.toInt() ?? 1,
+      assessment: json['assessment'] is Map
+          ? Map<String, dynamic>.from(json['assessment'] as Map)
+          : null,
+      allowedActions:
+          (json['allowed_actions'] as List?)?.cast<String>() ?? const [],
+      eligibleForInterview: json['eligible_for_interview'] == true,
       id: json['id'] as String,
       candidate: json['candidate'] as String? ?? '',
       candidateEmail: json['candidate_email'] as String? ?? '',

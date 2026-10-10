@@ -84,6 +84,10 @@ enum ExperienceLevel {
 ///
 /// Returned by `GET /api/jobs/` and `GET /api/jobs/{id}/`.
 class Job {
+  final double screeningThreshold;
+  final bool autoShortlistEnabled;
+  final String nonPassPolicy;
+  final Map<String, dynamic> screeningCriteria;
   final String id;
   final String recruiter;
   final String recruiterCompany;
@@ -105,6 +109,10 @@ class Job {
   final double? averageScore;
 
   const Job({
+    this.screeningThreshold = 60,
+    this.autoShortlistEnabled = true,
+    this.nonPassPolicy = 'REVIEW',
+    this.screeningCriteria = const {},
     required this.id,
     required this.recruiter,
     required this.recruiterCompany,
@@ -138,6 +146,13 @@ class Job {
         ? json['average_match_score']
         : json['average_score'];
     return Job(
+      screeningThreshold:
+          double.tryParse("${json['screening_threshold']}") ?? 60,
+      autoShortlistEnabled: json['auto_shortlist_enabled'] == true,
+      nonPassPolicy: json['non_pass_policy'] as String? ?? 'REVIEW',
+      screeningCriteria: json['screening_criteria'] is Map
+          ? Map<String, dynamic>.from(json['screening_criteria'] as Map)
+          : const {},
       id: json['id'] as String,
       recruiter: json['recruiter'] as String,
       recruiterCompany: json['recruiter_company'] as String? ?? '',
@@ -176,6 +191,10 @@ class Job {
   ///
   /// Note: Status cannot be passed in write payloads per backend constraints.
   static Map<String, dynamic> writePayload({
+    double screeningThreshold = 60,
+    bool autoShortlistEnabled = true,
+    String nonPassPolicy = 'REVIEW',
+    Map<String, dynamic> screeningCriteria = const {},
     required String title,
     required String description,
     String? requirements,
@@ -187,6 +206,10 @@ class Job {
     required DateTime deadline,
   }) {
     final Map<String, dynamic> payload = {
+      'screening_threshold': screeningThreshold,
+      'auto_shortlist_enabled': autoShortlistEnabled,
+      'non_pass_policy': nonPassPolicy,
+      'screening_criteria': screeningCriteria,
       'title': title,
       'description': description,
       'requirements': requirements ?? '',
