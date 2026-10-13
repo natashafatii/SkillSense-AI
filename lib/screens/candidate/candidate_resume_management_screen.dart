@@ -1,7 +1,9 @@
+import '../../widgets/candidate_button_style.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../constants/app_colors.dart';
@@ -102,16 +104,20 @@ class _CandidateResumeManagementScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
+            style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
             child: Text(
               'Cancel',
-              style: GoogleFonts.inter(color: Colors.grey[700]),
+              style: GoogleFonts.inter(
+                color: CandidateButtonStyle.secondaryText,
+              ),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
+            style: CandidateButtonStyle.destructive(TextButton.styleFrom()),
             child: Text(
               'Yes, delete',
-              style: GoogleFonts.inter(color: Colors.red),
+              style: GoogleFonts.inter(color: CandidateButtonStyle.error),
             ),
           ),
         ],
@@ -426,7 +432,7 @@ class _CandidateResumeManagementScreenState
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 950;
+    final bool isMobile = screenWidth < 900;
 
     final bool hasResumes = _resumes.isNotEmpty;
 
@@ -478,7 +484,12 @@ class _CandidateResumeManagementScreenState
                         child: Column(
                           children: [
                             // Top Bar Header with Breadcrumb & Controls
-                            _buildTopBar(isMobile),
+                            RecruiterTopBar(
+                              pageTitle: 'Upload',
+                              breadcrumbSegments: const ['Resumes', 'Upload'],
+                              mobileTitle: 'Resumes',
+                              candidate: true,
+                            ),
 
                             // Main Scrollable Canvas
                             Expanded(
@@ -491,8 +502,7 @@ class _CandidateResumeManagementScreenState
                                   bottom: isMobile ? 100 : 32,
                                 ),
                                 child: LayoutBuilder(
-                                  builder: (context, constraints) =>
-                                      isMobile || constraints.maxWidth < 1050
+                                  builder: (context, constraints) => isMobile
                                       ? _buildMobileLayout(hasResumes)
                                       : _buildWebLayout(hasResumes),
                                 ),
@@ -848,21 +858,20 @@ class _CandidateResumeManagementScreenState
 
                           // Button: Browse files
                           Container(
-                            height: 25,
+                            height: 32,
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                                colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(11),
                               boxShadow: const [
                                 BoxShadow(
-                                  color: Color.fromRGBO(15, 184, 155, 0.8),
-                                  blurRadius: 24,
-                                  spreadRadius: -10,
-                                  offset: Offset(0, 10),
+                                  color: Color.fromRGBO(20, 181, 132, 0.22),
+                                  blurRadius: 14,
+                                  offset: Offset(0, 5),
                                 ),
                               ],
                             ),
@@ -1220,7 +1229,7 @@ class _CandidateResumeManagementScreenState
                           width: double.infinity,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                              colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -1233,10 +1242,9 @@ class _CandidateResumeManagementScreenState
                                         !_isFailed))
                                 ? const [
                                     BoxShadow(
-                                      color: Color.fromRGBO(15, 184, 155, 0.8),
-                                      blurRadius: 24,
-                                      spreadRadius: -10,
-                                      offset: Offset(0, 10),
+                                      color: Color.fromRGBO(20, 181, 132, 0.22),
+                                      blurRadius: 14,
+                                      offset: Offset(0, 5),
                                     ),
                                   ]
                                 : [],
@@ -1371,7 +1379,11 @@ class _CandidateResumeManagementScreenState
           // Conditional Render: Resumes List, Loading Spinner, OR Empty State
           if (_listError != null) ...[
             Text('Could not load resumes: ${_listError!}'),
-            TextButton(onPressed: _loadResumeList, child: const Text('Retry')),
+            TextButton(
+              onPressed: _loadResumeList,
+              style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+              child: const Text('Retry'),
+            ),
           ],
           if (_mutatingResume) const LinearProgressIndicator(),
           if (_isLoadingList)
@@ -1539,81 +1551,83 @@ class _CandidateResumeManagementScreenState
                     vertical: 40,
                   ),
                   child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Empty state graphic container
-                        Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color.fromRGBO(38, 51, 77, 0.08),
-                              width: 0.88,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Empty state graphic container
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color.fromRGBO(38, 51, 77, 0.08),
+                                width: 0.88,
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.note_add_outlined,
+                                color: Color(0xFF7A88A3),
+                                size: 26,
+                              ),
                             ),
                           ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.note_add_outlined,
-                              color: Color(0xFF7A88A3),
-                              size: 26,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
+                          const SizedBox(height: 12),
 
-                        Text(
-                          'No resumes uploaded yet',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF1B2740),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 280),
-                          child: Text(
-                            'Upload your first resume using the form on the left to extract skills, experience, and unlock automated AI match scoring.',
+                          Text(
+                            'No resumes uploaded yet',
                             textAlign: TextAlign.center,
-                            softWrap: true,
-                            style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF7A88A3),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w500,
-                              height: 1.45,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Helper chip
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE6F7F5),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            'Supports PDF & DOCX up to 5MB',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.spaceGrotesk(
-                              color: AppColors.dashboardTeal,
-                              fontSize: 10,
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF1B2740),
+                              fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 6),
+
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 280),
+                            child: Text(
+                              'Upload your first resume using the form on the left to extract skills, experience, and unlock automated AI match scoring.',
+                              textAlign: TextAlign.center,
+                              softWrap: true,
+                              style: GoogleFonts.spaceGrotesk(
+                                color: const Color(0xFF7A88A3),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w500,
+                                height: 1.45,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Helper chip
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE6F7F5),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              'Supports PDF & DOCX up to 5MB',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.spaceGrotesk(
+                                color: AppColors.dashboardTeal,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -1721,14 +1735,14 @@ class _CandidateResumeManagementScreenState
           mainAxisSize: MainAxisSize.min,
           children: [
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
+              style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                 backgroundColor: AppColors.dashboardTeal,
                 foregroundColor: const Color(0xFF0F172A),
                 minimumSize: const Size(double.infinity, 44),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-              ),
+              )),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(
@@ -1742,14 +1756,14 @@ class _CandidateResumeManagementScreenState
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
+              style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E293B),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 44),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-              ),
+              )),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(
@@ -1763,14 +1777,14 @@ class _CandidateResumeManagementScreenState
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
+              style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E293B),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 44),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-              ),
+              )),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(

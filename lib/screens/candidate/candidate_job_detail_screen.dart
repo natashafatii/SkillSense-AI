@@ -1,6 +1,8 @@
+import '../../widgets/candidate_button_style.dart';
 import '../application_screening_screen.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
@@ -73,6 +75,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
   String? _applicationStateMessage;
 
   ResumeDetail? _resumeDetail;
+  bool? _hasUploadedResume;
+  bool _warnedMissingJobScore = false;
   bool _isLoadingResume = true;
   bool _isLoadingSkills = true;
   List<JobSkill>? _jobSkills;
@@ -100,6 +104,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     _skillsFailed = false;
     _isLoadingSkills = true;
     _resumeDetail = null;
+    _hasUploadedResume = null;
+    _warnedMissingJobScore = false;
     _isLoadingResume = true;
     _jobError = null;
     _isLoadingJob = true;
@@ -122,6 +128,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           _job = job;
           _isLoadingJob = false;
         });
+        _warnIfMissingJobScore();
       }
     } catch (_) {
       if (mounted && request == _jobRequest && jobId == widget.jobId) {
@@ -136,11 +143,25 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       final detail =
           await (widget.loadActiveResume?.call() ??
               ResumeService.ensureActiveDetailCached());
+      bool? hasUploadedResume = detail != null ? true : null;
+      if (detail == null) {
+        if (widget.loadActiveResume != null) {
+          hasUploadedResume = false;
+        } else {
+          try {
+            hasUploadedResume = (await ResumeService.listResumes()).isNotEmpty;
+          } catch (_) {
+            // Keep resume presence unknown when the API cannot confirm it.
+          }
+        }
+      }
       if (mounted && request == _jobRequest && jobId == widget.jobId) {
         setState(() {
           _resumeDetail = detail;
+          _hasUploadedResume = hasUploadedResume;
           _isLoadingResume = false;
         });
+        _warnIfMissingJobScore();
         if (detail != null && _needsParsing(detail)) {
           _pollActiveResume(detail.id, request);
         }
@@ -193,12 +214,28 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
             await (widget.pollResume?.call(id) ??
                 ResumeService.getResumeDetail(id));
         if (mounted && request == _jobRequest && _resumeDetail?.id == id) {
-          setState(() => _resumeDetail = detail);
+          setState(() {
+            _resumeDetail = detail;
+            _hasUploadedResume = true;
+          });
+          _warnIfMissingJobScore();
         }
       } catch (_) {
         // Transient request errors retry on the next tick.
       }
     }
+  }
+
+  void _warnIfMissingJobScore() {
+    if (_warnedMissingJobScore ||
+        _job == null ||
+        _resumeDetail?.isParsed != true ||
+        _job!.matchScore != null)
+      return;
+    _warnedMissingJobScore = true;
+    debugPrint(
+      'Job ${_job!.id} has no match_score for a candidate with a parsed resume.',
+    );
   }
 
   void _applyJob() {
@@ -220,14 +257,14 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     Widget buildModal(BuildContext dialogContext) => _ApplyModalWidget(
       jobTitle: _job!.title,
       companyInfo:
-          '${_job!.recruiterCompany} · ${_job!.location}${_job!.salary.isNotEmpty ? ' · ${_job!.salary}' : ''}',
+          '${_job!.recruiterCompany} · ${_job!.location} · ${_job!.salary.trim().isEmpty ? 'Salary not specified' : _job!.salary}',
       loadResumes: widget.loadApplyResumes,
       loadResumeDetail: widget.loadApplyResumeDetail,
       isMobile: isMobile,
-      onSubmit: (resumeId, name, bytes) {
+      onSubmit: (resumeId, name, bytes, coverNote) {
         Navigator.of(dialogContext).pop();
         if (mounted && widget.jobId == modalJobId && _job?.id == modalJobId) {
-          _submitApplicationAndPoll(resumeId, name, bytes);
+          _submitApplicationAndPoll(resumeId, name, bytes, coverNote);
         }
       },
     );
@@ -248,6 +285,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     String? resumeId,
     String? fileName,
     Uint8List? bytes,
+    String coverNote,
   ) async {
     if (!mounted || _isSubmitting || _job == null) return;
     final request = ++_submissionRequest;
@@ -264,6 +302,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               ) ??
               ApplicationService.submitApplication(
                 jobId: jobId,
+                coverNote: coverNote,
                 resumeId: resumeId,
                 fileName: fileName,
                 fileBytes: bytes,
@@ -432,9 +471,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
+            style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
               backgroundColor: AppColors.dashboardTeal,
-            ),
+            )),
             onPressed: () {
               Navigator.pop(context);
               Navigator.pushReplacement(
@@ -473,6 +512,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                 onPressed: () => Navigator.of(
                   context,
                 ).pushReplacementNamed('/candidate/jobs'),
+                style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
                 child: const Text('Back to jobs'),
               ),
             ],
@@ -540,12 +580,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       Expanded(
                         child: Column(
                           children: [
-                            _buildTopBar(
-                              isMobile,
-                              textPrimary,
-                              textSecondary,
-                              cardBg,
-                              cardBorder,
+                            RecruiterTopBar(
+                              pageTitle: 'Job detail',
+                              candidate: true,
                             ),
                             Expanded(
                               child: SingleChildScrollView(
@@ -724,9 +761,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         ? 0
         : DateTime.now().difference(_job!.createdAt).inDays;
     final String timeAgo = daysAgo == 0 ? 'today' : '${daysAgo}d ago';
-    final String salary = _job != null
-        ? _getSalaryStr(_job!.experienceLevel)
-        : '';
+    final String salary = _job?.salary.trim().isNotEmpty == true
+        ? _job!.salary
+        : 'Salary not specified';
 
     String initials = '??';
     if (_job?.recruiterCompany.isNotEmpty == true) {
@@ -785,7 +822,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                     child: Text(
                       _job == null
                           ? ''
-                          : '${_job!.recruiterCompany} · ${_job!.location} · $salary · posted $timeAgo',
+                          : '${_job!.recruiterCompany.isNotEmpty ? '${_job!.recruiterCompany} · ' : ''}${_job!.location} · $salary · posted $timeAgo',
                       style: GoogleFonts.inter(
                         color: textSecondary,
                         fontSize: isMobile ? 12 : 13,
@@ -813,17 +850,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         ),
       ],
     );
-  }
-
-  String _getSalaryStr(ExperienceLevel level) {
-    switch (level) {
-      case ExperienceLevel.entry:
-        return '\$60k - \$80k';
-      case ExperienceLevel.mid:
-        return '\$90k - \$130k';
-      case ExperienceLevel.senior:
-        return '\$140k - \$190k';
-    }
   }
 
   Widget _buildTagChip(String text) {
@@ -987,9 +1013,18 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     Color cardBg,
     Color cardBorder,
   ) {
-    final double? score = null;
+    final rawScore = _job?.matchScore;
+    final double? score =
+        rawScore != null &&
+            rawScore.isFinite &&
+            rawScore >= 0 &&
+            rawScore <= 100
+        ? rawScore
+        : null;
     final bool hasScore = score != null;
-    final ringColor = hasScore ? _getRingColor(score) : Colors.transparent;
+    final ringColor = hasScore
+        ? _getRingColor(score!)
+        : const Color(0xFFCBD5E1);
 
     return Stack(
       children: [
@@ -1023,108 +1058,83 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           ),
           child: Column(
             children: [
-              if (hasScore) ...[
-                SizedBox(
-                  width: 104,
-                  height: 104,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      TweenAnimationBuilder<double>(
-                        tween: Tween<double>(begin: 0, end: 1),
-                        duration: const Duration(milliseconds: 1000),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, child) {
-                          return CustomPaint(
-                            size: const Size(104, 104),
-                            painter: _RingPainter(
-                              progress: (score / 100) * value,
-                              ringColor: ringColor,
-                              trackColor: const Color(
-                                0xFFF1F5F9,
-                              ), // Lighter track for this UI
-                            ),
-                          );
-                        },
+              SizedBox(
+                width: 104,
+                height: 104,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 1000),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) => CustomPaint(
+                        size: const Size(104, 104),
+                        painter: _RingPainter(
+                          progress: hasScore ? (score! / 100) * value : 0,
+                          ringColor: ringColor,
+                          trackColor: const Color(0xFFF1F5F9),
+                        ),
                       ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${score.round()}',
-                            style: GoogleFonts.spaceGrotesk(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              color: textPrimary,
-                              height: 1.0,
-                            ),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          hasScore ? '${score!.round()}' : '—',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: hasScore
+                                ? textPrimary
+                                : const Color(0xFF94A3B8),
+                            height: 1.0,
                           ),
-                          Text(
-                            'MATCH',
-                            style: GoogleFonts.inter(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF94A3B8),
-                              letterSpacing: 1.0,
-                            ),
+                        ),
+                        Text(
+                          'MATCH',
+                          style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF94A3B8),
+                            letterSpacing: 1.0,
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                hasScore ? 'Match score' : 'Match unavailable',
+                style: GoogleFonts.inter(
+                  color: hasScore ? textPrimary : textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (!hasScore && _hasUploadedResume == false)
                 Text(
-                  'Excellent match',
-                  style: GoogleFonts.inter(
-                    color: textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  'Upload a resume to see your match score.',
+                  style: GoogleFonts.inter(color: textSecondary, fontSize: 12),
                 ),
-                Text(
-                  'Top 4% of jobs for your profile',
-                  style: GoogleFonts.inter(
-                    color: textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ] else ...[
-                Text(
-                  'No verified score',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Match unavailable',
-                  style: GoogleFonts.inter(
-                    color: textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
               const SizedBox(height: 20),
 
               // Apply Button
               Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.dashboardTeal.withValues(alpha: 0.3),
+                      color: CandidateButtonStyle.teal.withValues(alpha: 0.22),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     ),
                   ],
                 ),
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
+                  style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                     backgroundColor: AppColors.dashboardTeal,
                     shadowColor: Colors.transparent,
                     foregroundColor: Colors.white,
@@ -1132,7 +1142,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-                  ),
+                  )),
                   onPressed: _isApplied || _isSubmitting || _job == null
                       ? null
                       : _applyJob,
@@ -1141,7 +1151,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                         ? 'Applied · ${_applicationId ?? ''}'
                         : (_isSubmitting
                               ? 'Submitting...'
-                              : (hasScore
+                              : (_hasUploadedResume == true
                                     ? 'Apply with default resume'
                                     : 'Apply with a resume')),
                     style: GoogleFonts.inter(
@@ -1274,14 +1284,14 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
+                    style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                       backgroundColor: AppColors.dashboardTeal,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                    ),
+                    )),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -1379,7 +1389,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               child: Text(
                 'Manage resumes',
                 style: GoogleFonts.inter(
-                  color: AppColors.dashboardTeal,
+                  color: CandidateButtonStyle.deepTeal,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -1570,6 +1580,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
+            style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
             child: const Text('Close'),
           ),
         ],
@@ -1944,7 +1955,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     VoidCallback? onTap,
   }) {
     String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+    if (icon == Icons.notifications_none_rounded ||
+        icon == Icons.notifications_outlined ||
+        icon == Icons.notifications) {
       tooltip = 'Notifications';
     } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
       tooltip = 'Theme & settings';
@@ -2009,7 +2022,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
   }
 
   Color _getRingColor(double score) {
-    if (score == 0) return const Color(0xFFCBD5E1);
     if (score >= 85) return const Color(0xFF10B981);
     if (score >= 70) return const Color(0xFF32BAB1);
     if (score >= 55) return const Color(0xFFF59E0B);
@@ -2092,7 +2104,12 @@ class _ApplyModalWidget extends StatefulWidget {
   final String companyInfo;
   final Future<List<Map<String, dynamic>>> Function()? loadResumes;
   final Future<ResumeDetail> Function(String id)? loadResumeDetail;
-  final void Function(String? resumeId, String? fileName, Uint8List? fileBytes)
+  final void Function(
+    String? resumeId,
+    String? fileName,
+    Uint8List? fileBytes,
+    String coverNote,
+  )
   onSubmit;
   final bool isMobile;
 
@@ -2113,7 +2130,6 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
   List<Map<String, dynamic>> _resumes = [];
   String? _selectedResumeId;
   bool _isLoadingResumes = true;
-  bool _consentGiven = false;
 
   ResumeDetail? _parsedDetail;
   bool _isLoadingDetail = false;
@@ -2238,8 +2254,8 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
   }
 
   void _submit() {
-    if (_selectedResumeId == null || !_consentGiven) return;
-    widget.onSubmit(_selectedResumeId, null, null);
+    if (_selectedResumeId == null) return;
+    widget.onSubmit(_selectedResumeId, null, null, _noteController.text);
   }
 
   Widget _buildParsedContent() {
@@ -2310,10 +2326,13 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                 Navigator.of(context, rootNavigator: true).pop();
                 Navigator.pushReplacementNamed(context, '/candidate/resumes');
               },
+              style: TextButton.styleFrom(
+                foregroundColor: CandidateButtonStyle.deepTeal,
+              ),
               child: Text(
                 'Manage resumes',
                 style: GoogleFonts.inter(
-                  color: AppColors.dashboardTeal,
+                  color: CandidateButtonStyle.deepTeal,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -2666,18 +2685,6 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     ),
                   ],
                 ),
-                Material(
-                  color: Colors.transparent,
-                  child: CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _consentGiven,
-                    onChanged: (value) =>
-                        setState(() => _consentGiven = value ?? false),
-                    title: const Text(
-                      'I agree to send my resume text to Google Gemini for parsing and application screening.',
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -2685,18 +2692,18 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                       child: TextButton(
                         onPressed: () =>
                             Navigator.of(context, rootNavigator: true).pop(),
-                        style: TextButton.styleFrom(
+                        style: CandidateButtonStyle.secondary(TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           backgroundColor: const Color(0xFFF1F5F9),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
                           ),
-                        ),
+                        )),
                         child: Text(
                           'Cancel',
                           style: GoogleFonts.inter(
                             fontWeight: FontWeight.bold,
-                            color: const Color(0xFF475569),
+                            color: CandidateButtonStyle.secondaryText,
                           ),
                         ),
                       ),
@@ -2705,12 +2712,10 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed:
-                            _selectedResumeId == null ||
-                                _isLoadingResumes ||
-                                !_consentGiven
+                            _selectedResumeId == null || _isLoadingResumes
                             ? null
                             : _submit,
-                        style: ElevatedButton.styleFrom(
+                        style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           backgroundColor: AppColors.dashboardTeal,
                           foregroundColor: Colors.white,
@@ -2718,7 +2723,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
                           ),
-                        ),
+                        )),
                         child: Text(
                           'Submit application',
                           style: GoogleFonts.inter(fontWeight: FontWeight.bold),

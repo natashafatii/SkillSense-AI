@@ -1,33 +1,26 @@
-import 'dart:ui';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../../constants/app_colors.dart';
-import 'candidate_home_screen.dart';
-import 'candidate_applications_screen.dart';
-import 'candidate_job_feed_screen.dart';
-import 'candidate_interview_history_screen.dart';
-import 'candidate_resume_management_screen.dart';
-import 'candidate_interview_lobby_screen.dart';
-import 'candidate_feedback_report_screen.dart';
-import '../../services/auth_service.dart';
-import '../../widgets/candidate_side_nav.dart';
-import 'candidate_notifications_screen.dart';
-import '../../models/candidate_profile.dart';
-import '../../services/profile_service.dart';
-import '../../services/api_exception.dart';
+import '../../widgets/candidate_button_style.dart';
+import 'dart:async';
 
-// Global / Static theme preference so it persists across screen transitions in the prototype
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../../models/candidate_profile.dart';
+import '../../services/api_exception.dart';
+import '../../services/auth_service.dart';
+import '../../services/profile_service.dart';
+import '../../widgets/candidate_scaffold.dart';
+import '../../widgets/recruiter_top_bar.dart';
+import 'candidate_notifications_screen.dart';
+
 enum AppThemeMode { daylight, night, auto }
 
-/// Candidate Profile & Settings Screen (CD-10)
-/// Layout: Left Navigation Rail (Web) & Mobile Bottom Navigation Dock
+/// Candidate Profile & Settings (CD-10). The spacing follows the supplied
+/// profile reference, with the candidate console's teal accent.
 class CandidateProfileSettingsScreen extends StatefulWidget {
   static AppThemeMode currentTheme = AppThemeMode.daylight;
 
-  final Future<CandidateProfile> Function()? loadProfile;
+  final Future<CandidateProfile?> Function()? loadProfile;
 
   const CandidateProfileSettingsScreen({super.key, this.loadProfile});
 
@@ -36,1322 +29,2033 @@ class CandidateProfileSettingsScreen extends StatefulWidget {
       _CandidateProfileSettingsScreenState();
 }
 
+class _Colors {
+  final bool dark;
+  const _Colors(this.dark);
+
+  Color get bg => dark ? const Color(0xFF070B14) : const Color(0xFFF4F6FB);
+  Color get surface => dark ? const Color(0xFF0D1424) : Colors.white;
+  Color get surface2 =>
+      dark ? const Color(0xFF111A2E) : const Color(0xFFF7F9FD);
+  Color get field => dark ? const Color(0xFF0A1120) : Colors.white;
+  Color get border => dark ? const Color(0x2494AADC) : const Color(0xFFE0E5F0);
+  Color get border2 => dark ? const Color(0x4794AADC) : const Color(0xFFC8D0E3);
+  Color get text => dark ? const Color(0xFFE8EDF8) : const Color(0xFF16213A);
+  Color get text2 => dark ? const Color(0xFFA3AFC8) : const Color(0xFF4A5875);
+  Color get text3 => dark ? const Color(0xFF6E7C99) : const Color(0xFF74829E);
+  Color get accent => dark ? const Color(0xFF2EE6C8) : const Color(0xFF10A778);
+  Color get accentSoft =>
+      dark ? const Color(0x242EE6C8) : const Color(0x1710A778);
+  Color get accentBorder =>
+      dark ? const Color(0x472EE6C8) : const Color(0x4710A778);
+  Color get error => dark ? const Color(0xFFFF7B7B) : const Color(0xFFD64545);
+}
+
+class _Detail {
+  final String key;
+  final String label;
+  final String placeholder;
+  const _Detail(this.key, this.label, this.placeholder);
+}
+
+const _details = [
+  _Detail('headline', 'Headline', 'e.g. Backend developer'),
+  _Detail('location', 'Location and experience', 'e.g. Lahore, 3 years'),
+  _Detail('phone', 'Phone', '+92 300 1234567'),
+  _Detail('linkedin', 'LinkedIn', 'linkedin.com/in/yourname'),
+  _Detail('portfolio', 'Portfolio', 'yourname.com'),
+];
+
 class _CandidateProfileSettingsScreenState
-    extends State<CandidateProfileSettingsScreen>
-    with TickerProviderStateMixin {
-  final int _activeNavIndex = 5; // Profile/Settings is index 5
-  late AnimationController _strengthController;
-  late Animation<double> _strengthAnimation;
-
-  // Toggle Switches State
-  bool _reminders = true;
-  bool _matchedJobs = true;
-  bool _feedbackReady = true;
-  bool _recruiterViews = false;
-
-  // User profile state
-  bool _isLoadingProfile = true;
-  String? _profileError;
-
-  CandidateProfile? _candidateProfile;
-  final _editPhoneController = TextEditingController();
-  final _editLocationController = TextEditingController();
-  final _editLinkedinController = TextEditingController();
-  final _editPortfolioController = TextEditingController();
-  final _editExperienceController = TextEditingController();
-  final _editHeadlineController = TextEditingController();
+    extends State<CandidateProfileSettingsScreen> {
+  static const _signOutRed = Color(0xFFE85D5B);
+  CandidateProfile? _profile;
+  final Map<String, String> _values = {
+    for (final detail in _details) detail.key: '',
+  };
+  final List<int> _sections = [0, 0, 0, 0];
+  final List<bool> _notifications = [true, true, true, false];
+  final TextEditingController _editor = TextEditingController();
+  final FocusNode _editFocus = FocusNode();
+  final ScrollController _mobileScroll = ScrollController();
+  int _mobileTab = 0;
+  String? _editing;
+  String? _toast;
+  Timer? _toastTimer;
+  bool _signingOut = false;
+  bool _requestingExport = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCandidateProfile();
-    _strengthController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _strengthAnimation = Tween<double>(begin: 0, end: 0).animate(
-      CurvedAnimation(parent: _strengthController, curve: Curves.easeOutCubic),
-    );
+    _editFocus.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _loadProfile();
   }
 
-  Future<void> _loadCandidateProfile() async {
-    setState(() {
-      _isLoadingProfile = true;
-      _profileError = null;
-    });
+  Future<void> _loadProfile({bool forceRefresh = false}) async {
     try {
       final profile =
           await (widget.loadProfile?.call() ??
-              ProfileService.getCandidateProfile());
-      if (mounted) {
-        setState(() {
-          _candidateProfile = profile;
-          _isLoadingProfile = false;
-        });
+              ProfileService.getCandidateProfile(forceRefresh: forceRefresh));
+      if (!mounted || profile == null) return;
+      setState(() {
+        _profile = profile;
+        _values['headline'] = profile.headline;
+        _values['location'] = [
+          if (profile.location.trim().isNotEmpty) profile.location.trim(),
+          if (profile.yearsExperience != null)
+            '${profile.yearsExperience} years',
+        ].join(', ');
+        _values['phone'] = profile.phone;
+        _values['linkedin'] = profile.linkedinUrl;
+        _values['portfolio'] = profile.portfolioUrl;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      if (error.statusCode == 401) {
+        await _signOut();
+      } else {
+        _showToast(error.message);
       }
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        if (!mounted) return;
-        try {
-          await AuthService.signOut(context);
-          if (mounted) Navigator.of(context).pushReplacementNamed('/login');
-        } catch (error) {
-          if (mounted) {
-            setState(() {
-              _isLoadingProfile = false;
-              _profileError = 'Sign out failed: $error';
-            });
-          }
-        }
-        return;
-      }
-      if (mounted) {
-        setState(() {
-          _isLoadingProfile = false;
-          _profileError = e.message;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingProfile = false;
-          _profileError = e.toString();
-        });
-      }
+    } catch (_) {
+      // The screen remains usable while a profile service is unavailable.
     }
   }
 
   @override
   void dispose() {
-    _strengthController.dispose();
-    _editPhoneController.dispose();
-    _editLocationController.dispose();
-    _editLinkedinController.dispose();
-    _editPortfolioController.dispose();
-    _editExperienceController.dispose();
-    _editHeadlineController.dispose();
+    _toastTimer?.cancel();
+    _editor.dispose();
+    _editFocus.dispose();
+    _mobileScroll.dispose();
     super.dispose();
   }
 
   void _showToast(String message) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          message,
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
+    _toastTimer?.cancel();
+    setState(() => _toast = message);
+    _toastTimer = Timer(const Duration(milliseconds: 2400), () {
+      if (mounted) setState(() => _toast = null);
+    });
   }
 
-  Future<void> _showEditProfileDialog(BuildContext context) async {
-    final currentPhone = _candidateProfile?.phone ?? '';
-    final currentLocation = _candidateProfile?.location ?? '';
-    final currentLinkedin = _candidateProfile?.linkedinUrl ?? '';
-    final currentPortfolio = _candidateProfile?.portfolioUrl ?? '';
-    final currentExp = _candidateProfile?.yearsExperience?.toString() ?? '';
-    final currentHeadline = _candidateProfile?.headline ?? '';
+  void _beginEdit(String key) {
+    setState(() {
+      _editing = key;
+      _editor.text = _values[key] ?? '';
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _editFocus.requestFocus();
+    });
+  }
 
-    final phoneController = _editPhoneController..text = currentPhone;
-    final locationController = _editLocationController..text = currentLocation;
-    final linkedinController = _editLinkedinController..text = currentLinkedin;
-    final portfolioController = _editPortfolioController
-      ..text = currentPortfolio;
-    final expController = _editExperienceController..text = currentExp;
-    final headlineController = _editHeadlineController..text = currentHeadline;
+  void _cancelEdit() => setState(() => _editing = null);
 
-    String? errorMessage;
-    Map<String, dynamic> fieldErrors = {};
-    bool isSaving = false;
+  Future<void> _saveEdit() async {
+    final key = _editing;
+    if (key == null) return;
+    final value = _editor.text.trim();
+    setState(() {
+      _values[key] = value;
+      _editing = null;
+    });
+    _showToast('Saved');
+    if (widget.loadProfile != null) return;
 
-    Future<void> closeDialog(
-      BuildContext dialogContext, [
-      CandidateProfile? result,
-    ]) async {
-      FocusScope.of(dialogContext).unfocus();
-      WidgetsBinding.instance.scheduleFrame();
-      await WidgetsBinding.instance.endOfFrame;
-      if (dialogContext.mounted) Navigator.of(dialogContext).pop(result);
+    final patch = <String, dynamic>{};
+    switch (key) {
+      case 'headline':
+        patch['headline'] = value;
+      case 'phone':
+        patch['phone'] = value;
+      case 'linkedin':
+        patch['linkedin_url'] = value;
+      case 'portfolio':
+        patch['portfolio_url'] = value;
+      case 'location':
+        final match = RegExp(
+          r'^(.*?),\s*(\d+)\s*years?$',
+          caseSensitive: false,
+        ).firstMatch(value);
+        patch['location'] = match?.group(1)?.trim() ?? value;
+        if (match != null) {
+          patch['years_experience'] = int.parse(match.group(2)!);
+        }
     }
+    try {
+      final updated = await ProfileService.updateCandidateProfile(patch);
+      if (mounted) setState(() => _profile = updated);
+    } catch (_) {
+      if (mounted) _showToast('Could not sync this change. Please try again.');
+    }
+  }
 
-    final updatedProfile = await showDialog<CandidateProfile>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          String? getFieldError(String key) {
-            final err = fieldErrors[key];
-            if (err == null) return null;
-            if (err is List && err.isNotEmpty) return err.first.toString();
-            return err.toString();
-          }
+  void _openResumes() {
+    Navigator.of(context).pushNamed('/candidate/resumes');
+  }
 
-          Widget buildTextField(
-            String label,
-            TextEditingController controller,
-            String key, {
-            String? placeholder,
-            TextInputType? keyboardType,
-          }) {
-            final errorText = getFieldError(key);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: TextField(
-                controller: controller,
-                keyboardType: keyboardType,
-                style: GoogleFonts.inter(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: label,
-                  hintText: placeholder,
-                  hintStyle: GoogleFonts.inter(color: const Color(0xFF475569)),
-                  errorText: errorText,
-                  labelStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF334155)),
+  Future<void> _openProfileEditor() async {
+    if (_profile == null) await _loadProfile(forceRefresh: true);
+    if (!mounted) return;
+    final profile = _profile;
+    final initial = <String, String>{
+      'first_name': profile?.user.firstName ?? AuthService.firstName,
+      'last_name': profile?.user.lastName ?? AuthService.lastName,
+      'headline': profile?.headline ?? '',
+      'location': profile?.location ?? '',
+      'phone': profile?.phone ?? '',
+      'linkedin_url': profile?.linkedinUrl ?? '',
+      'portfolio_url': profile?.portfolioUrl ?? '',
+      'years_experience': profile?.yearsExperience?.toString() ?? '',
+    };
+    final edited = Map<String, String>.from(initial);
+    bool saving = false;
+    String? errorMessage;
+
+    await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Widget field(String key, String label, {TextInputType? inputType}) =>
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: TextFormField(
+                    key: Key('candidate-profile-edit-$key'),
+                    initialValue: initial[key],
+                    onChanged: (value) => edited[key] = value,
+                    keyboardType: inputType,
+                    enabled: !saving,
+                    decoration: InputDecoration(
+                      labelText: label,
+                      border: const OutlineInputBorder(),
+                    ),
                   ),
-                  focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.dashboardTeal),
+                );
+
+            Future<void> save() async {
+              if (saving) return;
+              final values = {
+                for (final entry in edited.entries)
+                  entry.key: entry.value.trim(),
+              };
+              final yearsText = values['years_experience']!;
+              final years = yearsText.isEmpty ? null : int.tryParse(yearsText);
+              if (yearsText.isNotEmpty && (years == null || years < 0)) {
+                setDialogState(() => errorMessage = 'Enter valid years of experience.');
+                return;
+              }
+              final patch = <String, dynamic>{};
+              for (final key in [
+                'headline',
+                'location',
+                'phone',
+                'linkedin_url',
+                'portfolio_url',
+              ]) {
+                if (values[key] != initial[key]) patch[key] = values[key];
+              }
+              if (yearsText != initial['years_experience']) {
+                patch['years_experience'] = years;
+              }
+              final firstChanged = values['first_name'] != initial['first_name'];
+              final lastChanged = values['last_name'] != initial['last_name'];
+              setDialogState(() {
+                saving = true;
+                errorMessage = null;
+              });
+              try {
+                if (patch.isNotEmpty) {
+                  await ProfileService.updateCandidateProfile(patch);
+                }
+                if (firstChanged || lastChanged) {
+                  await AuthService.updateUserProfile(
+                    firstName: firstChanged ? values['first_name'] : null,
+                    lastName: lastChanged ? values['last_name'] : null,
+                  );
+                }
+                await _loadProfile(forceRefresh: true);
+                if (!mounted || !dialogContext.mounted) return;
+                Navigator.of(dialogContext).pop();
+                _showToast('Profile saved.');
+              } catch (error) {
+                if (!mounted || !dialogContext.mounted) return;
+                if (error is ApiException && error.statusCode == 401) {
+                  Navigator.of(dialogContext).pop();
+                  await _signOut();
+                  return;
+                }
+                setDialogState(() {
+                  errorMessage = error is ApiException
+                      ? error.message
+                      : 'Could not save your profile. Please try again.';
+                });
+              } finally {
+                if (dialogContext.mounted) {
+                  setDialogState(() => saving = false);
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Edit profile'),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      field('first_name', 'First name'),
+                      field('last_name', 'Last name'),
+                      field('headline', 'Headline'),
+                      field('location', 'Location'),
+                      field('phone', 'Phone', inputType: TextInputType.phone),
+                      field('linkedin_url', 'LinkedIn', inputType: TextInputType.url),
+                      field('portfolio_url', 'Portfolio', inputType: TextInputType.url),
+                      field('years_experience', 'Years of experience',
+                          inputType: TextInputType.number),
+                      if (errorMessage != null)
+                        Text(errorMessage!, style: const TextStyle(color: Colors.red)),
+                    ],
                   ),
                 ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
+                  style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: saving ? null : save,
+                  style: CandidateButtonStyle.primary(TextButton.styleFrom()),
+                  child: Text(saving ? 'Saving…' : 'Save'),
+                ),
+              ],
             );
-          }
+          },
+        ),
+    );
+  }
 
-          return AlertDialog(
-            backgroundColor: const Color(0xFF0F172A),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Text(
-              'Edit Profile',
-              style: GoogleFonts.spaceGrotesk(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            content: SingleChildScrollView(
+  Future<void> _openAccountManagement() async {
+    final user = _profile?.user;
+    String first = user?.firstName ?? AuthService.firstName;
+    String last = user?.lastName ?? AuthService.lastName;
+    bool saving = false;
+    String? errorMessage;
+    await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Account management'),
+            content: SizedBox(
+              width: 380,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  TextFormField(
+                    initialValue: first,
+                    onChanged: (value) => first = value,
+                    enabled: !saving,
+                    decoration: const InputDecoration(labelText: 'First name'),
+                  ),
+                  TextFormField(
+                    initialValue: last,
+                    onChanged: (value) => last = value,
+                    enabled: !saving,
+                    decoration: const InputDecoration(labelText: 'Last name'),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(user?.email ?? AuthService.currentUserData?['email']?.toString() ?? ''),
                   if (errorMessage != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(8),
-                      color: Colors.red.withValues(alpha: 0.1),
-                      child: Text(
-                        errorMessage!,
-                        style: const TextStyle(color: Colors.red, fontSize: 12),
-                      ),
-                    ),
-                  buildTextField(
-                    'Phone',
-                    phoneController,
-                    'phone',
-                    placeholder: 'Enter your phone number',
-                  ),
-                  buildTextField(
-                    'Location',
-                    locationController,
-                    'location',
-                    placeholder: 'e.g. Lahore',
-                  ),
-                  buildTextField(
-                    'LinkedIn URL',
-                    linkedinController,
-                    'linkedin_url',
-                    placeholder: 'Enter your LinkedIn URL',
-                  ),
-                  buildTextField(
-                    'Portfolio URL',
-                    portfolioController,
-                    'portfolio_url',
-                    placeholder: 'Enter your portfolio URL',
-                  ),
-                  buildTextField(
-                    'Years of Experience',
-                    expController,
-                    'years_experience',
-                    placeholder: 'e.g. 4',
-                    keyboardType: TextInputType.number,
-                  ),
-                  buildTextField(
-                    'Headline',
-                    headlineController,
-                    'headline',
-                    placeholder: 'e.g. Senior Django Developer',
-                  ),
+                    Text(errorMessage!, style: const TextStyle(color: Colors.red)),
                 ],
               ),
             ),
             actions: [
               TextButton(
-                onPressed: isSaving ? null : () => closeDialog(context),
-                child: Text(
-                  'Cancel',
-                  style: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
-                ),
+                onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
+                style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+                child: const Text('Cancel'),
               ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.dashboardTeal,
-                  foregroundColor: const Color(0xFF0F172A),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: isSaving
+              TextButton(
+                onPressed: saving
                     ? null
                     : () async {
-                        setState(() {
-                          isSaving = true;
+                        setDialogState(() {
+                          saving = true;
                           errorMessage = null;
-                          fieldErrors = {};
                         });
                         try {
-                          final newPhone = phoneController.text.trim();
-                          final newLoc = locationController.text.trim();
-                          final newLi = linkedinController.text.trim();
-                          final newPort = portfolioController.text.trim();
-                          final newExpStr = expController.text.trim();
-                          final newHeadline = headlineController.text.trim();
-
-                          int? expValue;
-                          if (newExpStr.isNotEmpty) {
-                            expValue = int.tryParse(newExpStr);
-                            if (expValue == null) {
-                              setState(() {
-                                isSaving = false;
-                                fieldErrors['years_experience'] =
-                                    'Must be a valid number';
-                              });
-                              return;
-                            }
-                          }
-
-                          final patchData = <String, dynamic>{};
-                          if (newPhone != (_candidateProfile?.phone ?? '')) {
-                            patchData['phone'] = newPhone;
-                          }
-                          if (newLoc != (_candidateProfile?.location ?? '')) {
-                            patchData['location'] = newLoc;
-                          }
-                          if (newLi != (_candidateProfile?.linkedinUrl ?? '')) {
-                            patchData['linkedin_url'] = newLi;
-                          }
-                          if (newPort !=
-                              (_candidateProfile?.portfolioUrl ?? '')) {
-                            patchData['portfolio_url'] = newPort;
-                          }
-                          if (expValue != _candidateProfile?.yearsExperience) {
-                            patchData['years_experience'] = expValue;
-                          }
-                          if (newHeadline !=
-                              (_candidateProfile?.headline ?? '')) {
-                            patchData['headline'] = newHeadline;
-                          }
-
-                          if (patchData.isEmpty) {
-                            if (context.mounted) await closeDialog(context);
-                            return;
-                          }
-
-                          final updatedProfile =
-                              await ProfileService.updateCandidateProfile(
-                                patchData,
-                              );
-
-                          if (context.mounted) {
-                            await closeDialog(context, updatedProfile);
-                          }
-                        } on ApiException catch (e) {
-                          if (e.statusCode == 401) {
-                            if (context.mounted) {
-                              await closeDialog(context);
-                            }
-                            if (mounted) {
-                              try {
-                                await AuthService.signOut(this.context);
-                                if (mounted) {
-                                  Navigator.of(
-                                    this.context,
-                                  ).pushReplacementNamed('/login');
-                                }
-                              } catch (error) {
-                                if (mounted) {
-                                  _showToast('Sign out failed: $error');
-                                }
-                              }
-                            }
-                            return;
-                          }
-
-                          if (e.statusCode == 403) {
-                            setState(() {
-                              isSaving = false;
-                              errorMessage =
-                                  'You are not authorized as a candidate.';
-                            });
-                            return;
-                          }
-
-                          if (e.statusCode == 400 && e.fieldErrors != null) {
-                            setState(() {
-                              isSaving = false;
-                              fieldErrors = e.fieldErrors!;
-                              errorMessage = 'Please fix the errors below.';
-                            });
-                            return;
-                          }
-
-                          setState(() {
-                            isSaving = false;
-                            errorMessage = e.message;
+                          await AuthService.updateUserProfile(
+                            firstName: first,
+                            lastName: last,
+                          );
+                          await _loadProfile(forceRefresh: true);
+                          if (!mounted || !dialogContext.mounted) return;
+                          Navigator.of(dialogContext).pop();
+                          _showToast('Account updated.');
+                        } catch (error) {
+                          if (!mounted || !dialogContext.mounted) return;
+                          setDialogState(() {
+                            errorMessage = error is ApiException
+                                ? error.message
+                                : 'Could not update your account.';
                           });
-                        } catch (e) {
-                          setState(() {
-                            isSaving = false;
-                            errorMessage = 'An unexpected error occurred.';
-                          });
+                        } finally {
+                          if (dialogContext.mounted) {
+                            setDialogState(() => saving = false);
+                          }
                         }
                       },
-                child: isSaving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFF0F172A),
-                        ),
-                      )
-                    : Text(
-                        'Save',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-                      ),
+                style: CandidateButtonStyle.primary(TextButton.styleFrom()),
+                child: Text(saving ? 'Saving…' : 'Save'),
               ),
+            ],
+          ),
+        ),
+    );
+  }
+
+  Future<void> _requestDataExport() async {
+    if (_requestingExport) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        content: const Text('Request a copy of your account data?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: CandidateButtonStyle.primary(TextButton.styleFrom()),
+            child: const Text('Request'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _requestingExport = true);
+    try {
+      await ProfileService.requestCandidateDataExport();
+      if (mounted) _showToast("Data export requested. We'll email you a link");
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      if (error.statusCode == 401) {
+        await _signOut();
+      } else {
+        _showToast(error.message);
+      }
+    } catch (_) {
+      if (mounted) _showToast('Could not request your data. Please try again.');
+    } finally {
+      if (mounted) setState(() => _requestingExport = false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    if (_signingOut) return;
+    final navigator = Navigator.of(context);
+    setState(() => _signingOut = true);
+    try {
+      await AuthService.signOut(context);
+      if (navigator.mounted) {
+        navigator.pushNamedAndRemoveUntil('/login', (_) => false);
+      }
+    } catch (error) {
+      if (mounted) _showToast('Sign out failed: $error');
+    } finally {
+      if (mounted) setState(() => _signingOut = false);
+    }
+  }
+
+  Future<void> _confirmSignOut() async {
+    if (_signingOut) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        content: const Text(
+          "Sign out of SkillSense? You'll need to sign in again to access your account.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: CandidateButtonStyle.destructive(TextButton.styleFrom()),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) await _signOut();
+  }
+
+  Widget _signOutButton(_Colors c, {required bool mobile}) => SizedBox(
+    width: double.infinity,
+    height: mobile ? 50 : 40,
+    child: OutlinedButton(
+      key: Key(mobile ? 'candidate-mobile-sign-out' : 'candidate-web-sign-out'),
+      onPressed: _signingOut ? null : _confirmSignOut,
+      style: CandidateButtonStyle.destructive(
+        OutlinedButton.styleFrom(), radius: mobile ? 14 : 12,
+      ),
+      child: Text(
+        'Sign out',
+        style: _inter(mobile ? 16 : 13.5, _signOutRed, weight: FontWeight.w600),
+      ),
+    ),
+  );
+
+  int get _filled =>
+      _values.values.where((value) => value.trim().isNotEmpty).length;
+  int get _strength =>
+      ((_filled / 5) * 40 + (_sections.reduce((a, b) => a + b) / 4) * .6)
+          .round();
+  String get _strengthHelper => _strength == 100
+      ? 'Your profile is complete.'
+      : _filled < 5
+      ? 'Finish your details, then add a resume and skills.'
+      : 'Add your resume and skills to get a match score.';
+
+  bool _isDark(BuildContext context) =>
+      CandidateProfileSettingsScreen.currentTheme == AppThemeMode.night ||
+      (CandidateProfileSettingsScreen.currentTheme == AppThemeMode.auto &&
+          MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+
+  TextStyle _inter(
+    double size,
+    Color color, {
+    FontWeight weight = FontWeight.w400,
+    double? height,
+  }) => GoogleFonts.inter(
+    fontSize: size,
+    color: color,
+    fontWeight: weight,
+    height: height,
+  );
+  TextStyle _grotesk(
+    double size,
+    Color color, {
+    FontWeight weight = FontWeight.w700,
+  }) => GoogleFonts.spaceGrotesk(
+    fontSize: size,
+    color: color,
+    fontWeight: weight,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _Colors(_isDark(context));
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 900) return _mobileLayout(c);
+    final narrow = width < 1060;
+    final mobile = width < 640;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    return CandidateScaffold(
+      currentRoute:
+          '', // Keep the Profile avatar neutral in this screen's rail.
+      body: Scaffold(
+        backgroundColor: c.bg,
+        body: SafeArea(
+          bottom: false,
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  const RecruiterTopBar(
+                    pageTitle: 'Profile & settings',
+                    candidate: true,
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1320),
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              mobile ? 16 : 32,
+                              0,
+                              mobile ? 16 : 32,
+                              64,
+                            ),
+                            child: Column(
+                              children: [
+                                _identity(c, mobile),
+                                if (narrow)
+                                  Column(
+                                    children: [
+                                      _leftCard(c, narrow, mobile),
+                                      const SizedBox(height: 24),
+                                      _rightCards(c, mobile, reducedMotion),
+                                    ],
+                                  )
+                                else
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: _leftCard(c, narrow, mobile),
+                                      ),
+                                      const SizedBox(width: 24),
+                                      SizedBox(
+                                        width: 380,
+                                        child: _rightCards(
+                                          c,
+                                          mobile,
+                                          reducedMotion,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 24,
+                child: IgnorePointer(
+                  child: AnimatedSlide(
+                    offset: _toast == null ? const Offset(0, .5) : Offset.zero,
+                    duration: reducedMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 250),
+                    child: AnimatedOpacity(
+                      opacity: _toast == null ? 0 : 1,
+                      duration: reducedMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 250),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF16213A),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            _toast ?? '',
+                            style: _inter(
+                              14,
+                              const Color(0xFFF4F6FB),
+                              weight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _selectMobileTab(int tab) {
+    if (_mobileTab == tab) return;
+    setState(() => _mobileTab = tab);
+    if (_mobileScroll.hasClients) _mobileScroll.jumpTo(0);
+  }
+
+  Widget _mobileLayout(_Colors c) {
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    return Scaffold(
+      backgroundColor: c.bg,
+      body: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final content = Stack(
+              children: [
+                Column(
+                  children: [
+                    Container(
+                      key: const Key('candidate-profile-mobile-top-bar'),
+                      decoration: BoxDecoration(
+                        color: c.surface,
+                        border: Border(bottom: BorderSide(color: c.border)),
+                      ),
+                      child: Column(
+                        children: [
+                          const RecruiterTopBar(
+                            pageTitle: 'Profile & settings',
+                            mobileTitle: 'Profile',
+                            candidate: true,
+                          ),
+                          Padding(
+                            key: const Key('candidate-profile-mobile-tabs'),
+                            padding: const EdgeInsets.symmetric(horizontal: 18),
+                            child: Row(
+                              children: [
+                                _mobileTabButton('Profile', 0, c),
+                                _mobileTabButton('Settings', 1, c),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: _mobileScroll,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            16,
+                            16,
+                            84 + safeBottom,
+                          ),
+                          child: Column(
+                            children: _mobileTab == 0
+                                ? _mobileProfileCards(c)
+                                : _mobileSettingsCards(c, reducedMotion),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _mobileNav(c, safeBottom),
+                ),
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 92 + safeBottom,
+                  child: IgnorePointer(
+                    child: AnimatedSlide(
+                      offset: _toast == null
+                          ? const Offset(0, .5)
+                          : Offset.zero,
+                      duration: reducedMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 250),
+                      child: AnimatedOpacity(
+                        opacity: _toast == null ? 0 : 1,
+                        duration: reducedMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 250),
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF16213A),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _toast ?? '',
+                              textAlign: TextAlign.center,
+                              style: _inter(
+                                14,
+                                const Color(0xFFF4F6FB),
+                                weight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+
+            return SizedBox(
+              key: const Key('candidate-profile-mobile-frame'),
+              width: constraints.maxWidth,
+              height: constraints.maxHeight,
+              child: content,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileTabButton(String label, int tab, _Colors c) => Expanded(
+    child: Semantics(
+      selected: _mobileTab == tab,
+      child: InkWell(
+        onTap: () => _selectMobileTab(tab),
+        child: SizedBox(
+          height: 46,
+          child: Stack(
+            children: [
+              Center(
+                child: Text(
+                  label,
+                  style: _inter(
+                    15,
+                    _mobileTab == tab ? c.text : c.text3,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (_mobileTab == tab)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: FractionallySizedBox(
+                      widthFactor: .6,
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: c.accent,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(3),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  List<Widget> _mobileProfileCards(_Colors c) => [
+    _mobileIdentity(c),
+    const SizedBox(height: 14),
+    _mobileStrength(c),
+    const SizedBox(height: 14),
+    _mobileDetails(c),
+    const SizedBox(height: 14),
+    _mobileSections(c),
+    const SizedBox(height: 14),
+    _mobileResumes(c),
+  ];
+
+  Widget _mobileCard(_Colors c, Widget child) => Container(
+    width: double.infinity,
+    clipBehavior: Clip.antiAlias,
+    decoration: BoxDecoration(
+      color: c.surface,
+      border: Border.all(color: c.border),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: child,
+  );
+
+  Widget _mobileIdentity(_Colors c) {
+    final user = _profile?.user;
+    final name = [
+      user?.firstName,
+      user?.lastName,
+    ].where((s) => s != null && s.trim().isNotEmpty).join(' ');
+    final displayName = name.isEmpty ? 'Candidate' : name;
+    final initials = name.isEmpty
+        ? 'CA'
+        : name
+              .split(RegExp(r'\s+'))
+              .take(2)
+              .map((part) => part[0].toUpperCase())
+              .join();
+    return _mobileCard(
+      c,
+      Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 68,
+                  height: 68,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: c.accentSoft,
+                    border: Border.all(color: c.accentBorder),
+                  ),
+                  child: Text(
+                    initials,
+                    style: _inter(24, c.accent, weight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _grotesk(
+                          22,
+                          c.text,
+                        ).copyWith(letterSpacing: -.33, height: 1.2),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        user?.email ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: _inter(14, c.text2),
+                      ),
+                      Text('Candidate account', style: _inter(13, c.text3)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _mobileButton(
+              'Edit profile',
+              c,
+              primary: true,
+              onPressed: _openProfileEditor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileStrength(_Colors c) => _mobileCard(
+    c,
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 76,
+            height: 76,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox.expand(
+                  child: CircularProgressIndicator(
+                    value: 1,
+                    strokeWidth: 7,
+                    color: c.border,
+                  ),
+                ),
+                SizedBox.expand(
+                  child: CircularProgressIndicator(
+                    value: _strength / 100,
+                    strokeWidth: 7,
+                    strokeCap: StrokeCap.round,
+                    color: c.accent,
+                  ),
+                ),
+                Text(
+                  '$_strength%',
+                  style: _grotesk(18, c.text).copyWith(
+                    fontFeatures: [const FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Profile strength',
+                  style: _inter(16, c.text, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(_strengthHelper, style: _inter(14, c.text2, height: 1.4)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _mobileHeading(String title, _Colors c, {String? count}) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 20, 18, 6),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: _inter(17, c.text, weight: FontWeight.w600),
+          ),
+        ),
+        if (count != null) Text(count, style: _inter(13, c.text3)),
+      ],
+    ),
+  );
+
+  Widget _mobileDetails(_Colors c) => _mobileCard(
+    c,
+    Column(
+      children: [
+        _mobileHeading('Personal details', c, count: '$_filled of 5'),
+        for (final detail in _details) _mobileDetailRow(detail, c),
+      ],
+    ),
+  );
+
+  Widget _mobileDetailRow(_Detail detail, _Colors c) {
+    final value = _values[detail.key] ?? '';
+    return Material(
+      color: c.surface,
+      child: InkWell(
+        splashColor: c.accentSoft,
+        highlightColor: c.accentSoft,
+        onTap: () => _openMobileSheet(detail, c),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 62),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: c.border)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(detail.label, style: _inter(12.5, c.text3)),
+                    Text(
+                      value.isEmpty ? 'Not added' : value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _inter(
+                        15.5,
+                        value.isEmpty ? c.text3 : c.text,
+                        weight: value.isEmpty
+                            ? FontWeight.w400
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              value.isEmpty
+                  ? Text(
+                      'Add',
+                      style: _inter(14, c.accent, weight: FontWeight.w600),
+                    )
+                  : Icon(Icons.chevron_right_rounded, color: c.text3, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileSections(_Colors c) => _mobileCard(
+    c,
+    Column(
+      children: [
+        _mobileHeading('Profile sections', c),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final tileWidth = (constraints.maxWidth - 12) / 2;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _mobileTile(
+                    0,
+                    'Experience',
+                    'Jobs and internships',
+                    tileWidth,
+                    c,
+                  ),
+                  _mobileTile(1, 'Skills', 'What you can do', tileWidth, c),
+                  _mobileTile(
+                    2,
+                    'Education',
+                    'Degrees and courses',
+                    tileWidth,
+                    c,
+                  ),
+                  _mobileTile(3, 'Projects', "Work you've built", tileWidth, c),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _mobileTile(
+    int index,
+    String title,
+    String subtitle,
+    double width,
+    _Colors c,
+  ) => Material(
+    color: c.surface2,
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      onTap: _openResumes,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: width,
+        height: 180,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          border: Border.all(color: c.border),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: _inter(15, c.text, weight: FontWeight.w600)),
+            Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _inter(12.5, c.text3, height: 1.3),
+            ),
+            const Spacer(),
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${_sections[index]}',
+                    style: _grotesk(26, c.text),
+                  ),
+                  TextSpan(text: '%', style: _grotesk(13, c.text3)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: _sections[index] / 100,
+                minHeight: 4,
+                backgroundColor: c.border,
+                color: c.accent,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('Add', style: _inter(14, c.accent, weight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _mobileResumes(_Colors c) => _mobileCard(
+    c,
+    Padding(
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Resumes', style: _inter(17, c.text, weight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(
+            'Upload a resume to unlock your match score.',
+            style: _inter(14, c.text2),
+          ),
+          const SizedBox(height: 16),
+          _mobileButton(
+            'Manage resumes',
+            c,
+            primary: true,
+            onPressed: _openResumes,
+          ),
+        ],
+      ),
+    ),
+  );
+
+  List<Widget> _mobileSettingsCards(_Colors c, bool reducedMotion) => [
+    _mobileCard(
+      c,
+      Column(
+        children: [
+          _mobileHeading('Notifications', c),
+          _mobileNotification(
+            0,
+            'Interview reminders',
+            'Email and push, 24 hours and 1 hour before',
+            c,
+            reducedMotion,
+          ),
+          _mobileNotification(
+            1,
+            'New matched jobs',
+            'Daily digest',
+            c,
+            reducedMotion,
+          ),
+          _mobileNotification(
+            2,
+            'Feedback ready',
+            'Push notification immediately',
+            c,
+            reducedMotion,
+          ),
+          _mobileNotification(
+            3,
+            'Recruiter views',
+            'Weekly summary',
+            c,
+            reducedMotion,
+          ),
+        ],
+      ),
+    ),
+    const SizedBox(height: 14),
+    _mobileCard(
+      c,
+      Column(
+        children: [
+          _mobileHeading('Appearance and account', c),
+          _mobileSettingRow(
+            'Theme',
+            null,
+            _themeControl(
+              c,
+              mobile: true,
+              compact: MediaQuery.sizeOf(context).width < 400,
+            ),
+            c,
+          ),
+          _mobileSettingRow(
+            'Signed in with Clerk',
+            'Google SSO, session lasts 30 days',
+            _button(
+              'Manage',
+              c,
+              onPressed: _openAccountManagement,
+            ),
+            c,
+          ),
+          _mobileSettingRow(
+            'Download my data',
+            'Interviews, scores and recordings',
+            _button(
+              'Request',
+              c,
+              onPressed: _requestDataExport,
+            ),
+            c,
+          ),
+        ],
+      ),
+    ),
+    const SizedBox(height: 14),
+    _signOutButton(c, mobile: true),
+  ];
+
+  Widget _mobileNotification(
+    int index,
+    String title,
+    String subtitle,
+    _Colors c,
+    bool reducedMotion,
+  ) => Container(
+    constraints: const BoxConstraints(minHeight: 64),
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: c.border)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: _inter(15.5, c.text, weight: FontWeight.w600)),
+              Text(subtitle, style: _inter(13, c.text3, height: 1.35)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Semantics(
+          label: title,
+          toggled: _notifications[index],
+          child: GestureDetector(
+            onTap: () =>
+                setState(() => _notifications[index] = !_notifications[index]),
+            child: AnimatedContainer(
+              duration: reducedMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 200),
+              width: 50,
+              height: 30,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: _notifications[index] ? c.accent : c.border2,
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: AnimatedAlign(
+                duration: reducedMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 200),
+                alignment: _notifications[index]
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _mobileSettingRow(
+    String title,
+    String? subtitle,
+    Widget action,
+    _Colors c,
+  ) => Container(
+    constraints: const BoxConstraints(minHeight: 64),
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: c.border)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _inter(15.5, c.text, weight: FontWeight.w600),
+              ),
+              if (subtitle != null)
+                Text(subtitle, style: _inter(13, c.text3, height: 1.35)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        action,
+      ],
+    ),
+  );
+
+  Widget _mobileButton(
+    String label,
+    _Colors c, {
+    required VoidCallback onPressed,
+    bool primary = false,
+  }) => Container(
+    width: double.infinity,
+    height: 50,
+    decoration: primary
+        ? CandidateButtonStyle.primaryDecoration(radius: 14)
+        : null,
+    child: OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        backgroundColor: primary ? Colors.transparent : Colors.white,
+        side: BorderSide(
+          color: primary ? Colors.transparent : CandidateButtonStyle.edge,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      child: Text(
+        label,
+        style: _inter(
+          16,
+          primary ? Colors.white : CandidateButtonStyle.secondaryText,
+          weight: FontWeight.w600,
+        ),
+      ),
+    ),
+  );
+
+  Widget _mobileNav(_Colors c, double safeBottom) {
+    final items = <(String, IconData, String)>[
+      ('Home', Icons.home_outlined, '/candidate/home'),
+      ('Jobs', Icons.work_outline_rounded, '/candidate/jobs'),
+      ('Interviews', Icons.mic_none_rounded, '/candidate/interviews'),
+      ('Profile', Icons.person_outline_rounded, '/candidate/profile'),
+    ];
+    return Container(
+      key: const Key('candidate-profile-mobile-nav'),
+      padding: EdgeInsets.fromLTRB(8, 6, 8, 6 + safeBottom),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(top: BorderSide(color: c.border)),
+      ),
+      child: Row(
+        children: [
+          for (final item in items)
+            Expanded(
+              child: InkWell(
+                onTap: item.$1 == 'Profile'
+                    ? null
+                    : () => Navigator.of(context).pushReplacementNamed(item.$3),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        item.$2,
+                        size: 22,
+                        color: item.$1 == 'Profile' ? c.accent : c.text3,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.$1,
+                        style: _inter(
+                          11.5,
+                          item.$1 == 'Profile' ? c.accent : c.text3,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openMobileSheet(_Detail detail, _Colors c) async {
+    _editing = detail.key;
+    _editor.text = _values[detail.key] ?? '';
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final sheetContext = context;
+    final focusTimer = Timer(const Duration(milliseconds: 150), () {
+      if (mounted) _editFocus.requestFocus();
+    });
+    await showModalBottomSheet<void>(
+      context: sheetContext,
+      isScrollControlled: true,
+      barrierColor: const Color(0x80070B14),
+      backgroundColor: Colors.transparent,
+      sheetAnimationStyle: reducedMotion
+          ? AnimationStyle.noAnimation
+          : const AnimationStyle(duration: Duration(milliseconds: 300)),
+      builder: (modalContext) => Align(
+        alignment: Alignment.bottomCenter,
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(modalContext).bottom,
+            ),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                10,
+                18,
+                22 + MediaQuery.paddingOf(modalContext).bottom,
+              ),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(22),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 5,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      decoration: BoxDecoration(
+                        color: c.border2,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                  ),
+                  Text(detail.label, style: _grotesk(19, c.text)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'This shows on your profile to recruiters.',
+                    style: _inter(14, c.text3),
+                  ),
+                  const SizedBox(height: 14),
+                  Focus(
+                    onKeyEvent: (node, event) {
+                      if (event is KeyDownEvent &&
+                          event.logicalKey == LogicalKeyboardKey.escape) {
+                        Navigator.of(modalContext).pop();
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(color: c.accentSoft, spreadRadius: 4),
+                        ],
+                      ),
+                      child: TextField(
+                        controller: _editor,
+                        focusNode: _editFocus,
+                        keyboardType: detail.key == 'phone'
+                            ? TextInputType.phone
+                            : (detail.key == 'linkedin' ||
+                                  detail.key == 'portfolio')
+                            ? TextInputType.url
+                            : TextInputType.text,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) {
+                          Navigator.of(modalContext).pop();
+                          _saveEdit();
+                        },
+                        style: _inter(16, c.text),
+                        decoration: InputDecoration(
+                          hintText: detail.placeholder,
+                          hintStyle: _inter(16, c.text3),
+                          filled: true,
+                          fillColor: c.field,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 14,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: c.accent),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: c.accent),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 10,
+                        child: _mobileButton(
+                          'Cancel',
+                          c,
+                          onPressed: () => Navigator.of(modalContext).pop(),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 14,
+                        child: _mobileButton(
+                          'Save',
+                          c,
+                          primary: true,
+                          onPressed: () {
+                            Navigator.of(modalContext).pop();
+                            _saveEdit();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    focusTimer.cancel();
+    _editFocus.unfocus();
+    _editing = null;
+  }
+
+  Widget _topBar(_Colors c, bool narrow, bool mobile) => Container(
+    height: 58,
+    padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
+    decoration: BoxDecoration(
+      color: c.surface,
+      border: Border(bottom: BorderSide(color: c.border)),
+    ),
+    child: Row(
+      children: [
+        Text('Profile', style: _inter(13.5, c.text3)),
+        const SizedBox(width: 8),
+        Text('/', style: _inter(13.5, c.text3)),
+        const SizedBox(width: 8),
+        Text('Settings', style: _inter(13.5, c.text, weight: FontWeight.w600)),
+        const Spacer(),
+        if (!narrow) ...[
+          Container(
+            width: 300,
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: c.surface2,
+              border: Border.all(color: c.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.search, size: 17, color: c.text3),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Search or jump to…',
+                    style: _inter(13.5, c.text3),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: c.border),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '⌘K',
+                    style: _inter(11, c.text3, weight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+        ],
+        SizedBox(
+          width: 36,
+          height: 36,
+          child: Stack(
+            children: [
+              IconButton(
+                tooltip: 'Notifications',
+                padding: EdgeInsets.zero,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CandidateNotificationsScreen(),
+                  ),
+                ),
+                icon: Icon(
+                  Icons.notifications_none_rounded,
+                  size: 20,
+                  color: c.text2,
+                ),
+              ),
+              Positioned(
+                top: 7,
+                right: 8,
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: c.accent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: c.surface, width: 1.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 36,
+          height: 36,
+          child: IconButton(
+            tooltip: 'Sign Out',
+            padding: EdgeInsets.zero,
+            onPressed: _signingOut ? null : _confirmSignOut,
+            icon: Icon(Icons.logout_rounded, size: 19, color: c.error),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _identity(_Colors c, bool mobile) {
+    final user = _profile?.user;
+    final name = [
+      user?.firstName,
+      user?.lastName,
+    ].where((s) => s != null && s.trim().isNotEmpty).join(' ');
+    final displayName = name.isEmpty ? 'Candidate' : name;
+    final initials = name.isEmpty
+        ? 'CA'
+        : name
+              .split(RegExp(r'\s+'))
+              .take(2)
+              .map((part) => part[0].toUpperCase())
+              .join();
+    final avatarSize = mobile ? 68.0 : 88.0;
+    final avatar = Container(
+      width: avatarSize,
+      height: avatarSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: c.accentSoft,
+        border: Border.all(color: c.accentBorder),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: _inter(mobile ? 24 : 30, c.accent, weight: FontWeight.w600),
+      ),
+    );
+    final who = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          displayName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _grotesk(
+            mobile ? 26 : 32,
+            c.text,
+          ).copyWith(letterSpacing: -.02 * (mobile ? 26 : 32), height: 1.15),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 5,
+          children: [
+            Text(user?.email ?? '', style: _inter(15, c.text2)),
+            Text('Candidate account', style: _inter(15, c.text3)),
+          ],
+        ),
+      ],
+    );
+    final strength = _strengthCard(c);
+    final edit = _button(
+      'Edit profile',
+      c,
+      onPressed: _openProfileEditor,
+    );
+    if (mobile) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 34, bottom: 30),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                avatar,
+                const SizedBox(width: 18),
+                Expanded(child: who),
+              ],
+            ),
+            const SizedBox(height: 18),
+            strength,
+            const SizedBox(height: 18),
+            edit,
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 34, bottom: 30),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tight = constraints.maxWidth < 900;
+          if (tight) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    avatar,
+                    const SizedBox(width: 28),
+                    Expanded(child: who),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Flexible(child: strength),
+                    const SizedBox(width: 20),
+                    edit,
+                  ],
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              avatar,
+              const SizedBox(width: 28),
+              Expanded(child: who),
+              const SizedBox(width: 28),
+              strength,
+              const SizedBox(width: 28),
+              edit,
             ],
           );
         },
       ),
     );
-    if (mounted && updatedProfile != null) {
-      setState(() => _candidateProfile = updatedProfile);
-      _showToast('Profile updated successfully.');
-    }
   }
 
-  void _requestDataExport() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Download My Data',
-          style: GoogleFonts.spaceGrotesk(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(
-          "We'll prepare your data export and email you a download link within 24 hours. Continue?",
-          style: GoogleFonts.inter(color: const Color(0xFFE2E8F0), height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.dashboardTeal,
-              foregroundColor: const Color(0xFF0F172A),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-              _showToast(
-                'Export requested — you\'ll receive an email within 24 hours.',
-              );
-            },
-            child: Text(
-              'Request export',
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
+  Widget _strengthCard(_Colors c) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 400),
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 22, 14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(14),
       ),
-    );
-  }
-
-  void _showInterviewOptions(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Interviews Section',
-          style: GoogleFonts.spaceGrotesk(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.dashboardTeal,
-                foregroundColor: const Color(0xFF0F172A),
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateInterviewHistoryScreen(),
-                  ),
-                );
-              },
-              child: Text(
-                'Interview History (CD-09)',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateInterviewLobbyScreen(),
-                  ),
-                );
-              },
-              child: Text(
-                'Interview Lobby (CD-05)',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Color(0xFF334155)),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateFeedbackReportScreen(),
-                  ),
-                );
-              },
-              child: Text(
-                'Feedback Report (CD-07)',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 900;
-
-    // Theme values configuration
-    final bool isNightMode =
-        CandidateProfileSettingsScreen.currentTheme == AppThemeMode.night ||
-        (CandidateProfileSettingsScreen.currentTheme == AppThemeMode.auto &&
-            MediaQuery.of(context).platformBrightness == Brightness.dark);
-
-    final Color bgBase = isNightMode
-        ? const Color(0xFF0B0F19)
-        : const Color(0xFFF8FAFC);
-    final Color textPrimary = isNightMode
-        ? Colors.white
-        : const Color(0xFF0F172A);
-    final Color textSecondary = isNightMode
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF64748B);
-    final Color cardBg = isNightMode ? const Color(0xFF1E293B) : Colors.white;
-    final Color cardBorder = isNightMode
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
-
-    return Scaffold(
-      backgroundColor: bgBase,
-      body: Stack(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Grid Painter Background
-          Positioned.fill(
-            child: CustomPaint(
-              painter: GridPainter(
-                color: isNightMode
-                    ? Colors.white.withValues(alpha: 0.015)
-                    : Colors.black.withValues(alpha: 0.015),
-              ),
-            ),
-          ),
-
-          // Teal Aurora Glow
-          Positioned(
-            top: isMobile ? -50 : -120,
-            left: isMobile ? 20 : 180,
-            child: Container(
-              width: isMobile ? 300 : 450,
-              height: isMobile ? 300 : 450,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.dashboardTeal.withValues(
-                  alpha: isNightMode ? 0.08 : 0.04,
-                ),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-          ),
-
-          // Content Wrapper
-          SafeArea(
-            bottom: false,
-            child: Column(
+          SizedBox(
+            width: 64,
+            height: 64,
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      // Left Rail (Web Only)
-                      if (!isMobile)
-                        const CandidateSideNav(
-                          currentRoute: '/candidate/profile',
-                        ),
-
-                      // Main Canvas
-                      Expanded(
-                        child: Column(
-                          children: [
-                            _buildTopBar(
-                              isMobile,
-                              textPrimary,
-                              textSecondary,
-                              cardBg,
-                              cardBorder,
-                              isNightMode,
-                            ),
-                            Expanded(
-                              child: SingleChildScrollView(
-                                physics: const BouncingScrollPhysics(),
-                                padding: EdgeInsets.only(
-                                  left: isMobile ? 16 : 24,
-                                  right: isMobile ? 16 : 24,
-                                  top: 16,
-                                  bottom: isMobile ? 100 : 32,
-                                ),
-                                child: isMobile
-                                    ? _buildMobileLayout(
-                                        textPrimary,
-                                        textSecondary,
-                                        cardBg,
-                                        cardBorder,
-                                        isNightMode,
-                                      )
-                                    : _buildWebLayout(
-                                        textPrimary,
-                                        textSecondary,
-                                        cardBg,
-                                        cardBorder,
-                                        isNightMode,
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                SizedBox.expand(
+                  child: CircularProgressIndicator(
+                    value: 1,
+                    strokeWidth: 6,
+                    color: c.border,
+                  ),
+                ),
+                SizedBox.expand(
+                  child: CircularProgressIndicator(
+                    value: _strength / 100,
+                    strokeWidth: 6,
+                    color: c.accent,
+                    strokeCap: StrokeCap.round,
+                  ),
+                ),
+                Text(
+                  '$_strength%',
+                  style: _grotesk(16, c.text).copyWith(
+                    fontFeatures: [const FontFeature.tabularFigures()],
                   ),
                 ),
               ],
             ),
           ),
-
-          // Bottom Navigation Dock (Mobile Only)
-          if (isMobile)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildMobileBottomDock(isNightMode),
+          const SizedBox(width: 16),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Profile strength',
+                  style: _inter(14.5, c.text, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(_strengthHelper, style: _inter(13, c.text2, height: 1.4)),
+              ],
             ),
+          ),
         ],
       ),
-    );
-  }
+    ),
+  );
 
-  // ── WEB LAYOUT ─────────────────────────────────────────────────────────────
-  Widget _buildWebLayout(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isNightMode,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Left Column: Profile Strength + Sections completeness (1.4fr)
-        Expanded(
-          flex: 14,
-          child: Column(
-            children: [
-              _buildProfileStrengthCard(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-                isNightMode,
-                false,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 24),
+  Widget _card(_Colors c, Widget child) => Container(
+    decoration: BoxDecoration(
+      color: c.surface,
+      border: Border.all(color: c.border),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: child,
+  );
 
-        // Right Column: Notifications + Appearance (1fr)
-        Expanded(
-          flex: 10,
-          child: Column(
-            children: [
-              _buildNotificationsPanel(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-                isNightMode,
-              ),
-              const SizedBox(height: 20),
-              _buildAppearancePanel(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-                isNightMode,
-                false,
-              ),
-            ],
-          ),
+  Widget _sectionHeading(String title, _Colors c, {String? count}) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _inter(16, c.text, weight: FontWeight.w600),
         ),
-      ],
-    );
-  }
-
-  // ── MOBILE LAYOUT ──────────────────────────────────────────────────────────
-  Widget _buildMobileLayout(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isNightMode,
-  ) {
-    return Column(
-      children: [
-        _buildProfileStrengthCard(
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          isNightMode,
-          true,
-        ),
-        const SizedBox(height: 16),
-        _buildNotificationsPanel(
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          isNightMode,
-        ),
-        const SizedBox(height: 16),
-        _buildAppearancePanel(
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          isNightMode,
-          true,
-        ),
-      ],
-    );
-  }
-
-  // ── PROFILE STRENGTH CARD ──────────────────────────────────────────────────
-  Widget _buildProfileStrengthCard(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isNightMode,
-    bool isMobile,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Hero Row
-          Row(
+      if (count != null) ...[
+        const SizedBox(width: 8),
+        Text(count, style: _inter(13, c.text3)),
+      ],
+    ],
+  );
+
+  Widget _leftCard(_Colors c, bool narrow, bool mobile) {
+    final paddingX = mobile ? 18.0 : 30.0;
+    final detailRows = mobile
+        ? Column(
+            children: _details.map((detail) => _detailRow(detail, c)).toList(),
+          )
+        : Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                children: [
-                  AnimatedBuilder(
-                    animation: _strengthAnimation,
-                    builder: (context, child) {
-                      return _buildScoreRing(
-                        isMobile ? 64 : 84,
-                        _strengthAnimation.value,
-                        AppColors.dashboardTeal,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'PROFILE',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: AppColors.dashboardTeal,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 20),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ValueListenableBuilder<CandidateProfile?>(
-                      valueListenable: ProfileService.currentProfileNotifier,
-                      builder: (context, profile, child) {
-                        if (_isLoadingProfile) {
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: CircularProgressIndicator(
-                                color: AppColors.dashboardTeal,
-                              ),
-                            ),
-                          );
-                        }
-                        if (_profileError != null) {
-                          return Text(
-                            'Error: ',
-                            style: const TextStyle(color: Colors.red),
-                          );
-                        }
-
-                        final shownProfile = _candidateProfile ?? profile;
-                        final fn = shownProfile?.user.firstName?.trim() ?? '';
-                        final ln = shownProfile?.user.lastName?.trim() ?? '';
-                        final email = shownProfile?.user.email.trim() ?? '';
-
-                        String fullName = '';
-                        if (fn.isNotEmpty || ln.isNotEmpty) {
-                          fullName = '$fn $ln'.trim();
-                        } else if (email.isNotEmpty) {
-                          final prefix = email.split('@').first;
-                          fullName = prefix.isNotEmpty
-                              ? prefix[0].toUpperCase() + prefix.substring(1)
-                              : email;
-                        } else {
-                          fullName = 'Candidate User';
-                        }
-
-                        String initials = '';
-                        if (fn.isNotEmpty) {
-                          initials =
-                              fn[0].toUpperCase() +
-                              (ln.isNotEmpty ? ln[0].toUpperCase() : '');
-                        } else if (email.isNotEmpty) {
-                          initials = email[0].toUpperCase();
-                        } else {
-                          initials = 'C';
-                        }
-
-                        Widget buildMissing(String label) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        '$label: ',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.inter(
-                                          color: textSecondary,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Not added',
-                                      style: GoogleFonts.inter(
-                                        color: textSecondary.withValues(alpha: 0.6),
-                                        fontSize: 12,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              _HoverableAddLink(
-                                onTap: () => _showEditProfileDialog(context),
-                                baseColor: textSecondary,
-                                hoverColor: textPrimary,
-                              ),
-                            ],
-                          );
-                        }
-
-                        Widget buildIconRow(IconData icon, String text) {
-                          return Row(
-                            children: [
-                              Icon(icon, size: 14, color: textSecondary),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  text,
-                                  style: GoogleFonts.inter(
-                                    color: textSecondary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          );
-                        }
-
-                        Widget buildLinkRow(IconData icon, String url) {
-                          return Row(
-                            children: [
-                              Icon(icon, size: 14, color: textSecondary),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Tooltip(
-                                  message: url,
-                                  child: InkWell(
-                                    onTap: () async {
-                                      final uri = Uri.parse(
-                                        url.startsWith('http')
-                                            ? url
-                                            : 'https://$url',
-                                      );
-                                      if (await canLaunchUrl(uri)) {
-                                        await launchUrl(
-                                          uri,
-                                          mode: LaunchMode.externalApplication,
-                                        );
-                                      }
-                                    },
-                                    child: Text(
-                                      url,
-                                      style: GoogleFonts.inter(
-                                        color: AppColors.dashboardTeal,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        decoration: TextDecoration.underline,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 32,
-                                        height: 32,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFE2F9F3),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: const Color(0xFFA7F3D0),
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            initials,
-                                            style: GoogleFonts.spaceGrotesk(
-                                              color: const Color(0xFF047857),
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          fullName,
-                                          style: GoogleFonts.spaceGrotesk(
-                                            color: textPrimary,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    minimumSize: const Size(84, 34),
-                                    foregroundColor: textPrimary,
-                                    side: BorderSide(color: cardBorder),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                  ),
-                                  onPressed: () =>
-                                      _showEditProfileDialog(context),
-                                  child: Text(
-                                    'Edit profile',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    email.isNotEmpty
-                                        ? '$email · Candidate Profile'
-                                        : 'Candidate Profile',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.inter(
-                                      color: textSecondary,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                if (email.endsWith('@example.com'))
-                                  const SizedBox(width: 8),
-                                if (email.endsWith('@example.com'))
-                                  Flexible(
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amber.withValues(
-                                          alpha: 0.2,
-                                        ),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: Colors.amber),
-                                      ),
-                                      child: Text(
-                                        'Placeholder email - please update',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.inter(
-                                          color: Colors.amber[900],
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-
-                            if (_candidateProfile != null) ...[
-                              const SizedBox(height: 12),
-
-                              // Headline
-                              if (_candidateProfile!.headline.isNotEmpty)
-                                Text(
-                                  _candidateProfile!.headline,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    color: textPrimary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                )
-                              else
-                                buildMissing('Headline'),
-
-                              const SizedBox(height: 6),
-
-                              // Location and Years
-                              Builder(
-                                builder: (context) {
-                                  final loc = _candidateProfile!.location;
-                                  final yrs =
-                                      _candidateProfile!.yearsExperience;
-                                  if (loc.isEmpty && yrs == null) {
-                                    return buildMissing(
-                                      'Location & Experience',
-                                    );
-                                  }
-                                  final locStr = loc.isNotEmpty
-                                      ? loc
-                                      : 'Location not added';
-                                  final yrsStr = yrs != null
-                                      ? '$yrs yrs'
-                                      : 'Experience not added';
-                                  return buildIconRow(
-                                    Icons.location_on_outlined,
-                                    '$locStr · $yrsStr',
-                                  );
-                                },
-                              ),
-
-                              const SizedBox(height: 6),
-
-                              // Phone
-                              if (_candidateProfile!.phone.isNotEmpty)
-                                buildIconRow(
-                                  Icons.phone,
-                                  _candidateProfile!.phone,
-                                )
-                              else
-                                buildMissing('Phone'),
-
-                              const SizedBox(height: 6),
-
-                              // LinkedIn URL
-                              if (_candidateProfile!.linkedinUrl.isNotEmpty)
-                                buildLinkRow(
-                                  Icons.link,
-                                  _candidateProfile!.linkedinUrl,
-                                )
-                              else
-                                buildMissing('LinkedIn'),
-
-                              const SizedBox(height: 6),
-
-                              // Portfolio URL
-                              if (_candidateProfile!.portfolioUrl.isNotEmpty)
-                                buildLinkRow(
-                                  Icons.link,
-                                  _candidateProfile!.portfolioUrl,
-                                )
-                              else
-                                buildMissing('Portfolio'),
-                            ] else ...[
-                              const SizedBox(height: 8),
-                              InkWell(
-                                onTap: () => _showEditProfileDialog(context),
-                                child: Text(
-                                  'Complete your profile →',
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.dashboardTeal,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Coaching line
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.dashboardTeal.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'Add your resume and skills to get a match score.',
-                        style: GoogleFonts.inter(
-                          color: AppColors.dashboardTeal,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    _detailRow(_details[0], c),
+                    _detailRow(_details[2], c),
+                    _detailRow(_details[4], c),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 48),
+              Expanded(
+                child: Column(
+                  children: [
+                    _detailRow(_details[1], c),
+                    _detailRow(_details[3], c),
                   ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 24),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          const SizedBox(height: 20),
-
-          Text(
-            'Sections Completeness',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+          );
+    return _card(
+      c,
+      Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              paddingX,
+              mobile ? 22 : 26,
+              paddingX,
+              12,
             ),
-          ),
-          const SizedBox(height: 16),
-
-          // Dynamic Completion Rows derived from active resume API response / cache
-          Builder(
-            builder: (context) {
-              final Map<String, int> cov = {
-                'experience': 0,
-                'skills': 0,
-                'education': 0,
-                'projects': 0,
-              };
-
-              final num expVal = cov['experience'] ?? 0;
-              final num sklVal = cov['skills'] ?? 0;
-              final num eduVal = cov['education'] ?? 0;
-              final num prjVal = cov['projects'] ?? 0;
-
-              return Column(
-                children: [
-                  _buildCompletionBarRow(
-                    'Experience',
-                    expVal / 100.0,
-                    '${expVal.toInt()}%',
-                    AppColors.dashboardTeal,
-                    textPrimary,
-                    textSecondary,
-                  ),
-                  const SizedBox(height: 14),
-                  _buildCompletionBarRow(
-                    'Skills',
-                    sklVal / 100.0,
-                    '${sklVal.toInt()}%',
-                    AppColors.dashboardTeal,
-                    textPrimary,
-                    textSecondary,
-                  ),
-                  const SizedBox(height: 14),
-                  _buildCompletionBarRow(
-                    'Education',
-                    eduVal / 100.0,
-                    '${eduVal.toInt()}%',
-                    AppColors.dashboardTeal,
-                    textPrimary,
-                    textSecondary,
-                  ),
-                  const SizedBox(height: 14),
-                  _buildCompletionBarRow(
-                    'Projects',
-                    prjVal / 100.0,
-                    '${prjVal.toInt()}%',
-                    prjVal < 50
-                        ? const Color(0xFFF59E0B)
-                        : AppColors.dashboardTeal,
-                    textPrimary,
-                    textSecondary,
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.dashboardTeal,
-              side: const BorderSide(color: AppColors.dashboardTeal),
-              minimumSize: const Size(double.infinity, 40),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            icon: const Icon(Icons.description_outlined, size: 16),
-            onPressed: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => const CandidateResumeManagementScreen(),
+            child: Column(
+              children: [
+                _sectionHeading(
+                  'Personal details',
+                  c,
+                  count: '$_filled of 5 added',
                 ),
-              );
-            },
-            label: Text(
-              'Manage Resumes',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
+                const SizedBox(height: 18),
+                detailRows,
+              ],
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              paddingX,
+              14,
+              paddingX,
+              mobile ? 22 : 26,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionHeading('Profile sections', c),
+                const SizedBox(height: 18),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = mobile
+                        ? 1
+                        : narrow
+                        ? 2
+                        : 4;
+                    const gap = 14.0;
+                    final tileWidth =
+                        (constraints.maxWidth - gap * (columns - 1)) / columns;
+                    return Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        _tile(
+                          0,
+                          'Experience',
+                          'Jobs and internships',
+                          tileWidth,
+                          c,
+                        ),
+                        _tile(1, 'Skills', 'What you can do', tileWidth, c),
+                        _tile(
+                          2,
+                          'Education',
+                          'Degrees and courses',
+                          tileWidth,
+                          c,
+                        ),
+                        _tile(3, 'Projects', "Work you've built", tileWidth, c),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: paddingX, vertical: 20),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: c.border)),
+            ),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 20,
+              runSpacing: 12,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Resumes',
+                      style: _inter(14.5, c.text, weight: FontWeight.w600),
+                    ),
+                    Text(
+                      'Upload a resume to unlock your match score.',
+                      style: _inter(13.5, c.text2),
+                    ),
+                  ],
+                ),
+                _button(
+                  'Manage resumes',
+                  c,
+                  primary: true,
+                  onPressed: _openResumes,
+                ),
+              ],
             ),
           ),
         ],
@@ -1359,1262 +2063,482 @@ class _CandidateProfileSettingsScreenState
     );
   }
 
-  Widget _buildCompletionBarRow(
-    String name,
-    double progress,
-    String percentage,
-    Color color,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 90,
-          child: Text(
-            name,
-            style: GoogleFonts.inter(
-              color: textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+  Widget _detailRow(_Detail detail, _Colors c) {
+    final value = _values[detail.key] ?? '';
+    final editing = _editing == detail.key;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.only(top: 14, bottom: 16),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: c.border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(detail.label, style: _inter(13, c.text3))),
+              if (!editing)
+                _link(
+                  value.isEmpty ? 'Add' : 'Edit',
+                  c,
+                  () => _beginEdit(detail.key),
+                ),
+            ],
           ),
-        ),
-        Expanded(
-          child: Tooltip(
-            message: '$name breakdown details...',
-            child: Container(
-              height: 6,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: progress,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(3),
+          if (editing) ...[
+            const SizedBox(height: 6),
+            Focus(
+              onKeyEvent: (node, event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.escape) {
+                  _cancelEdit();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: _editFocus.hasFocus
+                      ? [BoxShadow(color: c.accentSoft, spreadRadius: 3)]
+                      : null,
+                ),
+                child: TextField(
+                  controller: _editor,
+                  focusNode: _editFocus,
+                  onSubmitted: (_) => _saveEdit(),
+                  style: _inter(14.5, c.text),
+                  decoration: InputDecoration(
+                    hintText: detail.placeholder,
+                    hintStyle: _inter(14.5, c.text3),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    filled: true,
+                    fillColor: c.field,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: c.accent),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: c.accent),
+                    ),
                   ),
                 ),
               ),
             ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _button(
+                  'Save',
+                  c,
+                  primary: true,
+                  compact: true,
+                  onPressed: _saveEdit,
+                ),
+                const SizedBox(width: 8),
+                _button('Cancel', c, compact: true, onPressed: _cancelEdit),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: 3),
+            Text(
+              value.isEmpty ? 'Not added' : value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _inter(
+                15,
+                value.isEmpty ? c.text3 : c.text,
+                weight: value.isEmpty ? FontWeight.w400 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _tile(
+    int index,
+    String title,
+    String subtitle,
+    double width,
+    _Colors c,
+  ) => Container(
+    width: width,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: c.surface2,
+      border: Border.all(color: c.border),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: _inter(14.5, c.text, weight: FontWeight.w600)),
+        Text(
+          subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: _inter(12.5, c.text3, height: 1.35),
+        ),
+        const SizedBox(height: 18),
+        RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: '${_sections[index]}',
+                style: _grotesk(28, c.text),
+              ),
+              TextSpan(text: '%', style: _grotesk(14, c.text3)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: LinearProgressIndicator(
+            value: _sections[index] / 100,
+            minHeight: 4,
+            backgroundColor: c.border,
+            color: c.accent,
+          ),
+        ),
+        const SizedBox(height: 14),
+        _link(
+          'Add ${title.toLowerCase()}',
+          c,
+          _openResumes,
+        ),
+      ],
+    ),
+  );
+
+  Widget _rightCards(_Colors c, bool mobile, bool reducedMotion) => Column(
+    children: [
+      _card(
+        c,
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            mobile ? 18 : 30,
+            mobile ? 22 : 26,
+            mobile ? 18 : 30,
+            12,
+          ),
+          child: Column(
+            children: [
+              _sectionHeading('Notifications', c),
+              const SizedBox(height: 10),
+              _notificationRow(
+                0,
+                'Interview reminders',
+                'Email and push, 24 hours and 1 hour before',
+                c,
+                reducedMotion,
+              ),
+              _notificationRow(
+                1,
+                'New matched jobs',
+                'Daily digest',
+                c,
+                reducedMotion,
+              ),
+              _notificationRow(
+                2,
+                'Feedback ready',
+                'Push notification immediately',
+                c,
+                reducedMotion,
+              ),
+              _notificationRow(
+                3,
+                'Recruiter views',
+                'Weekly summary',
+                c,
+                reducedMotion,
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 24),
+      _card(
+        c,
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            mobile ? 18 : 30,
+            mobile ? 22 : 26,
+            mobile ? 18 : 30,
+            12,
+          ),
+          child: Column(
+            children: [
+              _sectionHeading('Appearance and account', c),
+              const SizedBox(height: 10),
+              _settingsRow(c, title: 'Theme', action: _themeControl(c)),
+              _settingsRow(
+                c,
+                title: 'Signed in with Clerk',
+                subtitle: 'Google SSO, session lasts 30 days',
+                action: _button(
+                  'Manage',
+                  c,
+                  onPressed: _openAccountManagement,
+                ),
+              ),
+              _settingsRow(
+                c,
+                title: 'Download my data',
+                subtitle: 'Interviews, scores and recordings',
+                action: _button(
+                  'Request',
+                  c,
+                  onPressed: _requestDataExport,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 24),
+      _signOutButton(c, mobile: false),
+    ],
+  );
+
+  Widget _notificationRow(
+    int index,
+    String title,
+    String subtitle,
+    _Colors c,
+    bool reducedMotion,
+  ) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: c.border)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: _inter(14.5, c.text, weight: FontWeight.w600)),
+              Text(subtitle, style: _inter(13, c.text3, height: 1.4)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Semantics(
+          label: title,
+          toggled: _notifications[index],
+          child: GestureDetector(
+            onTap: () =>
+                setState(() => _notifications[index] = !_notifications[index]),
+            child: AnimatedContainer(
+              duration: reducedMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 200),
+              width: 42,
+              height: 24,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: _notifications[index] ? c.accent : c.border2,
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: AnimatedAlign(
+                duration: reducedMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 200),
+                alignment: _notifications[index]
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _settingsRow(
+    _Colors c, {
+    required String title,
+    String? subtitle,
+    required Widget action,
+  }) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: c.border)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: _inter(14.5, c.text, weight: FontWeight.w600),
+              ),
+              if (subtitle != null)
+                Text(subtitle, style: _inter(13, c.text3, height: 1.4)),
+            ],
           ),
         ),
         const SizedBox(width: 12),
-        SizedBox(
-          width: 38,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              percentage,
-              style: GoogleFonts.jetBrainsMono(
-                color: textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
+        action,
       ],
-    );
-  }
+    ),
+  );
 
-  // ── NOTIFICATIONS PANEL ────────────────────────────────────────────────────
-  Widget _buildNotificationsPanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isNightMode,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Notifications',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          _buildNotificationRow(
-            'Interview reminders',
-            'Email + push, 24h and 1h',
-            _reminders,
-            (val) => setState(() => _reminders = val),
-            textPrimary,
-            textSecondary,
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-          _buildNotificationRow(
-            'New matched jobs',
-            'Daily digest',
-            _matchedJobs,
-            (val) => setState(() => _matchedJobs = val),
-            textPrimary,
-            textSecondary,
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-          _buildNotificationRow(
-            'Feedback ready',
-            'Push immediately',
-            _feedbackReady,
-            (val) => setState(() => _feedbackReady = val),
-            textPrimary,
-            textSecondary,
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-          _buildNotificationRow(
-            'Recruiter views',
-            'Weekly summary',
-            _recruiterViews,
-            (val) => setState(() => _recruiterViews = val),
-            textPrimary,
-            textSecondary,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNotificationRow(
-    String label,
-    String desc,
-    bool value,
-    Function(bool) onChanged,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  color: textPrimary,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                desc,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(color: textSecondary, fontSize: 11.5),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        CupertinoSwitch(
-          activeTrackColor: AppColors.dashboardTeal,
-          value: value,
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-
-  // ── APPEARANCE PANEL ───────────────────────────────────────────────────────
-  Widget _buildAppearancePanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isNightMode,
-    bool isMobile,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Appearance & Account',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Theme Selector Row
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Theme',
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: textPrimary,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Night · Daylight · follow system',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: textSecondary,
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 5,
-                child: SingleChildScrollView(
-                  key: const Key('profile-theme-chip-scroll'),
-                  scrollDirection: Axis.horizontal,
-                  child: _buildThemeChips(isNightMode),
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-
-          // Account Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Signed in with Clerk',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: textPrimary,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Google SSO · session 30d',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: textSecondary,
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 32,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: textPrimary,
-                    side: BorderSide(color: cardBorder),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  onPressed: () =>
-                      _showToast('Account management would open here.'),
-                  child: Text(
-                    'Manage',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 24, color: Color(0xFFF1F5F9)),
-
-          // Data Download Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Download my data',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: textPrimary,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Interviews, scores, recordings',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: textSecondary,
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 32,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: textPrimary,
-                    side: BorderSide(color: cardBorder),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  onPressed: _requestDataExport,
-                  child: Text(
-                    'Request',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildThemeChips(bool isNightMode) {
-    return Row(
+  Widget _themeControl(
+    _Colors c, {
+    bool mobile = false,
+    bool compact = false,
+  }) => Container(
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(
+      color: c.surface2,
+      border: Border.all(color: c.border),
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildThemeChipButton('Night', AppThemeMode.night),
-        const SizedBox(width: 6),
-        _buildThemeChipButton('Daylight', AppThemeMode.daylight),
-        const SizedBox(width: 6),
-        _buildThemeChipButton('Auto', AppThemeMode.auto),
+        _themeButton(
+          'Night',
+          AppThemeMode.night,
+          c,
+          mobile: mobile,
+          compact: compact,
+        ),
+        _themeButton(
+          'Daylight',
+          AppThemeMode.daylight,
+          c,
+          mobile: mobile,
+          compact: compact,
+        ),
+        _themeButton(
+          'Auto',
+          AppThemeMode.auto,
+          c,
+          mobile: mobile,
+          compact: compact,
+        ),
       ],
-    );
-  }
+    ),
+  );
 
-  Widget _buildThemeChipButton(String text, AppThemeMode mode) {
-    final bool isActive = CandidateProfileSettingsScreen.currentTheme == mode;
-
+  Widget _themeButton(
+    String label,
+    AppThemeMode mode,
+    _Colors c, {
+    bool mobile = false,
+    bool compact = false,
+  }) {
+    final active = CandidateProfileSettingsScreen.currentTheme == mode;
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          CandidateProfileSettingsScreen.currentTheme = mode;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      onTap: () =>
+          setState(() => CandidateProfileSettingsScreen.currentTheme = mode),
+      child: Container(
+        height: mobile ? 34 : 28,
+        padding: EdgeInsets.symmetric(
+          horizontal: compact
+              ? 5
+              : mobile
+              ? 11
+              : 9,
+        ),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isActive
-              ? AppColors.dashboardTeal.withValues(alpha: 0.15)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isActive ? AppColors.dashboardTeal : const Color(0xFFE2E8F0),
-            width: isActive ? 1.5 : 1,
-          ),
+          color: active ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(mobile ? 8 : 6),
+          border: active ? Border.all(color: c.border) : null,
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: .1),
+                    blurRadius: 2,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
-          text,
-          style: GoogleFonts.inter(
-            color: isActive ? AppColors.dashboardTeal : const Color(0xFF64748B),
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
+          label,
+          style: _inter(
+            mobile ? 13.5 : 13,
+            active ? const Color(0xFF16213A) : c.text2,
+            weight: FontWeight.w500,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildScoreRing(double size, double score, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFFF8FAFC),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: size,
-            height: size,
-            child: CircularProgressIndicator(
-              value: score / 100,
-              strokeWidth: 4.5,
-              backgroundColor: Colors.transparent,
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-            ),
-          ),
-          Text(
-            '${score.toInt()}%',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: size < 70 ? 13 : 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _link(String label, _Colors c, VoidCallback onPressed) => TextButton(
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, 24),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: CandidateButtonStyle.deepTeal,
+    ),
+    child: Text(
+      label,
+      style: _inter(13, CandidateButtonStyle.deepTeal, weight: FontWeight.w600),
+    ),
+  );
 
-  /*
-    final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.home_rounded, 'label': 'Home', 'route': '/candidate/home'},
-      {
-        'icon': Icons.track_changes_rounded,
-        'label': 'Applications',
-        'route': '/candidate/applications',
-      },
-      {
-        'icon': Icons.grid_view_rounded,
-        'label': 'Jobs',
-        'route': '/candidate/jobs',
-      },
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'label': 'Interviews',
-        'route': '/candidate/interviews',
-      },
-      {
-        'icon': Icons.description_rounded,
-        'label': 'Resumes',
-        'route': '/candidate/resumes',
-      },
-      {
-        'icon': Icons.adjust_rounded,
-        'label': 'Settings',
-        'route': '/candidate/settings',
-      },
-    ];
-
-    return Container(
-      width: 60,
-      decoration: BoxDecoration(
-        color: isNightMode ? const Color(0xFF1E293B) : Colors.white,
-        border: Border(
-          right: BorderSide(
-            color: isNightMode
-                ? const Color(0xFF334155)
-                : const Color(0xFFE2E8F0),
-            width: 1,
-          ),
+  Widget _button(
+    String label,
+    _Colors c, {
+    required VoidCallback onPressed,
+    bool primary = false,
+    bool compact = false,
+  }) => Container(
+    height: compact ? 32 : 40,
+    decoration: primary
+        ? CandidateButtonStyle.primaryDecoration(radius: 12)
+        : null,
+    child: OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        backgroundColor: primary ? Colors.transparent : Colors.white,
+        foregroundColor: primary
+            ? Colors.white
+            : CandidateButtonStyle.secondaryText,
+        side: BorderSide(
+          color: primary ? Colors.transparent : CandidateButtonStyle.edge,
+        ),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: Text(
+        label,
+        style: _inter(
+          13.5,
+          primary ? Colors.white : CandidateButtonStyle.secondaryText,
+          weight: FontWeight.w600,
         ),
       ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              },
-              child: SvgPicture.asset('assets/images/logo.svg', height: 48),
-            ),
-          ),
-          const SizedBox(height: 40),
-
-          // Nav Items
-          Expanded(
-            child: ListView.separated(
-              itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
-              itemBuilder: (context, index) {
-                final isSelected = index == _activeNavIndex;
-                final item = navItems[index];
-                final bool hasBadge = index == 2 || index == 3;
-                final String badgeVal = index == 2 ? "3" : "1";
-
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Active glowing orb
-                      if (isSelected)
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.dashboardTeal,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.dashboardTeal.withValues(
-                                  alpha: 0.4,
-                                ),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      Tooltip(
-                        message: item['label'],
-                        waitDuration: const Duration(milliseconds: 350),
-                        preferBelow: false,
-                        verticalOffset: 24,
-                        margin: const EdgeInsets.only(left: 45),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () {
-                              if (index == 0) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) => const CandidateHomeScreen(),
-                                  ),
-                                );
-                              } else if (index == 1) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateApplicationsScreen(),
-                                  ),
-                                );
-                              } else if (index == 2) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateJobFeedScreen(),
-                                  ),
-                                );
-                              } else if (index == 3) {
-                                _showInterviewOptions(context);
-                              } else if (index == 4) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CandidateResumeManagementScreen(),
-                                  ),
-                                );
-                              } else {
-                                // Already here
-                              }
-                            },
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      item['icon'],
-                                      color: isSelected
-                                          ? const Color(0xFF0F172A)
-                                          : const Color(0xFF64748B),
-                                      size: 19,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Badge
-                      if (hasBadge)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.dashboardTeal,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: isNightMode
-                                    ? const Color(0xFF1E293B)
-                                    : Colors.white,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Text(
-                              badgeVal,
-                              style: const TextStyle(
-                                color: Color(0xFF0F172A),
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Account Menu
-          PopupMenuButton<String>(
-            tooltip: 'Account Menu',
-            onSelected: (value) {
-              if (value == 'candidate_home') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateHomeScreen(),
-                  ),
-                );
-              } else if (value == 'candidate_apps') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateApplicationsScreen(),
-                  ),
-                );
-              } else if (value == 'candidate_profile') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateProfileSettingsScreen(),
-                  ),
-                );
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'candidate_home',
-                child: Text(
-                  'Candidate Home',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_home',
-                child: Text(
-                  'Candidate Home',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_apps',
-                child: Text(
-                  'Candidate Applications',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'candidate_profile',
-                child: Text(
-                  'Profile & Settings',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-            child: Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFE6F7F5),
-                border: Border.all(
-                  color: const Color(0xFF32BAB1).withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  'MR',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF32BAB1),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-    );
-  }
-  */
-
-  // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock(bool isNightMode) {
-    final List<Map<String, dynamic>> dockItems = [
-      {'icon': Icons.home_rounded, 'route': '/candidate/home'},
-      {'icon': Icons.track_changes_rounded, 'route': '/candidate/applications'},
-      {'icon': Icons.grid_view_rounded, 'route': '/candidate/jobs'},
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'route': '/candidate/interviews',
-      },
-      {'icon': Icons.description_rounded, 'route': '/candidate/resumes'},
-      {'icon': Icons.adjust_rounded, 'route': '/candidate/settings'},
-    ];
-
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: isNightMode ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(
-          color: isNightMode
-              ? const Color(0xFF334155)
-              : const Color(0xFFE2E8F0),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(dockItems.length, (index) {
-          final isSelected = index == _activeNavIndex;
-          final item = dockItems[index];
-          final bool hasBadge = index == 2 || index == 3;
-          final String badgeVal = index == 2 ? "3" : "1";
-
-          return GestureDetector(
-            onTap: () {
-              FocusManager.instance.primaryFocus?.unfocus();
-              if (index == 0) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateHomeScreen(),
-                  ),
-                );
-              } else if (index == 1) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateApplicationsScreen(),
-                  ),
-                );
-              } else if (index == 2) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateJobFeedScreen(),
-                  ),
-                );
-              } else if (index == 3) {
-                _showInterviewOptions(context);
-              } else if (index == 4) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateResumeManagementScreen(),
-                  ),
-                );
-              } else {
-                // Already here
-              }
-            },
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? AppColors.dashboardTeal
-                        : Colors.transparent,
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: AppColors.dashboardTeal.withValues(
-                                alpha: 0.3,
-                              ),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        item['icon'],
-                        color: isSelected
-                            ? const Color(0xFF0F172A)
-                            : const Color(0xFF94A3B8),
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ),
-                if (hasBadge)
-                  Positioned(
-                    top: 2,
-                    right: 2,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.dashboardTeal,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: isNightMode
-                              ? const Color(0xFF1E293B)
-                              : const Color(0xFF0F172A),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Text(
-                        badgeVal,
-                        style: const TextStyle(
-                          color: Color(0xFF0F172A),
-                          fontSize: 7.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-  Widget _buildTopBar(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isNightMode,
-  ) {
-    if (isMobile) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: cardBg,
-          border: Border(bottom: BorderSide(color: cardBorder, width: 1)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Profile',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: Icon(Icons.search_rounded, color: textSecondary, size: 22),
-              onPressed: () => _showToast('Search requested.'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: isNightMode ? const Color(0xFF1E293B) : Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: isNightMode
-                ? const Color(0xFF334155)
-                : const Color(0xFFE2E8F0),
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Breadcrumbs: PROFILE / SETTINGS
-          Row(
-            children: [
-              Text(
-                'PROFILE',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              Text(
-                '  /  ',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'SETTINGS',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
-                ),
-              ),
-            ],
-          ),
-
-          // Actions
-          Row(
-            children: [
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: isNightMode
-                      ? const Color(0xFF0B0F19)
-                      : const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: cardBorder, width: 1),
-                ),
-                child: TextField(
-                  style: GoogleFonts.inter(color: textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: textSecondary,
-                      fontSize: 13,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      color: textSecondary,
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isNightMode
-                            ? const Color(0xFF1E293B)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: cardBorder),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: textSecondary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Notification bell button
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: AppColors.dashboardTeal,
-                cardBorder: cardBorder,
-                isNightMode: isNightMode,
-                onTap: () {
-                  FocusManager.instance.primaryFocus?.unfocus();
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateNotificationsScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 10),
-
-              // Settings icon
-              _buildTopBarIconButton(
-                icon: Icons.settings_outlined,
-                hasBadge: false,
-                cardBorder: cardBorder,
-                isNightMode: isNightMode,
-                onTap: () {
-                  FocusManager.instance.primaryFocus?.unfocus();
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateProfileSettingsScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 10),
-
-              // Sign Out Button
-              IconButton(
-                tooltip: 'Sign Out',
-                icon: const Icon(
-                  Icons.logout_rounded,
-                  color: Colors.redAccent,
-                  size: 20,
-                ),
-                onPressed: () async {
-                  final navigator = Navigator.of(context);
-                  final messenger = ScaffoldMessenger.of(context);
-                  try {
-                    await AuthService.signOut(context);
-                    if (navigator.mounted) {
-                      navigator.pushNamedAndRemoveUntil('/login', (_) => false);
-                    }
-                  } catch (error) {
-                    if (messenger.mounted) {
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Sign out failed: $error')),
-                      );
-                    }
-                  }
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-    required Color cardBorder,
-    required bool isNightMode,
-    VoidCallback? onTap,
-  }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    }
-
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: MouseRegion(
-        cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: isNightMode ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: cardBorder, width: 1),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  icon,
-                  color: isNightMode ? Colors.white : const Color(0xFF475569),
-                  size: 18,
-                ),
-                if (hasBadge)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: badgeColor ?? Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class GridPainter extends CustomPainter {
-  final Color color;
-  GridPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.0;
-
-    const double step = 30.0;
-    for (double i = 0; i < size.width; i += step) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-    for (double i = 0; i < size.height; i += step) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _HoverableAddLink extends StatefulWidget {
-  final VoidCallback onTap;
-  final Color baseColor;
-  final Color hoverColor;
-
-  const _HoverableAddLink({
-    required this.onTap,
-    required this.baseColor,
-    required this.hoverColor,
-  });
-
-  @override
-  State<_HoverableAddLink> createState() => _HoverableAddLinkState();
-}
-
-class _HoverableAddLinkState extends State<_HoverableAddLink> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: SizedBox(
-          width: 60,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.add,
-                  size: 10,
-                  color: _hovered ? widget.hoverColor : widget.baseColor,
-                ),
-                const SizedBox(width: 2),
-                Text(
-                  'Add',
-                  style: GoogleFonts.inter(
-                    color: _hovered ? widget.hoverColor : widget.baseColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    decoration: _hovered ? TextDecoration.underline : TextDecoration.none,
-                    decorationColor: _hovered ? widget.hoverColor : widget.baseColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }

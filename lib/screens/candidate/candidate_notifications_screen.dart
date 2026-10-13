@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
@@ -240,11 +241,7 @@ class _CandidateNotificationsScreenState
                         child: Column(
                           children: [
                             // Top Bar
-                            _buildTopBar(
-                              isMobile,
-                              textPrimary,
-                              textSecondary,
-                            ),
+                            RecruiterTopBar(pageTitle: 'Notifications', candidate: true),
 
                             // Scrollable Content
                             Expanded(
@@ -520,7 +517,7 @@ class _CandidateNotificationsScreenState
                 child: Text(
                   'Mark all read',
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF0FB89B),
+                    color: const Color(0xFF0A8A76),
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -756,7 +753,7 @@ class _CandidateNotificationsScreenState
             child: Text(
               notif.actionLabel!,
               style: GoogleFonts.inter(
-                color: const Color(0xFF0FB89B),
+                color: const Color(0xFF0A8A76),
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -864,7 +861,7 @@ class _CandidateNotificationsScreenState
                   child: Text(
                     notif.actionLabel!,
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF0FB89B),
+                      color: const Color(0xFF0A8A76),
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),

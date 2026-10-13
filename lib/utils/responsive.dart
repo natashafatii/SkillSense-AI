@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 
 class Responsive {
   // Breakpoints
-  static const double mobileMax = 599;
+  static const double mobileMax = 900;
   static const double tabletMax = 1023;
   static const double desktopMax = 1439;
 
   static bool isMobile(BuildContext context) =>
-      MediaQuery.of(context).size.width <= mobileMax;
+      MediaQuery.of(context).size.width < mobileMax;
 
   static bool isTablet(BuildContext context) =>
-      MediaQuery.of(context).size.width > mobileMax &&
+      MediaQuery.of(context).size.width >= mobileMax &&
       MediaQuery.of(context).size.width <= tabletMax;
 
   static bool isDesktop(BuildContext context) =>
@@ -28,7 +28,7 @@ class Responsive {
     double? wide,
   }) {
     double width = MediaQuery.of(context).size.width;
-    if (width <= mobileMax) {
+    if (width < mobileMax) {
       return mobile;
     } else if (width <= tabletMax) {
       return tablet ?? mobile * 1.1;
@@ -46,7 +46,7 @@ class Responsive {
     double? wide,
   }) {
     double width = MediaQuery.of(context).size.width;
-    if (width <= mobileMax) {
+    if (width < mobileMax) {
       return mobile;
     } else if (width <= tabletMax) {
       return tablet ?? mobile * 1.2;

@@ -1,5 +1,7 @@
+import '../../widgets/candidate_button_style.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
@@ -214,12 +216,10 @@ class _CandidateFeedbackReportScreenState
                       Expanded(
                         child: Column(
                           children: [
-                            _buildTopBar(
-                              isMobile,
-                              textPrimary,
-                              textSecondary,
-                              cardBg,
-                              cardBorder,
+                            RecruiterTopBar(
+                              pageTitle: 'Feedback',
+                              breadcrumbSegments: const ['Interviews', 'Feedback'],
+                              candidate: true,
                             ),
                             Expanded(
                               child: _isLoading
@@ -330,17 +330,17 @@ class _CandidateFeedbackReportScreenState
             ),
             const SizedBox(height: 16),
             Container(
-              height: isMobile ? 38 : 40,
+              height: 40,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                  colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF17CBAC).withValues(alpha: 0.25),
+                    color: const Color(0xFF14B584).withValues(alpha: 0.25),
                     blurRadius: 12,
                     spreadRadius: 2,
                     offset: const Offset(0, 4),
@@ -984,7 +984,7 @@ class _CandidateFeedbackReportScreenState
                           ),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
+                            style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFF1F5F9),
                               foregroundColor: const Color(0xFF334155),
                               elevation: 0,
@@ -992,7 +992,7 @@ class _CandidateFeedbackReportScreenState
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                            ),
+                            )),
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(

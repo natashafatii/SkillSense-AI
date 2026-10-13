@@ -44,6 +44,7 @@ dependencies:
   file_picker: ^8.0.0
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.2
+  video_player: ^2.10.1
 
 # Passkeys (used by Clerk) brings in ua_client_hints. Keep its native plugin
 # unchanged while using the local dart:js_interop web patch for Wasm builds.

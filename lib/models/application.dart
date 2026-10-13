@@ -47,6 +47,7 @@ class Application {
   final String job;
   final String jobTitle;
   final String? resumeId;
+  final String? coverNote;
   final ApplicationStatus status;
   final String? rawStatus;
   final String? candidateName;
@@ -69,6 +70,7 @@ class Application {
     required this.job,
     required this.jobTitle,
     this.resumeId,
+    this.coverNote,
     required this.status,
     this.rawStatus,
     this.candidateName,
@@ -100,6 +102,7 @@ class Application {
       job: json['job'] as String? ?? '',
       jobTitle: json['job_title'] as String? ?? '',
       resumeId: json['resume_id'] as String?,
+      coverNote: json['cover_note'] as String?,
       status: ApplicationStatus.fromString(rawStatus),
       rawStatus: rawStatus,
       candidateName: (json['candidate_name'] ?? json['name']) as String?,
@@ -118,6 +121,38 @@ class Application {
       updatedAt: json['updated_at'] != null
           ? DateTime.tryParse(json['updated_at'] as String)
           : null,
+    );
+  }
+
+  Application withShortlistResult(Map<String, dynamic> result) {
+    final nextStatus =
+        result['status']?.toString() ?? rawStatus ?? status.value;
+    return Application(
+      version: (result['version'] as num?)?.toInt() ?? version,
+      assessment: assessment,
+      allowedActions:
+          (result['allowed_actions'] as List?)?.cast<String>() ??
+          allowedActions,
+      eligibleForInterview: result['eligible_for_interview'] == true,
+      id: id,
+      candidate: candidate,
+      candidateEmail: candidateEmail,
+      job: job,
+      jobTitle: jobTitle,
+      resumeId: resumeId,
+      coverNote: coverNote,
+      status: ApplicationStatus.fromString(nextStatus),
+      rawStatus: nextStatus,
+      candidateName: candidateName,
+      resumeScore: resumeScore,
+      technicalScore: technicalScore,
+      behavioralScore: behavioralScore,
+      communicationScore: communicationScore,
+      outcome: outcome,
+      createdAt: createdAt,
+      updatedAt: result['updated_at'] is String
+          ? DateTime.tryParse(result['updated_at'] as String) ?? updatedAt
+          : updatedAt,
     );
   }
 

@@ -61,6 +61,51 @@ class ApplicationService {
     }
   }
 
+  /// Shortlists an applied candidate without a request body.
+  static Future<Application> shortlistApplication(
+    Application app, {
+    String reason = 'Selected for shortlist from applicant detail.',
+    Dio? client,
+  }) async {
+    try {
+      final dio = client ?? await ApiClient.getInstance();
+      final response = await dio.post(
+        '/applications/${app.id}/shortlist/',
+        data: {'expected_version': app.version, 'reason': reason},
+      );
+      final result = Map<String, dynamic>.from(response.data as Map);
+      if (result['status']?.toString().toUpperCase() != 'SHORTLISTED') {
+        throw const FormatException(
+          'Shortlist response did not confirm the new status.',
+        );
+      }
+      return app.withShortlistResult(result);
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
+    }
+  }
+
+  static Future<Application> rejectApplication(
+    Application app, {
+    Dio? client,
+  }) async {
+    try {
+      final dio = client ?? await ApiClient.getInstance();
+      final response = await dio.post(
+        '/applications/${app.id}/reject/',
+        data: {
+          'expected_version': app.version,
+          'reason': 'Rejected from applicant detail.',
+        },
+      );
+      return Application.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
+    }
+  }
+
   static const maxResumeBytes = 5 * 1024 * 1024;
 
   static List<Application> forJob(
@@ -164,6 +209,7 @@ class ApplicationService {
 
   static Future<Application> submitApplication({
     required String jobId,
+    String coverNote = '',
     String? fileName,
     Uint8List? fileBytes,
     String? resumeId,
@@ -201,6 +247,7 @@ class ApplicationService {
       final Map<String, dynamic> dataMap = {
         'job': jobId,
         'consent_given': true,
+        if (coverNote.trim().isNotEmpty) 'cover_note': coverNote.trim(),
       };
 
       if (resumeId != null) {

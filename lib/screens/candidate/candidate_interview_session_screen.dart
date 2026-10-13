@@ -1,7 +1,9 @@
+import '../../widgets/candidate_button_style.dart';
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import 'candidate_applications_screen.dart';
@@ -211,9 +213,10 @@ class _CandidateInterviewSessionScreenState extends State<CandidateInterviewSess
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
+            style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
             child: Text(
               'Continue',
-              style: GoogleFonts.inter(color: AppColors.dashboardTeal, fontWeight: FontWeight.bold),
+              style: GoogleFonts.inter(color: CandidateButtonStyle.secondaryText, fontWeight: FontWeight.bold),
             ),
           ),
           TextButton(
@@ -223,9 +226,10 @@ class _CandidateInterviewSessionScreenState extends State<CandidateInterviewSess
                 MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
               );
             },
+            style: CandidateButtonStyle.destructive(TextButton.styleFrom()),
             child: Text(
               'End interview',
-              style: GoogleFonts.inter(color: const Color(0xFFEF4444), fontWeight: FontWeight.bold),
+              style: GoogleFonts.inter(color: CandidateButtonStyle.error, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -265,22 +269,33 @@ class _CandidateInterviewSessionScreenState extends State<CandidateInterviewSess
 
           // Main Session Canvas
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Column(
-                children: [
-                  // Top Bar
-                  _buildTopBar(isMobile, textPrimary, textSecondary),
-                  const Spacer(),
-
-                  // Center Q&A Area
-                  _buildMainContentArea(isMobile, textPrimary, textSecondary),
-                  const Spacer(),
-
-                  // Bottom Actions row
-                  _buildBottomActionBar(isMobile),
-                ],
-              ),
+            child: Column(
+              children: [
+                const RecruiterTopBar(
+                  pageTitle: 'Interview session',
+                  candidate: true,
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    child: Column(
+                      children: [
+                        const Spacer(),
+                        _buildMainContentArea(
+                          isMobile,
+                          textPrimary,
+                          textSecondary,
+                        ),
+                        const Spacer(),
+                        _buildBottomActionBar(isMobile),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -545,7 +560,7 @@ class _CandidateInterviewSessionScreenState extends State<CandidateInterviewSess
           SizedBox(
             height: 44,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
+              style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0F172A),
                 foregroundColor: Colors.white,
                 elevation: 0,
@@ -554,14 +569,14 @@ class _CandidateInterviewSessionScreenState extends State<CandidateInterviewSess
                   side: BorderSide(color: const Color(0xFF1E293B), width: 1.5),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-              ),
+              )),
               onPressed: _hasRepeated || _isProcessing ? null : _repeatQuestion,
               child: Text(
                 '◌ Repeat question',
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
-                  color: _hasRepeated ? const Color(0xFF475569) : Colors.white,
+                  color: CandidateButtonStyle.secondaryText,
                 ),
               ),
             ),
@@ -579,19 +594,19 @@ class _CandidateInterviewSessionScreenState extends State<CandidateInterviewSess
                     ? []
                     : [
                         BoxShadow(
-                          color: AppColors.dashboardTeal.withValues(alpha: 0.25),
+                          color: CandidateButtonStyle.teal.withValues(alpha: 0.25),
                           blurRadius: 10,
                         ),
                       ],
               ),
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
+                style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                   backgroundColor: AppColors.dashboardTeal,
                   foregroundColor: const Color(0xFF0F172A),
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+                )),
                 onPressed: _isProcessing ? null : _doneAnswering,
                 child: _isProcessing
                     ? const SizedBox(
@@ -619,7 +634,7 @@ class _CandidateInterviewSessionScreenState extends State<CandidateInterviewSess
             SizedBox(
               height: 44,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
+                style: CandidateButtonStyle.destructive(ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1E293B),
                   foregroundColor: const Color(0xFFEF4444),
                   elevation: 0,
@@ -627,7 +642,7 @@ class _CandidateInterviewSessionScreenState extends State<CandidateInterviewSess
                     borderRadius: BorderRadius.circular(10),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                ),
+                )),
                 onPressed: _promptLeave,
                 child: Text(
                   'Leave',

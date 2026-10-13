@@ -21,6 +21,10 @@ enum ResumeStatus {
 /// status is `PENDING`.
 class ResumeDetail {
   final String id;
+  final String? filename;
+  final String? fileUrl;
+  final int? fileSize;
+  final DateTime? uploadedAt;
   final ResumeStatus status;
   final List<String>? skills;
   final List<Map<String, dynamic>>? education;
@@ -32,6 +36,10 @@ class ResumeDetail {
 
   const ResumeDetail({
     required this.id,
+    this.filename,
+    this.fileUrl,
+    this.fileSize,
+    this.uploadedAt,
     required this.status,
     this.skills,
     this.education,
@@ -49,6 +57,10 @@ class ResumeDetail {
   factory ResumeDetail.fromJson(Map<String, dynamic> json) {
     return ResumeDetail(
       id: json['id'] as String,
+      filename: json['filename'] as String?,
+      fileUrl: json['file_url'] as String?,
+      fileSize: (json['file_size'] as num?)?.toInt(),
+      uploadedAt: DateTime.tryParse(json['uploaded_at']?.toString() ?? ''),
       status: ResumeStatus.fromString(json['status'] as String? ?? 'PENDING'),
       skills: (json['skills'] as List<dynamic>?)
           ?.map((e) => e.toString())
@@ -73,5 +85,6 @@ class ResumeDetail {
   }
 
   @override
-  String toString() => 'ResumeDetail($id, status=${status.value}, score=$matchScore)';
+  String toString() =>
+      'ResumeDetail($id, status=${status.value}, score=$matchScore)';
 }

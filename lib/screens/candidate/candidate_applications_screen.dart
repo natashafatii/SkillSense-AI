@@ -1,5 +1,7 @@
+import '../../widgets/candidate_button_style.dart';
 import 'candidate_job_detail_screen.dart';
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/app_tooltip.dart';
@@ -112,7 +114,7 @@ class _CandidateApplicationsScreenState
                 Expanded(
                   child: Column(
                     children: [
-                      _buildTopBar(wide),
+                      RecruiterTopBar(pageTitle: 'Applications', candidate: true),
                       Expanded(
                         child: _loading
                             ? const Center(
@@ -460,6 +462,7 @@ class _CandidateApplicationsScreenState
         ),
         TextButton(
           onPressed: () => _load(page: _page),
+          style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
           child: const Text('Retry'),
         ),
       ],
@@ -519,17 +522,17 @@ class _CandidateApplicationsScreenState
             ),
             const SizedBox(height: 16),
             Container(
-              height: isMobile ? 38 : 40,
+              height: 40,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                  colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF17CBAC).withValues(alpha: 0.25),
+                    color: const Color(0xFF14B584).withValues(alpha: 0.25),
                     blurRadius: 12,
                     spreadRadius: 2,
                     offset: const Offset(0, 4),
@@ -1000,6 +1003,7 @@ class CandidateApplicationJobLink extends StatelessWidget {
         : () => Navigator.of(
             context,
           ).pushNamed('/candidate/job-detail', arguments: jobId),
+    style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
     child: const Text('View Job Details'),
   );
 }

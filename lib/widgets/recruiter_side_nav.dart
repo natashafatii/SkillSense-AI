@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_service.dart';
 import 'app_tooltip.dart';
@@ -45,10 +48,14 @@ const recruiterSections = <RecruiterSection>[
 
 class RecruiterSideNav extends StatefulWidget {
   final String currentRoute;
+  final String? selectedRoute;
+  final bool glowSelected;
   final bool inDrawer;
   const RecruiterSideNav({
     super.key,
     required this.currentRoute,
+    this.selectedRoute,
+    this.glowSelected = false,
     this.inDrawer = false,
   });
 
@@ -57,7 +64,7 @@ class RecruiterSideNav extends StatefulWidget {
 }
 
 class _RecruiterSideNavState extends State<RecruiterSideNav> {
-  static bool _persistedExpanded = true;
+  static final Map<String, bool> _expandedByUser = {};
   static final Set<int> _persistedSections = <int>{0};
   static const _accent = Color(0xFF2563EB);
   static const _ink = Color(0xFF0F172A);
@@ -65,9 +72,11 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
   static const _textSecondary = Color(0xFF475569);
   static const _textTertiary = Color(0xFF94A3B8);
   static const _border = Color(0xFFE2E8F0);
+  String get _selectedRoute => widget.selectedRoute ?? widget.currentRoute;
 
   late bool _expanded;
   late bool _contentExpanded;
+  String? _preferenceKey;
   bool _focusSearchOnExpand = false;
   late Set<int> _openSections;
   final _searchController = TextEditingController();
@@ -76,11 +85,75 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
   @override
   void initState() {
     super.initState();
-    _expanded = widget.inDrawer || _persistedExpanded;
+    _preferenceKey = _keyForCurrentUser();
+    _expanded = widget.inDrawer || (_expandedByUser[_preferenceKey] ?? false);
     _contentExpanded = _expanded;
     _openSections = {..._persistedSections};
     _openActiveSection();
     HardwareKeyboard.instance.addHandler(_handleKeyboardShortcut);
+    AuthService.currentUserNotifier.addListener(_onUserChanged);
+    if (!widget.inDrawer) _restorePreference(_preferenceKey);
+  }
+
+  String? _keyForCurrentUser() {
+    final user = AuthService.currentUserData;
+    final id =
+        AuthService.currentUserId ??
+        user?['clerk_id']?.toString() ??
+        user?['id']?.toString() ??
+        user?['email']?.toString().trim().toLowerCase();
+    if (id == null || id.isEmpty) return null;
+    return 'recruiter_sidebar_expanded_v1_${Uri.encodeComponent(id)}';
+  }
+
+  void _onUserChanged() {
+    final key = _keyForCurrentUser();
+    if (key == _preferenceKey) return;
+    _preferenceKey = key;
+    if (!widget.inDrawer) {
+      final expanded = _expandedByUser[key] ?? false;
+      setState(() {
+        _expanded = expanded;
+        _contentExpanded = expanded && _contentExpanded;
+      });
+      _restorePreference(key);
+    }
+  }
+
+  Future<void> _restorePreference(String? key) async {
+    if (key == null || _expandedByUser.containsKey(key)) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getBool(key);
+      if (!mounted ||
+          _preferenceKey != key ||
+          _expandedByUser.containsKey(key) ||
+          stored == null) {
+        return;
+      }
+      _expandedByUser[key] = stored;
+      setState(() {
+        _expanded = stored;
+        _contentExpanded = stored && _contentExpanded;
+      });
+    } catch (_) {
+      // With no readable preference, the rail stays collapsed.
+    }
+  }
+
+  void _rememberExpanded(bool expanded) {
+    if (widget.inDrawer) return;
+    final key = _preferenceKey;
+    if (key == null) return;
+    _expandedByUser[key] = expanded;
+    unawaited(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(key, _expandedByUser[key] ?? expanded);
+      } catch (_) {
+        // Keep the in-memory choice when local storage is unavailable.
+      }
+    }());
   }
 
   bool _handleKeyboardShortcut(KeyEvent event) {
@@ -96,8 +169,8 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
     if (!_expanded) {
       setState(() {
         _expanded = true;
-        _persistedExpanded = true;
       });
+      _rememberExpanded(true);
       _focusSearchOnExpand = true;
     } else {
       _searchFocus.requestFocus();
@@ -108,13 +181,16 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
   @override
   void didUpdateWidget(covariant RecruiterSideNav oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentRoute != widget.currentRoute) _openActiveSection();
+    if (oldWidget.currentRoute != widget.currentRoute ||
+        oldWidget.selectedRoute != widget.selectedRoute) {
+      _openActiveSection();
+    }
   }
 
   void _openActiveSection() {
     for (var i = 0; i < recruiterSections.length; i++) {
       if (recruiterSections[i].items.any(
-        (item) => item.route == widget.currentRoute,
+        (item) => item.route == _selectedRoute,
       )) {
         _openSections.add(i);
         _persistedSections.add(i);
@@ -126,6 +202,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKeyboardShortcut);
+    AuthService.currentUserNotifier.removeListener(_onUserChanged);
     _searchController.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -142,9 +219,9 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
     setState(() {
       if (!_expanded) {
         _expanded = true;
-        _persistedExpanded = true;
         _contentExpanded = false;
         _openSections.add(index);
+        _rememberExpanded(true);
       } else if (!_openSections.add(index)) {
         _openSections.remove(index);
       }
@@ -154,16 +231,13 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
     });
   }
 
-  Widget _tooltip(String label, Widget child) => AppTooltip(
-    message: label,
-    position: TooltipPosition.right,
-    child: child,
-  );
+  Widget _tooltip(String label, Widget child) =>
+      AppTooltip(message: label, position: TooltipPosition.right, child: child);
 
   Widget _section(int index) {
     final section = recruiterSections[index];
     final active = section.items.any(
-      (item) => item.route == widget.currentRoute,
+      (item) => item.route == _selectedRoute,
     );
     if (!_contentExpanded) {
       return _tooltip(
@@ -175,16 +249,33 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
             height: 44,
             margin: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
             decoration: BoxDecoration(
-              color: active ? _accent.withValues(alpha: .10) : null,
+              color: active && widget.glowSelected
+                  ? _accent
+                  : active
+                  ? _accent.withValues(alpha: .10)
+                  : null,
               borderRadius: BorderRadius.circular(8),
-              border: active
+              boxShadow: active && widget.glowSelected
+                  ? [
+                      BoxShadow(
+                        color: _accent.withValues(alpha: .35),
+                        blurRadius: 14,
+                        offset: const Offset(0, 5),
+                      ),
+                    ]
+                  : null,
+              border: active && !widget.glowSelected
                   ? const Border(left: BorderSide(color: _accent, width: 2))
                   : null,
             ),
             child: Icon(
               section.icon,
               size: 19,
-              color: active ? _accent : _muted,
+              color: active && widget.glowSelected
+                  ? Colors.white
+                  : active
+                  ? _accent
+                  : _muted,
             ),
           ),
         ),
@@ -249,7 +340,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
   }
 
   Widget _child(RecruiterDestination item) {
-    final active = widget.currentRoute == item.route;
+    final active = _selectedRoute == item.route;
     return Padding(
       padding: const EdgeInsets.only(left: 24),
       child: InkWell(
@@ -300,80 +391,80 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
             key: const Key('recruiter-account'),
             tooltip: '',
             onSelected: (value) async {
-            if (value == 'settings') _navigate('/recruiter/settings');
-            if (value == 'company') _navigate('/recruiter/company-team');
-            if (value == 'signout') {
-              final navigator = Navigator.of(context);
-              await AuthService.signOut(context);
-              if (navigator.mounted) {
-                navigator.pushNamedAndRemoveUntil('/login', (_) => false);
+              if (value == 'settings') _navigate('/recruiter/settings');
+              if (value == 'company') _navigate('/recruiter/company-team');
+              if (value == 'signout') {
+                final navigator = Navigator.of(context);
+                await AuthService.signOut(context);
+                if (navigator.mounted) {
+                  navigator.pushNamedAndRemoveUntil('/login', (_) => false);
+                }
               }
-            }
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'settings', child: Text('Theme & settings')),
-            PopupMenuItem(value: 'company', child: Text('Company & team')),
-            PopupMenuDivider(),
-            PopupMenuItem(value: 'signout', child: Text('Sign out')),
-          ],
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-            padding: const EdgeInsets.only(top: 9),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: _border)),
-            ),
-            child: Row(
-              mainAxisAlignment: _contentExpanded
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: const Color(0xFFE0E9FF),
-                  child: Text(
-                    initials.isEmpty ? 'R' : initials,
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: _accent,
-                      fontWeight: FontWeight.w700,
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'settings', child: Text('Theme & settings')),
+              PopupMenuItem(value: 'company', child: Text('Company & team')),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'signout', child: Text('Sign out')),
+            ],
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+              padding: const EdgeInsets.only(top: 9),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: _border)),
+              ),
+              child: Row(
+                mainAxisAlignment: _contentExpanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: const Color(0xFFE0E9FF),
+                    child: Text(
+                      initials.isEmpty ? 'R' : initials,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: _accent,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                if (_contentExpanded) ...[
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name.isEmpty ? 'Recruiter' : name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _ink,
+                  if (_contentExpanded) ...[
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name.isEmpty ? 'Recruiter' : name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _ink,
+                            ),
                           ),
-                        ),
-                        Text(
-                          email,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            color: _textTertiary,
+                          Text(
+                            email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: _textTertiary,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
-        ),
-      );
-    },
+        );
+      },
     );
   }
 
@@ -396,7 +487,8 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
           ),
         },
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
           onEnd: () {
             if (_expanded && !_contentExpanded) {
               setState(() => _contentExpanded = true);
@@ -467,8 +559,8 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                           borderRadius: BorderRadius.circular(12),
                           onTap: () => setState(() {
                             _expanded = !_expanded;
-                            _persistedExpanded = _expanded;
                             if (!_expanded) _contentExpanded = false;
+                            _rememberExpanded(_expanded);
                           }),
                           child: SizedBox(
                             width: 24,

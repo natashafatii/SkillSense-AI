@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/app_tooltip.dart';
 
 import '../../models/job.dart';
+import 'create_role_screen.dart';
+import '../../services/api_exception.dart';
+import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import '../../constants/app_colors.dart';
+
+enum _JobAction { edit, close, view, publish, delete }
 
 class JobListingsScreen extends StatefulWidget {
   final Future<List<Job>> Function()? loadJobs;
@@ -24,7 +30,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
   bool _isLoading = true;
   List<Job> _allJobs = [];
   String? _loadError;
-  String? _hoveredJobId;
+  String? _busyJobId;
 
   int get _activeCount =>
       _allJobs.where((j) => j.status == JobStatus.active).length;
@@ -72,6 +78,194 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
     }
   }
 
+  void _toast(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<bool> _confirmAction(_JobAction action) async {
+    final (message, confirmLabel) = switch (action) {
+      _JobAction.close => (
+        "Close this role? Candidates can no longer apply. This can't be undone.",
+        'Close role',
+      ),
+      _JobAction.delete => (
+        'Delete this draft? This permanently removes the role and its data.',
+        'Delete draft',
+      ),
+      _JobAction.publish => (
+        'Publish this role? Candidates can apply immediately.',
+        'Publish',
+      ),
+      _ => throw StateError('This action does not need confirmation.'),
+    };
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: action == _JobAction.delete || action == _JobAction.close
+                    ? TextButton.styleFrom(foregroundColor: Colors.red)
+                    : null,
+                child: Text(confirmLabel),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  void _replaceJob(Job updated) {
+    setState(() {
+      _allJobs = [
+        for (final job in _allJobs) job.id == updated.id ? updated : job,
+      ];
+      _activeFilter = updated.status;
+    });
+  }
+
+  Future<void> _handleAction(Job job, _JobAction action) async {
+    if (_busyJobId != null) return;
+    if (action == _JobAction.view) {
+      await Navigator.of(
+        context,
+      ).pushNamed('/recruiter/jobs/${Uri.encodeComponent(job.id)}');
+      if (mounted) _fetchJobs();
+      return;
+    }
+    if (action == _JobAction.edit) {
+      setState(() => _busyJobId = job.id);
+      try {
+        final currentJob = await JobService.getJob(job.id);
+        if (!mounted) return;
+        if (currentJob.isClosed) {
+          _replaceJob(currentJob);
+          _toast('This role is closed.');
+          return;
+        }
+        final result = await Navigator.of(
+          context,
+        ).pushNamed<Object>('/recruiter/create-role', arguments: currentJob);
+        if (!mounted) return;
+        if (result == CreateRoleEditResult.notFound) {
+          await _fetchJobs();
+          if (mounted) _toast('Job not found.');
+        } else if (result is Job) {
+          _replaceJob(result);
+          _toast('Job updated.');
+        }
+      } on ApiException catch (error) {
+        await _handleActionError(error);
+      } catch (_) {
+        if (mounted) _toast('Server error. Please retry.');
+      } finally {
+        if (mounted) setState(() => _busyJobId = null);
+      }
+      return;
+    }
+    if (!await _confirmAction(action) || !mounted) return;
+    setState(() => _busyJobId = job.id);
+    try {
+      switch (action) {
+        case _JobAction.close:
+          final updated = await JobService.closeJob(job.id);
+          if (!mounted) return;
+          if (updated.status != JobStatus.closed) {
+            throw StateError('The job API did not confirm closure.');
+          }
+          _replaceJob(updated);
+          _toast('Role closed.');
+          break;
+        case _JobAction.publish:
+          final updated = await JobService.publishJob(job.id, null);
+          if (!mounted) return;
+          if (updated.status != JobStatus.active) {
+            throw StateError('The job API did not confirm publication.');
+          }
+          _replaceJob(updated);
+          _toast('Role published.');
+          break;
+        case _JobAction.delete:
+          await JobService.deleteJob(job.id);
+          if (!mounted) return;
+          setState(() => _allJobs.removeWhere((row) => row.id == job.id));
+          _toast('Draft deleted.');
+          break;
+        case _JobAction.edit || _JobAction.view:
+          break;
+      }
+    } on ApiException catch (error) {
+      await _handleActionError(error);
+    } catch (_) {
+      if (mounted) _toast('Server error. Please retry.');
+    } finally {
+      if (mounted) setState(() => _busyJobId = null);
+    }
+  }
+
+  Future<void> _handleActionError(ApiException error) async {
+    if (!mounted) return;
+    if (error.statusCode == 401) {
+      await AuthService.signOut(context);
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+      }
+    } else if (error.statusCode == 404) {
+      await _fetchJobs();
+      if (mounted) _toast('Job not found.');
+    } else if (error.statusCode == 403) {
+      _toast("You're not authorized to perform this action.");
+    } else if (error.statusCode == 400) {
+      _toast(error.message);
+    } else {
+      _toast('Server error. Please retry.');
+    }
+  }
+
+  Widget _actionMenu(Job job) {
+    final actions = switch (job.status) {
+      JobStatus.active => const [
+        _JobAction.edit,
+        _JobAction.close,
+        _JobAction.view,
+      ],
+      JobStatus.draft => const [
+        _JobAction.edit,
+        _JobAction.publish,
+        _JobAction.delete,
+        _JobAction.view,
+      ],
+      JobStatus.closed => const [_JobAction.view],
+    };
+    return PopupMenuButton<_JobAction>(
+      key: Key('job-actions-${job.id}'),
+      tooltip: 'Actions for ${job.title}',
+      enabled: _busyJobId == null,
+      icon: const Icon(Icons.more_horiz, size: 20),
+      onSelected: (action) => _handleAction(job, action),
+      itemBuilder: (_) => [
+        for (final action in actions)
+          PopupMenuItem(
+            value: action,
+            child: Text(switch (action) {
+              _JobAction.edit => 'Edit',
+              _JobAction.close => 'Close',
+              _JobAction.view => 'View',
+              _JobAction.publish => 'Publish',
+              _JobAction.delete => 'Delete',
+            }),
+          ),
+      ],
+    );
+  }
+
   Color _getRingColor(double? score) {
     if (score == null || score <= 0) return const Color(0xFFCBD5E1);
     if (score >= 85) return const Color(0xFF10B981);
@@ -116,7 +310,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 768;
+    final isMobile = MediaQuery.sizeOf(context).width < 900;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -126,8 +320,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
             bottom: false,
             child: Column(
               children: [
-                if (!isMobile) _buildWebTopBar(),
-                if (isMobile) _buildMobileTopBar(),
+                const RecruiterTopBar(pageTitle: 'Job listings'),
                 _buildHeaderRow(isMobile),
                 _buildFilterChips(isMobile),
                 Expanded(
@@ -271,7 +464,9 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
     required bool hasBadge,
   }) {
     String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+    if (icon == Icons.notifications_none_rounded ||
+        icon == Icons.notifications_outlined ||
+        icon == Icons.notifications) {
       tooltip = 'Notifications';
     } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
       tooltip = 'Theme & settings';
@@ -542,84 +737,70 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
   }
 
   Widget _buildJobRow(Job job, bool isMobile) {
-    final hovered = _hoveredJobId == job.id;
     final badgeColor = job.isActive
         ? const Color(0xFF047857)
         : const Color(0xFF64748B);
     final badgeBackground = job.isActive
         ? const Color(0xFFDDF7E9)
         : const Color(0xFFF1F5F9);
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hoveredJobId = job.id),
-      onExit: (_) => setState(() => _hoveredJobId = null),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        color: hovered ? const Color(0xFFF8FAFF) : Colors.white,
-        foregroundDecoration: hovered
-            ? BoxDecoration(
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF2563EB).withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              )
-            : null,
-        child: InkWell(
-          onTap: () => Navigator.of(
-            context,
-          ).pushNamed('/recruiter/rankings', arguments: job.id),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                _buildScoreRing(job.averageScore),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        job.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF0F172A),
-                        ),
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        hoverColor: const Color(0xFFF8FAFF),
+        onTap: _busyJobId != null
+            ? null
+            : () => _handleAction(job, _JobAction.view),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              _buildScoreRing(job.averageScore),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      job.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0F172A),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _metadata(job),
-                        maxLines: isMobile ? 2 : 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          fontSize: 10.5,
-                          color: const Color(0xFF64748B),
-                        ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _metadata(job),
+                      maxLines: isMobile ? 2 : 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        color: const Color(0xFF64748B),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 12),
+              if (isMobile)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _buildApplicantCount(job.applicantCount, isMobile: true),
+                    const SizedBox(height: 5),
+                    _buildStatusBadge(job, badgeColor, badgeBackground),
+                  ],
+                )
+              else ...[
+                _buildApplicantCount(job.applicantCount, isMobile: false),
                 const SizedBox(width: 12),
-                if (isMobile)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      _buildApplicantCount(job.applicantCount, isMobile: true),
-                      const SizedBox(height: 5),
-                      _buildStatusBadge(job, badgeColor, badgeBackground),
-                    ],
-                  )
-                else ...[
-                  _buildApplicantCount(job.applicantCount, isMobile: false),
-                  const SizedBox(width: 12),
-                  _buildStatusBadge(job, badgeColor, badgeBackground),
-                ],
+                _buildStatusBadge(job, badgeColor, badgeBackground),
               ],
-            ),
+              const SizedBox(width: 4),
+              _actionMenu(job),
+            ],
           ),
         ),
       ),
@@ -750,20 +931,29 @@ class RecruiterNotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFFF8FAFC),
-    appBar: AppBar(title: const Text('Notifications')),
-    body: const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.notifications_none_rounded,
-            size: 36,
-            color: Color(0xFF64748B),
+    body: Column(
+      children: [
+        const RecruiterTopBar(
+          pageTitle: 'Notifications',
+          breadcrumbSegments: ['Notifications'],
+        ),
+        const Expanded(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.notifications_none_rounded,
+                  size: 36,
+                  color: Color(0xFF64748B),
+                ),
+                SizedBox(height: 12),
+                Text('You’re all caught up.'),
+              ],
+            ),
           ),
-          SizedBox(height: 12),
-          Text('You’re all caught up.'),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 }

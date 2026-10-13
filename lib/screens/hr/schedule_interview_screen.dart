@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/application.dart';
@@ -439,7 +440,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 800;
+    final compact = MediaQuery.sizeOf(context).width < 900;
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FD),
       body: Stack(
@@ -451,7 +452,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 Expanded(
                   child: Column(
                     children: [
-                      _topBar(compact),
+                      const RecruiterTopBar(
+                        pageTitle: 'Schedule interview',
+                        breadcrumbSegments: ['Schedule interview'],
+                      ),
                       Expanded(
                         child: _showEmptyState
                             ? _buildEmptyState(compact)

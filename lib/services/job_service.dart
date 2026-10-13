@@ -27,7 +27,9 @@ class JobService {
       final data = response.data;
       final rows = data is List ? data : (data as Map)['results'] as List;
       final skills = rows
-          .map((row) => JobSkill.fromJson(Map<String, dynamic>.from(row as Map)))
+          .map(
+            (row) => JobSkill.fromJson(Map<String, dynamic>.from(row as Map)),
+          )
           .toList();
       if (generation == SessionScope.generation) _skillsCache[id] = skills;
       return skills;
@@ -37,10 +39,10 @@ class JobService {
   }
 
   /// Loads all recruiter-owned jobs for selection controls.
-  static Future<List<Job>> listAllJobs({Dio? client}) async {
+  static Future<List<Job>> listAllJobs({JobStatus? status, Dio? client}) async {
     final jobs = <Job>[];
     for (var page = 1; page <= 100; page++) {
-      final result = await listJobs(page: page, client: client);
+      final result = await listJobs(page: page, status: status, client: client);
       jobs.addAll(result.results);
       if (!result.hasNext) return jobs;
     }
@@ -144,7 +146,10 @@ class JobService {
   static Future<void> deleteJob(String id) async {
     try {
       final dio = await ApiClient.getInstance();
-      await dio.delete('/jobs/$id/');
+      final response = await dio.delete('/jobs/$id/');
+      if (response.statusCode != 204) {
+        throw StateError('The job API did not confirm deletion.');
+      }
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
     }
@@ -153,10 +158,16 @@ class JobService {
   /// Transitions a `DRAFT` job to `ACTIVE`.
   ///
   /// Requires at least one skill and a future deadline.
-  static Future<Job> publishJob(String id, Map<String, dynamic> jobData, {Dio? client}) async {
+  static Future<Job> publishJob(
+    String id,
+    Map<String, dynamic>? jobData, {
+    Dio? client,
+  }) async {
     try {
       final dio = client ?? await ApiClient.getInstance();
-      final response = await dio.post('/jobs/$id/publish/', data: jobData);
+      final response = jobData == null
+          ? await dio.post('/jobs/$id/publish/')
+          : await dio.post('/jobs/$id/publish/', data: jobData);
       return Job.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
@@ -164,7 +175,12 @@ class JobService {
   }
 
   /// Adds a skill to a job.
-  static Future<JobSkill> addSkillToJob(String id, String skillName, {bool isRequired = true, Dio? client}) async {
+  static Future<JobSkill> addSkillToJob(
+    String id,
+    String skillName, {
+    bool isRequired = true,
+    Dio? client,
+  }) async {
     try {
       final dio = client ?? await ApiClient.getInstance();
       final response = await dio.post(
@@ -179,7 +195,11 @@ class JobService {
   }
 
   /// Removes a skill from a job.
-  static Future<void> deleteSkillFromJob(String id, int skillId, {Dio? client}) async {
+  static Future<void> deleteSkillFromJob(
+    String id,
+    int skillId, {
+    Dio? client,
+  }) async {
     try {
       final dio = client ?? await ApiClient.getInstance();
       await dio.delete('/jobs/$id/skills/$skillId/');

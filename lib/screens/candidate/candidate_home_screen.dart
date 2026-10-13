@@ -1,5 +1,7 @@
+import '../../widgets/candidate_button_style.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/app_tooltip.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -200,13 +202,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       Expanded(
                         child: Column(
                           children: [
-                            _buildTopBar(
-                              isMobile,
-                              textPrimary,
-                              textSecondary,
-                              cardBg,
-                              cardBorder,
-                            ),
+                            RecruiterTopBar(pageTitle: 'Home', candidate: true),
                             Expanded(
                               child: _isLoading
                                   ? const Center(
@@ -234,7 +230,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                                                   });
                                                   _initializeData();
                                                 },
-                                                style: ElevatedButton.styleFrom(
+                                                style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                                                   backgroundColor: const Color(0xFF0FB89B),
                                                   foregroundColor: Colors.white,
                                                   elevation: 0,
@@ -245,7 +241,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                                                   shape: RoundedRectangleBorder(
                                                     borderRadius: BorderRadius.circular(20),
                                                   ),
-                                                ),
+                                                )),
                                                 child: const Text('Retry'),
                                               ),
                                             ],
@@ -543,7 +539,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                               ),
                             );
                           },
-                          style: ElevatedButton.styleFrom(
+                          style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0FB89B),
                             foregroundColor: Colors.white,
                             elevation: 0,
@@ -554,7 +550,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
                             ),
-                          ),
+                          )),
                           icon: const Icon(
                             Icons.add,
                             size: 16,
@@ -577,7 +573,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                               ),
                             );
                           },
-                          style: OutlinedButton.styleFrom(
+                          style: CandidateButtonStyle.secondary(OutlinedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: const Color(0xFF334155),
                             side: const BorderSide(
@@ -591,13 +587,13 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
                             ),
-                          ),
+                          )),
                           child: Text(
                             'Complete profile',
                             style: GoogleFonts.inter(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w600,
-                              color: const Color(0xFF334155),
+                              color: CandidateButtonStyle.secondaryText,
                             ),
                           ),
                         ),
@@ -710,7 +706,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 children: [
                   ElevatedButton(
                     onPressed: () => _showInterviewOptions(context),
-                    style: ElevatedButton.styleFrom(
+                    style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0FB89B),
                       foregroundColor: Colors.white,
                       elevation: 0,
@@ -721,7 +717,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
-                    ),
+                    )),
                     child: Text(
                       'Run device check',
                       style: GoogleFonts.inter(
@@ -1191,7 +1187,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                           ),
                         );
                       },
-                      style: ElevatedButton.styleFrom(
+                      style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0FB89B),
                         foregroundColor: Colors.white,
                         elevation: 0,
@@ -1202,7 +1198,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                         ),
-                      ),
+                      )),
                       icon: const Icon(
                         Icons.add,
                         size: 16,
@@ -1841,14 +1837,14 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
+              style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                 backgroundColor: AppColors.dashboardTeal,
                 foregroundColor: const Color(0xFF0F172A),
                 minimumSize: const Size(double.infinity, 44),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-              ),
+              )),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(context).pushReplacement(
@@ -1864,7 +1860,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
+              style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E293B),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 44),
@@ -1872,7 +1868,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                   borderRadius: BorderRadius.circular(8),
                   side: const BorderSide(color: Color(0xFF334155)),
                 ),
-              ),
+              )),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(context).pushReplacement(
@@ -1888,7 +1884,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
+              style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E293B),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 44),
@@ -1896,7 +1892,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                   borderRadius: BorderRadius.circular(8),
                   side: const BorderSide(color: Color(0xFF334155)),
                 ),
-              ),
+              )),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(context).pushReplacement(

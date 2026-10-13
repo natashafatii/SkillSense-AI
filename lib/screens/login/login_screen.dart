@@ -1,5 +1,6 @@
 // lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
@@ -8,6 +9,7 @@ import '../../widgets/gradient_background.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import 'login_screen_web.dart';
+import 'login_error_message.dart';
 import 'forgot_password_screen_web.dart';
 import 'check_email_screen_web.dart';
 import 'set_new_password_screen_web.dart';
@@ -48,6 +50,8 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+    _emailController.addListener(_dismissLoginError);
+    _passwordController.addListener(_dismissLoginError);
     _emailFocus.addListener(() => setState(() {}));
     _passwordFocus.addListener(() => setState(() {}));
     _ctrl = AnimationController(
@@ -69,6 +73,12 @@ class _LoginScreenState extends State<LoginScreen>
         );
   }
 
+  void _dismissLoginError() {
+    if (_loginError != null && mounted) {
+      setState(() => _loginError = null);
+    }
+  }
+
   @override
   void dispose() {
     _ctrl.dispose();
@@ -84,8 +94,7 @@ class _LoginScreenState extends State<LoginScreen>
     final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
-      setState(() => _loginError = null);
-      _snack('Please enter both email and password.');
+      setState(() => _loginError = 'Please enter your email and password.');
       return;
     }
 
@@ -114,6 +123,7 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             );
         if (mounted && mismatch != null) {
+          if (kDebugMode) debugPrint('Login failed: $mismatch');
           setState(() => _loginError = mismatch.toString());
         }
         return;
@@ -185,9 +195,12 @@ class _LoginScreenState extends State<LoginScreen>
         Navigator.pushReplacementNamed(context, '/candidate/home');
       }
     } catch (e) {
+      if (kDebugMode) debugPrint('Login failed: $e');
       if (mounted) {
         setState(() {
-          _loginError = e.toString().replaceAll('Exception: ', '');
+          _loginError = e is RoleMismatchException
+              ? e.toString()
+              : loginErrorMessage(e);
         });
       }
     } finally {
@@ -328,7 +341,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth > 900) {
+        if (constraints.maxWidth >= 900) {
           return LoginScreenWeb(
             isLoading: _isLoading,
             emailController: _emailController,
@@ -415,6 +428,43 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                               const SizedBox(height: 28),
+
+                              if (_loginError != null) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF2F2),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.warning_amber_rounded,
+                                        color: Color(0xFF991B1B),
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          _loginError!,
+                                          style: const TextStyle(
+                                            color: Color(0xFF991B1B),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (_loginError!.contains('Please use'))
+                                  TextButton(
+                                    onPressed: _chooseLoginRole,
+                                    child: const Text(
+                                      'Choose another login type',
+                                    ),
+                                  ),
+                                const SizedBox(height: 12),
+                              ],
 
                               // ── Email field (standalone on bg) ─────────────
                               TextFormField(
@@ -519,31 +569,6 @@ class _LoginScreenState extends State<LoginScreen>
                                 ],
                               ),
                               const SizedBox(height: 22),
-
-                              if (_loginError != null) ...[
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF2F2),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    _loginError!,
-                                    style: const TextStyle(
-                                      color: Color(0xFF991B1B),
-                                    ),
-                                  ),
-                                ),
-                                if (_loginError!.contains('Please use'))
-                                  TextButton(
-                                    onPressed: _chooseLoginRole,
-                                    child: const Text(
-                                      'Choose another login type',
-                                    ),
-                                  ),
-                                const SizedBox(height: 12),
-                              ],
 
                               // ── Log In button ──────────────────────────────
                               SizedBox(

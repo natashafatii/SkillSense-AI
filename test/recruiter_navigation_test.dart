@@ -3,32 +3,48 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:skillsense_ai/services/auth_service.dart';
+import 'package:skillsense_ai/screens/hr/create_role_screen.dart';
 import 'package:skillsense_ai/widgets/recruiter_scaffold.dart';
 import 'package:skillsense_ai/widgets/recruiter_side_nav.dart';
 
 void main() {
+  var userSequence = 0;
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    AuthService.currentUserNotifier.value = {
+      'email': 'recruiter-nav-${userSequence++}@example.com',
+    };
+  });
+  tearDown(() => AuthService.currentUserNotifier.value = null);
+
   testWidgets('the shared shell owns one sidebar across recruiter routes', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.binding.setSurfaceSize(const Size(1280, 900));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.resetPhysicalSize);
     for (final route in [
       '/recruiter/command-deck',
       '/recruiter/create-role',
       '/recruiter/job-listings',
       '/recruiter/analytics',
     ]) {
-      await tester.pumpWidget(MaterialApp(
-        key: ValueKey(route),
-        home: RecruiterScaffold(currentRoute: route, body: Text(route)),
-      ));
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey(route),
+          home: RecruiterScaffold(currentRoute: route, body: Text(route)),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.byType(RecruiterSideNav), findsOneWidget);
       expect(
         tester.getRect(find.text(route)).left,
-        greaterThanOrEqualTo(tester.getRect(find.byType(RecruiterSideNav)).right),
+        greaterThanOrEqualTo(
+          tester.getRect(find.byType(RecruiterSideNav)).right,
+        ),
       );
     }
   });
@@ -48,6 +64,8 @@ void main() {
         ),
       ),
     );
+    await tester.tap(find.byKey(const Key('recruiter-collapse')));
+    await tester.pumpAndSettle();
 
     expect(tester.widget<Text>(find.text('SkillSense')).style?.fontSize, 13.5);
     expect(
@@ -99,6 +117,8 @@ void main() {
         ),
       ),
     );
+    await tester.tap(find.byKey(const Key('recruiter-collapse')));
+    await tester.pumpAndSettle();
 
     for (
       var sectionIndex = 0;
@@ -152,6 +172,8 @@ void main() {
         ),
       ),
     );
+    await tester.tap(find.byKey(const Key('recruiter-collapse')));
+    await tester.pumpAndSettle();
 
     expect(find.text('Rankings'), findsOneWidget);
     final rankings = tester.widget<Text>(find.text('Rankings'));
@@ -205,7 +227,6 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byKey(const Key('recruiter-collapse')));
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(RecruiterSideNav)).width, 60);
     final icon = find.byKey(const Key('recruiter-section-1'));
@@ -221,6 +242,108 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(RecruiterSideNav)).width, 272);
     expect(find.text('PIPELINE & CANDIDATES'), findsOneWidget);
+  });
+
+  testWidgets('restores expansion for the same recruiter only', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const firstKey = 'recruiter_sidebar_expanded_v1_first%40example.com';
+    const secondKey = 'recruiter_sidebar_expanded_v1_second%40example.com';
+    SharedPreferences.setMockInitialValues({firstKey: true});
+    AuthService.currentUserNotifier.value = {'email': 'first@example.com'};
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: RecruiterScaffold(
+          currentRoute: '/recruiter/command-deck',
+          body: SizedBox.expand(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(RecruiterSideNav)).width, 272);
+
+    AuthService.currentUserNotifier.value = {'email': 'second@example.com'};
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(RecruiterSideNav)).width, 60);
+
+    await tester.tap(find.byKey(const Key('recruiter-collapse')));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(RecruiterSideNav)).width, 272);
+    final preferences = await SharedPreferences.getInstance();
+    await tester.runAsync(() async {
+      for (
+        var attempt = 0;
+        attempt < 20 && preferences.getBool(secondKey) != true;
+        attempt++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    expect(
+      preferences.getBool(secondKey),
+      isTrue,
+      reason:
+          'keys: ${preferences.getKeys()}, auth id: ${AuthService.currentUserId}',
+    );
+
+    AuthService.currentUserNotifier.value = {'email': 'first@example.com'};
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(RecruiterSideNav)).width, 272);
+    expect(preferences.getBool(firstKey), isTrue);
+  });
+
+  testWidgets('Create Role reflows as the recruiter rail animates', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: RecruiterScaffold(
+          currentRoute: '/recruiter/create-role',
+          body: CreateRoleScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final rail = find.byType(RecruiterSideNav);
+    final canvas = find.byKey(const Key('recruiter-main-canvas'));
+    expect(tester.getSize(rail).width, 60);
+    expect(tester.getRect(canvas).left, 60);
+
+    await tester.tap(find.byKey(const Key('recruiter-collapse')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 110));
+    final animatedWidth = tester.getSize(rail).width;
+    expect(animatedWidth, greaterThan(60));
+    expect(animatedWidth, lessThan(272));
+    expect(tester.getRect(canvas).left, closeTo(animatedWidth, .1));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(rail).width, 272);
+    expect(tester.getRect(canvas).left, 272);
+    expect(tester.getRect(canvas).right, 1280);
+    expect(tester.takeException(), isNull);
+
+    tester.view.physicalSize = const Size(900, 900);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(canvas).left, 272);
+    expect(tester.getRect(canvas).right, 900);
+    expect(find.text('NEW JOB POSTING'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    tester.view.physicalSize = const Size(640, 900);
+    await tester.pumpAndSettle();
+    final bodyLeft = tester.getRect(find.byType(CreateRoleScreen)).left;
+    await tester.tap(find.byKey(const Key('recruiter-menu')));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byType(CreateRoleScreen)).left, bodyLeft);
+    expect(find.byType(RecruiterSideNav), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('mobile menu exposes recruiter destinations', (tester) async {

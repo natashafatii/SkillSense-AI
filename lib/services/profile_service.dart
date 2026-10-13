@@ -78,6 +78,16 @@ class ProfileService {
     }
   }
 
+  /// Requests an export of the signed-in user's data.
+  static Future<void> requestCandidateDataExport() async {
+    try {
+      final dio = await ApiClient.getInstance();
+      await dio.post('/users/me/data-export/');
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
+    }
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // Recruiter Profile Endpoints (`/api/recruiters/profile/`)
   // ══════════════════════════════════════════════════════════════════════════

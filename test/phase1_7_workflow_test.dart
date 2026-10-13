@@ -52,6 +52,7 @@ void main() {
   test('POST uses the selected bytes and canonical job ID', () async {
     final dio = Dio(BaseOptions(baseUrl: 'https://test.invalid'));
     String? sentJob;
+    String? sentCoverNote;
     String? sentFileName;
     List<int>? sentBytes;
     dio.interceptors.add(
@@ -60,6 +61,9 @@ void main() {
           final form = options.data as FormData;
           sentJob = form.fields
               .singleWhere((field) => field.key == 'job')
+              .value;
+          sentCoverNote = form.fields
+              .singleWhere((field) => field.key == 'cover_note')
               .value;
           final file = form.files
               .singleWhere((field) => field.key == 'resume_file')
@@ -89,6 +93,7 @@ void main() {
     );
     final result = await ApplicationService.submitApplication(
       jobId: 'job-a',
+      coverNote: 'I enjoy backend work.',
       fileName: 'selected.pdf',
       fileBytes: pdf,
       consentGiven: true,
@@ -97,6 +102,7 @@ void main() {
     expect(result.id, 'application-1');
     expect(result.job, 'job-a');
     expect(sentJob, 'job-a');
+    expect(sentCoverNote, 'I enjoy backend work.');
     expect(sentFileName, 'selected.pdf');
     expect(sentBytes, pdf);
   });

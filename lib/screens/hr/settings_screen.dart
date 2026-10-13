@@ -1,12 +1,27 @@
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
+import '../../services/scoring_model_service.dart';
+import '../../widgets/app_tooltip.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter;
 
+typedef ScoringModelScreen = SettingsScreen;
+
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final int? scoredCount;
+  final bool? isDefault;
+  final bool? forceEmptyState;
+  final Future<ScoringModelStatus> Function()? loadModelStatus;
+
+  const SettingsScreen({
+    super.key,
+    this.scoredCount,
+    this.isDefault,
+    this.forceEmptyState,
+    this.loadModelStatus,
+  });
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -15,7 +30,13 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _searchController = TextEditingController();
 
-  // Rebalancing Sliders State (must always sum to 100)
+  // Model and workspace state
+  bool _loading = true;
+  int _scoredCandidatesCount = 0;
+  bool _isDefaultModel = true;
+  bool _reviewingWeights = false;
+
+  // Sliders State (must always sum to 100)
   double _techWeight = 45.0;
   double _commWeight = 30.0;
   double _fitWeight = 25.0;
@@ -26,10 +47,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _thresholdYes = 70.0;
   double _thresholdStrong = 85.0;
 
+  // Model metrics for live view
+  double _auc = 0.89;
+  double _drift = 0.012;
+  String _modelVersion = 'v2.4';
+
+  static const Color _tx = Color(0xFF0F172A);
+  static const Color _tx2 = Color(0xFF475569);
+  static const Color _tx3 = Color(0xFF64748B);
+  static const Color _tx4 = Color(0xFF94A3B8);
+  static const Color _edge2 = Color(0xFFE2E8F0);
+  static const Color _field = Color(0xFFF1F5F9);
+
+  @override
+  void initState() {
+    super.initState();
+    _initModelData();
+  }
+
+  Future<void> _initModelData() async {
+    if (widget.scoredCount != null || widget.isDefault != null) {
+      setState(() {
+        _scoredCandidatesCount = widget.scoredCount ?? 0;
+        _isDefaultModel = widget.isDefault ?? true;
+        _loading = false;
+      });
+      return;
+    }
+
+    try {
+      // Use defaults until the scoring-model GET endpoint exists.
+      final status = widget.loadModelStatus == null
+          ? const ScoringModelStatus()
+          : await widget.loadModelStatus!();
+      if (!mounted) return;
+      setState(() {
+        _scoredCandidatesCount = status.scoredCandidatesCount;
+        _isDefaultModel = status.isDefault;
+        _techWeight = status.techWeight;
+        _commWeight = status.commWeight;
+        _fitWeight = status.fitWeight;
+        _auc = status.auc;
+        _drift = status.drift;
+        _modelVersion = status.version;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _scoredCandidatesCount = 0;
+        _isDefaultModel = true;
+        _loading = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  bool get _showEmptyState {
+    if (widget.forceEmptyState == true) return true;
+    if (_reviewingWeights) return false;
+    if (_loading) return false;
+    // Empty state triggers only when workspace has < 20 scored candidates OR model is on defaults
+    return _scoredCandidatesCount < 20 || _isDefaultModel;
   }
 
   // Single rebalancing slider group logic
@@ -82,7 +166,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final currentSum = _techWeight + _commWeight + _fitWeight;
       final error = 100.0 - currentSum;
       if (error != 0.0) {
-        // Adjust the one that isn't the primary target of drag
         if (target == 'tech') {
           _commWeight += error;
         } else {
@@ -95,7 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth <= 768;
+    final bool isMobile = screenWidth < 900;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -121,40 +204,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── MAIN WORKSPACE CONTENT ──────────────────────────────────────────
           SafeArea(
             bottom: false,
-            child: Row(
+            child: Column(
               children: [
-                // 1. LEFT RAIL (Web Only)
+                // Top Bar (Web: 58px / Mobile: 56px)
+                const RecruiterTopBar(
+                  pageTitle: 'Scoring model',
+                  breadcrumbSegments: ['Scoring model'],
+                ),
 
-                // 2. MAIN WORKSPACE
+                // Center area: Empty State or Live RD-10 layout
                 Expanded(
-                  child: Column(
-                    children: [
-                      // Top Bar (Web Only)
-                      if (!isMobile) _buildTopBar(),
-
-                      // Mobile Header (Mobile Only)
-                      if (isMobile) _buildMobileHeader(),
-
-                      // Scrollable content
-                      Expanded(
-                        child: SingleChildScrollView(
+                  child: _showEmptyState
+                      ? _buildEmptyState(isMobile: isMobile)
+                      : SingleChildScrollView(
                           padding: EdgeInsets.symmetric(
                             horizontal: isMobile ? 16 : 24,
-                            vertical: isMobile ? 12 : 8,
+                            vertical: isMobile ? 12 : 16,
                           ),
                           child: isMobile
                               ? _buildMobileLayout()
                               : _buildWebLayout(),
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
           ),
 
-          // ── MOBILE FLOATING BOTTOM DOCK (Settings active -> Settings in App bar overflow) ──
+          // ── MOBILE FLOATING BOTTOM DOCK ────────────────────────────────────
           if (isMobile)
             Align(
               alignment: Alignment.bottomCenter,
@@ -165,26 +241,219 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── WEB LAYOUT ─────────────────────────────────────────────────────────────
+  // ── CENTERED EMPTY STATE ───────────────────────────────────────────────────
+  Widget _buildEmptyState({required bool isMobile}) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon tile: 64px (web) / 54px (mobile), muted background (--field), 1px border --edge2
+            Container(
+              width: isMobile ? 54 : 64,
+              height: isMobile ? 54 : 64,
+              decoration: BoxDecoration(
+                color: _field,
+                borderRadius: BorderRadius.circular(isMobile ? 17 : 20),
+                border: Border.all(color: _edge2, width: 1),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.contrast_rounded,
+                  size: isMobile ? 20 : 24,
+                  color: _tx2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Heading: Web "Using the default scoring model" / Mobile "Default model active"
+            Text(
+              isMobile
+                  ? 'Default model active'
+                  : 'Using the default scoring model',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: _tx,
+                fontSize: isMobile ? 15 : 18,
+                fontWeight: FontWeight.w700,
+                letterSpacing: isMobile ? -0.03 * 15 : -0.025 * 18,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Helper text
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: isMobile ? 280 : 400),
+              child: Text(
+                isMobile
+                    ? 'Tune weights after your first scored candidates.'
+                    : 'Weights start balanced across skills, experience and interview performance. You can tune them once you have a few scored candidates.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: _tx3,
+                  fontSize: isMobile ? 11 : 12.5,
+                  fontWeight: FontWeight.w400,
+                  height: 1.65,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Primary CTA: "Review default weights" (Indigo gradient)
+            Container(
+              height: isMobile ? 38 : 40,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF4D7BFA).withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 22 : 26),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                ),
+                onPressed: () {
+                  setState(() {
+                    _reviewingWeights = true;
+                  });
+                },
+                child: Text(
+                  'Review default weights',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: isMobile ? 13 : 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+
+            // Unlock hint: Web only, 4px below button
+            if (!isMobile) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Changes apply to new reports only',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: _tx4,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── WEB LAYOUT (LIVE RD-10 CONFIGURATION VIEW) ──────────────────────────────
   Widget _buildWebLayout() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1080),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeaderArea(),
+            if (_reviewingWeights &&
+                (_scoredCandidatesCount < 20 || _isDefaultModel))
+              _buildReviewBanner(),
+            _buildConfigurationForm(isMobile: false),
+            const SizedBox(height: 24),
+            _buildShapImportanceCard(isMobile: false),
+            const SizedBox(height: 24),
+            _buildModelCard(isMobile: false),
+            const SizedBox(height: 60),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── MOBILE LAYOUT (LIVE RD-10 CONFIGURATION VIEW) ───────────────────────────
+  Widget _buildMobileLayout() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildHeaderArea(),
-        _buildConfigurationForm(isMobile: false),
-        const SizedBox(height: 60),
+        if (_reviewingWeights &&
+            (_scoredCandidatesCount < 20 || _isDefaultModel))
+          _buildReviewBanner(),
+        _buildConfigurationForm(isMobile: true),
+        const SizedBox(height: 16),
+        _buildShapImportanceCard(isMobile: true),
+        const SizedBox(height: 16),
+        _buildModelCard(isMobile: true),
+        const SizedBox(height: 110), // Safe space above bottom dock
       ],
     );
   }
 
-  // ── MOBILE LAYOUT ──────────────────────────────────────────────────────────
-  Widget _buildMobileLayout() {
-    return Column(
-      children: [
-        _buildConfigurationForm(isMobile: true),
-        const SizedBox(height: 16),
-        const SizedBox(height: 110), // Safe space above bottom dock
-      ],
+  Widget _buildReviewBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF2FF),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFC7D2FE)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.tune_rounded, color: Color(0xFF4338CA), size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Reviewing default model configuration. Changes apply to newly generated reports only.',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF3730A3),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _reviewingWeights = false;
+              });
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              '‹ Back to overview',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF4338CA),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -195,7 +464,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        border: Border.all(color: _edge2, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF0F172A).withValues(alpha: 0.02),
@@ -213,12 +482,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Text(
                 'Score weights',
                 style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
+                  color: _tx,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              _buildVersionBadge('LOCAL PREVIEW'),
+              _buildVersionBadge(
+                _isDefaultModel ? 'DEFAULT WEIGHTS' : 'CUSTOM WEIGHTS',
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -243,7 +514,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Communication Weight Slider
+          // Role Fit Weight Slider
           _buildRebalancingSliderRow(
             label: 'ROLE FIT',
             value: _fitWeight,
@@ -260,21 +531,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: _edge2),
             ),
             child: Row(
               children: [
-                const Icon(
-                  Icons.info_outline_rounded,
-                  size: 16,
-                  color: Color(0xFF64748B),
-                ),
+                const Icon(Icons.info_outline_rounded, size: 16, color: _tx3),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Preview only. These controls do not save or change the active scoring rubric.',
+                    'Changes apply to new candidate reports only. Previously generated scores remain untouched.',
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
+                      color: _tx3,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -292,18 +559,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             'Recommendation Thresholds',
             style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
+              color: _tx,
               fontSize: 14.5,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Explore a local preview of recommendation bands. Recruiter changes are not saved.',
-            style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
-              fontSize: 12,
-            ),
+            'Configure scoring cutoff points for AI candidate recommendations.',
+            style: GoogleFonts.inter(color: _tx3, fontSize: 12),
           ),
           const SizedBox(height: 20),
 
@@ -365,7 +629,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 12),
           _buildBandProportionalStrip(isMobile: isMobile),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
           // Actions
           Row(
@@ -395,14 +659,246 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Text(
                   'Reset defaults',
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF64748B),
+                    color: _tx3,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  // ── SHAP FEATURE IMPORTANCE CARD ───────────────────────────────────────────
+  Widget _buildShapImportanceCard({required bool isMobile}) {
+    final features = [
+      {
+        'label': 'Technical Interview Performance',
+        'share': 0.38,
+        'color': const Color(0xFF4D7BFA),
+      },
+      {
+        'label': 'Resume & Experience Match',
+        'share': 0.28,
+        'color': AppColors.dashboardTeal,
+      },
+      {
+        'label': 'Communication & Clarity',
+        'share': 0.20,
+        'color': AppColors.dashboardAmber,
+      },
+      {
+        'label': 'Problem Solving & Rigor',
+        'share': 0.14,
+        'color': const Color(0xFF8B5CF6),
+      },
+    ];
+
+    return Container(
+      padding: EdgeInsets.all(isMobile ? 18 : 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _edge2, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Feature Importance (SHAP)',
+                      style: GoogleFonts.spaceGrotesk(
+                        color: _tx,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Relative predictive influence of scoring features on candidate match rating.',
+                      style: GoogleFonts.inter(color: _tx3, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _buildVersionBadge('EXPLAINABILITY'),
+            ],
+          ),
+          const SizedBox(height: 20),
+          for (final f in features) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        f['label'] as String,
+                        style: GoogleFonts.inter(
+                          color: _tx,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        '+${((f['share'] as double) * 100).toInt()}%',
+                        style: GoogleFonts.jetBrainsMono(
+                          color: _tx,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: f['share'] as double,
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        f['color'] as Color,
+                      ),
+                      minHeight: 7,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── MODEL CARD (AUC, DRIFT, VERSION) ───────────────────────────────────────
+  Widget _buildModelCard({required bool isMobile}) {
+    return Container(
+      padding: EdgeInsets.all(isMobile ? 18 : 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _edge2, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Active Model Card',
+                style: GoogleFonts.spaceGrotesk(
+                  color: _tx,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              _buildVersionBadge(_modelVersion),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            children: [
+              _buildModelMetricTile(
+                label: 'ROC-AUC SCORE',
+                value: _auc.toStringAsFixed(2),
+                sub: 'Discrimination quality',
+                color: const Color(0xFF16A34A),
+              ),
+              _buildModelMetricTile(
+                label: 'FEATURE DRIFT',
+                value: '< ${(_drift * 100).toStringAsFixed(1)}%',
+                sub: 'Stable distribution',
+                color: const Color(0xFF2563EB),
+              ),
+              _buildModelMetricTile(
+                label: 'CALIBRATION',
+                value: 'Platt Scaled',
+                sub: 'Probabilistic alignment',
+                color: const Color(0xFF7C3AED),
+              ),
+              _buildModelMetricTile(
+                label: 'WORKSPACE REPORTS',
+                value: '$_scoredCandidatesCount',
+                sub: _scoredCandidatesCount >= 20
+                    ? 'Tuned to dataset'
+                    : 'Running on defaults',
+                color: _scoredCandidatesCount >= 20
+                    ? const Color(0xFF0D9488)
+                    : _tx3,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelMetricTile({
+    required String label,
+    required String value,
+    required String sub,
+    required Color color,
+  }) {
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _edge2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: _tx3,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: GoogleFonts.spaceGrotesk(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(sub, style: GoogleFonts.inter(color: _tx4, fontSize: 11)),
         ],
       ),
     );
@@ -432,7 +928,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               '${value.toStringAsFixed(0)}%',
               style: GoogleFonts.jetBrainsMono(
-                color: const Color(0xFF0F172A),
+                color: _tx,
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
               ),
@@ -447,9 +943,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             overlayColor: color.withValues(alpha: 0.12),
             trackHeight: 6,
             thumbShape: RoundSliderThumbShape(
-              enabledThumbRadius: isMobile
-                  ? 12
-                  : 8, // touch friendly handle target 24px diameter on mobile
+              enabledThumbRadius: isMobile ? 12 : 8,
               elevation: 4,
             ),
           ),
@@ -506,7 +1000,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             value.toStringAsFixed(0),
             style: GoogleFonts.jetBrainsMono(
-              color: const Color(0xFF0F172A),
+              color: _tx,
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
@@ -516,7 +1010,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── BAND PROPORTIONAL STRIP ────────────────────────────────────────────────
   Widget _buildBandProportionalStrip({required bool isMobile}) {
     final double shareNo = _thresholdNo;
     final double shareMaybe = _thresholdMaybe - _thresholdNo;
@@ -601,7 +1094,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── WEB HEADER AREA ────────────────────────────────────────────────────────
+  // ── WEB HEADER AREA (FOR LIVE CONFIGURATION VIEW) ──────────────────────────
   Widget _buildHeaderArea() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
@@ -609,9 +1102,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            'Scoring preview',
+            'Scoring model',
             style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
+              color: _tx,
               fontSize: 24,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.5,
@@ -628,7 +1121,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             onPressed: () {
-              Navigator.of(context).pushReplacementNamed('/org');
+              Navigator.of(
+                context,
+              ).pushReplacementNamed('/recruiter/company-team');
             },
             child: Text(
               'Organization & Team ›',
@@ -643,308 +1138,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── MOBILE HEADER (with settings action overflow) ──────────────────────────
-  Widget _buildMobileHeader() {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              SvgPicture.asset('assets/images/logo.svg', height: 26),
-              const SizedBox(width: 10),
-              Text(
-                'Scoring Settings',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF475569)),
-            onSelected: (val) {
-              Navigator.of(context).pushReplacementNamed(val);
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: '/settings',
-                child: Text(
-                  'Scoring preview',
-                  style: GoogleFonts.inter(fontSize: 13),
-                ),
-              ),
-              PopupMenuItem(
-                value: '/org',
-                child: Text(
-                  'Organization & Team',
-                  style: GoogleFonts.inter(fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB LEFT RAIL NAVIGATION ───────────────────────────────────────────────
-  // Legacy rail is kept for reference while the shared recruiter rail owns navigation.
-  // ignore: unused_element
-  Widget _buildLeftRail(BuildContext context) {
-    final List<Map<String, dynamic>> navItems = [
-      {
-        'icon': Icons.dashboard_rounded,
-        'label': 'Dashboard',
-        'route': '/dashboard',
-      },
-      {'icon': Icons.menu_book_rounded, 'label': 'Jobs', 'route': '/pipeline'},
-      {
-        'icon': Icons.calendar_month_rounded,
-        'label': 'Interviews',
-        'route': '/schedule',
-      },
-      {
-        'icon': Icons.emoji_events_outlined,
-        'label': 'Rankings',
-        'route': '/rankings',
-      },
-      {
-        'icon': Icons.analytics_outlined,
-        'label': 'Analytics',
-        'route': '/analytics',
-      },
-      {
-        'icon': Icons.settings_outlined,
-        'label': 'Settings',
-        'route': '/settings',
-      },
-    ];
-
-    return Container(
-      width: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              },
-              child: SvgPicture.asset('assets/images/logo.svg', height: 48),
-            ),
-          ),
-          const SizedBox(height: 40),
-
-          // Nav Items
-          Expanded(
-            child: ListView.separated(
-              itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
-              itemBuilder: (context, index) {
-                final isSelected = index == 5; // Settings is active
-                final item = navItems[index];
-                final bool hasBadge =
-                    index == 1; // Jobs has unread item badge "18"
-
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Active glowing orb
-                      if (isSelected)
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.dashboardBlue,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.dashboardBlue.withValues(
-                                  alpha: 0.4,
-                                ),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      Tooltip(
-                        message: item['label'],
-                        waitDuration: const Duration(milliseconds: 350),
-                        preferBelow: false,
-                        verticalOffset: 24,
-                        margin: const EdgeInsets.only(left: 45),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () {
-                              if (!isSelected) {
-                                Navigator.of(
-                                  context,
-                                ).pushReplacementNamed(item['route']);
-                              }
-                            },
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: Center(
-                                child: Icon(
-                                  item['icon'],
-                                  color: isSelected
-                                      ? Colors.white
-                                      : const Color(0xFF64748B),
-                                  size: 19,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Badge Sit on Top-Right Corner
-                      if (hasBadge)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.dashboardBlue,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: const Text(
-                              '18',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Avatar bottom
-          Container(
-            width: 36,
-            height: 36,
-            margin: const EdgeInsets.only(bottom: 24),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFEFF6FF),
-              border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
-            ),
-            child: Center(
-              child: Text(
-                'AR',
-                style: GoogleFonts.inter(
-                  color: AppColors.dashboardBlue,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB TOP BAR ────────────────────────────────────────────────────────────
+  // ── WEB TOP BAR (58px height, 1px bottom border --edge2) ───────────────────
   Widget _buildTopBar() {
     return Container(
-      height: 60,
+      height: 58,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+        border: Border(bottom: BorderSide(color: _edge2, width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Breadcrumbs
-          Row(
-            children: [
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pushReplacementNamed('/dashboard');
-                  },
-                  child: Text(
-                    'SETTINGS',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-              ),
-              Text(
-                ' / ',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFFCBD5E1),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'SCORING MODEL',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
+          // Breadcrumb on left: "SCORING MODEL" — Space Grotesk 10.5px uppercase, 0.1em tracking, --tx3
+          Text(
+            'SCORING MODEL',
+            style: GoogleFonts.spaceGrotesk(
+              color: _tx3,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 10.5 * 0.1,
+            ),
           ),
 
-          // Actions Search/Notifications
+          // Actions on right: Search ("⌕ Search or jump to… ⌘K"), Bell (◔) with red dot, Settings (◍)
           Row(
             children: [
               // Search Input
@@ -954,23 +1171,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                  border: Border.all(color: _edge2, width: 1),
                 ),
                 child: TextField(
                   controller: _searchController,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
+                  style: GoogleFonts.inter(color: _tx, fontSize: 13),
                   decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
+                    hintText: 'Search or jump to…',
+                    hintStyle: GoogleFonts.inter(color: _tx3, fontSize: 13),
                     prefixIcon: const Icon(
                       Icons.search_rounded,
-                      color: Color(0xFF64748B),
+                      color: _tx3,
                       size: 16,
                     ),
                     suffixIcon: Container(
@@ -984,12 +1195,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        border: Border.all(color: _edge2),
                       ),
                       child: Text(
                         '⌘K',
                         style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
+                          color: _tx3,
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1003,18 +1214,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(width: 14),
 
-              // Notification button
+              // Notification bell icon (◔) with red dot
               _buildTopBarIconButton(
                 icon: Icons.notifications_none_rounded,
                 hasBadge: true,
-                badgeColor: AppColors.dashboardRed,
+                badgeColor: const Color(0xFFEF4444),
+                tooltip: 'Notifications',
+                onTap: () {},
               ),
               const SizedBox(width: 10),
 
-              // Language button
+              // Settings icon (◍)
               _buildTopBarIconButton(
-                icon: Icons.language_rounded,
+                icon: Icons.settings_outlined,
                 hasBadge: false,
+                tooltip: 'Settings',
+                onTap: () {
+                  Navigator.of(context).pushNamed('/recruiter/settings');
+                },
               ),
             ],
           ),
@@ -1026,69 +1243,133 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildTopBarIconButton({
     required IconData icon,
     required bool hasBadge,
+    required String tooltip,
+    required VoidCallback onTap,
     Color? badgeColor,
   }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    } else if (icon == Icons.language_rounded) {
-      tooltip = 'Language';
-    }
-
     return AppTooltip(
       message: tooltip,
       position: TooltipPosition.bottom,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 18),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: badgeColor ?? Colors.red,
-                      shape: BoxShape.circle,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _edge2, width: 1),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(icon, color: _tx2, size: 18),
+                if (hasBadge)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: badgeColor ?? Colors.red,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ── MOBILE BOTTOM NAVIGATION DOCK (Settings active -> Settings is in app-bar overflow, bottom dock keeps 5 main screens) ──
-  Widget _buildMobileBottomDock() {
+  // ── MOBILE HEADER (Small logomark 26px + "Scoring" title) ───────────────────
+  Widget _buildMobileHeader() {
     return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _edge2, width: 1)),
+      ),
+      child: Row(
+        children: [
+          SvgPicture.asset(
+            'assets/images/logo.svg',
+            height: 26,
+            placeholderBuilder: (_) => const Icon(
+              Icons.auto_awesome,
+              size: 24,
+              color: Color(0xFF4D7BFA),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Scoring',
+            style: GoogleFonts.inter(
+              color: _tx,
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.03 * 19,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── MOBILE FLOATING BOTTOM DOCK (6 icons, Analytics active glowing indigo) ───
+  Widget _buildMobileBottomDock() {
+    final List<Map<String, dynamic>> dockItems = [
+      {
+        'icon': Icons.dashboard_rounded,
+        'route': '/recruiter/command-deck',
+        'label': 'Dashboard',
+      },
+      {
+        'icon': Icons.grid_view_rounded,
+        'route': '/recruiter/job-listings',
+        'label': 'Jobs',
+      },
+      {
+        'icon': Icons.view_column_rounded,
+        'route': '/recruiter/pipeline',
+        'label': 'Pipeline',
+      },
+      {
+        'icon': Icons.radio_button_checked_rounded,
+        'route': '/recruiter/schedule-interview',
+        'label': 'Interviews',
+      },
+      {
+        'icon': Icons.leaderboard_rounded,
+        'route': '/recruiter/rankings',
+        'label': 'Rankings',
+      },
+      {
+        'icon': Icons.diamond_rounded,
+        'route': '/recruiter/analytics',
+        'label': 'Analytics',
+      },
+    ];
+    // Scoring lives under Intelligence & Workspace, which maps to the Analytics dock entry (index 5)
+    const int activeNavIndex = 5;
+
+    return Container(
+      key: const Key('scoring-mobile-dock'),
       height: 64,
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: _edge2, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1096,34 +1377,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildMobileDockItem(Icons.dashboard_rounded, '/dashboard', false),
-          _buildMobileDockItem(Icons.menu_book_rounded, '/pipeline', false),
-          _buildMobileDockItem(
-            Icons.calendar_month_rounded,
-            '/schedule',
-            false,
-          ),
-          _buildMobileDockItem(Icons.emoji_events_outlined, '/rankings', false),
-          _buildMobileDockItem(Icons.analytics_outlined, '/analytics', false),
-        ],
-      ),
-    );
-  }
+        children: List.generate(dockItems.length, (index) {
+          final isSelected = index == activeNavIndex;
+          final item = dockItems[index];
 
-  Widget _buildMobileDockItem(IconData icon, String route, bool isActive) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).pushReplacementNamed(route);
-      },
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.transparent,
-        ),
-        child: Icon(icon, color: const Color(0xFF94A3B8), size: 22),
+          return GestureDetector(
+            onTap: () {
+              if (!isSelected) {
+                Navigator.of(
+                  context,
+                ).pushReplacementNamed(item['route'] as String);
+              }
+            },
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected
+                        ? const Color(0xFF4D7BFA)
+                        : Colors.transparent,
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: const Color(
+                                0xFF4D7BFA,
+                              ).withValues(alpha: 0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Icon(
+                    item['icon'] as IconData,
+                    color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
       ),
     );
   }

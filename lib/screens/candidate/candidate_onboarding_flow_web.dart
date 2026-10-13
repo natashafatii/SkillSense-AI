@@ -1,3 +1,4 @@
+import '../../widgets/candidate_button_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -893,7 +894,7 @@ class _CandidateOnboardingFlowWebState
                                             height: 54,
                                             child: ElevatedButton(
                                               onPressed: _nextPage,
-                                              style: ElevatedButton.styleFrom(
+                                              style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                                                 backgroundColor:
                                                     AppColors.candidatePrimary,
                                                 foregroundColor: Colors.white,
@@ -902,7 +903,7 @@ class _CandidateOnboardingFlowWebState
                                                   borderRadius:
                                                       BorderRadius.circular(28),
                                                 ),
-                                              ),
+                                              )),
                                               child: Text(
                                                 _currentPage == _totalPages - 1
                                                     ? AppConstants
@@ -936,7 +937,7 @@ class _CandidateOnboardingFlowWebState
                                     style: GoogleFonts.inter(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: AppColors.candidatePrimary,
+                                      color: CandidateButtonStyle.deepTeal,
                                     ),
                                   ),
                                 ),

@@ -354,47 +354,21 @@ class LoginScreenWeb extends StatelessWidget {
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   const Icon(
-                                                    Icons.close,
+                                                    Icons.warning_amber_rounded,
                                                     color: Color(0xFFEF4444),
                                                     size: 16,
                                                   ),
                                                   const SizedBox(width: 10),
                                                   Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          'Authentication Failed',
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                                fontSize: 13,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w700,
-                                                                color:
-                                                                    const Color(
-                                                                      0xFF991B1B,
-                                                                    ),
-                                                              ),
+                                                    child: Text(
+                                                      errorMessage!,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 12.5,
+                                                        color: const Color(
+                                                          0xFFB91C1C,
                                                         ),
-                                                        const SizedBox(
-                                                          height: 3,
-                                                        ),
-                                                        Text(
-                                                          errorMessage!,
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                                fontSize: 12.5,
-                                                                color:
-                                                                    const Color(
-                                                                      0xFFB91C1C,
-                                                                    ),
-                                                                height: 1.4,
-                                                              ),
-                                                        ),
-                                                      ],
+                                                        height: 1.4,
+                                                      ),
                                                     ),
                                                   ),
                                                 ],

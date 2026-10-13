@@ -7,11 +7,12 @@ import 'package:skillsense_ai/models/application.dart';
 import 'package:skillsense_ai/models/resume_detail.dart';
 import 'package:skillsense_ai/screens/hr/candidate_report_screen.dart';
 
-Application application(String id, String resumeId, String email) =>
+Application application(String id, String resumeId, String email, {String? name}) =>
     Application(
       id: id,
       candidate: 'candidate-$id',
       candidateEmail: email,
+      candidateName: name,
       job: 'job-$id',
       jobTitle: 'Role $id',
       resumeId: resumeId,
@@ -28,6 +29,40 @@ ResumeDetail resume(String id, double score) => ResumeDetail(
 
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+
+  testWidgets('report breadcrumb uses the fetched candidate name', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const MaterialApp(home: CandidateReportScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('PIPELINE'), findsOneWidget);
+    expect(find.text('REPORT'), findsOneWidget);
+    expect(find.text('AYESHA KHAN'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CandidateReportScreen(
+          applicationId: 'a-1',
+          resumeId: 'r-1',
+          loadApplication: (_) async => application(
+            'a-1',
+            'r-1',
+            'ayesha@example.com',
+            name: 'Ayesha Khan',
+          ),
+          loadResume: (id) async => resume(id, 63),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('PIPELINE'), findsOneWidget);
+    expect(find.text('AYESHA KHAN'), findsOneWidget);
+    expect(find.text('REPORT'), findsOneWidget);
+  });
 
   testWidgets('report renders only fields from the requested records', (
     tester,

@@ -389,7 +389,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth > 900) {
+        if (constraints.maxWidth >= 900) {
           return CandidateRegisterScreenWeb(
             isLoading: _isLoading,
             firstNameController: _firstNameController,

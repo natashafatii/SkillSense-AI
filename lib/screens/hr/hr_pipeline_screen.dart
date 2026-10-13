@@ -1,14 +1,18 @@
 import 'dart:async';
-import 'screening_policy_screen.dart';
-import '../application_screening_screen.dart';
 import 'package:flutter/material.dart';
+import '../dashboard/command_deck_screen.dart' show GridPainter;
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/application.dart';
 import '../../models/job.dart';
+import '../../models/resume_detail.dart';
 import '../../services/application_service.dart';
+import '../../services/api_exception.dart';
+import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import 'schedule_interview_screen.dart';
+import 'applicant_detail_preview.dart';
 
 /// Recruiter Kanban board scoped to one job and backed by its applications.
 class HrPipelineScreen extends StatefulWidget {
@@ -16,6 +20,9 @@ class HrPipelineScreen extends StatefulWidget {
   final Future<List<Job>> Function()? loadJobs;
   final Future<List<Application>> Function(String jobId)? loadApplications;
   final Future<Application> Function(String id)? loadApplication;
+  final Future<ResumeDetail> Function(String id)? loadResume;
+  final Future<Application> Function(Application app)? shortlistApplication;
+  final Future<Application> Function(Application app)? rejectApplication;
   final Future<Application> Function(String id, String status)?
   advanceApplication;
 
@@ -25,6 +32,9 @@ class HrPipelineScreen extends StatefulWidget {
     this.loadJobs,
     this.loadApplications,
     this.loadApplication,
+    this.loadResume,
+    this.shortlistApplication,
+    this.rejectApplication,
     this.advanceApplication,
   });
 
@@ -39,7 +49,6 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
     'SHORTLISTED',
     'INTERVIEWED',
     'DECIDED',
-    'REJECTED',
   ];
   static const _stageColors = [
     Color(0xFF64748B),
@@ -47,7 +56,6 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
     Color(0xFF22CDB1),
     Color(0xFF7C6CF2),
     Color(0xFF10B981),
-    Color(0xFFEF4444),
   ];
 
   List<Job> _jobs = [];
@@ -55,9 +63,13 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   final Map<String, List<Application>> _cache = {};
   final Map<String, Future<List<Application>>> _inFlight = {};
   final Set<String> _expanded = {};
+  final Set<String> _shortlisting = {};
+  final Map<String, FocusNode> _viewFocusNodes = {};
+  final GlobalKey _jobSwitcherKey = GlobalKey();
   String? _jobId;
   String? _error;
   bool _loading = true;
+  bool _switcherLoading = false;
   int _selection = 0;
   Timer? _refreshTimer;
 
@@ -80,21 +92,10 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    for (final node in _viewFocusNodes.values) {
+      node.dispose();
+    }
     super.dispose();
-  }
-
-  Future<void> _editPolicy(Job job) async {
-    final updated = await Navigator.push<Job>(
-      context,
-      MaterialPageRoute(builder: (_) => ScreeningPolicyScreen(job: job)),
-    );
-    if (mounted && updated != null)
-      setState(
-        () => _jobs = [
-          for (final existing in _jobs)
-            existing.id == updated.id ? updated : existing,
-        ],
-      );
   }
 
   @override
@@ -134,6 +135,24 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
       }
     } catch (error) {
       if (!mounted) return;
+      final status = error is ApiException ? error.statusCode : null;
+      if (status == 401) {
+        try {
+          await AuthService.signOut();
+        } catch (_) {}
+        if (mounted) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+        }
+        return;
+      }
+      if (status == 404) {
+        setState(() {
+          _jobs = [];
+          _loading = false;
+          _error = null;
+        });
+        return;
+      }
       setState(() {
         _error = 'Could not load pipeline: $error';
         _loading = false;
@@ -178,17 +197,11 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
     }
   }
 
-  String _columnFor(Application app) =>
-      switch ((app.rawStatus ?? app.status.value).toUpperCase()) {
-        'PENDING' || 'APPLIED' => 'APPLIED',
-        'SCREENED' => 'SHORTLISTED',
-        'SCREENING' || 'UNDER_REVIEW' => 'UNDER_REVIEW',
-        'REJECTED' => 'REJECTED',
-        'SHORTLISTED' => 'SHORTLISTED',
-        'INTERVIEWED' => 'INTERVIEWED',
-        'DECISION' || 'DECIDED' => 'DECIDED',
-        _ => 'APPLIED',
-      };
+  String? _columnFor(Application app) {
+    final status = (app.rawStatus ?? app.status.value).toUpperCase();
+    if (status == 'REJECTED' || status == 'DECISION') return 'DECIDED';
+    return _stages.contains(status) ? status : null;
+  }
 
   String _candidateName(Application app) {
     final name = app.candidateName?.trim();
@@ -221,19 +234,150 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   }
 
   Future<void> _showApplication(Application app) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ApplicationScreeningScreen(
-          applicationId: app.id,
-          loadApplication: widget.loadApplication,
-        ),
-      ),
+    final compact = MediaQuery.sizeOf(context).width < 900;
+    final company =
+        _jobs.where((job) => job.id == app.job).firstOrNull?.recruiterCompany ??
+        '';
+    Widget preview() => ApplicantDetailPreview(
+      initialApplication: app,
+      candidateName: _candidateName(app),
+      company: company,
+      mobile: compact,
+      loadApplication: widget.loadApplication,
+      loadResume: widget.loadResume,
+      onShortlist: _shortlist,
+      onReject: _reject,
     );
-    if (mounted && _jobId == app.job) await _selectJob(app.job, refresh: true);
+    if (compact) {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => SizedBox(
+          height: MediaQuery.sizeOf(context).height * .88,
+          child: preview(),
+        ),
+      );
+    } else {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => Dialog(
+          insetPadding: const EdgeInsets.all(24),
+          backgroundColor: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640, maxHeight: 720),
+            child: preview(),
+          ),
+        ),
+      );
+    }
+    if (mounted) _viewFocusNodes[app.id]?.requestFocus();
   }
 
-  Future<void> _shortlist(Application app) => _showApplication(app);
+  Future<bool> _shortlist(Application app) async {
+    if (!_shortlisting.add(app.id)) return false;
+    setState(() {});
+    try {
+      final updated =
+          await (widget.shortlistApplication?.call(app) ??
+              ApplicationService.shortlistApplication(app));
+      if (!mounted) return false;
+      final cached = _cache[app.job];
+      if (cached != null) {
+        _cache[app.job] = [
+          for (final existing in cached)
+            existing.id == app.id ? updated : existing,
+        ];
+      }
+      if (_jobId == app.job) {
+        setState(() {
+          _applications = [
+            for (final existing in _applications)
+              existing.id == app.id ? updated : existing,
+          ];
+        });
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Candidate shortlisted.')));
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      final status = error is ApiException ? error.statusCode : null;
+      if (status == 401) {
+        try {
+          await AuthService.signOut();
+        } catch (_) {
+          // Redirect even if the session was already ended.
+        }
+        if (mounted) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+        }
+        return false;
+      }
+      final message = switch (status) {
+        400 => 'Cannot shortlist from current stage.',
+        403 => "You're not authorized.",
+        _ => 'Could not shortlist. Please retry.',
+      };
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return false;
+    } finally {
+      _shortlisting.remove(app.id);
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<bool> _reject(Application app) async {
+    if (!_shortlisting.add(app.id)) return false;
+    setState(() {});
+    try {
+      final updated =
+          await (widget.rejectApplication?.call(app) ??
+              ApplicationService.rejectApplication(app));
+      if (!mounted) return false;
+      _cache[app.job] = [
+        for (final existing in (_cache[app.job] ?? _applications))
+          existing.id == app.id ? updated : existing,
+      ];
+      if (_jobId == app.job) {
+        setState(() {
+          _applications = [
+            for (final existing in _applications)
+              existing.id == app.id ? updated : existing,
+          ];
+        });
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Candidate rejected.')));
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      if (error is ApiException && error.statusCode == 401) {
+        try {
+          await AuthService.signOut();
+        } catch (_) {}
+        if (mounted) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+        }
+        return false;
+      }
+      final message = error is ApiException
+          ? error.message
+          : 'Could not reject. Please retry.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return false;
+    } finally {
+      _shortlisting.remove(app.id);
+      if (mounted) setState(() {});
+    }
+  }
 
   void _schedule(Application app) {
     Navigator.push(
@@ -245,67 +389,125 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
     );
   }
 
-  Widget _topBar(Job? job) => Container(
-    height: 54,
-    padding: const EdgeInsets.symmetric(horizontal: 24),
-    decoration: const BoxDecoration(
+  Future<void> _openJobSwitcher() async {
+    if (_switcherLoading || _jobId == null) return;
+    setState(() => _switcherLoading = true);
+    List<Job> activeJobs;
+    try {
+      activeJobs =
+          (await (widget.loadJobs?.call() ??
+                  JobService.listAllJobs(status: JobStatus.active)))
+              .where((job) => job.status == JobStatus.active)
+              .toList();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load active jobs.')),
+        );
+      }
+      return;
+    } finally {
+      if (mounted) setState(() => _switcherLoading = false);
+    }
+    if (!mounted) return;
+    final button = _jobSwitcherKey.currentContext?.findRenderObject();
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (button is! RenderBox || overlay is! RenderBox) return;
+    final origin = button.localToGlobal(Offset.zero, ancestor: overlay);
+    final selected = await showMenu<Job>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(origin.dx, origin.dy + button.size.height, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      constraints: const BoxConstraints(maxWidth: 360),
       color: Colors.white,
-      border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            'ROLES / ${job?.title.toUpperCase() ?? 'SELECT A ROLE'} / PIPELINE',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
-            ),
-          ),
-        ),
-        if (job != null)
-          TextButton(
-            onPressed: () => _editPolicy(job),
-            child: const Text('Screening policy'),
-          ),
-        IconButton(
-          tooltip: 'Refresh applications',
-          onPressed: _jobId == null || _loading
-              ? null
-              : () => _selectJob(_jobId!, refresh: true),
-          icon: const Icon(Icons.refresh),
-        ),
-        const SizedBox(width: 16),
-        const Icon(
-          Icons.notifications_none_rounded,
-          size: 18,
-          color: Color(0xFF64748B),
-        ),
-        const SizedBox(width: 16),
-        const Icon(Icons.language_rounded, size: 18, color: Color(0xFF64748B)),
-      ],
-    ),
-  );
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      items: activeJobs.isEmpty
+          ? [
+              const PopupMenuItem<Job>(
+                enabled: false,
+                child: Text('No active jobs'),
+              ),
+            ]
+          : activeJobs.map((job) {
+              final current = job.id == _jobId;
+              return PopupMenuItem<Job>(
+                value: job,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  decoration: BoxDecoration(
+                    color: current ? const Color(0xFFEAF0FF) : null,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              job.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.spaceGrotesk(
+                                color: const Color(0xFF17233B),
+                                fontSize: 13,
+                                fontWeight: current
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${job.location} · ${job.jobType.value}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFF8290AB),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (current) ...[
+                        const SizedBox(width: 12),
+                        const Icon(
+                          Icons.check_rounded,
+                          color: Color(0xFF3B5AF1),
+                          size: 17,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+    );
+    if (!mounted || selected == null || selected.id == _jobId) return;
+    Navigator.of(context).pushReplacementNamed(
+      '/recruiter/jobs/${Uri.encodeComponent(selected.id)}/pipeline',
+    );
+  }
 
   Widget _header(Job? job, bool compact) => Padding(
-    padding: EdgeInsets.fromLTRB(compact ? 16 : 24, 18, compact ? 16 : 24, 14),
+    padding: EdgeInsets.fromLTRB(compact ? 16 : 24, 28, compact ? 16 : 24, 22),
     child: compact
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _headerTitle(job),
               const SizedBox(height: 12),
-              _headerActions(),
+              _headerActions(job),
             ],
           )
         : Row(
             children: [
               Expanded(child: _headerTitle(job)),
-              _headerActions(),
+              _headerActions(job),
             ],
           ),
   );
@@ -313,45 +515,53 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   Widget _headerTitle(Job? job) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        job?.title ?? 'Applicant pipeline',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: GoogleFonts.spaceGrotesk(
-          color: const Color(0xFF17233B),
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
+      InkWell(
+        key: _jobSwitcherKey,
+        onTap: _jobId == null ? null : _openJobSwitcher,
+        borderRadius: BorderRadius.circular(6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                job?.title ?? 'Applicant pipeline',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.spaceGrotesk(
+                  color: const Color(0xFF17233B),
+                  fontSize: 25,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 5),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 20,
+              color: Color(0xFF17233B),
+            ),
+          ],
         ),
       ),
       Text(
         '${_applications.length} applicants',
-        style: GoogleFonts.inter(color: const Color(0xFF8290AB), fontSize: 11),
+        style: GoogleFonts.inter(color: const Color(0xFF8290AB), fontSize: 12),
       ),
     ],
   );
 
-  Widget _headerActions() => Row(
+  Widget _headerActions(Job? job) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      if (_jobs.length > 1)
-        DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: _jobId,
-            items: [
-              for (final job in _jobs)
-                DropdownMenuItem(
-                  value: job.id,
-                  child: Text(job.title, overflow: TextOverflow.ellipsis),
-                ),
-            ],
-            onChanged: (id) {
-              if (id != null) _selectJob(id);
-            },
-          ),
-        ),
-      if (_jobs.length > 1) const SizedBox(width: 12),
       FilledButton.icon(
-        onPressed: _jobId == null
+        key: const Key('pipeline-schedule-interview'),
+        onPressed:
+            _jobId == null ||
+                !_applications.any(
+                  (app) =>
+                      _columnFor(app) == 'SHORTLISTED' &&
+                      app.eligibleForInterview,
+                )
             ? null
             : () => Navigator.push(
                 context,
@@ -375,78 +585,320 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   @override
   Widget build(BuildContext context) {
     final job = _jobs.where((item) => item.id == _jobId).firstOrNull;
-    final compact = MediaQuery.sizeOf(context).width < 700;
+    final compact = MediaQuery.sizeOf(context).width < 900;
+    final hasJobs = _jobs.isNotEmpty;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FD),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _topBar(job),
-            _header(job, compact),
-            if (_loading) const LinearProgressIndicator(minHeight: 2),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _error!,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: _loadJobs,
-                      child: const Text('Retry'),
-                    ),
-                  ],
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Stack(
+        children: [
+          // Background gradient
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
                 ),
               ),
-            if (!_loading && _jobs.isEmpty)
-              const Expanded(
-                child: Center(child: Text('No recruiter jobs found.')),
-              )
-            else
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = ((constraints.maxWidth - 48 - 48) / 5).clamp(
-                      225.0,
-                      300.0,
-                    );
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: EdgeInsets.fromLTRB(
-                        compact ? 16 : 24,
-                        0,
-                        compact ? 16 : 24,
-                        16,
-                      ),
-                      child: SizedBox(
-                        height: constraints.maxHeight - 16,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (
-                              var index = 0;
-                              index < _stages.length;
-                              index++
-                            ) ...[
-                              SizedBox(
-                                width: width,
-                                child: _column(
-                                  _stages[index],
-                                  _stageColors[index],
-                                ),
-                              ),
-                              if (index < _stages.length - 1)
-                                const SizedBox(width: 12),
-                            ],
-                          ],
+            ),
+          ),
+
+          // Grid pattern overlay (Web Only)
+          if (!compact)
+            Positioned.fill(child: CustomPaint(painter: GridPainter())),
+
+          // Main workspace content
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                const RecruiterTopBar(
+                  pageTitle: 'Pipeline',
+                  mobileTitle: 'Pipeline',
+                  breadcrumbSegments: ['Roles', 'Pipeline'],
+                ),
+                if (_loading) const LinearProgressIndicator(minHeight: 2),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _error!,
+                            style: GoogleFonts.inter(
+                              color: Colors.red,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
+                        TextButton(
+                          onPressed: _loadJobs,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (!_loading && !hasJobs)
+                  Expanded(child: _buildEmptyState(compact))
+                else if (hasJobs) ...[
+                  _header(job, compact),
+                  Expanded(child: _buildKanbanBoard(compact)),
+                ],
+              ],
+            ),
+          ),
+
+          // Mobile bottom dock
+          if (compact)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: _buildMobileBottomDock(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── EMPTY STATE ─────────────────────────────────────────────────────────────
+  Widget _buildEmptyState(bool compact) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: compact ? 84 : 24,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon tile (64px web / 54px mobile)
+                Container(
+                  width: compact ? 54 : 64,
+                  height: compact ? 54 : 64,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(compact ? 17 : 20),
+                    border: Border.all(color: const Color(0xFFE3EAF4)),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.view_kanban_outlined,
+                      size: compact ? 20 : 24,
+                      color: const Color(0xFF8190A8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Heading
+                Text(
+                  compact ? 'No candidates yet' : 'No candidates in pipeline',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF17233B),
+                    fontSize: compact ? 15 : 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: compact ? -0.02 : -0.025,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Helper text
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: compact ? 280 : 380),
+                  child: Text(
+                    compact
+                        ? 'Create a role to track applicants across interview stages.'
+                        : 'Create a role or post a job listing to start receiving applicants and tracking them across interview stages.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF8190A8),
+                      fontSize: compact ? 11 : 12.5,
+                      height: 1.65,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Primary CTA — indigo gradient
+                Container(
+                  height: compact ? 38 : 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(11),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4D7BFA).withValues(alpha: 0.28),
+                        blurRadius: 14,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 4),
                       ),
-                    );
-                  },
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    key: const Key('pipeline-create-role-cta'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 22 : 26,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).pushReplacementNamed('/recruiter/create-role'),
+                    child: Text(
+                      'Create a role',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+
+                if (!compact) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Active job listings automatically populate the applicant pipeline',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF94A3B8),
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  // ── KANBAN BOARD ───────────────────────────────────────────────────────────
+  Widget _buildKanbanBoard(bool compact) => LayoutBuilder(
+    builder: (context, constraints) {
+      final width = ((constraints.maxWidth - 48 - 48) / 5).clamp(225.0, 300.0);
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.fromLTRB(
+          compact ? 16 : 24,
+          0,
+          compact ? 16 : 24,
+          compact ? 84 : 16,
+        ),
+        child: SizedBox(
+          height: constraints.maxHeight - (compact ? 84 : 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var index = 0; index < _stages.length; index++) ...[
+                SizedBox(
+                  width: width,
+                  child: _column(_stages[index], _stageColors[index]),
+                ),
+                if (index < _stages.length - 1) const SizedBox(width: 12),
+              ],
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
+  // ── MOBILE FLOATING BOTTOM DOCK ────────────────────────────────────────────
+  Widget _buildMobileBottomDock() {
+    const destinations = [
+      (Icons.dashboard_outlined, '/recruiter/command-deck', 'Dashboard'),
+      (Icons.grid_view_rounded, '/recruiter/job-listings', 'Jobs'),
+      (Icons.view_kanban_outlined, '/recruiter/pipeline', 'Pipeline'),
+      (
+        Icons.radio_button_checked,
+        '/recruiter/schedule-interview',
+        'Interviews',
+      ),
+      (Icons.leaderboard_outlined, '/recruiter/rankings', 'Rankings'),
+      (Icons.diamond_outlined, '/recruiter/analytics', 'Analytics'),
+    ];
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 64,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            for (final destination in destinations)
+              Expanded(
+                child: Tooltip(
+                  message: destination.$3,
+                  child: InkWell(
+                    key: Key('pipeline-dock-${destination.$3.toLowerCase()}'),
+                    onTap: destination.$3 == 'Pipeline'
+                        ? null
+                        : () => Navigator.of(
+                            context,
+                          ).pushReplacementNamed(destination.$2),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      decoration: destination.$3 == 'Pipeline'
+                          ? BoxDecoration(
+                              color: const Color(0xFF4D7BFA),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF4D7BFA,
+                                  ).withValues(alpha: 0.34),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            )
+                          : null,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        destination.$1,
+                        size: 20,
+                        color: destination.$3 == 'Pipeline'
+                            ? Colors.white
+                            : const Color(0xFF74829E),
+                      ),
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -464,12 +916,12 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
           child: Row(
             children: [
               Container(
-                width: 7,
-                height: 7,
+                width: 8,
+                height: 8,
                 decoration: BoxDecoration(
                   color: color,
                   shape: BoxShape.circle,
@@ -482,12 +934,16 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
                 ),
               ),
               const SizedBox(width: 7),
-              Text(
-                '$stage · ${apps.length}',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF27344C),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+              Expanded(
+                child: Text(
+                  '$stage · ${apps.length}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF27344C),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -495,43 +951,60 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
         ),
         Expanded(
           child: apps.isEmpty
-              ? Center(
-                  child: Text(
-                    'No candidates yet',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF94A3B8),
-                      fontSize: 11,
+              ? Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFE2E8F0),
+                      strokeAlign: BorderSide.strokeAlignInside,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'No candidates yet',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 )
               : ListView.separated(
                   padding: EdgeInsets.zero,
-                  itemCount: shown.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) => _card(shown[index], stage),
+                  itemCount: shown.length + (more > 0 ? 1 : 0),
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) => index < shown.length
+                      ? _card(shown[index], stage)
+                      : _moreButton(stage, more),
                 ),
         ),
-        if (more > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: OutlinedButton(
-              onPressed: () => setState(() => _expanded.add(stage)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFD8DFEC)),
-                foregroundColor: const Color(0xFF7D8BA6),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                '＋ $more more',
-                style: GoogleFonts.inter(fontSize: 11),
-              ),
-            ),
-          ),
       ],
     );
   }
+
+  Widget _moreButton(String stage, int more) => SizedBox(
+    height: 62,
+    child: CustomPaint(
+      painter: const _PipelineDashedBorder(Color(0xFFD8DFEC)),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => setState(() => _expanded.add(stage)),
+          child: Center(
+            child: Text(
+              '+ $more more',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF7D8BA6),
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 
   Widget _card(Application app, String stage) {
     final name = _candidateName(app);
@@ -540,16 +1013,23 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
     final date = scored ? (app.updatedAt ?? app.createdAt) : app.createdAt;
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 1,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 0,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         onTap: () => _showApplication(app),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFFE9EDF5)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0A1C315B),
+                blurRadius: 18,
+                offset: Offset(0, 6),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -557,7 +1037,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
               Row(
                 children: [
                   CircleAvatar(
-                    radius: 15,
+                    radius: 18,
                     backgroundColor: const Color(0xFFE8EEFF),
                     child: Text(
                       initials,
@@ -643,25 +1123,24 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   }
 
   Widget _cardFooter(Application app, String stage) {
-    if (stage == 'APPLIED' || stage == 'REJECTED') {
+    if (stage == 'APPLIED') {
+      final focusNode = _viewFocusNodes.putIfAbsent(app.id, FocusNode.new);
       return Align(
         alignment: Alignment.centerRight,
         child: OutlinedButton(
+          focusNode: focusNode,
           onPressed: () => _showApplication(app),
-          child: Text(
-            app.assessment?['status'] == 'FAILED'
-                ? 'Resolve error'
-                : 'View screening',
-          ),
+          child: const Text('View'),
         ),
       );
     }
     if (stage == 'UNDER_REVIEW') {
+      final busy = _shortlisting.contains(app.id);
       return Align(
         alignment: Alignment.centerRight,
         child: OutlinedButton(
-          onPressed: () => _shortlist(app),
-          child: const Text('Review screening'),
+          onPressed: busy ? null : () => _shortlist(app),
+          child: Text(busy ? 'Shortlisting…' : 'Shortlist'),
         ),
       );
     }
@@ -669,7 +1148,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
       return Align(
         alignment: Alignment.centerRight,
         child: FilledButton(
-          onPressed: () => _schedule(app),
+          onPressed: app.eligibleForInterview ? () => _schedule(app) : null,
           style: FilledButton.styleFrom(
             backgroundColor: const Color(0xFF3B5AF1),
           ),
@@ -698,7 +1177,11 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
       );
     }
     final outcome = app.outcome?.toUpperCase();
-    final label = outcome == 'NO' || outcome == 'HIRED' ? outcome! : 'DECIDED';
+    final label = app.rawStatus == 'REJECTED'
+        ? 'NO'
+        : outcome == 'NO' || outcome == 'HIRED'
+        ? outcome!
+        : 'DECIDED';
     return Align(
       alignment: Alignment.centerRight,
       child: _badge(
@@ -738,4 +1221,30 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
       ),
     ),
   );
+}
+
+class _PipelineDashedBorder extends CustomPainter {
+  final Color color;
+  const _PipelineDashedBorder(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(20)),
+      );
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (final metric in path.computeMetrics()) {
+      for (double offset = 0; offset < metric.length; offset += 7) {
+        canvas.drawPath(metric.extractPath(offset, offset + 4), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PipelineDashedBorder oldDelegate) =>
+      oldDelegate.color != color;
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:skillsense_ai/constants/app_colors.dart';
 import 'package:skillsense_ai/constants/env_config.dart';
+import 'models/job.dart';
 
 // Conditional import: picks the web or native platform integration.
 import 'services/platform_app_stub.dart'
@@ -38,6 +39,7 @@ import 'screens/hr/rankings_screen.dart';
 import 'screens/hr/schedule_interview_screen.dart';
 import 'screens/hr/settings_screen.dart';
 import 'screens/hr/job_listings_screen.dart';
+import 'screens/hr/recruiter_job_detail_screen.dart';
 import 'screens/hr/recruiter_settings_hub_screen.dart';
 import 'screens/signup/terms_privacy_screen.dart';
 import 'screens/welcome/aperture_splash_screen.dart';
@@ -221,6 +223,28 @@ class SkillSenseApp extends StatelessWidget {
             allowedRoles: const [EnvConfig.roleCandidate],
             child: CandidateJobDetailRoute(arguments: id),
           );
+        } else if (name.startsWith('/recruiter/jobs/') &&
+            name.endsWith('/pipeline') &&
+            name.length > '/recruiter/jobs//pipeline'.length) {
+          final id = Uri.decodeComponent(
+            name.substring(
+              '/recruiter/jobs/'.length,
+              name.length - '/pipeline'.length,
+            ),
+          );
+          builder = RoleGuard(
+            allowedRoles: const [EnvConfig.roleRecruiter],
+            child: HrPipelineScreen(jobId: id),
+          );
+        } else if (name.startsWith('/recruiter/jobs/') &&
+            name.length > '/recruiter/jobs/'.length) {
+          final id = Uri.decodeComponent(
+            name.substring('/recruiter/jobs/'.length),
+          );
+          builder = RoleGuard(
+            allowedRoles: const [EnvConfig.roleRecruiter],
+            child: RecruiterJobDetailScreen(jobId: id),
+          );
         } else {
           switch (settings.name) {
             case '/auth':
@@ -293,9 +317,14 @@ class SkillSenseApp extends StatelessWidget {
               break;
             case '/create-role':
             case '/recruiter/create-role':
-              builder = const RoleGuard(
+              builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleRecruiter],
-                child: CreateRoleScreen(),
+                child: CreateRoleScreen(
+                  key: const ValueKey('create-role-form-v2'),
+                  initialJob: settings.arguments is Job
+                      ? settings.arguments as Job
+                      : null,
+                ),
               );
               break;
             case '/schedule':
@@ -316,9 +345,13 @@ class SkillSenseApp extends StatelessWidget {
               break;
             case '/rankings':
             case '/recruiter/rankings':
-              builder = const RoleGuard(
+              builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleRecruiter],
-                child: RankingsScreen(),
+                child: RankingsScreen(
+                  jobId: settings.arguments is String
+                      ? settings.arguments as String
+                      : null,
+                ),
               );
               break;
             case '/analytics':
@@ -459,6 +492,19 @@ class SkillSenseApp extends StatelessWidget {
               isRecruiterRoute
               ? RecruiterScaffold(
                   currentRoute: canonicalRecruiterRoute!,
+                  selectedRoute:
+                      canonicalRecruiterRoute == '/recruiter/company-team'
+                      ? '/recruiter/command-deck'
+                      : canonicalRecruiterRoute.startsWith(
+                              '/recruiter/jobs/',
+                            ) &&
+                            canonicalRecruiterRoute.endsWith('/pipeline')
+                      ? '/recruiter/pipeline'
+                      : canonicalRecruiterRoute.startsWith('/recruiter/jobs/')
+                      ? '/recruiter/job-listings'
+                      : null,
+                  glowSelected:
+                      canonicalRecruiterRoute == '/recruiter/company-team',
                   body: builder,
                 )
               : builder,

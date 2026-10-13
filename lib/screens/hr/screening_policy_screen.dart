@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import '../../models/job.dart';
 import '../../services/job_service.dart';
 
@@ -94,7 +95,10 @@ class _ScreeningPolicyScreenState extends State<ScreeningPolicyScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Screening policy')),
+    appBar: const PreferredSize(
+      preferredSize: Size.fromHeight(58),
+      child: RecruiterTopBar(pageTitle: 'Screening policy'),
+    ),
     body: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 700),

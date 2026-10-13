@@ -1,3 +1,4 @@
+import '../../widgets/candidate_button_style.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
@@ -92,7 +93,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
             height: 56,
             child: ElevatedButton(
               onPressed: _nextPage,
-              style: ElevatedButton.styleFrom(
+              style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                 backgroundColor: AppColors.candidatePrimary,
                 foregroundColor: AppColors.white,
                 elevation: 10,
@@ -100,7 +101,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28),
                 ),
-              ),
+              )),
               child: Text(
                 _currentPage == 4
                     ? AppConstants.candidateCreateAccount
@@ -121,7 +122,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth > 900) {
+        if (constraints.maxWidth >= 900) {
           return const CandidateOnboardingFlowWeb();
         }
         return Scaffold(
@@ -142,7 +143,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                       style: GoogleFonts.publicSans(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.candidatePrimary,
+                        color: CandidateButtonStyle.deepTeal,
                       ),
                     ),
                   ),

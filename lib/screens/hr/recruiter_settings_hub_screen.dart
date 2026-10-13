@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/recruiter_top_bar.dart';
 
 class RecruiterSettingsHubScreen extends StatelessWidget {
   const RecruiterSettingsHubScreen({super.key});
@@ -7,8 +8,9 @@ class RecruiterSettingsHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFFF8FAFC),
-    appBar: AppBar(title: const Text('Theme & settings')),
-    body: ListView(
+    body: Column(children: [
+      const RecruiterTopBar(pageTitle: 'Theme & settings'),
+      Expanded(child: ListView(
       padding: const EdgeInsets.all(24),
       children: [
         Text(
@@ -52,6 +54,7 @@ class RecruiterSettingsHubScreen extends StatelessWidget {
           ),
         ),
       ],
-    ),
+    )),
+    ]),
   );
 }

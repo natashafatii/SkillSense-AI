@@ -1,12 +1,18 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
+import '../../services/api_client.dart';
+import '../../services/auth_service.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter;
 
 class OrgTeamScreen extends StatefulWidget {
-  const OrgTeamScreen({super.key});
+  const OrgTeamScreen({super.key, this.loadTeam, this.sendInvite});
+
+  final Future<dynamic> Function()? loadTeam;
+  final Future<dynamic> Function(String email)? sendInvite;
 
   @override
   State<OrgTeamScreen> createState() => _OrgTeamScreenState();
@@ -14,42 +20,13 @@ class OrgTeamScreen extends StatefulWidget {
 
 class _OrgTeamScreenState extends State<OrgTeamScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _inviteController = TextEditingController();
 
-  // Team member data
-  final List<Map<String, dynamic>> _team = [
-    {
-      'name': 'Abdul Rehman',
-      'email': 'abdul@techverse.pk',
-      'role': 'OWNER',
-      'color': AppColors.dashboardBlue,
-      'initials': 'AR',
-      'avatarBg': const Color(0xFFEFF6FF),
-    },
-    {
-      'name': 'Sana Khan',
-      'email': 'sana@techverse.pk',
-      'role': 'RECRUITER',
-      'color': AppColors.dashboardTeal,
-      'initials': 'SK',
-      'avatarBg': const Color(0xFFECFDF5),
-    },
-    {
-      'name': 'M. Tariq',
-      'email': 'tariq@techverse.pk',
-      'role': 'RECRUITER',
-      'color': AppColors.dashboardTeal,
-      'initials': 'MT',
-      'avatarBg': const Color(0xFFECFDF5),
-    },
-    {
-      'name': 'Hira Baig',
-      'email': 'Invited 2d ago',
-      'role': 'PENDING',
-      'color': const Color(0xFF94A3B8),
-      'initials': 'HB',
-      'avatarBg': const Color(0xFFF1F5F9),
-    },
-  ];
+  List<Map<String, dynamic>> _team = [];
+  List<Map<String, dynamic>> _pendingInvitations = [];
+  bool _teamLoading = true;
+  String? _teamError;
+  bool _sendingInvite = false;
 
   // Integrations status data
   final List<Map<String, dynamic>> _integrations = [
@@ -77,15 +54,228 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadTeam();
+  }
+
+  Future<void> _loadTeam() async {
+    setState(() {
+      _teamLoading = true;
+      _teamError = null;
+    });
+    try {
+      // The team GET endpoint is not available yet. An injected loader can
+      // supply live members when the endpoint is ready.
+      final payload = widget.loadTeam == null
+          ? <Map<String, dynamic>>[]
+          : await widget.loadTeam!();
+      final members = _readRows(payload, ['members', 'team', 'results']);
+      final invitations = payload is List
+          ? <Map<String, dynamic>>[]
+          : _readRows(payload, ['pending_invitations', 'invitations']);
+      final pending = <Map<String, dynamic>>[
+        ...invitations.where(_isPending),
+        ...members.where(_isPending),
+      ];
+      if (!mounted) return;
+      setState(() {
+        _team = members
+            .where(
+              (member) =>
+                  !_isPending(member) &&
+                  member['role']?.toString().toUpperCase() != 'OWNER',
+            )
+            .toList();
+        _pendingInvitations = pending;
+        _teamLoading = false;
+      });
+    } on DioException catch (error) {
+      if (!mounted) return;
+      if (error.response?.statusCode == 401) {
+        await AuthService.signOut(context);
+        return;
+      }
+      // If 404 or endpoint not populated -> treat as empty team
+      setState(() {
+        _team = [];
+        _pendingInvitations = [];
+        _teamLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _team = [];
+        _pendingInvitations = [];
+        _teamLoading = false;
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> _readRows(dynamic payload, List<String> keys) {
+    dynamic rows = payload;
+    if (payload is Map) {
+      rows = null;
+      for (final key in keys) {
+        if (payload[key] is List) {
+          rows = payload[key];
+          break;
+        }
+      }
+    }
+    if (rows is! List) return [];
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  bool _isPending(Map<String, dynamic> row) =>
+      row['status']?.toString().toUpperCase() == 'PENDING' ||
+      row['role']?.toString().toUpperCase() == 'PENDING';
+
+  bool get _hasNoTeammates => _team.isEmpty && _pendingInvitations.isEmpty;
+
+  Future<dynamic> _postInvitation(String email) async {
+    final client = await ApiClient.getInstance();
+    try {
+      return (await client.post(
+        '/company/team/invite/',
+        data: {'email': email},
+      )).data;
+    } on DioException catch (error) {
+      if (error.response?.statusCode != 404 &&
+          error.response?.statusCode != 405) {
+        rethrow;
+      }
+      try {
+        return (await client.post(
+          '/company/invitations/',
+          data: {'email': email},
+        )).data;
+      } on DioException catch (fallbackError) {
+        if (fallbackError.response?.statusCode != 404 &&
+            fallbackError.response?.statusCode != 405) {
+          rethrow;
+        }
+        return (await client.post(
+          '/company/team/',
+          data: {'email': email},
+        )).data;
+      }
+    }
+  }
+
+  Future<void> _openInviteFlow() async {
+    _inviteController.clear();
+    String? errorText;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, updateDialog) => AlertDialog(
+          title: Text(
+            'Invite a teammate',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+          ),
+          content: TextField(
+            controller: _inviteController,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: 'Email address',
+              hintText: 'teammate@company.com',
+              errorText: errorText,
+              border: const OutlineInputBorder(),
+            ),
+            onSubmitted: (_) => _submitInvite(
+              _inviteController,
+              dialogContext,
+              updateDialog,
+              (error) => errorText = error,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: _sendingInvite
+                  ? null
+                  : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: _sendingInvite
+                  ? null
+                  : () => _submitInvite(
+                      _inviteController,
+                      dialogContext,
+                      updateDialog,
+                      (error) => errorText = error,
+                    ),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF3E68ED),
+              ),
+              child: Text(_sendingInvite ? 'Sending…' : 'Send invite'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitInvite(
+    TextEditingController controller,
+    BuildContext dialogContext,
+    StateSetter updateDialog,
+    void Function(String?) setError,
+  ) async {
+    if (_sendingInvite) return;
+    final email = controller.text.trim();
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      updateDialog(() => setError('Enter a valid email address.'));
+      return;
+    }
+    updateDialog(() {
+      _sendingInvite = true;
+      setError(null);
+    });
+    try {
+      final result =
+          await (widget.sendInvite?.call(email) ?? _postInvitation(email));
+      if (!mounted || !dialogContext.mounted) return;
+      final invitation = result is Map
+          ? Map<String, dynamic>.from(result)
+          : null;
+      final confirmedInvitation =
+          invitation != null &&
+          invitation['email']?.toString().isNotEmpty == true &&
+          _isPending(invitation);
+      if (confirmedInvitation) {
+        setState(() => _pendingInvitations.add(invitation));
+      }
+      Navigator.of(dialogContext).pop();
+      if (!confirmedInvitation) await _loadTeam();
+    } catch (_) {
+      if (dialogContext.mounted) {
+        updateDialog(
+          () => setError('Could not send the invitation. Please try again.'),
+        );
+      }
+    } finally {
+      _sendingInvite = false;
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
+    _inviteController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth <= 768;
+    final bool isMobile = screenWidth < 900;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -105,34 +295,61 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
           ),
 
           // ── GRID PATTERN OVERLAY (Web Only) ─────────────────────────────────
-          if (!isMobile) Positioned.fill(child: CustomPaint(painter: GridPainter())),
+          if (!isMobile)
+            Positioned.fill(child: CustomPaint(painter: GridPainter())),
 
           // ── MAIN WORKSPACE CONTENT ──────────────────────────────────────────
           SafeArea(
             bottom: false,
             child: Row(
               children: [
-                // 1. LEFT RAIL (Web Only)
-
-                // 2. WORKSPACE
+                // 1. WORKSPACE
                 Expanded(
                   child: Column(
                     children: [
-                      // Top Bar (Web Only)
-                      if (!isMobile) _buildTopBar(),
+                      const RecruiterTopBar(
+                        pageTitle: 'Company & team',
+                        mobileTitle: 'Team',
+                        breadcrumbSegments: ['Company & team'],
+                      ),
 
-                      // Mobile Header (Mobile Only)
-                      if (isMobile) _buildMobileHeader(),
-
-                      // Scrollable content
+                      // Content: Loading, Error, Empty State, or live layout
                       Expanded(
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 16 : 24,
-                            vertical: isMobile ? 12 : 8,
-                          ),
-                          child: isMobile ? _buildMobileLayout() : _buildWebLayout(),
-                        ),
+                        child: _teamLoading
+                            ? const Center(
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFF4D7BFA),
+                                ),
+                              )
+                            : _teamError != null
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _teamError!,
+                                      style: GoogleFonts.inter(
+                                        color: const Color(0xFF4A5875),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: _loadTeam,
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : _hasNoTeammates
+                            ? _ownerEmptyContent(isMobile)
+                            : SingleChildScrollView(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isMobile ? 16 : 24,
+                                  vertical: isMobile ? 12 : 8,
+                                ),
+                                child: isMobile
+                                    ? _buildMobileLayout()
+                                    : _buildWebLayout(),
+                              ),
                       ),
                     ],
                   ),
@@ -145,9 +362,215 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
           if (isMobile)
             Align(
               alignment: Alignment.bottomCenter,
-              child: _buildMobileBottomDock(),
+              child: _hasNoTeammates
+                  ? _emptyMobileDock()
+                  : _buildMobileBottomDock(),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _ownerEmptyContent(bool mobile) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: mobile ? 84 : 24,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: mobile ? 54 : 64,
+                  height: mobile ? 54 : 64,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    border: Border.all(color: const Color(0xFFE3EAF4)),
+                    borderRadius: BorderRadius.circular(mobile ? 17 : 20),
+                  ),
+                  child: Icon(
+                    Icons.groups_outlined,
+                    size: mobile ? 22 : 26,
+                    color: const Color(0xFF8190A8),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  mobile ? 'No teammates yet' : 'Just you for now',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: mobile ? 15 : 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: mobile ? -0.2 : -0.45,
+                    color: const Color(0xFF17233B),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: mobile ? 280 : 400),
+                  child: Text(
+                    mobile
+                        ? 'Invite co-recruiters to work together.'
+                        : 'Invite co-recruiters to share the pipeline, review interviews and manage roles together.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: mobile ? 11 : 12.5,
+                      fontWeight: FontWeight.w400,
+                      height: 1.65,
+                      color: const Color(0xFF8190A8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  height: mobile ? 38 : 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(11),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4D7BFA).withValues(alpha: 0.28),
+                        blurRadius: 14,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton.icon(
+                    key: const Key('company-team-invite'),
+                    onPressed: _openInviteFlow,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: mobile ? 22 : 26,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                    ),
+                    icon: const Icon(
+                      Icons.add_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      'Invite a teammate',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                if (!mobile) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Add your company profile any time',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w400,
+                      color: const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _emptyMobileDock() {
+    const destinations = [
+      (Icons.dashboard_outlined, '/recruiter/command-deck', 'Dashboard'),
+      (Icons.grid_view_rounded, '/recruiter/job-listings', 'Jobs'),
+      (Icons.view_kanban_outlined, '/recruiter/pipeline', 'Pipeline'),
+      (
+        Icons.radio_button_checked,
+        '/recruiter/schedule-interview',
+        'Interviews',
+      ),
+      (Icons.leaderboard_outlined, '/recruiter/rankings', 'Rankings'),
+      (Icons.diamond_outlined, '/recruiter/analytics', 'Analytics'),
+    ];
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 64,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF16213A).withValues(alpha: .1),
+              blurRadius: 25,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            for (final destination in destinations)
+              Expanded(
+                child: Tooltip(
+                  message: destination.$3,
+                  child: InkWell(
+                    key: Key(
+                      'company-team-dock-${destination.$3.toLowerCase()}',
+                    ),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pushReplacementNamed(destination.$2),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      decoration: destination.$3 == 'Dashboard'
+                          ? BoxDecoration(
+                              color: const Color(0xFF3E68ED),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF3E68ED,
+                                  ).withValues(alpha: .34),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            )
+                          : null,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        destination.$1,
+                        size: 19,
+                        color: destination.$3 == 'Dashboard'
+                            ? Colors.white
+                            : const Color(0xFF74829E),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -230,13 +653,21 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
               ),
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
                 onPressed: () {},
                 child: Text(
                   'Edit',
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -332,14 +763,22 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.dashboardBlue,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                onPressed: () {},
+                onPressed: _openInviteFlow,
                 icon: const Icon(Icons.add_rounded, size: 16),
                 label: Text(
                   'Invite',
-                  style: GoogleFonts.inter(fontSize: 12.5, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -349,15 +788,38 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: _team.length,
-            separatorBuilder: (_, __) => const Divider(color: Color(0xFFF1F5F9), height: 1),
+            itemCount: _team.length + _pendingInvitations.length,
+            separatorBuilder: (_, __) =>
+                const Divider(color: Color(0xFFF1F5F9), height: 1),
             itemBuilder: (context, idx) {
-              final member = _team[idx];
-              final String name = member['name'];
-              final String email = member['email'];
-              final String role = member['role'];
-              final Color badgeColor = member['color'];
-              final Color avatarBg = member['avatarBg'];
+              final member = idx < _team.length
+                  ? _team[idx]
+                  : _pendingInvitations[idx - _team.length];
+              final String email = member['email']?.toString() ?? '';
+              final String name =
+                  member['name']?.toString() ??
+                  [member['first_name'], member['last_name']]
+                      .where(
+                        (part) => part != null && part.toString().isNotEmpty,
+                      )
+                      .join(' ')
+                      .trim();
+              final String shownName = name.isEmpty ? email : name;
+              final String role = _isPending(member)
+                  ? 'PENDING'
+                  : (member['role']?.toString().toUpperCase() ?? 'RECRUITER');
+              final Color badgeColor = role == 'OWNER'
+                  ? AppColors.dashboardBlue
+                  : role == 'PENDING'
+                  ? const Color(0xFF94A3B8)
+                  : AppColors.dashboardTeal;
+              final Color avatarBg = badgeColor.withValues(alpha: .1);
+              final initials = shownName
+                  .split(RegExp(r'\s+'))
+                  .where((part) => part.isNotEmpty)
+                  .take(2)
+                  .map((part) => part[0].toUpperCase())
+                  .join();
 
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -366,10 +828,13 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
                     Container(
                       width: 32,
                       height: 32,
-                      decoration: BoxDecoration(color: avatarBg, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                        color: avatarBg,
+                        shape: BoxShape.circle,
+                      ),
                       child: Center(
                         child: Text(
-                          member['initials'],
+                          initials,
                           style: GoogleFonts.spaceGrotesk(
                             color: const Color(0xFF475569),
                             fontSize: 11,
@@ -385,7 +850,7 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            name,
+                            shownName,
                             style: GoogleFonts.inter(
                               color: const Color(0xFF0F172A),
                               fontSize: 13.5,
@@ -411,7 +876,9 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
                       decoration: BoxDecoration(
                         color: badgeColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+                        border: Border.all(
+                          color: badgeColor.withValues(alpha: 0.2),
+                        ),
                       ),
                       child: Center(
                         child: Text(
@@ -460,7 +927,8 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: _integrations.length,
-            separatorBuilder: (_, __) => const Divider(color: Color(0xFFF1F5F9), height: 1),
+            separatorBuilder: (_, __) =>
+                const Divider(color: Color(0xFFF1F5F9), height: 1),
             itemBuilder: (context, idx) {
               final service = _integrations[idx];
               final String name = service['name'];
@@ -518,11 +986,16 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
 
                     // Connection status badge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: badgeColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+                        border: Border.all(
+                          color: badgeColor.withValues(alpha: 0.2),
+                        ),
                       ),
                       child: Text(
                         status,
@@ -578,7 +1051,9 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
                       value: 142 / 250.0,
                       strokeWidth: 4.5,
                       backgroundColor: Color(0xFFF1F5F9),
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.dashboardBlue),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.dashboardBlue,
+                      ),
                     ),
                     Text(
                       '58%',
@@ -625,13 +1100,21 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
             alignment: Alignment.centerRight,
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: () {},
               child: Text(
                 'Manage plan',
-                style: GoogleFonts.inter(fontSize: 12.5, fontWeight: FontWeight.bold),
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -662,7 +1145,9 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
               foregroundColor: AppColors.dashboardBlue,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () {
               Navigator.of(context).pushReplacementNamed('/settings');
@@ -680,64 +1165,37 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
     );
   }
 
-  // ── MOBILE HEADER ──────────────────────────────────────────────────────────
-  Widget _buildMobileHeader() {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              SvgPicture.asset('assets/images/logo.svg', height: 26),
-              const SizedBox(width: 10),
-              Text(
-                'Company',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF475569)),
-            onSelected: (val) {
-              Navigator.of(context).pushReplacementNamed(val);
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: '/settings',
-                child: Text('Scoring Model Settings', style: GoogleFonts.inter(fontSize: 13)),
-              ),
-              PopupMenuItem(
-                value: '/org',
-                child: Text('Organization & Team', style: GoogleFonts.inter(fontSize: 13)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── WEB LEFT RAIL NAVIGATION ───────────────────────────────────────────────
   // Legacy rail is kept for reference while the shared recruiter rail owns navigation.
   // ignore: unused_element
   Widget _buildLeftRail(BuildContext context) {
     final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'route': '/dashboard'},
+      {
+        'icon': Icons.dashboard_rounded,
+        'label': 'Dashboard',
+        'route': '/dashboard',
+      },
       {'icon': Icons.menu_book_rounded, 'label': 'Jobs', 'route': '/pipeline'},
-      {'icon': Icons.calendar_month_rounded, 'label': 'Interviews', 'route': '/schedule'},
-      {'icon': Icons.emoji_events_outlined, 'label': 'Rankings', 'route': '/rankings'},
-      {'icon': Icons.analytics_outlined, 'label': 'Analytics', 'route': '/analytics'},
-      {'icon': Icons.settings_outlined, 'label': 'Settings', 'route': '/settings'},
+      {
+        'icon': Icons.calendar_month_rounded,
+        'label': 'Interviews',
+        'route': '/schedule',
+      },
+      {
+        'icon': Icons.emoji_events_outlined,
+        'label': 'Rankings',
+        'route': '/rankings',
+      },
+      {
+        'icon': Icons.analytics_outlined,
+        'label': 'Analytics',
+        'route': '/analytics',
+      },
+      {
+        'icon': Icons.settings_outlined,
+        'label': 'Settings',
+        'route': '/settings',
+      },
     ];
 
     return Container(
@@ -767,7 +1225,8 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
               separatorBuilder: (_, __) => const SizedBox(height: 18),
               itemBuilder: (context, index) {
                 final item = navItems[index];
-                final bool hasBadge = index == 1; // Jobs has unread item badge "18"
+                final bool hasBadge =
+                    index == 1; // Jobs has unread item badge "18"
 
                 return Center(
                   child: Stack(
@@ -793,7 +1252,9 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
                           cursor: SystemMouseCursors.click,
                           child: GestureDetector(
                             onTap: () {
-                              Navigator.of(context).pushReplacementNamed(item['route']);
+                              Navigator.of(
+                                context,
+                              ).pushReplacementNamed(item['route']);
                             },
                             child: Container(
                               width: 38,
@@ -820,11 +1281,17 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
                           top: -4,
                           right: -4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.dashboardBlue,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white, width: 1.5),
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
                             ),
                             child: const Text(
                               '18',
@@ -884,185 +1351,6 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
     );
   }
 
-  // ── WEB TOP BAR ────────────────────────────────────────────────────────────
-  Widget _buildTopBar() {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Breadcrumbs
-          Row(
-            children: [
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pushReplacementNamed('/dashboard');
-                  },
-                  child: Text(
-                    'SETTINGS',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-              ),
-              Text(
-                ' / ',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFFCBD5E1),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'ORGANIZATION & TEAM',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-
-          // Actions Search/Notifications
-          Row(
-            children: [
-              // Search Input
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Notification button
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: AppColors.dashboardRed,
-              ),
-              const SizedBox(width: 10),
-
-              // Language button
-              _buildTopBarIconButton(
-                icon: Icons.language_rounded,
-                hasBadge: false,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-  }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    } else if (icon == Icons.language_rounded) {
-      tooltip = 'Language';
-    }
-
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 18),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: badgeColor ?? Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
   Widget _buildMobileBottomDock() {
     return Container(
@@ -1084,7 +1372,11 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
         children: [
           _buildMobileDockItem(Icons.dashboard_rounded, '/dashboard', false),
           _buildMobileDockItem(Icons.menu_book_rounded, '/pipeline', false),
-          _buildMobileDockItem(Icons.calendar_month_rounded, '/schedule', false),
+          _buildMobileDockItem(
+            Icons.calendar_month_rounded,
+            '/schedule',
+            false,
+          ),
           _buildMobileDockItem(Icons.emoji_events_outlined, '/rankings', false),
           _buildMobileDockItem(Icons.analytics_outlined, '/analytics', false),
         ],
@@ -1104,11 +1396,7 @@ class _OrgTeamScreenState extends State<OrgTeamScreen> {
           shape: BoxShape.circle,
           color: Colors.transparent,
         ),
-        child: Icon(
-          icon,
-          color: const Color(0xFF94A3B8),
-          size: 22,
-        ),
+        child: Icon(icon, color: const Color(0xFF94A3B8), size: 22),
       ),
     );
   }

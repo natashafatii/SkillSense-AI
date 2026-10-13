@@ -10,16 +10,11 @@ import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import '../../services/application_service.dart';
 import '../../services/interview_service.dart';
+import '../../services/api_exception.dart';
 import '../../models/job.dart';
 import '../../models/application.dart';
 import '../../models/interview.dart';
-
-// Global shared state for badges and notifications
-class AppNavState {
-  static int unreadInterviews = 0;
-  static bool hasUnreadNotifications = false;
-  static List<String> notifications = [];
-}
+import '../../widgets/recruiter_top_bar.dart';
 
 class CommandDeckScreen extends StatefulWidget {
   const CommandDeckScreen({super.key});
@@ -41,6 +36,10 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   String? _applicationsError;
   String? _interviewsError;
   Timer? _refreshTimer;
+  bool _initialRefreshStarted = false;
+  bool _jobsNotFound = false;
+  bool _interviewsNotFound = false;
+  ModalRoute<dynamic>? _route;
 
   bool get _hasData => _jobs.isNotEmpty || _applications.isNotEmpty;
   List<Job> get _activeJobs =>
@@ -78,6 +77,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     final all = <Application>[];
     final failures = <String>[];
     for (final job in jobs) {
+      if (!mounted || _route?.isCurrent != true) break;
       try {
         all.addAll(await ApplicationService.listAllForJob(job.id));
       } catch (error) {
@@ -96,18 +96,27 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   }
 
   Future<void> _refreshDashboard() async {
-    if (_refreshingDashboard) return;
+    if (_refreshingDashboard ||
+        _jobsNotFound ||
+        !mounted ||
+        _route?.isCurrent != true) {
+      return;
+    }
     _refreshingDashboard = true;
     try {
       final jobs = await JobService.listAllJobs();
-      if (!mounted) return;
+      if (!mounted || _route?.isCurrent != true) {
+        return;
+      }
       setState(() {
         _jobs = jobs;
         _loadingDashboard = false;
         _dashboardError = null;
       });
       final loaded = await _loadAllApplications(jobs);
-      if (!mounted) return;
+      if (!mounted || _route?.isCurrent != true) {
+        return;
+      }
       setState(() {
         _applications = loaded.applications;
         _applicationsError = loaded.error;
@@ -124,6 +133,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
         }
         return;
       }
+      if (_interviewsNotFound) return;
       try {
         final interviews = await InterviewService.listAll();
         if (mounted) {
@@ -134,7 +144,14 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           });
         }
       } catch (error) {
-        debugPrint('Command Deck interviews request failed: $error');
+        if (error is ApiException && error.statusCode == 404) {
+          if (!_interviewsNotFound) {
+            debugPrint('Command Deck interviews endpoint returned 404; stopping refreshes.');
+          }
+          _interviewsNotFound = true;
+        } else {
+          debugPrint('Command Deck interviews request failed: $error');
+        }
         if (mounted) {
           setState(() {
             _interviewsError = error.toString();
@@ -143,7 +160,14 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
         }
       }
     } catch (error) {
-      debugPrint('Command Deck jobs request failed: $error');
+      if (error is ApiException && error.statusCode == 404) {
+        if (!_jobsNotFound) {
+          debugPrint('Command Deck jobs endpoint returned 404; stopping refreshes.');
+        }
+        _jobsNotFound = true;
+      } else {
+        debugPrint('Command Deck jobs request failed: $error');
+      }
       if (mounted) {
         setState(() {
           _dashboardError = error.toString();
@@ -157,7 +181,10 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshDashboard();
+    if (state == AppLifecycleState.resumed &&
+        _route?.isCurrent == true) {
+      _refreshDashboard();
+    }
   }
 
   // Navigation & Search State
@@ -209,10 +236,13 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _refreshDashboard();
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 30),
-      (_) => _refreshDashboard(),
+      (_) {
+        if (mounted && _route?.isCurrent == true) {
+          _refreshDashboard();
+        }
+      },
     );
     _filteredSearchData = List.from(_searchData);
 
@@ -260,6 +290,24 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
+    if (_initialRefreshStarted || _route?.isCurrent != true) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _initialRefreshStarted ||
+          _route?.isCurrent != true) {
+        return;
+      }
+      _initialRefreshStarted = true;
+      _refreshDashboard();
+    });
+  }
+
   void _filterSearch(String query) {
     if (query.isEmpty) {
       setState(() {
@@ -302,7 +350,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth <= 768;
+    final bool isMobile = screenWidth < 900;
 
     // Use light theme for both mobile and web
     final DeckTheme currentTheme = DeckTheme.light;
@@ -380,7 +428,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                         Expanded(
                           child: Column(
                             children: [
-                              _buildTopBar(isMobile, currentTheme),
+                              _buildTopBar(),
                               Expanded(
                                 child: Stack(
                                   children: [
@@ -427,14 +475,14 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                     // Floating Autocomplete Search Dropdown
                                     if (_isSearchDropdownOpen)
                                       _buildSearchAutocompleteDropdown(
-                                        isMobile,
+                                        screenWidth < 980,
                                         currentTheme,
                                       ),
 
                                     // Floating Notifications Dropdown
                                     if (_isNotificationDropdownOpen)
                                       _buildNotificationsDropdown(
-                                        isMobile,
+                                        screenWidth < 980,
                                         currentTheme,
                                       ),
 
@@ -1046,210 +1094,26 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   }
 
   // ── TOP BAR (Collapsed on Mobile) ──────────────────────────────────────────
-  Widget _buildTopBar(bool isMobile, DeckTheme theme) {
-    if (isMobile) {
-      return Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: theme.cardBg,
-          border: Border(bottom: BorderSide(color: theme.border, width: 1)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                SvgPicture.asset('assets/images/logo.svg', height: 26),
-                const SizedBox(width: 8),
-                Text(
-                  'Deck',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: theme.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Text(
-                'WORKSPACE',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              Text(
-                ' / ',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFFCBD5E1),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'COMMAND DECK',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-
-          Row(
-            children: [
-              // Search Input
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: _isSearchFocused
-                        ? AppColors.dashboardBlue
-                        : const Color(0xFFE2E8F0),
-                    width: _isSearchFocused ? 1.8 : 1.0,
-                  ),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 14),
-
-              // Notification Icon
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _isNotificationDropdownOpen = !_isNotificationDropdownOpen;
-                    AppNavState.hasUnreadNotifications = false;
-                  });
-                },
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: _buildTopBarIconButton(
-                    icon: Icons.notifications_none_rounded,
-                    hasBadge: AppNavState.hasUnreadNotifications,
-                    badgeColor: AppColors.dashboardRed,
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 10),
-
-              _buildTopBarIconButton(
-                icon: Icons.language_rounded,
-                hasBadge: false,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-  }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
+  Widget _buildTopBar() => RecruiterTopBar(
+    pageTitle: 'Command Deck',
+    searchController: _searchController,
+    searchFocusNode: _searchFocusNode,
+    searchFocused: _isSearchFocused,
+    hasUnread:
+        AppNavState.hasUnreadNotifications || AppNavState.unreadInterviews > 0,
+    onSearchTap: () {
+      setState(() => _isSearchDropdownOpen = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocusNode.requestFocus();
+      });
+    },
+    onBellTap: () {
+      setState(() {
+        _isNotificationDropdownOpen = !_isNotificationDropdownOpen;
+        AppNavState.hasUnreadNotifications = false;
+      });
+    },
+  );
   // ── FLOATING OVERLAYS ──────────────────────────────────────────────────────
   Widget _buildSearchAutocompleteDropdown(bool isMobile, DeckTheme theme) {
     return Positioned(

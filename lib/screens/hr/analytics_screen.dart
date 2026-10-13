@@ -1,86 +1,138 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import '../../constants/app_colors.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter;
+import 'package:google_fonts/google_fonts.dart';
+
+import '../../services/auth_service.dart';
+import '../../widgets/recruiter_top_bar.dart';
+
+const _surface = Colors.white;
+const _field = Color(0xFFF8FAFE);
+const _edge = Color(0xFFE1E6F0);
+const _text = Color(0xFF16213A);
+const _text2 = Color(0xFF4A5875);
+const _text3 = Color(0xFF74829E);
+const _accent = Color(0xFF3E68ED);
 
 class AnalyticsScreen extends StatefulWidget {
-  const AnalyticsScreen({super.key});
+  const AnalyticsScreen({super.key, this.loadOverview});
+
+  final Future<dynamic> Function()? loadOverview;
 
   @override
   State<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  final TextEditingController _searchController = TextEditingController();
 
-  // Histogram data: bins with count and corresponding color mapping based on thresholds
-  // Bins: 0-40 (Red), 40-55 (Amber), 55-70 (Blue), 70-100 (Teal)
-  final List<Map<String, dynamic>> _histogramBins = [
-    {'label': '0–40', 'count': 12, 'color': AppColors.dashboardRed, 'pct': 0.18},
-    {'label': '40–55', 'count': 28, 'color': AppColors.dashboardAmber, 'pct': 0.42},
-    {'label': '55–70', 'count': 64, 'color': AppColors.dashboardBlue, 'pct': 0.90},
-    {'label': '70–100', 'count': 38, 'color': AppColors.dashboardTeal, 'pct': 0.56},
-  ];
-
-  // Pipeline conversion funnel data
-  final List<Map<String, dynamic>> _funnelSteps = [
-    {'stage': 'APPLIED', 'count': 412, 'pct': 1.0, 'color': AppColors.dashboardBlue},
-    {'stage': 'SCREENED', 'count': 268, 'pct': 0.65, 'color': AppColors.dashboardBlue},
-    {'stage': 'INTERVIEWED', 'count': 142, 'pct': 0.34, 'color': AppColors.dashboardTeal},
-    {'stage': 'SELECTED', 'count': 19, 'pct': 0.046, 'color': AppColors.dashboardTeal},
-    {'stage': 'HIRED', 'count': 12, 'pct': 0.029, 'color': AppColors.dashboardTeal},
-  ];
-
-  // Role health stats (Healthy, Slow, At Risk - words over numbers)
-  final List<Map<String, dynamic>> _roleHealth = [
-    {
-      'role': 'Senior Django Dev',
-      'status': 'Healthy',
-      'detail': '11d open',
-      'pct': 0.75,
-      'color': AppColors.dashboardTeal,
-    },
-    {
-      'role': 'Frontend (React)',
-      'status': 'Slow',
-      'detail': '28d open',
-      'pct': 0.40,
-      'color': AppColors.dashboardAmber,
-    },
-    {
-      'role': 'ML / AI Engineer',
-      'status': 'At risk',
-      'detail': '34d open',
-      'pct': 0.15,
-      'color': AppColors.dashboardRed,
-    },
-    {
-      'role': 'Full Stack Dev',
-      'status': 'Healthy',
-      'detail': '8d open',
-      'pct': 0.90,
-      'color': AppColors.dashboardBlue,
-    },
-  ];
+  _AnalyticsOverview? _overview;
+  bool _loading = true;
+  String? _error;
+  int _requestId = 0;
+  Timer? _emptyRefresh;
+  bool _initialLoadStarted = false;
+  bool _overviewNotFound = false;
+  ModalRoute<dynamic>? _route;
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    if (widget.loadOverview == null) return;
+    _emptyRefresh = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted &&
+          _route?.isCurrent == true &&
+          !_overviewNotFound &&
+          !_loading &&
+          _error == null &&
+          _overview?.hasData != true) {
+        _load();
+      }
+    });
   }
 
   @override
-  Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth <= 768;
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
+    if (_initialLoadStarted || _route?.isCurrent != true) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _initialLoadStarted || _route?.isCurrent != true) {
+        return;
+      }
+      _initialLoadStarted = true;
+      _load();
+    });
+  }
 
+  @override
+  void dispose() {
+
+    _emptyRefresh?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    if (_overviewNotFound || !mounted || _route?.isCurrent != true) {
+      return;
+    }
+    final requestId = ++_requestId;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      // No default request until the overview endpoint exists.
+      final payload = widget.loadOverview == null
+          ? <String, dynamic>{}
+          : await widget.loadOverview!();
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _overview = _AnalyticsOverview.fromResponse(payload);
+        _loading = false;
+      });
+    } on DioException catch (error) {
+      if (!mounted || requestId != _requestId) return;
+      if (error.response?.statusCode == 401) {
+        await AuthService.signOut(context);
+        return;
+      }
+      if (error.response?.statusCode == 404) {
+        if (!_overviewNotFound) {
+          debugPrint(
+            'Analytics overview endpoint returned 404; stopping refreshes.',
+          );
+        }
+        _overviewNotFound = true;
+      }
+      // 404 or unpopulated analytics -> treat as empty state
+      setState(() {
+        _overview = null;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _overview = null;
+        _loading = false;
+      });
+    }
+  }
+
+  bool get _mobile => MediaQuery.sizeOf(context).width < 900;
+
+  @override
+  Widget build(BuildContext context) {
+    final mobile = _mobile;
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: Stack(
         children: [
-          // ── BASE GRADIENT ──────────────────────────────────────────────────
+          // ── BASE GRADIENT ──
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -93,1130 +145,719 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
           ),
 
-          // ── GRID PATTERN OVERLAY (Web Only) ─────────────────────────────────
-          if (!isMobile) Positioned.fill(child: CustomPaint(painter: GridPainter())),
+          // ── GRID PATTERN OVERLAY (Web Only) ──
+          if (!mobile)
+            Positioned.fill(child: CustomPaint(painter: GridPainter())),
 
-          // ── MAIN WORKSPACE CONTENT ──────────────────────────────────────────
+          // ── MAIN CONTENT ──
           SafeArea(
             bottom: false,
-            child: Row(
+            child: Column(
               children: [
-                // 1. LEFT RAIL (Web Only)
-
-                // 2. MAIN WORKSPACE
+                const RecruiterTopBar(
+                  pageTitle: 'Analytics',
+                  breadcrumbSegments: ['Analytics'],
+                ),
                 Expanded(
-                  child: Column(
-                    children: [
-                      // Top Bar (Web Only)
-                      if (!isMobile) _buildTopBar(),
-
-                      // Mobile Header (Mobile Only)
-                      if (isMobile) _buildMobileHeader(),
-
-                      // Scrollable Analytics Grid
-                      Expanded(
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 16 : 24,
-                            vertical: isMobile ? 12 : 8,
-                          ),
-                          child: isMobile ? _buildMobileLayout() : _buildWebLayout(),
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(color: _accent),
+                        )
+                      : _error != null
+                      ? _errorState()
+                      : _overview?.hasData == true
+                      ? _liveLayout(_overview!, mobile)
+                      : _emptyState(mobile),
                 ),
               ],
             ),
           ),
 
-          // ── MOBILE FLOATING BOTTOM DOCK ────────────────────────────────────
-          if (isMobile)
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: _buildMobileBottomDock(),
-            ),
+          // ── MOBILE FLOATING BOTTOM DOCK ──
+          if (mobile)
+            Positioned(left: 0, right: 0, bottom: 0, child: _mobileDock()),
         ],
       ),
     );
   }
 
-  // ── WEB LAYOUT ─────────────────────────────────────────────────────────────
-  Widget _buildWebLayout() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildHeaderArea(),
-        _buildKpiBentoRow(isMobile: false),
-        const SizedBox(height: 20),
-        _buildMiddleChartsRow(isMobile: false),
-        const SizedBox(height: 20),
-        _buildRoleHealthCard(isMobile: false),
-        const SizedBox(height: 40),
-      ],
-    );
-  }
-
-  // ── MOBILE LAYOUT ──────────────────────────────────────────────────────────
-  Widget _buildMobileLayout() {
-    return Column(
-      children: [
-        // Time to Hire Hero Panel first (full-width)
-        _buildKpiCard(
-          title: 'TIME TO HIRE',
-          value: '11.2d',
-          sub: '-3.1d vs manual',
-          subCol: const Color(0xFF22C55E),
-          isHot: true,
-          isMobile: true,
-        ),
-        const SizedBox(height: 12),
-
-        // Conversion funnel card
-        _buildFunnelCard(isMobile: true),
-        const SizedBox(height: 12),
-
-        // Histogram card
-        _buildHistogramCard(isMobile: true),
-        const SizedBox(height: 12),
-
-        // Role health card
-        _buildRoleHealthCard(isMobile: true),
-        const SizedBox(height: 110), // safe space for bottom dock
-      ],
-    );
-  }
-
-  // ── KPI BENTO ROW (Time-to-hire owns the beam) ──────────────────────────
-  Widget _buildKpiBentoRow({required bool isMobile}) {
-    return Row(
-      children: [
-        // Hot KPI: Time-to-hire (owns the beam!)
-        Expanded(
-          flex: 3,
-          child: _buildKpiCard(
-            title: 'TIME TO HIRE',
-            value: '11.2d',
-            sub: '-3.1d vs manual',
-            subCol: const Color(0xFF22C55E),
-            isHot: true,
-            isMobile: isMobile,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          flex: 2,
-          child: _buildKpiCard(
-            title: 'INTERVIEWS RUN',
-            value: '142',
-            sub: 'this quarter',
-            subCol: const Color(0xFF64748B),
-            isHot: false,
-            isMobile: isMobile,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          flex: 2,
-          child: _buildKpiCard(
-            title: 'COST PER HIRE',
-            value: 'PKR 8.4k',
-            sub: '-62% vs agency',
-            subCol: const Color(0xFF22C55E),
-            isHot: false,
-            isMobile: isMobile,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          flex: 2,
-          child: _buildKpiCard(
-            title: 'OFFER ACCEPT',
-            value: '83%',
-            sub: '+9pts',
-            subCol: const Color(0xFF22C55E),
-            isHot: false,
-            isMobile: isMobile,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildKpiCard({
-    required String title,
-    required String value,
-    required String sub,
-    required Color subCol,
-    required bool isHot,
-    required bool isMobile,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(isMobile ? 18 : 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isHot ? AppColors.dashboardBlue : const Color(0xFFE2E8F0),
-          width: isHot ? 2 : 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-          if (isHot)
-            BoxShadow(
-              color: AppColors.dashboardBlue.withValues(alpha: 0.08),
-              blurRadius: 20,
-              spreadRadius: 2,
+  // ── CENTERED EMPTY STATE ───────────────────────────────────────────────────
+  Widget _emptyState(bool mobile) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: mobile ? 84 : 24,
             ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: isMobile ? 26 : 32,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            sub,
-            style: GoogleFonts.inter(
-              color: subCol,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── MIDDLE CHARTS ROW ──────────────────────────────────────────────────────
-  Widget _buildMiddleChartsRow({required bool isMobile}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 4,
-          child: _buildHistogramCard(isMobile: isMobile),
-        ),
-        const SizedBox(width: 20),
-        Expanded(
-          flex: 3,
-          child: _buildFunnelCard(isMobile: isMobile),
-        ),
-      ],
-    );
-  }
-
-  // Score distribution card (Histogram colored by score bands)
-  Widget _buildHistogramCard({required bool isMobile}) {
-    return Container(
-      height: isMobile ? 280 : 340,
-      padding: EdgeInsets.all(isMobile ? 18 : 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Score distribution',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  '142 INTERVIEWS',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: AppColors.dashboardBlue,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const Spacer(),
-
-          // Histogram Bars colored by bands
-          SizedBox(
-            height: isMobile ? 130 : 180,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: _histogramBins.map((bin) {
-                final double heightPct = bin['pct'];
-                final Color color = bin['color'];
-
-                return Expanded(
-                  child: Container(
-                    margin: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        // Tooltip count
-                        Text(
-                          '${bin['count']}',
-                          style: GoogleFonts.jetBrainsMono(
-                            color: const Color(0xFF64748B),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-
-                        // Glowing Rounded Bar
-                        Container(
-                          height: (isMobile ? 90 : 130) * heightPct,
-                          decoration: BoxDecoration(
-                            color: color,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(6),
-                              topRight: Radius.circular(6),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: color.withValues(alpha: 0.12),
-                                blurRadius: 10,
-                                spreadRadius: 1,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-          const Divider(color: Color(0xFFF1F5F9), height: 1),
-          const SizedBox(height: 10),
-
-          // X-Axis score labels representing thresholds: 0, 40, 55, 70, 100
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildAxisTick('0'),
-                _buildAxisTick('40'),
-                _buildAxisTick('55'),
-                _buildAxisTick('70'),
-                _buildAxisTick('100'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAxisTick(String label) {
-    return Text(
-      label,
-      style: GoogleFonts.jetBrainsMono(
-        color: const Color(0xFF94A3B8),
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-
-  // Pipeline conversion funnel card
-  Widget _buildFunnelCard({required bool isMobile}) {
-    return Container(
-      height: 340,
-      padding: EdgeInsets.all(isMobile ? 18 : 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Pipeline conversion',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-                ),
-          ),
-
-          const Spacer(),
-
-          // Funnel Steps
-          Column(
-            children: _funnelSteps.map((step) {
-              final String stage = step['stage'];
-              final int count = step['count'];
-              final double barPct = step['pct'];
-              final Color color = step['color'];
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Row(
-                  children: [
-                    // Stage Name label
-                    SizedBox(
-                      width: 100,
-                      child: Text(
-                        stage,
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-
-                    // Horizontal conversion bar
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(
-                          value: barPct,
-                          minHeight: 6,
-                          backgroundColor: const Color(0xFFF1F5F9),
-                          valueColor: AlwaysStoppedAnimation<Color>(color),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 18),
-
-                    // Count
-                    SizedBox(
-                      width: 32,
-                      child: Text(
-                        '$count',
-                        textAlign: TextAlign.right,
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF334155),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── ROLE HEALTH SECTION ────────────────────────────────────────────────────
-  Widget _buildRoleHealthCard({required bool isMobile}) {
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 18 : 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Role health',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pushReplacementNamed('/dashboard');
-                  },
-                  child: Text(
-                    'All roles ›',
-                    style: GoogleFonts.inter(
-                      color: AppColors.dashboardBlue,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          // Role cards grid / list
-          if (!isMobile)
-            Row(
-              children: [
-                Expanded(child: _buildRoleHealthTile(_roleHealth[0])),
-                const SizedBox(width: 14),
-                Expanded(child: _buildRoleHealthTile(_roleHealth[1])),
-                const SizedBox(width: 14),
-                Expanded(child: _buildRoleHealthTile(_roleHealth[2])),
-                const SizedBox(width: 14),
-                Expanded(child: _buildRoleHealthTile(_roleHealth[3])),
-              ],
-            )
-          else
-            Column(
-              children: [
-                _buildRoleHealthTile(_roleHealth[0]),
-                const SizedBox(height: 12),
-                _buildRoleHealthTile(_roleHealth[1]),
-                const SizedBox(height: 12),
-                _buildRoleHealthTile(_roleHealth[2]),
-                const SizedBox(height: 12),
-                _buildRoleHealthTile(_roleHealth[3]),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRoleHealthTile(Map<String, dynamic> data) {
-    final String role = data['role'];
-    final String status = data['status'];
-    final String detail = data['detail'];
-    final double pct = data['pct'];
-    final Color color = data['color'];
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            role,
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-
-          // Health status word status ("At risk" / "Slow" / "Healthy")
-          Text(
-            '$status - $detail',
-            style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(
-              value: pct,
-              minHeight: 4,
-              backgroundColor: const Color(0xFFE2E8F0),
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── MOBILE APP HEADER ──────────────────────────────────────────────────────
-  Widget _buildMobileHeader() {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              SvgPicture.asset('assets/images/logo.svg', height: 26),
-              const SizedBox(width: 10),
-              Text(
-                'Analytics',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          Text(
-            'Q3 OVERVIEW',
-            style: GoogleFonts.jetBrainsMono(
-              color: const Color(0xFF64748B),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB HEADER AREA ────────────────────────────────────────────────────────
-  Widget _buildHeaderArea() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Analytics Overview',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.5,
-            ),
-          ),
-
-          // Overview switch option
-          Container(
-            height: 36,
-            padding: const EdgeInsets.all(2.5),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE2E8F0).withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
+                // Icon tile (◈, 64px web / 54px mobile)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  width: mobile ? 54 : 64,
+                  height: mobile ? 54 : 64,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
+                    color: const Color(0xFFF1F5F9),
+                    border: Border.all(color: const Color(0xFFE3EAF4)),
+                    borderRadius: BorderRadius.circular(mobile ? 17 : 20),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '◈',
+                    style: TextStyle(
+                      fontSize: mobile ? 20 : 24,
+                      color: const Color(0xFF8190A8),
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Heading
+                Text(
+                  mobile ? 'No data yet' : 'No analytics yet',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: mobile ? 15 : 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: mobile ? -0.2 : -0.45,
+                    color: const Color(0xFF17233B),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Helper text
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: mobile ? 280 : 380),
+                  child: Text(
+                    mobile
+                        ? 'Metrics appear after your first interviews.'
+                        : 'Hiring funnel, score trends and time-to-hire appear once your first candidates move through a role.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: mobile ? 11 : 12.5,
+                      height: 1.65,
+                      color: const Color(0xFF8190A8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Primary CTA — indigo gradient
+                Container(
+                  height: mobile ? 38 : 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(11),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
+                        color: const Color(0xFF4D7BFA).withValues(alpha: 0.28),
+                        blurRadius: 14,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
-                  child: Center(
+                  child: ElevatedButton(
+                    key: const Key('analytics-job-listings'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: mobile ? 22 : 26,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).pushReplacementNamed('/recruiter/job-listings'),
                     child: Text(
-                      'Overview',
+                      'Go to job listings',
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF0F172A),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
                   ),
                 ),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).pushReplacementNamed('/rankings');
-                    },
+                if (!mobile) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Charts unlock after the first interviews finish',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 10.5,
+                      color: const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _errorState() => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(_error!, style: GoogleFonts.inter(color: _text2)),
+        TextButton(onPressed: _load, child: const Text('Retry')),
+      ],
+    ),
+  );
+
+  // ── MOBILE FLOATING BOTTOM DOCK ────────────────────────────────────────────
+  Widget _mobileDock() {
+    final destinations = [
+      (Icons.dashboard_outlined, '/recruiter/command-deck', 'Dashboard'),
+      (Icons.grid_view_rounded, '/recruiter/job-listings', 'Jobs'),
+      (Icons.view_kanban_outlined, '/recruiter/pipeline', 'Pipeline'),
+      (
+        Icons.radio_button_checked,
+        '/recruiter/schedule-interview',
+        'Interviews',
+      ),
+      (Icons.leaderboard_outlined, '/recruiter/rankings', 'Rankings'),
+      (Icons.diamond_outlined, '/recruiter/analytics', 'Analytics'),
+    ];
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 64,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            for (final destination in destinations)
+              Expanded(
+                child: Tooltip(
+                  message: destination.$3,
+                  child: InkWell(
+                    key: Key('analytics-dock-${destination.$3.toLowerCase()}'),
+                    onTap: destination.$3 == 'Analytics'
+                        ? null
+                        : () => Navigator.of(
+                            context,
+                          ).pushReplacementNamed(destination.$2),
+                    borderRadius: BorderRadius.circular(16),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      color: Colors.transparent,
-                      child: Center(
-                        child: Text(
-                          'Cohort Rankings',
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF64748B),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
+                      decoration: destination.$3 == 'Analytics'
+                          ? BoxDecoration(
+                              color: const Color(0xFF4D7BFA),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF4D7BFA,
+                                  ).withValues(alpha: 0.34),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            )
+                          : null,
+                      alignment: Alignment.center,
+                      child: destination.$3 == 'Analytics'
+                          ? const Text(
+                              '◈',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.white,
+                                height: 1.0,
+                              ),
+                            )
+                          : Icon(
+                              destination.$1,
+                              size: 19,
+                              color: const Color(0xFF74829E),
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _liveLayout(_AnalyticsOverview overview, bool mobile) =>
+      SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          mobile ? 16 : 28,
+          mobile ? 20 : 28,
+          mobile ? 16 : 28,
+          mobile ? 110 : 48,
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  mobile ? 'Insights' : 'Analytics overview',
+                  style: GoogleFonts.inter(
+                    fontSize: mobile ? 22 : 26,
+                    fontWeight: FontWeight.w700,
+                    color: _text,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _kpiBento(overview, mobile),
+                if (overview.hasHistogram || overview.hasFunnel) ...[
+                  const SizedBox(height: 20),
+                  mobile
+                      ? Column(
+                          children: [
+                            if (overview.hasHistogram)
+                              _histogram(overview.histogram),
+                            if (overview.hasHistogram && overview.hasFunnel)
+                              const SizedBox(height: 16),
+                            if (overview.hasFunnel) _funnel(overview.funnel),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (overview.hasHistogram)
+                              Expanded(child: _histogram(overview.histogram)),
+                            if (overview.hasHistogram && overview.hasFunnel)
+                              const SizedBox(width: 20),
+                            if (overview.hasFunnel)
+                              Expanded(child: _funnel(overview.funnel)),
+                          ],
+                        ),
+                ],
+                if (overview.roleHealth.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  _roleHealth(overview.roleHealth),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+
+  Widget _panel(String title, Widget child) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: _surface,
+      border: Border.all(color: _edge),
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: _text.withValues(alpha: .04),
+          blurRadius: 16,
+          offset: const Offset(0, 5),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: _text,
+          ),
+        ),
+        const SizedBox(height: 18),
+        child,
+      ],
+    ),
+  );
+
+  Widget _kpiBento(_AnalyticsOverview data, bool mobile) {
+    final metrics = <(String, String)>[
+      if (data.timeToHire != null && data.timeToHire! > 0)
+        ('TIME TO HIRE', '${data.timeToHire!.toStringAsFixed(1)}d'),
+      if (data.interviewsRun != null && data.interviewsRun! > 0)
+        ('INTERVIEWS RUN', '${data.interviewsRun}'),
+      if (data.costPerHire != null && data.costPerHire!.isNotEmpty)
+        ('COST PER HIRE', data.costPerHire!),
+      if (data.hires != null && data.hires! > 0) ('HIRES', '${data.hires}'),
+    ];
+    if (metrics.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = mobile ? 1 : math.min(4, metrics.length);
+        final width = (constraints.maxWidth - (columns - 1) * 14) / columns;
+        return Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            for (final metric in metrics)
+              SizedBox(
+                width: width,
+                child: _panel(
+                  metric.$1,
+                  Text(
+                    metric.$2,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: _text,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _histogram(List<_AnalyticsPoint> bins) {
+    final maxCount = bins.fold<int>(
+      1,
+      (current, bin) => math.max(current, bin.count),
+    );
+    const colors = [
+      Color(0xFFEF5B5B),
+      Color(0xFFE9A83C),
+      Color(0xFF3E6FF0),
+      Color(0xFF14B584),
+    ];
+    return _panel(
+      'Score distribution',
+      SizedBox(
+        height: 190,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var i = 0; i < bins.length; i++)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${bins[i].count}',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 10.5,
+                          color: _text2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 140 * bins[i].count / maxCount,
+                        decoration: BoxDecoration(
+                          color: colors[i % colors.length],
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(6),
                           ),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        bins[i].label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(fontSize: 10.5, color: _text3),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _funnel(List<_AnalyticsPoint> steps) {
+    final maxCount = steps.fold<int>(
+      1,
+      (current, step) => math.max(current, step.count),
+    );
+    return _panel(
+      'Pipeline conversion',
+      Column(
+        children: [
+          for (final step in steps)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 104,
+                    child: Text(
+                      step.label.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 10,
+                        color: _text2,
+                      ),
                     ),
                   ),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: step.count / maxCount,
+                        minHeight: 7,
+                        backgroundColor: _field,
+                        valueColor: const AlwaysStoppedAnimation(_accent),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 32,
+                    child: Text(
+                      '${step.count}',
+                      textAlign: TextAlign.right,
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11,
+                        color: _text,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _roleHealth(List<_RoleHealth> roles) => _panel(
+    'Role health',
+    Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        for (final role in roles)
+          Container(
+            width: 220,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _field,
+              border: Border.all(color: _edge),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  role.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w600,
+                    color: _text,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  role.status,
+                  style: GoogleFonts.inter(fontSize: 12, color: _text2),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
+      ],
+    ),
+  );
+}
 
-  // ── WEB LEFT RAIL NAVIGATION ───────────────────────────────────────────────
-  // Legacy rail is kept for reference while the shared recruiter rail owns navigation.
-  // ignore: unused_element
-  Widget _buildLeftRail(BuildContext context) {
-    final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'route': '/dashboard'},
-      {'icon': Icons.menu_book_rounded, 'label': 'Jobs', 'route': '/pipeline'},
-      {'icon': Icons.calendar_month_rounded, 'label': 'Interviews', 'route': '/schedule'},
-      {'icon': Icons.emoji_events_outlined, 'label': 'Rankings', 'route': '/rankings'},
-      {'icon': Icons.analytics_outlined, 'label': 'Analytics', 'route': '/analytics'},
-      {'icon': Icons.settings_outlined, 'label': 'Settings', 'route': '/settings'},
-    ];
+class _AnalyticsOverview {
+  const _AnalyticsOverview({
+    required this.interviewsRun,
+    required this.timeToHire,
+    required this.costPerHire,
+    required this.hires,
+    required this.pipelineMovement,
+    required this.histogram,
+    required this.funnel,
+    required this.roleHealth,
+  });
 
-    return Container(
-      width: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
-              },
-              child: SvgPicture.asset('assets/images/logo.svg', height: 48),
-            ),
-          ),
-          const SizedBox(height: 40),
+  final int? interviewsRun, hires, pipelineMovement;
+  final double? timeToHire;
+  final String? costPerHire;
+  final List<_AnalyticsPoint> histogram, funnel;
+  final List<_RoleHealth> roleHealth;
 
-          // Nav Items
-          Expanded(
-            child: ListView.separated(
-              itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
-              itemBuilder: (context, index) {
-                final isSelected = index == 4; // Analytics is active/selected (index 4)
-                final item = navItems[index];
-                final bool hasBadge = index == 1; // Jobs has unread item badge "18"
+  bool get hasHistogram => histogram.any((point) => point.count > 0);
+  bool get hasFunnel => funnel.any((point) => point.count > 0);
 
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Active glowing orb
-                      if (isSelected)
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.dashboardBlue,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.dashboardBlue.withValues(alpha: 0.4),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
+  bool get hasData =>
+      (interviewsRun ?? 0) > 0 ||
+      (hires ?? 0) > 0 ||
+      (pipelineMovement ?? 0) > 0 ||
+      (timeToHire ?? 0) > 0 ||
+      hasHistogram ||
+      funnel.any(
+        (point) => point.label.toUpperCase() != 'APPLIED' && point.count > 0,
+      );
 
-                      Tooltip(
-                        message: item['label'],
-                        waitDuration: const Duration(milliseconds: 350),
-                        preferBelow: false,
-                        verticalOffset: 24,
-                        margin: const EdgeInsets.only(left: 45),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () {
-                              if (!isSelected) {
-                                Navigator.of(context).pushReplacementNamed(item['route']);
-                              }
-                            },
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: Center(
-                                child: Icon(
-                                  item['icon'],
-                                  color: isSelected ? Colors.white : const Color(0xFF64748B),
-                                  size: 19,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Badge Sit on Top-Right Corner
-                      if (hasBadge)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.dashboardBlue,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white, width: 1.5),
-                            ),
-                            child: const Text(
-                              '18',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Avatar bottom
-          Container(
-            width: 36,
-            height: 36,
-            margin: const EdgeInsets.only(bottom: 24),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFEFF6FF),
-              border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
-            ),
-            child: Center(
-              child: Text(
-                'AR',
-                style: GoogleFonts.inter(
-                  color: AppColors.dashboardBlue,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB TOP BAR ────────────────────────────────────────────────────────────
-  Widget _buildTopBar() {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Breadcrumbs
-          Row(
-            children: [
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pushReplacementNamed('/pipeline');
-                  },
-                  child: Text(
-                    'ROLES',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-              ),
-              Text(
-                ' / ',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFFCBD5E1),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'ANALYTICS',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-
-          // Actions Search/Notifications
-          Row(
-            children: [
-              // Search Input
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Notification button
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: AppColors.dashboardRed,
-              ),
-              const SizedBox(width: 10),
-
-              // Language button
-              _buildTopBarIconButton(
-                icon: Icons.language_rounded,
-                hasBadge: false,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-  }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    } else if (icon == Icons.language_rounded) {
-      tooltip = 'Language';
+  factory _AnalyticsOverview.fromResponse(dynamic response) {
+    var root = _map(response);
+    if (root['data'] is Map) root = _map(root['data']);
+    if (root['overview'] is Map) root = _map(root['overview']);
+    final metrics = _map(root['metrics'] ?? root['kpis']);
+    dynamic read(List<String> names) {
+      for (final name in names) {
+        if (metrics.containsKey(name)) return metrics[name];
+        if (root.containsKey(name)) return root[name];
+      }
+      return null;
     }
 
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 18),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: badgeColor ?? Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
+    final interviewRecords = read(['interviews', 'interview_data']);
+    final completedRecords = interviewRecords is List
+        ? interviewRecords
+              .where(
+                (item) =>
+                    item is Map &&
+                    [
+                      'COMPLETED',
+                      'DECIDED',
+                    ].contains(item['status']?.toString().toUpperCase()),
+              )
+              .length
+        : 0;
+    return _AnalyticsOverview(
+      interviewsRun:
+          _number(
+            read([
+              'interviews_completed',
+              'completed_interviews',
+              'interviews_run',
+              'total_interviews',
+              'interview_count',
+            ]),
+          )?.toInt() ??
+          (completedRecords > 0 ? completedRecords : null),
+      timeToHire: _number(
+        read([
+          'time_to_hire_days',
+          'average_time_to_hire_days',
+          'avg_time_to_hire',
+          'time_to_hire',
+        ]),
+      )?.toDouble(),
+      costPerHire: read(['cost_per_hire', 'average_cost_per_hire'])?.toString(),
+      hires: _number(read(['hires', 'total_hires', 'hired_count']))?.toInt(),
+      pipelineMovement: _number(
+        read(['pipeline_movement', 'candidates_advanced', 'stage_transitions']),
+      )?.toInt(),
+      histogram: _points(
+        read([
+          'score_distribution',
+          'score_histogram',
+          'histogram',
+          'match_score_distribution',
+        ]),
       ),
+      funnel: _points(
+        read(['pipeline_funnel', 'funnel', 'pipeline_conversion', 'pipeline']),
+      ),
+      roleHealth: _roles(read(['role_health', 'roles_health'])),
     );
   }
 
-  // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() {
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildMobileDockItem(Icons.dashboard_rounded, '/dashboard', false),
-          _buildMobileDockItem(Icons.menu_book_rounded, '/pipeline', false),
-          _buildMobileDockItem(Icons.calendar_month_rounded, '/schedule', false),
-          _buildMobileDockItem(Icons.emoji_events_outlined, '/rankings', false),
-          _buildMobileDockItem(Icons.analytics_outlined, '/analytics', true), // active
-        ],
-      ),
-    );
+  static Map<String, dynamic> _map(dynamic value) => value is Map
+      ? value.map((key, item) => MapEntry(key.toString(), item))
+      : <String, dynamic>{};
+
+  static num? _number(dynamic value) {
+    if (value is num) return value;
+    if (value is String) return num.tryParse(value.replaceAll(',', ''));
+    if (value is Map) return _number(value['value'] ?? value['count']);
+    return null;
   }
 
-  Widget _buildMobileDockItem(IconData icon, String route, bool isActive) {
-    return GestureDetector(
-      onTap: () {
-        if (!isActive) {
-          Navigator.of(context).pushReplacementNamed(route);
-        }
-      },
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: isActive ? AppColors.dashboardBlue : Colors.transparent,
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: AppColors.dashboardBlue.withValues(alpha: 0.4),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : [],
-        ),
-        child: Icon(
-          icon,
-          color: isActive ? Colors.white : const Color(0xFF94A3B8),
-          size: 22,
-        ),
-      ),
-    );
+  static List<_AnalyticsPoint> _points(dynamic value) {
+    if (value is Map) {
+      for (final key in ['bins', 'steps', 'stages', 'results', 'data']) {
+        if (value[key] is List) return _points(value[key]);
+      }
+      return value.entries
+          .map(
+            (entry) => _AnalyticsPoint(
+              entry.key.toString(),
+              _number(entry.value)?.toInt() ?? 0,
+            ),
+          )
+          .toList();
+    }
+    if (value is! List) return const [];
+    return [
+      for (final raw in value)
+        if (raw is Map)
+          _AnalyticsPoint(
+            (raw['label'] ??
+                    raw['range'] ??
+                    raw['bucket'] ??
+                    raw['score_range'] ??
+                    raw['stage'] ??
+                    raw['status'] ??
+                    '')
+                .toString(),
+            _number(
+                  raw['count'] ??
+                      raw['value'] ??
+                      raw['total'] ??
+                      raw['applications'],
+                )?.toInt() ??
+                0,
+          ),
+    ];
   }
+
+  static List<_RoleHealth> _roles(dynamic value) {
+    if (value is! List) return const [];
+    return [
+      for (final raw in value)
+        if (raw is Map)
+          _RoleHealth(
+            (raw['title'] ?? raw['role'] ?? raw['job_title'] ?? '').toString(),
+            (raw['status'] ?? raw['health'] ?? '').toString(),
+          ),
+    ];
+  }
+}
+
+class _AnalyticsPoint {
+  const _AnalyticsPoint(this.label, this.count);
+  final String label;
+  final int count;
+}
+
+class _RoleHealth {
+  const _RoleHealth(this.title, this.status);
+  final String title, status;
 }

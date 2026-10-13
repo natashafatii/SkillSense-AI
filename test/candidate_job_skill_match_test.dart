@@ -260,6 +260,16 @@ void main() {
     expect(inDialog(find.text('COVER NOTE · OPTIONAL')), findsOneWidget);
     expect(inDialog(find.text('Submit application')), findsOneWidget);
     expect(inDialog(find.text('Cancel')), findsOneWidget);
+    expect(inDialog(find.byType(CheckboxListTile)), findsNothing);
+    expect(inDialog(find.byType(Checkbox)), findsNothing);
+    expect(
+      inDialog(find.textContaining('I agree to send my resume text')),
+      findsNothing,
+    );
+    final submit = tester.widget<ElevatedButton>(
+      inDialog(find.widgetWithText(ElevatedButton, 'Submit application')),
+    );
+    expect(submit.onPressed, isNotNull);
     expect(
       inDialog(
         find.text(
@@ -268,5 +278,87 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('Job Detail hero uses API salary and match_score', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final job = Job.fromJson({
+      'id': 'scored-job',
+      'recruiter': 'owner',
+      'recruiter_company': 'Nimbus',
+      'title': 'API Role',
+      'description': 'Description',
+      'requirements': '',
+      'skills_required': <String>[],
+      'location': 'Karachi',
+      'salary': 'PKR 410,000 monthly',
+      'match_score': 86,
+      'status': 'ACTIVE',
+      'created_at': '2026-10-01T00:00:00Z',
+      'updated_at': '2026-10-01T00:00:00Z',
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CandidateJobDetailScreen(
+          jobId: job.id,
+          loadJob: (_) async => job,
+          loadActiveResume: () async => null,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Nimbus · Karachi · PKR 410,000 monthly'),
+      findsOneWidget,
+    );
+    expect(find.text('86'), findsOneWidget);
+    expect(find.text('Top 4% of jobs for your profile'), findsNothing);
+    expect(find.text('Upload a resume to see your match score.'), findsNothing);
+  });
+
+  testWidgets('Job Detail shows an honest empty score and salary', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final job = Job.fromJson({
+      'id': 'unscored-job',
+      'recruiter': 'owner',
+      'recruiter_company': 'Nimbus',
+      'title': 'Unscored Role',
+      'description': 'Description',
+      'requirements': '',
+      'skills_required': <String>[],
+      'location': 'Karachi',
+      'salary': null,
+      'match_score': null,
+      'status': 'ACTIVE',
+      'created_at': '2026-10-01T00:00:00Z',
+      'updated_at': '2026-10-01T00:00:00Z',
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CandidateJobDetailScreen(
+          jobId: job.id,
+          loadJob: (_) async => job,
+          loadActiveResume: () async => null,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Salary not specified'), findsOneWidget);
+    expect(find.text('—'), findsOneWidget);
+    expect(
+      find.text('Upload a resume to see your match score.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('\$60k'), findsNothing);
   });
 }

@@ -7,6 +7,7 @@ class CandidateJobCard extends StatefulWidget {
   final Job job;
   final bool isMobile;
   final bool isHot;
+  final bool? hasUploadedResume;
   final VoidCallback onApply;
 
   const CandidateJobCard({
@@ -14,6 +15,7 @@ class CandidateJobCard extends StatefulWidget {
     required this.job,
     required this.isMobile,
     required this.isHot,
+    this.hasUploadedResume,
     required this.onApply,
   });
 
@@ -80,31 +82,28 @@ class _CandidateJobCardState extends State<CandidateJobCard>
     return const Color(0xFFEF4444);
   }
 
-  // Generate a mock salary based on experience to match design
-  String _getSalaryStr() {
-    switch (widget.job.experienceLevel) {
-      case ExperienceLevel.senior:
-        return 'PKR 250–350k';
-      case ExperienceLevel.entry:
-        return 'PKR 120–180k';
-      case ExperienceLevel.mid:
-        return 'PKR 180–260k';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final title = widget.job.title;
-    final company = widget.job.recruiterCompany.isNotEmpty
-        ? widget.job.recruiterCompany
-        : 'Unknown Company';
     final location = widget.job.location;
     final skills = widget.job.skillsRequired;
     final skillChips = _buildSkillChips(skills);
 
     // Use actual score, or null if none
-    final score = widget.job.averageScore;
-    final ringColor = score != null ? _getRingColor(score) : const Color(0xFF94A3B8);
+    final rawScore = widget.job.matchScore ?? widget.job.averageScore;
+    final double? score =
+        rawScore != null &&
+            rawScore.isFinite &&
+            rawScore >= 0 &&
+            rawScore <= 100
+        ? rawScore
+        : null;
+    final salary = widget.job.salary.trim().isEmpty
+        ? 'Salary not specified'
+        : widget.job.salary;
+    final ringColor = score != null
+        ? _getRingColor(score)
+        : const Color(0xFF94A3B8);
     final isHot = widget.isHot;
 
     // Day shadow
@@ -231,7 +230,7 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                             ),
                           ),
                           Text(
-                            score != null ? '${score.round()}' : '--',
+                            score != null ? '${score.round()}' : '—',
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -268,7 +267,7 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '$company · $location · ${_getSalaryStr()}',
+                                        '$location · ${widget.job.jobType.value} · $salary',
                                         style: GoogleFonts.inter(
                                           color: const Color(0xFF64748B),
                                           fontSize: 10.5,
@@ -284,7 +283,22 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                   _ApplyButton(onApply: widget.onApply),
                               ],
                             ),
-                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 12,
+                              child:
+                                  score == null &&
+                                      widget.hasUploadedResume == false
+                                  ? Text(
+                                      'Upload a resume to see your match score.',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        color: const Color(0xFF94A3B8),
+                                        fontSize: 9,
+                                      ),
+                                    )
+                                  : null,
+                            ),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
@@ -422,22 +436,28 @@ class _ApplyButtonState extends State<_ApplyButton> {
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               gradient: const LinearGradient(
-                colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               boxShadow: _hovered
                   ? [
                       BoxShadow(
-                        color: const Color(0xFF2EE6C8).withValues(alpha: 0.6),
+                        color: const Color(0xFF14B584).withValues(alpha: 0.4),
                         blurRadius: 22,
                         spreadRadius: -6,
                         offset: Offset.zero,
                       ),
                     ]
-                  : [],
+                  : [
+                      BoxShadow(
+                        color: const Color(0xFF14B584).withValues(alpha: 0.22),
+                        blurRadius: 14,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
             ),
             child: Text(
               'Apply',

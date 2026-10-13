@@ -5,6 +5,7 @@ import 'package:skillsense_ai/screens/dashboard/command_deck_screen.dart';
 import 'package:skillsense_ai/services/api_client.dart';
 import 'package:skillsense_ai/services/auth_service.dart';
 import 'package:skillsense_ai/widgets/recruiter_scaffold.dart';
+import 'package:skillsense_ai/widgets/recruiter_top_bar.dart';
 
 void main() {
   testWidgets('Command Deck switches from empty to live API data', (
@@ -102,6 +103,9 @@ void main() {
     }
 
     await mountDeck();
+    expect(find.byType(RecruiterTopBar), findsOneWidget);
+    expect(find.text('WORKSPACE'), findsOneWidget);
+    expect(find.text('COMMAND DECK'), findsWidgets);
     expect(find.text('+ Post your first job'), findsOneWidget);
     expect(find.text('Getting started'), findsOneWidget);
     expectMetric('OPEN ROLES', '0');

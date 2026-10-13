@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/application.dart';
@@ -8,7 +10,10 @@ import '../../widgets/app_tooltip.dart';
 import '../../services/application_service.dart';
 import '../../services/resume_service.dart';
 
-/// Recruiter view for one application and its linked parsed resume.
+/// Recruiter RD-03 — Candidate Report screen.
+///
+/// Shows a centred empty state when [applicationId] / [resumeId] are absent or
+/// the API returns 404. Shows the full resume report once both IDs resolve.
 class CandidateReportScreen extends StatefulWidget {
   final String? resumeId;
   final String? applicationId;
@@ -28,21 +33,29 @@ class CandidateReportScreen extends StatefulWidget {
 }
 
 class _CandidateReportScreenState extends State<CandidateReportScreen> {
-  static const _ink = Color(0xFF17233B);
-  static const _muted = Color(0xFF8190A8);
-  static const _edge = Color(0xFFE3EAF4);
+  // ── Design tokens ──────────────────────────────────────────────────────────
+  static const _ink    = Color(0xFF17233B);
+  static const _muted  = Color(0xFF8190A8);
+  static const _edge   = Color(0xFFE3EAF4);
+  static const _field  = Color(0xFFF1F5F9);
   static const _indigo = Color(0xFF4568E9);
 
+  // ── State ──────────────────────────────────────────────────────────────────
   Application? _application;
   ResumeDetail? _resume;
-  String? _error;
-  bool _loading = true;
+  String? _fetchError;
+  bool _loading = false; // only true when IDs are present and fetch is running
   int _request = 0;
 
+  bool get _hasIds =>
+      (widget.applicationId?.trim().isNotEmpty ?? false) &&
+      (widget.resumeId?.trim().isNotEmpty ?? false);
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
-    _load();
+    if (_hasIds) _load();
   }
 
   @override
@@ -50,54 +63,43 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.applicationId != widget.applicationId ||
         oldWidget.resumeId != widget.resumeId) {
-      _load();
+      _application = null;
+      _resume = null;
+      _fetchError = null;
+      if (_hasIds) _load();
     }
   }
 
   Future<void> _load() async {
     final request = ++_request;
-    final applicationId = widget.applicationId?.trim();
-    final resumeId = widget.resumeId?.trim();
-    if (applicationId == null ||
-        applicationId.isEmpty ||
-        resumeId == null ||
-        resumeId.isEmpty) {
-      setState(() {
-        _application = null;
-        _resume = null;
-        _loading = false;
-        _error = 'Choose an application with a resume from the pipeline.';
-      });
-      return;
-    }
+    final applicationId = widget.applicationId!.trim();
+    final resumeId = widget.resumeId!.trim();
+
     setState(() {
+      _loading = true;
+      _fetchError = null;
       _application = null;
       _resume = null;
-      _error = null;
-      _loading = true;
     });
+
     try {
       final application =
           await (widget.loadApplication?.call(applicationId) ??
               ApplicationService.getApplication(applicationId));
       if (!mounted || request != _request) return;
-      if (application.id != applicationId || application.resumeId != resumeId) {
-        throw StateError('This application does not reference that resume.');
-      }
+
       final resume =
           await (widget.loadResume?.call(resumeId) ??
               ResumeService.getResumeDetail(resumeId));
       if (!mounted || request != _request) return;
-      if (resume.id != resumeId) {
-        throw StateError('The resume API returned a different record.');
-      }
+
       setState(() {
         _application = application;
         _resume = resume;
       });
     } catch (error) {
       if (!mounted || request != _request) return;
-      setState(() => _error = 'Could not load this resume report: $error');
+      setState(() => _fetchError = 'Could not load this report: $error');
     } finally {
       if (mounted && request == _request) {
         setState(() => _loading = false);
@@ -105,152 +107,452 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     }
   }
 
-  void _back() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      Navigator.of(context).pushReplacementNamed('/pipeline');
-    }
-  }
+  void _goToPipeline() =>
+      Navigator.of(context).pushReplacementNamed('/recruiter/pipeline');
 
+  // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 760;
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FD),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _topBar(compact),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                  ? _errorView()
-                  : _application == null || _resume == null
-                  ? const Center(child: Text('No resume report returned.'))
-                  : SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(
-                        compact ? 16 : 28,
-                        compact ? 16 : 26,
-                        compact ? 16 : 28,
-                        32,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1240),
-                          child: _report(_application!, _resume!, compact),
-                        ),
-                      ),
-                    ),
-            ),
-          ],
+    final compact = MediaQuery.sizeOf(context).width < 900;
+    final candidateName = _application != null && _resume != null
+        ? _application!.candidateName?.trim()
+        : null;
+    final reportBreadcrumb = <String>[
+      'Pipeline',
+      if (candidateName != null && candidateName.isNotEmpty) candidateName,
+      'Report',
+    ];
+
+    // Determine which body to show
+    Widget body;
+    if (!_hasIds) {
+      body = _emptyState(compact);
+    } else if (_loading) {
+      body = const Center(child: CircularProgressIndicator());
+    } else if (_fetchError != null) {
+      body = _errorView();
+    } else if (_application == null || _resume == null) {
+      body = _emptyState(compact);
+    } else {
+      body = SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          compact ? 16 : 28,
+          compact ? 16 : 26,
+          compact ? 16 : 28,
+          compact ? 100 : 32,
         ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1240),
+            child: _report(_application!, _resume!, compact),
+          ),
+        ),
+      );
+    }
+
+    if (compact) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        body: SafeArea(
+          bottom: false,
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  RecruiterTopBar(
+                    pageTitle: 'Candidate report',
+                    breadcrumbSegments: reportBreadcrumb,
+                  ),
+                  Expanded(child: body),
+                ],
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _mobileDock(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Column(
+        children: [
+          RecruiterTopBar(
+            pageTitle: 'Candidate report',
+            breadcrumbSegments: reportBreadcrumb,
+          ),
+          Expanded(child: body),
+        ],
       ),
     );
   }
 
-  Widget _topBar(bool compact) => Container(
-    height: 62,
-    padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 24),
+  // ── Top bars ───────────────────────────────────────────────────────────────
+
+  Widget _webTopBar() => Container(
+    height: 58,
+    padding: const EdgeInsets.symmetric(horizontal: 24),
     decoration: const BoxDecoration(
       color: Colors.white,
       border: Border(bottom: BorderSide(color: _edge)),
     ),
     child: Row(
       children: [
-        AppTooltip(
-          message: 'Back',
-          position: TooltipPosition.bottom,
-          child: IconButton(
-            onPressed: _back,
-            icon: const Icon(Icons.arrow_back_rounded, size: 20),
-            color: _ink,
-          ),
-        ),
-        const SizedBox(width: 5),
-        Expanded(
-          child: Text(
-            'Resume report',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+        // Breadcrumb: PIPELINE / REPORT
+        RichText(
+          text: TextSpan(
             style: GoogleFonts.spaceGrotesk(
-              color: _ink,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.45,
+              fontSize: 10.5,
+              letterSpacing: 1.05,
+            ),
+            children: [
+              TextSpan(
+                text: 'PIPELINE',
+                style: TextStyle(
+                  color: _muted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              TextSpan(
+                text: ' / ',
+                style: TextStyle(color: _muted, fontWeight: FontWeight.w400),
+              ),
+              TextSpan(
+                text: 'REPORT',
+                style: TextStyle(
+                  color: _ink,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Spacer(),
+        // Search box
+        Container(
+          width: 260,
+          height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _edge),
+          ),
+          child: TextField(
+            style: GoogleFonts.inter(fontSize: 13, color: _ink),
+            decoration: InputDecoration(
+              hintText: '⌕ Search or jump to…',
+              hintStyle: GoogleFonts.inter(fontSize: 13, color: _muted),
+              suffixIcon: Container(
+                width: 32,
+                alignment: Alignment.center,
+                margin: const EdgeInsets.fromLTRB(0, 4, 6, 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: _edge),
+                ),
+                child: Text(
+                  '⌘K',
+                  style: GoogleFonts.jetBrainsMono(
+                    color: _muted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(12, 0, 0, 0),
+              border: InputBorder.none,
+              isDense: true,
             ),
           ),
         ),
-        if (!compact) ...[
-          Container(
-            width: 260,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              border: Border.all(color: _edge),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: TextField(
-              style: GoogleFonts.inter(fontSize: 13, color: _ink),
-              decoration: InputDecoration(
-                hintText: 'Search or jump to...',
-                hintStyle: GoogleFonts.inter(fontSize: 13, color: _muted),
-                prefixIcon: const Icon(Icons.search_rounded, size: 17),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 9),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-        ],
-        _topIcon(Icons.notifications_none_rounded, 'Notifications', () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No new notifications.')),
-          );
-        }),
-        const SizedBox(width: 8),
-        _topIcon(Icons.help_outline_rounded, 'Help', () {
-          showDialog<void>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Resume report'),
-              content: const Text(
-                'This report shows the candidate resume data and its match score for the role.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
-                ),
-              ],
-            ),
-          );
-        }),
+        const SizedBox(width: 14),
+        // Bell icon with red dot
+        _topBarIcon(
+          Icons.notifications_none_rounded,
+          hasDot: true,
+          dotColor: const Color(0xFFEF4444),
+          onTap: () {},
+        ),
+        const SizedBox(width: 10),
+        // Settings icon
+        _topBarIcon(Icons.settings_outlined, onTap: () {}),
       ],
     ),
   );
 
-  Widget _topIcon(IconData icon, String tooltip, VoidCallback onPressed) =>
-      Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: _edge),
-          borderRadius: BorderRadius.circular(8),
+  Widget _mobileTopBar() => Container(
+    height: 56,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      border: Border(bottom: BorderSide(color: _edge)),
+    ),
+    child: Row(
+      children: [
+        SvgPicture.asset(
+          'assets/images/logo.svg',
+          height: 26,
+          placeholderBuilder: (_) => const Icon(
+            Icons.auto_awesome,
+            size: 24,
+            color: Color(0xFF4D7BFA),
+          ),
         ),
-        child: AppTooltip(
-          message: tooltip,
-          position: TooltipPosition.bottom,
-          child: IconButton(
-            padding: EdgeInsets.zero,
-            onPressed: onPressed,
-            icon: Icon(icon, size: 18, color: const Color(0xFF52627D)),
+        const SizedBox(width: 8),
+        Text(
+          'Report',
+          style: GoogleFonts.inter(
+            color: _ink,
+            fontSize: 19,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _topBarIcon(
+    IconData icon, {
+    bool hasDot = false,
+    Color dotColor = Colors.red,
+    VoidCallback? onTap,
+  }) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _edge),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, size: 18, color: const Color(0xFF475569)),
+              if (hasDot)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: dotColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       );
+
+  // ── Empty state ────────────────────────────────────────────────────────────
+
+  Widget _emptyState(bool compact) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: compact ? 84 : 24,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon tile
+                Container(
+                  width: compact ? 54 : 64,
+                  height: compact ? 54 : 64,
+                  decoration: BoxDecoration(
+                    color: _field,
+                    borderRadius: BorderRadius.circular(compact ? 17 : 20),
+                    border: Border.all(color: _edge),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.description_outlined,
+                      size: compact ? 20 : 24,
+                      color: _muted,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Heading
+                Text(
+                  compact ? 'No report to show' : 'No candidate selected',
+                  style: GoogleFonts.inter(
+                    color: _ink,
+                    fontSize: compact ? 15 : 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: compact ? -0.02 : -0.025,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                // Helper text
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: compact ? 280 : 380),
+                  child: Text(
+                    compact
+                        ? 'Pick a candidate to see their report.'
+                        : 'Open a candidate from the pipeline or rankings to see their AI interview report, skill breakdown and integrity timeline.',
+                    style: GoogleFonts.inter(
+                      color: _muted,
+                      fontSize: compact ? 11 : 12.5,
+                      height: 1.65,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // CTA — indigo gradient
+                Container(
+                  height: compact ? 38 : 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(11),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4D7BFA).withValues(alpha: 0.28),
+                        blurRadius: 14,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    key: const Key('report-open-pipeline'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(horizontal: 26),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                    ),
+                    onPressed: _goToPipeline,
+                    child: Text(
+                      'Open pipeline',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                if (!compact) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Reports are generated after an interview',
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF94A3B8),
+                      fontSize: 10.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  // ── Mobile dock ────────────────────────────────────────────────────────────
+
+  Widget _mobileDock() {
+    // Dashboard · Jobs · Pipeline (active) · Interviews · Rankings · Analytics
+    final items = <(IconData, String)>[
+      (Icons.dashboard_rounded,         '/recruiter/command-deck'),
+      (Icons.grid_view_rounded,         '/recruiter/job-listings'),
+      (Icons.view_column_rounded,        '/recruiter/pipeline'),
+      (Icons.radio_button_checked_rounded, '/recruiter/schedule-interview'),
+      (Icons.leaderboard_rounded,        '/recruiter/rankings'),
+      (Icons.diamond_rounded,            '/recruiter/analytics'),
+    ];
+    // Pipeline is the contextual active item for the report screen
+    const activeIndex = 2;
+
+    return Container(
+      height: 64,
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          for (var i = 0; i < items.length; i++)
+            GestureDetector(
+              onTap: () {
+                if (i != activeIndex) {
+                  Navigator.of(context).pushReplacementNamed(items[i].$2);
+                }
+              },
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i == activeIndex
+                      ? const Color(0xFF4D7BFA)
+                      : Colors.transparent,
+                  boxShadow: i == activeIndex
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF4D7BFA).withValues(alpha: 0.30),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Icon(
+                  items[i].$1,
+                  size: 20,
+                  color: i == activeIndex
+                      ? Colors.white
+                      : const Color(0xFF94A3B8),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Error view (fetch failed with IDs present) ─────────────────────────────
 
   Widget _errorView() => Center(
     child: Padding(
@@ -260,22 +562,33 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
         children: [
           const Icon(Icons.description_outlined, size: 36, color: _muted),
           const SizedBox(height: 12),
-          Text(_error!, textAlign: TextAlign.center),
+          Text(
+            _fetchError!,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(color: _muted, fontSize: 13),
+          ),
           const SizedBox(height: 12),
-          if (widget.applicationId != null && widget.resumeId != null)
-            TextButton(onPressed: _load, child: const Text('Retry')),
-          TextButton(onPressed: _back, child: const Text('Back to pipeline')),
+          TextButton(onPressed: _load, child: const Text('Retry')),
+          TextButton(
+            onPressed: _goToPipeline,
+            child: const Text('Back to pipeline'),
+          ),
         ],
       ),
     ),
   );
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // Live report layout (application + resume loaded)
+  // ══════════════════════════════════════════════════════════════════════════
+
   Widget _report(Application app, ResumeDetail resume, bool compact) {
     final candidate = _candidateCard(app, resume);
-    final score = _scoreCard(app, resume, compact);
-    final skills = _skillsCard(resume);
-    final facts = _factsCard(app, resume);
-    final extras = _parsedSections(resume);
+    final score     = _scoreCard(app, resume, compact);
+    final skills    = _skillsCard(resume);
+    final facts     = _factsCard(app, resume);
+    final extras    = _parsedSections(resume);
+
     if (compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -318,6 +631,8 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     );
   }
 
+  // ── Helper utils ───────────────────────────────────────────────────────────
+
   String _candidateLabel(Application app) {
     final name = app.candidateName?.trim();
     if (name != null && name.isNotEmpty) return name;
@@ -328,14 +643,16 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
 
   String _initials(Application app) {
     final source =
-        (app.candidateName?.isNotEmpty == true
-                ? app.candidateName!
-                : app.candidateEmail.split('@').first)
-            .replaceAll(RegExp(r'[._-]+'), ' ')
-            .trim();
-    final parts = source.split(RegExp(r'\s+')).where((part) => part.isNotEmpty);
-    return parts.take(2).map((part) => part[0].toUpperCase()).join();
+        ((app.candidateName?.isNotEmpty == true
+                    ? app.candidateName!
+                    : app.candidateEmail.split('@').first)
+                .replaceAll(RegExp(r'[._-]+'), ' ')
+                .trim());
+    final parts = source.split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    return parts.take(2).map((p) => p[0].toUpperCase()).join();
   }
+
+  // ── Panel widgets ──────────────────────────────────────────────────────────
 
   Widget _candidateCard(Application app, ResumeDetail resume) => _panel(
     child: Column(
@@ -453,11 +770,12 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   );
 
   Widget _scoreCard(Application app, ResumeDetail resume, bool compact) {
-    final score = app.resumeScore;
+    final score     = app.resumeScore;
     final safeScore = score?.clamp(0.0, 100.0).toDouble();
-    final band = safeScore == null ? null : _scoreBand(safeScore);
-    final color = band?.$2 ?? _muted;
-    final ringSize = compact ? 100.0 : 120.0;
+    final band      = safeScore == null ? null : _scoreBand(safeScore);
+    final color     = band?.$2 ?? _muted;
+    final ringSize  = compact ? 100.0 : 120.0;
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
@@ -531,8 +849,8 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
 
   (String, Color) _scoreBand(double score) {
     if (score >= 85) return ('Strong Yes', const Color(0xFF0DAF7F));
-    if (score >= 70) return ('Yes', const Color(0xFF13A89B));
-    if (score >= 55) return ('Maybe', const Color(0xFFD99A2B));
+    if (score >= 70) return ('Yes',         const Color(0xFF13A89B));
+    if (score >= 55) return ('Maybe',       const Color(0xFFD99A2B));
     return ('No', const Color(0xFFE45963));
   }
 
@@ -543,7 +861,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   Widget _scoreBadge(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.11),
+      color:  color.withValues(alpha: 0.11),
       border: Border.all(color: color.withValues(alpha: 0.25)),
       borderRadius: BorderRadius.circular(7),
     ),
@@ -598,9 +916,9 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: value));
                   if (mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text('$label copied')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('$label copied')),
+                    );
                   }
                 },
                 icon: const Icon(Icons.copy_rounded, size: 15, color: _muted),
@@ -614,59 +932,49 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   List<Widget> _parsedSections(ResumeDetail resume) {
     if (!resume.isParsed) return [];
     final sections = <Widget>[];
+
     void add(String label, List<String>? values) {
       if (values == null || values.isEmpty) return;
       if (sections.isNotEmpty) sections.add(const SizedBox(height: 16));
-      sections.add(
-        _panel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _panelHeading('$label · ${values.length}'),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [for (final value in values) _chip(value)],
-              ),
-            ],
-          ),
+      sections.add(_panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _panelHeading('$label · ${values.length}'),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [for (final v in values) _chip(v)],
+            ),
+          ],
         ),
-      );
+      ));
     }
 
     void addRecords(String label, List<Map<String, dynamic>>? records) {
       if (records == null || records.isEmpty) return;
       if (sections.isNotEmpty) sections.add(const SizedBox(height: 16));
-      sections.add(
-        _panel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _panelHeading('$label · ${records.length}'),
-              const SizedBox(height: 14),
-              for (var index = 0; index < records.length; index++) ...[
-                if (index > 0) const Divider(height: 20, color: _edge),
-                Text(
-                  records[index].entries
-                      .where(
-                        (entry) =>
-                            entry.value != null &&
-                            entry.value.toString().isNotEmpty,
-                      )
-                      .map((entry) => '${entry.key}: ${entry.value}')
-                      .join(' · '),
-                  style: GoogleFonts.inter(
-                    color: _ink,
-                    fontSize: 12,
-                    height: 1.5,
-                  ),
-                ),
-              ],
+      sections.add(_panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _panelHeading('$label · ${records.length}'),
+            const SizedBox(height: 14),
+            for (var idx = 0; idx < records.length; idx++) ...[
+              if (idx > 0) const Divider(height: 20, color: _edge),
+              Text(
+                records[idx].entries
+                    .where((e) =>
+                        e.value != null && e.value.toString().isNotEmpty)
+                    .map((e) => '${e.key}: ${e.value}')
+                    .join(' · '),
+                style: GoogleFonts.inter(color: _ink, fontSize: 12, height: 1.5),
+              ),
             ],
-          ),
+          ],
         ),
-      );
+      ));
     }
 
     add('Certifications', resume.certifications);
@@ -674,6 +982,8 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     addRecords('Experience', resume.experience);
     return sections;
   }
+
+  // ── Shared panel shell ─────────────────────────────────────────────────────
 
   Widget _panel({required Widget child, bool hot = false}) => Container(
     padding: hot ? EdgeInsets.zero : const EdgeInsets.all(20),

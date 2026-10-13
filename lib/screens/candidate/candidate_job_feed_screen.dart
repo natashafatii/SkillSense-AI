@@ -2,12 +2,15 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../../widgets/candidate_button_style.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
 import '../../models/job.dart';
 import '../../models/paginated_response.dart';
 import '../../services/job_service.dart';
+import '../../services/resume_service.dart';
 import 'candidate_profile_settings_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
 import 'candidate_notifications_screen.dart';
@@ -15,8 +18,9 @@ import 'widgets/candidate_job_card.dart';
 
 class CandidateJobFeedScreen extends StatefulWidget {
   final Future<PaginatedResponse<Job>> Function(int page)? loadJobs;
+  final Future<List<Map<String, dynamic>>> Function()? loadResumes;
 
-  const CandidateJobFeedScreen({super.key, this.loadJobs});
+  const CandidateJobFeedScreen({super.key, this.loadJobs, this.loadResumes});
 
   @override
   State<CandidateJobFeedScreen> createState() => _CandidateJobFeedScreenState();
@@ -37,11 +41,46 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
   int _page = 1;
   int _requestGeneration = 0;
   bool _hasAnyJobs = true;
+  bool? _hasUploadedResume;
+  bool _hasParsedResume = false;
+  final Set<String> _warnedMissingScores = {};
 
   @override
   void initState() {
     super.initState();
     _loadJobs();
+    _loadResumeState();
+  }
+
+  Future<void> _loadResumeState() async {
+    try {
+      final resumes =
+          await (widget.loadResumes?.call() ?? ResumeService.listResumes());
+      if (!mounted) return;
+      setState(() {
+        _hasUploadedResume = resumes.isNotEmpty;
+        _hasParsedResume = resumes.any(
+          (resume) =>
+              resume['status']?.toString().toUpperCase() == 'PARSED' ||
+              resume['is_parsed'] == true,
+        );
+      });
+      _warnMissingScores();
+    } catch (_) {
+      // A failed resume lookup is unknown, not evidence that no resume exists.
+    }
+  }
+
+  void _warnMissingScores() {
+    if (!_hasParsedResume) return;
+    for (final job in _jobs) {
+      if (job.matchScore != null || job.averageScore != null) continue;
+      if (_warnedMissingScores.add(job.id)) {
+        debugPrint(
+          'Job ${job.id} has no match_score for a candidate with a parsed resume.',
+        );
+      }
+    }
   }
 
   Future<void> _loadJobs({int page = 1}) async {
@@ -75,10 +114,14 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
             .where((job) => job.isActive && job.id.isNotEmpty)
             .toList();
         _page = page;
-        if (page == 1 && _searchController.text.isEmpty && _selectedFilter == 'All jobs' && _locationController.text.isEmpty) {
+        if (page == 1 &&
+            _searchController.text.isEmpty &&
+            _selectedFilter == 'All jobs' &&
+            _locationController.text.isEmpty) {
           _hasAnyJobs = _jobs.isNotEmpty;
         }
       });
+      _warnMissingScores();
     } catch (e) {
       if (mounted && generation == _requestGeneration) {
         setState(() {
@@ -196,46 +239,52 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                       Expanded(
                         child: Column(
                           children: [
-                            _buildTopBar(
-                              isMobile,
-                              textPrimary,
-                              textSecondary,
-                              cardBg,
-                              cardBorder,
+                            RecruiterTopBar(
+                              pageTitle: 'Job feed',
+                              candidate: true,
                             ),
                             Expanded(
                               child: _loading && _jobs.isEmpty
-                                  ? const Center(child: CircularProgressIndicator(color: AppColors.dashboardTeal))
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.dashboardTeal,
+                                      ),
+                                    )
                                   : _error != null && _jobs.isEmpty
-                                      ? Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Text('Could not load jobs: ${_error!}'),
-                                            TextButton(
-                                              onPressed: () => _loadJobs(page: _page),
-                                              child: const Text('Retry'),
-                                            ),
-                                          ],
-                                        )
-                                      : !_hasAnyJobs
-                                          ? _buildEmptyState(isMobile)
-                                          : SingleChildScrollView(
-                                              physics: const BouncingScrollPhysics(),
-                                              padding: EdgeInsets.only(
-                                                left: 22,
-                                                right: 22,
-                                                top: 16,
-                                                bottom: isMobile ? 100 : 32,
-                                              ),
-                                              child: _buildContentCanvas(
-                                                isMobile,
-                                                processedJobs,
-                                                textPrimary,
-                                                textSecondary,
-                                                cardBg,
-                                                cardBorder,
-                                              ),
-                                            ),
+                                  ? Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text('Could not load jobs: ${_error!}'),
+                                        TextButton(
+                                          onPressed: () =>
+                                              _loadJobs(page: _page),
+                                          style: CandidateButtonStyle.secondary(
+                                            TextButton.styleFrom(),
+                                          ),
+                                          child: const Text('Retry'),
+                                        ),
+                                      ],
+                                    )
+                                  : !_hasAnyJobs
+                                  ? _buildEmptyState(isMobile)
+                                  : SingleChildScrollView(
+                                      physics: const BouncingScrollPhysics(),
+                                      padding: EdgeInsets.only(
+                                        left: 22,
+                                        right: 22,
+                                        top: 16,
+                                        bottom: isMobile ? 100 : 32,
+                                      ),
+                                      child: _buildContentCanvas(
+                                        isMobile,
+                                        processedJobs,
+                                        textPrimary,
+                                        textSecondary,
+                                        cardBg,
+                                        cardBorder,
+                                      ),
+                                    ),
                             ),
                           ],
                         ),
@@ -357,6 +406,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               Text('Could not load jobs: ${_error!}'),
               TextButton(
                 onPressed: () => _loadJobs(page: _page),
+                style: CandidateButtonStyle.secondary(
+                  TextButton.styleFrom(),
+                ),
                 child: const Text('Retry'),
               ),
             ],
@@ -376,6 +428,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   job: job,
                   isMobile: isMobile,
                   isHot: idx == 0,
+                  hasUploadedResume: _hasUploadedResume,
                   onApply: () => _openJobDetail(job.title, job.id),
                 );
               },
@@ -397,6 +450,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   job: job,
                   isMobile: isMobile,
                   isHot: idx == 0,
+                  hasUploadedResume: _hasUploadedResume,
                   onApply: () => _openJobDetail(job.title, job.id),
                 );
               },
@@ -458,17 +512,17 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
             ),
             const SizedBox(height: 16),
             Container(
-              height: isMobile ? 38 : 40,
+              height: 40,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                  colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF17CBAC).withValues(alpha: 0.25),
+                    color: const Color(0xFF14B584).withValues(alpha: 0.25),
                     blurRadius: 12,
                     spreadRadius: 2,
                     offset: const Offset(0, 4),
@@ -485,7 +539,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   ),
                 ),
                 onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/candidate/profile');
+                  Navigator.of(
+                    context,
+                  ).pushReplacementNamed('/candidate/profile');
                 },
                 child: Text(
                   'Complete my profile',
@@ -578,7 +634,10 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       {'icon': Icons.home_rounded, 'route': '/candidate/home'},
       {'icon': Icons.adjust_rounded, 'route': '/candidate/jobs'},
       {'icon': Icons.grid_view_rounded, 'route': '/candidate/applications'},
-      {'icon': Icons.radio_button_checked_rounded, 'route': '/candidate/interview-lobby'},
+      {
+        'icon': Icons.radio_button_checked_rounded,
+        'route': '/candidate/interview-lobby',
+      },
       {'icon': Icons.person_outline_rounded, 'route': '/candidate/profile'},
     ];
     final int activeNavIndex = 1; // Jobs is index 1
@@ -668,7 +727,11 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.auto_awesome, color: AppColors.dashboardBlue, size: 26),
+            const Icon(
+              Icons.auto_awesome,
+              color: AppColors.dashboardBlue,
+              size: 26,
+            ),
             const SizedBox(width: 8),
             Text(
               'Jobs',
@@ -805,7 +868,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     VoidCallback? onTap,
   }) {
     String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+    if (icon == Icons.notifications_none_rounded ||
+        icon == Icons.notifications_outlined ||
+        icon == Icons.notifications) {
       tooltip = 'Notifications';
     } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
       tooltip = 'Theme & settings';
@@ -854,8 +919,6 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       ),
     );
   }
-
-
 }
 
 class GridPainter extends CustomPainter {
@@ -902,40 +965,22 @@ class _HoverableFilterChipState extends State<_HoverableFilterChip> {
   @override
   Widget build(BuildContext context) {
     final isSelected = widget.isSelected;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const Gradient selectedGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
+    );
 
-    final Gradient selectedGradient = isDark
-        ? const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF2EE6C8), Color(0xFF0E9E8C)],
-          )
-        : const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
-          );
-
-    final List<BoxShadow> selectedShadow = isDark
-        ? [
-            BoxShadow(
-              color: const Color(0xFF2EE6C8).withValues(alpha: 0.6),
-              blurRadius: 22,
-              spreadRadius: -6,
-              offset: const Offset(0, 0),
-            )
-          ]
-        : [
-            BoxShadow(
-              color: const Color(0xFF0FB89B).withValues(alpha: 0.8),
-              blurRadius: 24,
-              spreadRadius: -10,
-              offset: const Offset(0, 10),
-            )
-          ];
+    final List<BoxShadow> selectedShadow = [
+      BoxShadow(
+        color: const Color(0xFF14B584).withValues(alpha: 0.25),
+        blurRadius: 14,
+        offset: const Offset(0, 5),
+      ),
+    ];
 
     final Color inactiveBg = _hovered
-        ? const Color(0xFF2EE6C8).withValues(alpha: 0.12)
+        ? const Color(0xFF14B584).withValues(alpha: 0.06)
         : Colors.white;
 
     final Color inactiveText = const Color(0xFF64748B);
@@ -952,13 +997,13 @@ class _HoverableFilterChipState extends State<_HoverableFilterChip> {
           decoration: BoxDecoration(
             color: isSelected ? null : inactiveBg,
             gradient: isSelected ? selectedGradient : null,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(12),
             border: isSelected
-                ? Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1.0)
-                : Border.all(
-                    color: const Color(0xFFE2E8F0),
-                    width: 1.5,
-                  ),
+                ? Border.all(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    width: 1.0,
+                  )
+                : Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
             boxShadow: isSelected ? selectedShadow : [],
           ),
           child: Text(

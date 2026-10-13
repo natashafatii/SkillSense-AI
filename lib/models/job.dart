@@ -107,6 +107,7 @@ class Job {
   final List<JobSkill> jobSkills;
   final int applicantCount;
   final double? averageScore;
+  final double? matchScore;
 
   const Job({
     this.screeningThreshold = 60,
@@ -132,6 +133,7 @@ class Job {
     required this.jobSkills,
     this.applicantCount = 0,
     this.averageScore,
+    this.matchScore,
   });
 
   bool get isDraft => status == JobStatus.draft;
@@ -184,6 +186,7 @@ class Job {
           const [],
       applicantCount: applicantValue is num ? applicantValue.toInt() : 0,
       averageScore: (scoreValue as num?)?.toDouble(),
+      matchScore: (json['match_score'] as num?)?.toDouble(),
     );
   }
 

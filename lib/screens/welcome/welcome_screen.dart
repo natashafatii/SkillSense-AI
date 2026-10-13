@@ -62,7 +62,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth > 900) {
+        if (constraints.maxWidth >= 900) {
           return const WelcomeScreenWeb();
         }
         return Scaffold(

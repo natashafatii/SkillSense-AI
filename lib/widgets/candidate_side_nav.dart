@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -363,6 +362,8 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
   // ── FOOTER USER PROFILE & SETTINGS TILES ─────────────────────────────────
   Widget _buildFooter() {
+    final isProfileActive = widget.currentRoute == '/candidate/profile';
+    const tealAccent = Color(0xFF2EE6C8);
     if (!_isExpanded) {
       // ── COLLAPSED FOOTER (MR Avatar) ──
       return Padding(
@@ -370,54 +371,116 @@ class _CandidateSideNavState extends State<CandidateSideNav>
         child: Column(
           children: [
             // Dynamic User Avatar Circle
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: () => _handleNavigation('/candidate/profile', -1),
-                child: ValueListenableBuilder<CandidateProfile?>(
-                  valueListenable: ProfileService.currentProfileNotifier,
-                  builder: (context, profile, child) {
-                    final fn = profile?.user.firstName?.trim() ?? '';
-                    final ln = profile?.user.lastName?.trim() ?? '';
-                    final email = profile?.user.email.trim() ?? '';
+            ValueListenableBuilder<CandidateProfile?>(
+              valueListenable: ProfileService.currentProfileNotifier,
+              builder: (context, profile, child) {
+                final fn = profile?.user.firstName?.trim() ?? '';
+                final ln = profile?.user.lastName?.trim() ?? '';
+                final email = profile?.user.email.trim() ?? '';
 
-                    String initials = '';
-                    if (fn.isNotEmpty) {
-                      initials =
-                          fn[0].toUpperCase() +
-                          (ln.isNotEmpty ? ln[0].toUpperCase() : '');
-                    } else if (email.isNotEmpty) {
-                      initials = email[0].toUpperCase();
-                    }
-                    if (initials.isEmpty) initials = 'C';
+                String initials = '';
+                if (fn.isNotEmpty) {
+                  initials =
+                      fn[0].toUpperCase() +
+                      (ln.isNotEmpty ? ln[0].toUpperCase() : '');
+                } else if (email.isNotEmpty) {
+                  initials = email[0].toUpperCase();
+                }
+                if (initials.isEmpty) initials = 'C';
 
-                    return AppTooltip(
-                      message: fn.isNotEmpty ? '$fn $ln'.trim() : (email.isNotEmpty ? email : 'Account'),
-                      position: TooltipPosition.right,
-                      offset: 12.0,
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2F9F3),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFA7F3D0)),
-                        ),
-                        child: Center(
-                          child: Text(
-                            initials,
-                            style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF047857),
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
+                return AppTooltip(
+                  message: fn.isNotEmpty
+                      ? '$fn $ln'.trim()
+                      : (email.isNotEmpty ? email : 'Account'),
+                  position: TooltipPosition.right,
+                  offset: 12.0,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      key: const Key('candidate-collapsed-profile'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _handleNavigation('/candidate/profile', -1),
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: isProfileActive
+                                    ? tealAccent.withValues(alpha: 0.12)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: isProfileActive
+                                    ? [
+                                        BoxShadow(
+                                          color: tealAccent.withValues(
+                                            alpha: 0.25,
+                                          ),
+                                          blurRadius: 8,
+                                          spreadRadius: 1,
+                                        ),
+                                      ]
+                                    : null,
+                              ),
                             ),
-                          ),
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE2F9F3),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xFFA7F3D0),
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  initials,
+                                  style: GoogleFonts.spaceGrotesk(
+                                    color: const Color(0xFF047857),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (isProfileActive)
+                              Positioned(
+                                left: 0,
+                                child: Container(
+                                  key: const Key(
+                                    'candidate-profile-active-seam',
+                                  ),
+                                  width: 3,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: tealAccent,
+                                    borderRadius: const BorderRadius.horizontal(
+                                      right: Radius.circular(3),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: tealAccent.withValues(
+                                          alpha: 0.8,
+                                        ),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
+                    ),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -437,6 +500,8 @@ class _CandidateSideNavState extends State<CandidateSideNav>
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
+              key: const Key('candidate-expanded-profile'),
+              behavior: HitTestBehavior.opaque,
               onTap: () => _handleNavigation('/candidate/profile', -1),
               child: ValueListenableBuilder<CandidateProfile?>(
                 valueListenable: ProfileService.currentProfileNotifier,
@@ -467,57 +532,74 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                   final displayName = name.isNotEmpty ? name : 'Candidate';
                   final displayInitials = initials.isNotEmpty ? initials : 'C';
 
-                  return Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2F9F3),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFA7F3D0)),
-                        ),
-                        child: Center(
-                          child: Text(
-                            displayInitials,
-                            style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF047857),
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.bold,
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: isProfileActive
+                          ? tealAccent.withValues(alpha: 0.08)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        if (isProfileActive)
+                          Container(
+                            width: 3,
+                            height: 22,
+                            margin: const EdgeInsets.only(right: 5),
+                            decoration: BoxDecoration(
+                              color: tealAccent,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2F9F3),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFFA7F3D0)),
+                          ),
+                          child: Center(
+                            child: Text(
+                              displayInitials,
+                              style: GoogleFonts.spaceGrotesk(
+                                color: const Color(0xFF047857),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              displayName,
-                              style: GoogleFonts.spaceGrotesk(
-                                color: const Color(0xFF0F172A),
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                height: 1.1,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (email.isNotEmpty)
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                email,
-                                style: GoogleFonts.inter(
-                                  color: const Color(0xFF64748B),
-                                  fontSize: 10.5,
+                                displayName,
+                                style: GoogleFonts.spaceGrotesk(
+                                  color: const Color(0xFF0F172A),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.1,
                                 ),
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                          ],
+                              if (email.isNotEmpty)
+                                Text(
+                                  email,
+                                  style: GoogleFonts.inter(
+                                    color: const Color(0xFF64748B),
+                                    fontSize: 10.5,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-
-                    ],
+                      ],
+                    ),
                   );
                 },
               ),

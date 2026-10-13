@@ -382,7 +382,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth > 900) {
+        if (constraints.maxWidth >= 900) {
           return HrRegisterScreenWeb(
             isLoading: _isLoading,
             nameController: _fullNameController,

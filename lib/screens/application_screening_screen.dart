@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../widgets/recruiter_top_bar.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/application.dart';
 import '../services/application_service.dart';
@@ -161,14 +162,9 @@ class _ApplicationScreeningScreenState
       'rescreen': 'Rescreen with current policy',
     };
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Application screening'),
-        actions: [
-          IconButton(
-            onPressed: _busy ? null : _load,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
+      appBar: const PreferredSize(
+        preferredSize: Size.fromHeight(58),
+        child: RecruiterTopBar(pageTitle: 'Application screening'),
       ),
       body: Center(
         child: ConstrainedBox(

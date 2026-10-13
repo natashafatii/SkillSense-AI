@@ -1,5 +1,7 @@
+import '../../widgets/candidate_button_style.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
@@ -237,13 +239,7 @@ class _CandidateInterviewHistoryScreenState
                       Expanded(
                         child: Column(
                           children: [
-                            _buildTopBar(
-                              isMobile,
-                              textPrimary,
-                              textSecondary,
-                              cardBg,
-                              cardBorder,
-                            ),
+                            RecruiterTopBar(pageTitle: 'Interview history', candidate: true),
                             Expanded(
                               child: _isLoading
                                   ? const Center(
@@ -353,17 +349,17 @@ class _CandidateInterviewHistoryScreenState
             ),
             const SizedBox(height: 16),
             Container(
-              height: isMobile ? 38 : 40,
+              height: 40,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF17CBAC), Color(0xFF0A8A76)],
+                  colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF17CBAC).withValues(alpha: 0.25),
+                    color: const Color(0xFF14B584).withValues(alpha: 0.25),
                     blurRadius: 12,
                     spreadRadius: 2,
                     offset: const Offset(0, 4),
@@ -920,7 +916,7 @@ class _CandidateInterviewHistoryScreenState
                                 SizedBox(
                                   height: 32,
                                   child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
+                                    style: CandidateButtonStyle.secondary(OutlinedButton.styleFrom(
                                       foregroundColor: textPrimary,
                                       side: BorderSide(color: cardBorder),
                                       shape: RoundedRectangleBorder(
@@ -929,7 +925,7 @@ class _CandidateInterviewHistoryScreenState
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 10,
                                       ),
-                                    ),
+                                    )),
                                     onPressed: _navigateToFeedback,
                                     child: Text(
                                       'Feedback',
@@ -986,7 +982,7 @@ class _CandidateInterviewHistoryScreenState
                                 ),
                                 const SizedBox(width: 16),
                                 OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
+                                  style: CandidateButtonStyle.secondary(OutlinedButton.styleFrom(
                                     foregroundColor: textPrimary,
                                     side: BorderSide(color: cardBorder),
                                     shape: RoundedRectangleBorder(
@@ -996,7 +992,7 @@ class _CandidateInterviewHistoryScreenState
                                       horizontal: 14,
                                       vertical: 8,
                                     ),
-                                  ),
+                                  )),
                                   onPressed: _navigateToFeedback,
                                   child: Text(
                                     'Feedback',

@@ -73,7 +73,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth > 900) {
+        if (constraints.maxWidth >= 900) {
           return RoleSelectionScreenWeb(
             selectedRole: _selectedRole,
             onRoleSelected: _selectRole,
