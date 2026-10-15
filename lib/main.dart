@@ -14,6 +14,7 @@ import 'screens/login/role_selection_screen.dart' as login_role;
 import 'screens/signup/signup_role_selection_screen.dart';
 import 'screens/signup/candidate_register_screen.dart';
 import 'screens/signup/hr_register_screen.dart';
+import 'screens/signup/google_callback_screen.dart';
 import 'screens/candidate/candidate_onboarding_flow.dart';
 import 'screens/hr/hr_onboarding_flow.dart';
 import 'screens/candidate/candidate_applications_screen.dart';
@@ -190,6 +191,15 @@ class SkillSenseApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       navigatorObservers: [AppRouteObserver()],
+      initialRoute: AuthService.isGoogleCallback ? '/oauth/callback' : null,
+      onGenerateInitialRoutes: AuthService.isGoogleCallback
+          ? (_) => [
+              MaterialPageRoute<void>(
+                settings: const RouteSettings(name: '/oauth/callback'),
+                builder: (_) => const GoogleCallbackScreen(),
+              ),
+            ]
+          : null,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.primary,
@@ -247,6 +257,12 @@ class SkillSenseApp extends StatelessWidget {
           );
         } else {
           switch (settings.name) {
+            case '/login/candidate':
+              builder = const LoginScreen(selectedRole: 'CANDIDATE');
+              break;
+            case '/login/recruiter':
+              builder = const LoginScreen(selectedRole: 'RECRUITER');
+              break;
             case '/auth':
             case '/login':
               builder = LoginScreen(
@@ -255,6 +271,9 @@ class SkillSenseApp extends StatelessWidget {
               break;
             case '/login/role':
               builder = const login_role.RoleSelectionScreen();
+              break;
+            case '/oauth/callback':
+              builder = const GoogleCallbackScreen();
               break;
             case '/signup':
             case '/signup/role':

@@ -6,6 +6,8 @@ import '../../constants/app_constants.dart';
 import '../../utils/responsive.dart';
 
 class LoginScreenWeb extends StatelessWidget {
+  final String title;
+  final VoidCallback onGoogleSignIn;
   final bool isLoading;
   final TextEditingController emailController;
   final TextEditingController passwordController;
@@ -23,6 +25,8 @@ class LoginScreenWeb extends StatelessWidget {
 
   const LoginScreenWeb({
     super.key,
+    required this.title,
+    required this.onGoogleSignIn,
     required this.isLoading,
     required this.emailController,
     required this.passwordController,
@@ -308,7 +312,7 @@ class LoginScreenWeb extends StatelessWidget {
                                         children: [
                                           // Title
                                           Text(
-                                            AppConstants.loginWebRightTitle,
+                                            title,
                                             style: GoogleFonts.inter(
                                               fontSize: 32,
                                               fontWeight: FontWeight.w800,
@@ -530,6 +534,24 @@ class LoginScreenWeb extends StatelessWidget {
                                           ),
                                           const SizedBox(height: 24),
 
+                                          SizedBox(
+                                            width: double.infinity,
+                                            height: 48,
+                                            child: OutlinedButton.icon(
+                                              onPressed: isLoading
+                                                  ? null
+                                                  : onGoogleSignIn,
+                                              icon: SvgPicture.asset(
+                                                'assets/icons/google.svg',
+                                                width: 20,
+                                                height: 20,
+                                              ),
+                                              label: const Text(
+                                                'Sign in with Google',
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 24),
                                           // Don't have an account? Sign Up
                                           Center(
                                             child: MouseRegion(

@@ -148,6 +148,20 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
     );
   }
 
+  Future<void> _googleSignUp() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      await AuthService.startGoogleSignUp(role: 'CANDIDATE');
+    } catch (error) {
+      if (mounted) {
+        _snack(error.toString().replaceFirst('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _register({bool isWeb = false}) async {
     if (isWeb) {
       if (_firstNameController.text.trim().isEmpty ||
@@ -420,9 +434,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
             onPhoneValidityChanged: (valid) =>
                 setState(() => _phoneValid = valid),
             onRegister: () => _register(isWeb: true),
-            onGoogleSignIn: () {
-              // TODO: Implement Google Sign In
-            },
+            onGoogleSignIn: _googleSignUp,
             onLoginTap: () {
               Navigator.pushReplacementNamed(
                 context,

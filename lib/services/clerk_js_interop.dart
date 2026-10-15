@@ -62,9 +62,11 @@ extension type ClerkJS._(JSObject _) implements JSObject {
   /// handshake. Accepts an optional options object.
   external JSPromise<JSAny?> load([JSObject? options]);
 
-  /// Handles any pending Clerk redirect callback (e.g. after dev-browser
-  /// handshake redirect). Should be called after load() on page init.
-  external JSPromise<JSAny?>? handleRedirectCallback([JSObject? params]);
+  /// Completes an OAuth redirect; Flutter supplies navigation after validation.
+  external JSPromise<JSAny?> handleRedirectCallback(
+    JSObject params, [
+    JSFunction? customNavigate,
+  ]);
 
   /// The `Client` object containing `signIn` and `signUp` resources.
   external ClerkClient? get client;
@@ -103,6 +105,11 @@ extension type ClerkClient._(JSObject _) implements JSObject {
 
 @JS()
 extension type ClerkSignUp._(JSObject _) implements JSObject {
+  external ClerkSignUpVerifications? get verifications;
+  external JSPromise<JSAny?> authenticateWithRedirect(JSObject params);
+  external JSPromise<ClerkSignUp> update(JSObject params);
+  external JSArray<JSString>? get missingFields;
+
   /// `signUp.create({ emailAddress, password, firstName, lastName,
   ///   unsafeMetadata })`.
   external JSPromise<ClerkSignUp> create(JSObject params);
@@ -129,7 +136,19 @@ extension type ClerkSignUp._(JSObject _) implements JSObject {
 // ═══════════════════════════════════════════════════════════════════════
 
 @JS()
+extension type ClerkSignUpVerifications._(JSObject _) implements JSObject {
+  external ClerkExternalAccountVerification? get externalAccount;
+}
+
+@JS()
+extension type ClerkExternalAccountVerification._(JSObject _) implements JSObject {
+  external String? get status;
+}
+
+@JS()
 extension type ClerkSignIn._(JSObject _) implements JSObject {
+  external JSPromise<JSAny?> authenticateWithRedirect(JSObject params);
+
   /// `signIn.create({ identifier, password })`.
   external JSPromise<ClerkSignIn> create(JSObject params);
 
@@ -233,10 +252,8 @@ JSObject buildSignInCreateParams({
 
 /// Starts the email-code password-reset flow.
 JSObject buildPasswordResetCreateParams(String email) {
-  return {
-    'strategy': 'reset_password_email_code',
-    'identifier': email,
-  }.jsify()! as JSObject;
+  return {'strategy': 'reset_password_email_code', 'identifier': email}.jsify()!
+      as JSObject;
 }
 
 /// Verifies the reset code and supplies the replacement password.
@@ -245,10 +262,11 @@ JSObject buildPasswordResetAttemptParams({
   required String password,
 }) {
   return {
-    'strategy': 'reset_password_email_code',
-    'code': code,
-    'password': password,
-  }.jsify()! as JSObject;
+        'strategy': 'reset_password_email_code',
+        'code': code,
+        'password': password,
+      }.jsify()!
+      as JSObject;
 }
 
 /// Builds the parameters that ask Clerk to send the Device Trust email code.

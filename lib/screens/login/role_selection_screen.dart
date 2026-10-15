@@ -60,7 +60,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
   void _onContinue() {
     Navigator.pushNamed(
       context,
-      '/login',
+      _selectedRole == 'recruiter' ? '/login/recruiter' : '/login/candidate',
       arguments: _selectedRole,
     );
   }

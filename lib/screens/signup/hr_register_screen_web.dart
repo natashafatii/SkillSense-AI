@@ -393,7 +393,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
 
                                           // Google Button
                                           _GoogleSignInButton(
-                                            onTap: onGoogleSignIn,
+                                            onTap: isLoading ? null : onGoogleSignIn,
                                           ),
                                           const SizedBox(height: 16),
 
@@ -680,7 +680,7 @@ class _BulletPoint extends StatelessWidget {
 }
 
 class _GoogleSignInButton extends StatelessWidget {
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _GoogleSignInButton({required this.onTap});
 

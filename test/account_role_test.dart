@@ -11,6 +11,7 @@ import 'package:skillsense_ai/services/auth_home.dart';
 import 'package:skillsense_ai/services/profile_service.dart';
 import 'package:skillsense_ai/screens/login/login_screen.dart';
 import 'package:skillsense_ai/screens/signup/email_verification_screen.dart';
+import 'package:skillsense_ai/screens/signup/google_callback_screen.dart';
 import 'package:skillsense_ai/widgets/role_guard.dart';
 
 class FakeContext implements BuildContext {
@@ -92,6 +93,45 @@ class FakeSdk extends AuthServiceInterface {
   Future<void> verifySignUpCode(String code) => complete();
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class FakeGoogleSdk extends FakeSdk
+    implements GoogleOAuthService, GoogleSignInService {
+  @override
+  bool pendingGoogleSignIn = false;
+  String? startedGoogleRole;
+  Object? completionError;
+  @override
+  Future<void> startGoogleSignIn({String? role}) async {
+    startedGoogleRole = role;
+    pendingGoogleRole = role;
+    pendingGoogleSignIn = true;
+  }
+
+  @override
+  bool isGoogleCallback = true;
+  @override
+  String? pendingGoogleRole = 'CANDIDATE';
+  @override
+  Future<void> startGoogleSignUp({
+    required String role,
+    String? companyName,
+  }) async {
+    pendingGoogleRole = role;
+  }
+
+  @override
+  Future<List<String>> completeGoogleSignUp(Map<String, String> fields) async {
+    if (completionError != null) throw completionError!;
+    await complete();
+    return [];
+  }
+
+  @override
+  void clearGoogleRedirect() {
+    pendingGoogleRole = null;
+    isGoogleCallback = false;
+  }
 }
 
 void main() {
@@ -190,6 +230,144 @@ void main() {
     expect(sdk.signedIn, isFalse);
     expect(identityCalls, 1);
     await sub.cancel();
+  });
+
+  for (final role in ['CANDIDATE', 'RECRUITER']) {
+    testWidgets('failed $role Google signup returns directly to registration', (tester) async {
+      final google = FakeGoogleSdk()
+        ..pendingGoogleRole = role
+        ..completionError = StateError('OAuth incomplete');
+      AuthService.setInstanceForTesting(google);
+      await AuthService.initialize('test');
+      await tester.pumpWidget(MaterialApp(
+        home: const GoogleCallbackScreen(),
+        routes: {
+          '/signup/hr': (_) => const Text('Recruiter registration'),
+          '/signup/candidate': (_) => const Text('Candidate registration'),
+        },
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('OAuth incomplete'), findsOneWidget);
+      await tester.tap(find.text('Back to sign up'));
+      await tester.pumpAndSettle();
+      expect(find.text(role == 'RECRUITER'
+          ? 'Recruiter registration' : 'Candidate registration'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    test('generic Google login restores the backend $role after logout', () async {
+      final google = FakeGoogleSdk();
+      sdk = google;
+      AuthService.setInstanceForTesting(google);
+      backend(role);
+      await AuthService.initialize('test');
+      await AuthService.startGoogleSignIn(role: role);
+      await AuthService.completeGoogleSignUp();
+      await AuthService.signOut();
+      await AuthService.startGoogleSignIn();
+      expect(google.pendingGoogleSignIn, isTrue);
+      expect(google.startedGoogleRole, isNull);
+      expect(AuthService.isAuthenticated, isFalse);
+      await AuthService.completeGoogleSignUp();
+      expect(AuthService.getUserRole(), role);
+      expect(AuthService.isAuthenticated, isTrue);
+    });
+
+    test('Google sign-in accepts only the backend $role identity', () async {
+      final google = FakeGoogleSdk();
+      sdk = google;
+      AuthService.setInstanceForTesting(google);
+      backend(role);
+      await AuthService.initialize('test');
+      await AuthService.startGoogleSignIn(role: role);
+      expect(google.startedGoogleRole, role);
+      expect(AuthService.isAuthenticated, isFalse);
+      await AuthService.completeGoogleSignUp();
+      expect(AuthService.getUserRole(), role);
+      expect(AuthService.isAuthenticated, isTrue);
+    });
+
+    testWidgets('$role login exposes a working Google button', (tester) async {
+      final google = FakeGoogleSdk();
+      sdk = google;
+      AuthService.setInstanceForTesting(google);
+      await AuthService.initialize('test');
+      await tester.pumpWidget(
+        MaterialApp(home: LoginScreen(selectedRole: role)),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          role == 'RECRUITER' ? 'Recruiter sign in' : 'Candidate sign in',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Sign in with Google'));
+      await tester.pumpAndSettle();
+      expect(google.startedGoogleRole, role);
+    });
+  }
+
+  testWidgets('generic Google button starts OAuth without role selection', (tester) async {
+    final google = FakeGoogleSdk();
+    AuthService.setInstanceForTesting(google);
+    await AuthService.initialize('test');
+    await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign in with Google'));
+    await tester.pumpAndSettle();
+    expect(google.pendingGoogleSignIn, isTrue);
+    expect(google.startedGoogleRole, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('explicit Google portal still rejects a different backend role', () async {
+    final google = FakeGoogleSdk();
+    sdk = google;
+    AuthService.setInstanceForTesting(google);
+    backend('RECRUITER');
+    await AuthService.initialize('test');
+    await AuthService.startGoogleSignIn(role: 'CANDIDATE');
+    await expectLater(AuthService.completeGoogleSignUp(), throwsA(isA<RoleMismatchException>()));
+    expect(AuthService.isAuthenticated, isFalse);
+    expect(google.signedIn, isFalse);
+  });
+
+  test(
+    'Google callback waits for backend validation before publishing',
+    () async {
+      final google = FakeGoogleSdk()..signedIn = true;
+      sdk = google;
+      AuthService.setInstanceForTesting(google);
+      final gate = Completer<void>();
+      backend('CANDIDATE', hold: gate);
+      await AuthService.initialize('test');
+      expect(identityCalls, 0);
+      expect(AuthService.isAuthenticated, isFalse);
+      final completion = AuthService.completeGoogleSignUp();
+      await Future<void>.delayed(Duration.zero);
+      expect(AuthService.isAuthenticated, isFalse);
+      gate.complete();
+      await completion;
+      expect(identityCalls, 1);
+      expect(AuthService.getUserRole(), 'CANDIDATE');
+      expect(AuthService.isAuthenticated, isTrue);
+    },
+  );
+
+  test('Google signup cannot change an existing backend role', () async {
+    final google = FakeGoogleSdk();
+    sdk = google;
+    AuthService.setInstanceForTesting(google);
+    backend('RECRUITER');
+    await AuthService.initialize('test');
+    await expectLater(
+      AuthService.completeGoogleSignUp(),
+      throwsA(isA<RoleMismatchException>()),
+    );
+    expect(AuthService.isAuthenticated, isFalse);
+    expect(google.signedIn, isFalse);
+    expect(AuthService.currentUserData, isNull);
   });
 
   testWidgets('wrong-role login error stays in the login form', (tester) async {

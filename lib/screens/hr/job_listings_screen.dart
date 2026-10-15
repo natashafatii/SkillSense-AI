@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -10,6 +11,10 @@ import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import '../../constants/app_colors.dart';
+import '../../models/app_notification.dart';
+import '../../models/paginated_response.dart';
+import '../../services/notification_service.dart';
+import '../../services/session_scope.dart';
 
 enum _JobAction { edit, close, view, publish, delete }
 
@@ -925,30 +930,258 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
   }
 }
 
-class RecruiterNotificationsScreen extends StatelessWidget {
-  const RecruiterNotificationsScreen({super.key});
+class RecruiterNotificationsScreen extends StatefulWidget {
+  const RecruiterNotificationsScreen({
+    super.key,
+    this.loadNotifications,
+    this.loadUnreadCount,
+    this.markRead,
+    this.refreshInterval = const Duration(seconds: 30),
+  });
+
+  final Future<PaginatedResponse<AppNotification>> Function(int page)?
+  loadNotifications;
+  final Future<int> Function()? loadUnreadCount;
+  final Future<AppNotification> Function(String id)? markRead;
+  final Duration refreshInterval;
+
+  @override
+  State<RecruiterNotificationsScreen> createState() =>
+      _RecruiterNotificationsScreenState();
+}
+
+class _RecruiterNotificationsScreenState
+    extends State<RecruiterNotificationsScreen>
+    with WidgetsBindingObserver {
+  List<AppNotification> _items = [];
+  int _unread = 0;
+  int _page = 1;
+  bool _hasNext = false;
+  bool _busy = false;
+  bool _loaded = false;
+  bool _active = true;
+  String? _error;
+  final Set<String> _marking = {};
+  Timer? _poller;
+  int _request = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    AuthService.currentUserNotifier.addListener(_accountChanged);
+    _fetch();
+    if (widget.refreshInterval > Duration.zero) {
+      _poller = Timer.periodic(widget.refreshInterval, (_) {
+        if (_active && ModalRoute.of(context)?.isCurrent == true) _fetch();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _poller?.cancel();
+    _request++;
+    AuthService.currentUserNotifier.removeListener(_accountChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _active = state == AppLifecycleState.resumed;
+    if (_active) _fetch();
+  }
+
+  void _accountChanged() {
+    _request++;
+    setState(() {
+      _items = [];
+      _unread = 0;
+      _busy = false;
+      _loaded = false;
+      _error = null;
+      _marking.clear();
+    });
+    if (AuthService.currentUserNotifier.value != null) _fetch();
+  }
+
+  Future<void> _fetch({bool more = false}) async {
+    if (_busy || _marking.isNotEmpty) return;
+    final request = ++_request;
+    final generation = SessionScope.generation;
+    final page = more ? _page + 1 : 1;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait<Object>([
+        widget.loadNotifications?.call(page) ??
+            NotificationService.list(page: page),
+        widget.loadUnreadCount?.call() ?? NotificationService.unreadCount(),
+      ]);
+      if (!mounted ||
+          generation != SessionScope.generation ||
+          request != _request)
+        return;
+      final response = results[0] as PaginatedResponse<AppNotification>;
+      setState(() {
+        final byId = {
+          for (final item in more ? _items : <AppNotification>[]) item.id: item,
+        };
+        for (final item in response.results) {
+          byId[item.id] = item;
+        }
+        _items = byId.values.toList();
+        _unread = results[1] as int;
+        _page = page;
+        _hasNext = response.hasNext;
+        _loaded = true;
+      });
+    } catch (error) {
+      if (mounted &&
+          generation == SessionScope.generation &&
+          request == _request) {
+        setState(
+          () => _error = error is ApiException
+              ? error.message
+              : 'Unable to load notifications. Please retry.',
+        );
+      }
+    } finally {
+      if (mounted && request == _request) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _markRead(AppNotification item) async {
+    if (item.isRead || _busy || !_marking.add(item.id)) return;
+    final generation = SessionScope.generation;
+    setState(() {});
+    try {
+      final updated =
+          await (widget.markRead?.call(item.id) ??
+              NotificationService.markRead(item.id));
+      if (!mounted || generation != SessionScope.generation) return;
+      setState(() {
+        _items = _items
+            .map((row) => row.id == item.id ? updated : row)
+            .toList();
+        if (_unread > 0) _unread--;
+      });
+    } catch (_) {
+      if (mounted && generation == SessionScope.generation) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to mark notification as read. Please retry.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _marking.remove(item.id));
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFFF8FAFC),
     body: Column(
       children: [
-        const RecruiterTopBar(
+        RecruiterTopBar(
           pageTitle: 'Notifications',
-          breadcrumbSegments: ['Notifications'],
+          breadcrumbSegments: const ['Notifications'],
+          hasUnread: _unread > 0,
         ),
-        const Expanded(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.notifications_none_rounded,
-                  size: 36,
-                  color: Color(0xFF64748B),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$_unread unread',
+                  style: const TextStyle(color: Color(0xFF64748B)),
                 ),
-                SizedBox(height: 12),
-                Text('You’re all caught up.'),
+              ),
+              IconButton(
+                tooltip: 'Refresh notifications',
+                onPressed: _busy ? null : () => _fetch(),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+        ),
+        if (_busy) const LinearProgressIndicator(),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : () => _fetch(),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _fetch(),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(24),
+              children: [
+                if (_loaded && _items.isEmpty && _error == null)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 80),
+                    child: Center(child: Text('You’re all caught up.')),
+                  ),
+                for (final item in _items)
+                  Card(
+                    key: ValueKey(item.id),
+                    color: item.isRead ? Colors.white : const Color(0xFFEFF6FF),
+                    child: ListTile(
+                      isThreeLine: true,
+                      leading: Icon(
+                        item.isRead
+                            ? Icons.notifications_none_rounded
+                            : Icons.notifications_active_outlined,
+                      ),
+                      title: Text(
+                        item.title,
+                        style: TextStyle(
+                          fontWeight: item.isRead
+                              ? FontWeight.w400
+                              : FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${item.message}\n${item.createdAt.toLocal()}',
+                      ),
+                      onTap: () => _markRead(item),
+                      trailing: item.isRead
+                          ? null
+                          : IconButton(
+                              tooltip: 'Mark as read',
+                              onPressed: _marking.contains(item.id) || _busy
+                                  ? null
+                                  : () => _markRead(item),
+                              icon: const Icon(Icons.done),
+                            ),
+                    ),
+                  ),
+                if (_hasNext)
+                  Center(
+                    child: TextButton(
+                      onPressed: _busy ? null : () => _fetch(more: true),
+                      child: const Text('Load more'),
+                    ),
+                  ),
               ],
             ),
           ),

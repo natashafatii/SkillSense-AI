@@ -7,6 +7,7 @@ class RouteStorage {
   static const List<String> _ignoredRoutes = [
     '/',
     '/welcome',
+    '/oauth/callback',
   ];
 
   static Future<void> saveLastRoute(String routeName) async {
