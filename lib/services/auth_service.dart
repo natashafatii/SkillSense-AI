@@ -82,7 +82,7 @@ class AuthService {
 
   static Future<void> initialize(String publishableKey) async {
     _sdkSubscription ??= instance.authStateChanges.listen((signedIn) {
-      if (_authOperation) return;
+      if (_authOperation || isGoogleCallback) return;
       if (!signedIn) {
         _invalidate();
         _emit(false);
@@ -91,7 +91,78 @@ class AuthService {
       }
     });
     await instance.initialize(publishableKey);
-    if (instance.isSignedIn) await _restoreSession();
+    if (instance.isSignedIn && !isGoogleCallback) await _restoreSession();
+  }
+
+  static bool get isGoogleCallback =>
+      instance is GoogleOAuthService &&
+      (instance as GoogleOAuthService).isGoogleCallback;
+
+  static GoogleOAuthService get _googleOAuth {
+    final service = instance;
+    if (service is GoogleOAuthService) return service as GoogleOAuthService;
+    throw UnsupportedError('Google sign-up is available in the web app.');
+  }
+
+  static Future<void> startGoogleSignUp({
+    required String role,
+    String? companyName,
+  }) async {
+    final service = _googleOAuth;
+    final normalized = normalizeRole(role);
+    if (!['CANDIDATE', 'RECRUITER'].contains(normalized)) {
+      throw ArgumentError('Choose Candidate or Recruiter to continue.');
+    }
+    expectedLoginRole = normalized;
+    await _authenticate(
+      () => service.startGoogleSignUp(
+        role: normalized!,
+        companyName: companyName,
+      ),
+      replaceSession: true,
+      expectedRole: normalized,
+    );
+  }
+
+  static Future<List<String>> completeGoogleSignUp([
+    Map<String, String> fields = const {},
+  ]) async {
+    final service = _googleOAuth;
+    final role = service.pendingGoogleRole;
+    if (role == null && !pendingGoogleSignIn) {
+      throw StateError('Google authentication expired. Please start again.');
+    }
+    expectedLoginRole = role;
+    return _authenticate(
+      () => service.completeGoogleSignUp(fields),
+      expectedRole: role,
+    );
+  }
+
+  static void clearGoogleRedirect() => _googleOAuth.clearGoogleRedirect();
+
+  static String? get pendingGoogleRole => _googleOAuth.pendingGoogleRole;
+
+  static bool get pendingGoogleSignIn =>
+      instance is GoogleSignInService &&
+      (instance as GoogleSignInService).pendingGoogleSignIn;
+
+  static Future<void> startGoogleSignIn({String? role}) async {
+    final normalized = normalizeRole(role);
+    if (role != null && !['CANDIDATE', 'RECRUITER'].contains(normalized)) {
+      throw ArgumentError('Choose Candidate or Recruiter to continue.');
+    }
+    final service = instance;
+    if (service is! GoogleSignInService) {
+      throw UnsupportedError('Google sign-in is available in the web app.');
+    }
+    expectedLoginRole = normalized;
+    await _authenticate(
+      () =>
+          (service as GoogleSignInService).startGoogleSignIn(role: normalized),
+      replaceSession: true,
+      expectedRole: normalized,
+    );
   }
 
   static Future<void> _restoreSession() async {

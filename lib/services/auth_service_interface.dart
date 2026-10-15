@@ -1,5 +1,19 @@
 import 'dart:async';
 
+abstract interface class GoogleSignInService {
+  bool get pendingGoogleSignIn;
+  Future<void> startGoogleSignIn({String? role});
+}
+
+/// Browser OAuth is separate from the native SDK's session contract.
+abstract interface class GoogleOAuthService {
+  bool get isGoogleCallback;
+  String? get pendingGoogleRole;
+  Future<void> startGoogleSignUp({required String role, String? companyName});
+  Future<List<String>> completeGoogleSignUp(Map<String, String> fields);
+  void clearGoogleRedirect();
+}
+
 enum SignInResultStatus { complete, verificationRequired }
 
 class RoleMismatchException implements Exception {

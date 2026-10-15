@@ -37,6 +37,33 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLoading = false;
   String? _loginError;
 
+  String get _signInTitle =>
+      switch (AuthService.normalizeRole(widget.selectedRole)) {
+        'CANDIDATE' => 'Candidate sign in',
+        'RECRUITER' => 'Recruiter sign in',
+        _ => 'Sign in',
+      };
+
+  Future<void> _googleSignIn() async {
+    if (_isLoading) return;
+    final role = AuthService.normalizeRole(widget.selectedRole);
+    setState(() {
+      _isLoading = true;
+      _loginError = null;
+    });
+    try {
+      await AuthService.startGoogleSignIn(role: role);
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _loginError = error.toString().replaceFirst('Exception: ', ''),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -343,6 +370,8 @@ class _LoginScreenState extends State<LoginScreen>
       builder: (context, constraints) {
         if (constraints.maxWidth >= 900) {
           return LoginScreenWeb(
+            title: _signInTitle,
+            onGoogleSignIn: _googleSignIn,
             isLoading: _isLoading,
             emailController: _emailController,
             passwordController: _passwordController,
@@ -408,7 +437,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                               // ── Bold black title ───────────────────────────
                               Text(
-                                AppConstants.loginTitle,
+                                _signInTitle,
                                 style: GoogleFonts.publicSans(
                                   fontSize: 34,
                                   fontWeight: FontWeight.w800,
@@ -636,8 +665,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                               // ── Continue with Google ───────────────────────
                               GestureDetector(
-                                onTap: () =>
-                                    _snack(AppConstants.continueWithGoogle),
+                                onTap: _isLoading ? null : _googleSignIn,
                                 child: Container(
                                   height: 56,
                                   decoration: BoxDecoration(
@@ -658,7 +686,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                       const SizedBox(width: 12),
                                       Text(
-                                        AppConstants.continueWithGoogle,
+                                        'Sign in with Google',
                                         style: GoogleFonts.publicSans(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w500,

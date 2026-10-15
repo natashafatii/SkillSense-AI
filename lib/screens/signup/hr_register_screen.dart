@@ -138,6 +138,21 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
     );
   }
 
+  Future<void> _googleSignUp() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      await AuthService.startGoogleSignUp(
+        role: 'RECRUITER',
+        companyName: _companyNameController.text.trim(),
+      );
+    } catch (error) {
+      if (mounted) _snack(error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _register({bool isWeb = false}) async {
     if (!isWeb && !(_formKey.currentState?.validate() ?? false)) return;
 
@@ -400,9 +415,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
             onObscureToggle: () => setState(() => _obscurePassword = !_obscurePassword),
             onObscureConfirmToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
             onRegister: () => _register(isWeb: true),
-            onGoogleSignIn: () {
-              // TODO: Google Sign In
-            },
+            onGoogleSignIn: _googleSignUp,
             onLoginTap: () {
               Navigator.pushReplacementNamed(context, '/login', arguments: 'RECRUITER');
             },

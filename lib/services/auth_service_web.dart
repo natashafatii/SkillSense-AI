@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:js_interop';
+import 'package:web/web.dart' as web;
 
 import 'auth_service_interface.dart';
 import 'clerk_js_interop.dart';
@@ -12,11 +14,250 @@ AuthServiceInterface createAuthService() => AuthServiceWeb();
 /// clerk-js is loaded via a `<script>` tag in `web/index.html` and handles
 /// the dev-browser handshake (`__clerk_db_jwt` cookie exchange)
 /// automatically — the exact capability missing from the Dart SDK on web.
-class AuthServiceWeb implements AuthServiceInterface {
+class AuthServiceWeb
+    implements AuthServiceInterface, GoogleOAuthService, GoogleSignInService {
   late ClerkJS _clerk;
   final StreamController<bool> _authStreamController =
       StreamController<bool>.broadcast();
   bool _initialised = false;
+  bool _googleCallbackHandled = false;
+  bool _googleEmailCodePrepared = false;
+  static const _googleStorageKey = 'skillsense_google_signup';
+
+  @override
+  bool get isGoogleCallback =>
+      Uri.base.queryParameters['skillsense_oauth'] == 'google' ||
+      Uri.base.fragment == '/oauth/callback';
+
+  Map<String, dynamic>? get _googleAttempt {
+    try {
+      final raw = web.window.sessionStorage.getItem(_googleStorageKey);
+      if (raw == null) return null;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final started = DateTime.fromMillisecondsSinceEpoch(
+        data['started'] as int,
+      );
+      final age = DateTime.now().difference(started);
+      if (age.isNegative || age > const Duration(minutes: 30)) return null;
+      final automaticRole = data['sign_in'] == true && data['role'] == null;
+      if (!automaticRole && !['CANDIDATE', 'RECRUITER'].contains(data['role'])) {
+        return null;
+      }
+      return data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  String? get pendingGoogleRole => _googleAttempt?['role'] as String?;
+
+  @override
+  bool get pendingGoogleSignIn => _googleAttempt?['sign_in'] == true;
+
+  @override
+  Future<void> startGoogleSignIn({String? role}) =>
+      _startGoogle(role: role, signIn: true);
+
+  String get _googleCallbackUrl => Uri.base
+      .replace(
+        queryParameters: {'skillsense_oauth': 'google'},
+        fragment: '/oauth/callback',
+      )
+      .toString();
+
+  @override
+  Future<void> startGoogleSignUp({required String role, String? companyName}) =>
+      _startGoogle(role: role, companyName: companyName);
+
+  Future<void> _startGoogle({
+    String? role,
+    String? companyName,
+    bool signIn = false,
+  }) async {
+    if (!(signIn && role == null) &&
+        !['CANDIDATE', 'RECRUITER'].contains(role)) {
+      throw ArgumentError('Choose Candidate or Recruiter to continue.');
+    }
+    final client = _clerk.client;
+    if (client == null ||
+        (signIn ? client.signIn == null : client.signUp == null)) {
+      throw StateError('Clerk authentication is unavailable.');
+    }
+    final metadata = {
+      'role': role,
+      if (companyName != null && companyName.trim().isNotEmpty)
+        'company_name': companyName.trim(),
+    };
+    // Tab-scoped storage survives Google's full-page redirect without sharing
+    // the selected portal between tabs. It is never used to authorize a role.
+    web.window.sessionStorage.setItem(
+      _googleStorageKey,
+      jsonEncode({
+        ...metadata,
+        'sign_in': signIn,
+        'started': DateTime.now().millisecondsSinceEpoch,
+      }),
+    );
+    _googleCallbackHandled = false;
+    _googleEmailCodePrepared = false;
+    try {
+      final params =
+          {
+                'strategy': 'oauth_google',
+                'redirectUrl': _googleCallbackUrl,
+                'redirectUrlComplete': _googleCallbackUrl,
+                if (!signIn) 'unsafeMetadata': metadata,
+              }.jsify()!
+              as JSObject;
+      if (signIn) {
+        await client.signIn!.authenticateWithRedirect(params).toDart;
+      } else {
+        await client.signUp!.authenticateWithRedirect(params).toDart;
+      }
+    } catch (error) {
+      clearGoogleRedirect();
+      throw Exception(
+        _cleanError(error, 'Unable to start Google authentication.'),
+      );
+    }
+  }
+
+  @override
+  Future<List<String>> completeGoogleSignUp(Map<String, String> fields) async {
+    final attempt = _googleAttempt;
+    if (attempt == null || !isGoogleCallback) {
+      throw StateError('Google sign-up expired. Please start again.');
+    }
+    if (!_googleCallbackHandled) {
+      await _clerk
+          .handleRedirectCallback(
+            {
+                  'signInForceRedirectUrl': _googleCallbackUrl,
+                  'signUpForceRedirectUrl': _googleCallbackUrl,
+                  'continueSignUpUrl': _googleCallbackUrl,
+                  'signInUrl': _googleCallbackUrl,
+                  'signUpUrl': _googleCallbackUrl,
+                  'transferable': !pendingGoogleSignIn,
+                  'reloadResource': pendingGoogleSignIn ? 'signIn' : 'signUp',
+                  // Clerk 6.39 uses this hook for successful session activation;
+                  // customNavigate below only handles incomplete-flow navigation.
+                  '__internal_navigateOnSetActive':
+                      ((JSObject _) => Future<JSAny?>.value(null).toJS).toJS,
+                  if (!pendingGoogleSignIn)
+                    'unsafeMetadata': {
+                      'role': attempt['role'],
+                      if (attempt['company_name'] != null)
+                        'company_name': attempt['company_name'],
+                    },
+                }.jsify()!
+                as JSObject,
+            // Flutter owns navigation, and publishes auth only after Django agrees.
+            ((JSString _) => Future<JSAny?>.value(null).toJS).toJS,
+          )
+          .toDart;
+      _googleCallbackHandled = true;
+    }
+
+    if (!isSignedIn) {
+      if (pendingGoogleSignIn ||
+          _clerk.client?.signUp?.verifications?.externalAccount?.status ==
+              'transferable') {
+        final signIn = _clerk.client?.signIn;
+        if (signIn?.status == 'complete') {
+          await _activateCompletedSignIn(signIn!);
+          return [];
+        }
+        if (signIn != null &&
+            [
+              'needs_second_factor',
+              'needs_client_trust',
+            ].contains(signIn.status)) {
+          final code = fields['sign_in_code']?.trim() ?? '';
+          if (code.isNotEmpty) {
+            await verifySignInCode(code);
+            return [];
+          }
+          if (!_googleEmailCodePrepared) {
+            await _prepareEmailCode(signIn);
+            _googleEmailCodePrepared = true;
+          }
+          return ['sign_in_code'];
+        }
+        throw StateError(
+          'Google sign-in could not complete. Use your existing '
+          'email login for additional verification, or sign up if you do not have an account.',
+        );
+      }
+      var signUp = _clerk.client?.signUp;
+      if (signUp?.status == 'missing_requirements') {
+        final missing =
+            signUp!.missingFields?.toDart
+                .map((value) => value.toDart)
+                .toList() ??
+            <String>[];
+        const supported = {'first_name', 'last_name', 'username'};
+        if (missing.isEmpty ||
+            missing.any((field) => !supported.contains(field))) {
+          throw StateError(
+            'This account requires additional verification. '
+            'Please use email sign-up or sign in to your existing account.',
+          );
+        }
+        if (missing.any((field) => (fields[field] ?? '').trim().isEmpty)) {
+          return missing;
+        }
+        const names = {
+          'first_name': 'firstName',
+          'last_name': 'lastName',
+          'username': 'username',
+        };
+        signUp = await signUp
+            .update(
+              {
+                    for (final field in missing)
+                      names[field]!: fields[field]!.trim(),
+                  }.jsify()!
+                  as JSObject,
+            )
+            .toDart;
+      }
+      if (signUp?.status == 'complete' && signUp?.createdSessionId != null) {
+        await _activateSession(signUp!.createdSessionId!);
+        return [];
+      }
+      throw StateError(
+        'Google sign-in was cancelled or requires additional '
+        'verification. Please try again or use your existing login.',
+      );
+    }
+    final token = await getSessionToken();
+    if (token == null || token.isEmpty) {
+      throw StateError('Google sign-in did not create a valid session.');
+    }
+    await sessionValidator(token);
+    return [];
+  }
+
+  @override
+  void clearGoogleRedirect() {
+    web.window.sessionStorage.removeItem(_googleStorageKey);
+    if (isGoogleCallback) {
+      final query = Map<String, String>.from(Uri.base.queryParameters)
+        ..remove('skillsense_oauth');
+      web.window.history.replaceState(
+        null,
+        '',
+        Uri.base
+            .replace(
+              queryParameters: query.isEmpty ? null : query,
+              query: query.isEmpty ? '' : null,
+              fragment: '',
+            )
+            .toString(),
+      );
+    }
+  }
 
   @override
   late Future<void> Function(String token) sessionValidator;
