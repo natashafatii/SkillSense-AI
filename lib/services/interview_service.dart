@@ -9,14 +9,14 @@ class InterviewService {
   InterviewService._();
 
   /// Lists the current recruiter's interviews across all jobs.
-  static Future<List<Interview>> listAll({Dio? client}) async {
+  static Future<List<Interview>> listAll({String? status, Dio? client}) async {
     final dio = client ?? await ApiClient.getInstance();
     final interviews = <Interview>[];
     try {
       for (var page = 1; page <= 100; page++) {
         final response = await dio.get(
           '/interviews/',
-          queryParameters: {'page': page},
+          queryParameters: {if (status != null) 'status': status, 'page': page},
         );
         final data = response.data;
         final List<dynamic> rows;
@@ -43,7 +43,11 @@ class InterviewService {
   }
 
   /// Reads scheduled interviews for a job to mark occupied calendar slots.
-  static Future<List<Interview>> listForJob(String jobId, {Dio? client}) async {
+  static Future<List<Interview>> listForJob(
+    String jobId, {
+    String? status,
+    Dio? client,
+  }) async {
     if (jobId.isEmpty) throw ArgumentError('Job ID is required.');
     final dio = client ?? await ApiClient.getInstance();
     final interviews = <Interview>[];
@@ -51,7 +55,11 @@ class InterviewService {
       for (var page = 1; page <= 100; page++) {
         final response = await dio.get(
           '/interviews/',
-          queryParameters: {'job': jobId, 'page': page},
+          queryParameters: {
+            'job': jobId,
+            if (status != null) 'status': status,
+            'page': page,
+          },
         );
         final data = response.data;
         final List<dynamic> rows;

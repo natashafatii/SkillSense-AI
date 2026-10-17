@@ -1110,29 +1110,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               letterSpacing: -0.5,
             ),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEFF6FF),
-              foregroundColor: AppColors.dashboardBlue,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () {
-              Navigator.of(
-                context,
-              ).pushReplacementNamed('/recruiter/company-team');
-            },
-            child: Text(
-              'Organization & Team ›',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.bold,
-                fontSize: 12.5,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1220,7 +1197,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 hasBadge: true,
                 badgeColor: const Color(0xFFEF4444),
                 tooltip: 'Notifications',
-                onTap: () {},
+                onTap: () =>
+                    Navigator.of(context).pushNamed('/recruiter/notifications'),
               ),
               const SizedBox(width: 10),
 
@@ -1228,9 +1206,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildTopBarIconButton(
                 icon: Icons.settings_outlined,
                 hasBadge: false,
-                tooltip: 'Settings',
+                tooltip: 'Profile',
                 onTap: () {
-                  Navigator.of(context).pushNamed('/recruiter/settings');
+                  Navigator.of(context).pushNamed('/recruiter/profile');
                 },
               ),
             ],

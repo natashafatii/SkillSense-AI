@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:skillsense_ai/models/candidate_profile.dart';
 import 'package:skillsense_ai/models/user.dart';
 import 'package:skillsense_ai/screens/candidate/candidate_profile_settings_screen.dart';
@@ -44,6 +45,56 @@ void main() {
   setUp(
     () => CandidateProfileSettingsScreen.currentTheme = AppThemeMode.daylight,
   );
+
+  testWidgets('candidate sections expand independently and survive remount', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    ProfileService.currentProfileNotifier.value = _profile();
+    addTearDown(() => ProfileService.currentProfileNotifier.value = null);
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Widget nav(String route) => MaterialApp(
+      home: Scaffold(
+        body: Row(
+          children: [
+            CandidateSideNav(
+              currentRoute: route,
+              initialExpanded: true,
+              onNavigate: (_) {},
+            ),
+            const Expanded(child: SizedBox()),
+          ],
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(nav('/candidate/home'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(CandidateSideNav)).width, 272);
+    expect(find.text('Candidate home'), findsOneWidget);
+
+    await tester.tap(find.text('RESUMES'));
+    await tester.pumpAndSettle();
+    expect(find.text('Candidate home'), findsOneWidget);
+    expect(find.text('Resume upload'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(nav('/candidate/resumes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Candidate home'), findsOneWidget);
+    expect(find.text('Resume upload'), findsOneWidget);
+    expect(tester.getSize(find.byType(CandidateSideNav)).width, 272);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getStringList('candidate_sidebar_v1_anonymous_sections'),
+      containsAll(['0', '4']),
+    );
+  });
 
   for (final width in [1280.0, 1024.0, 900.0, 481.0, 480.0, 360.0]) {
     testWidgets('Profile & Settings has no overflow at ${width.toInt()}px', (

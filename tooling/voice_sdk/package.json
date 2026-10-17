@@ -1,0 +1,1 @@
+{"private":true,"type":"module","scripts":{"build":"esbuild retell_entry.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=../../web/vendor/skillsense_retell.mjs --legal-comments=eof"},"dependencies":{"retell-client-js-sdk":"3.0.2"},"devDependencies":{"esbuild":"0.28.2"}}

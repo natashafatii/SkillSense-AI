@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:skillsense_ai/constants/app_colors.dart';
 import 'package:skillsense_ai/constants/env_config.dart';
 import 'models/job.dart';
+import 'models/phase8_contract.dart';
+import 'services/media/interview_media_route_observer.dart';
 
 // Conditional import: picks the web or native platform integration.
 import 'services/platform_app_stub.dart'
@@ -30,29 +32,41 @@ import 'screens/candidate/candidate_notifications_screen.dart';
 import 'screens/candidate/candidate_resume_management_screen.dart';
 import 'screens/dashboard/command_deck_screen.dart';
 import 'screens/hr/analytics_screen.dart';
+import 'screens/admin/admin_portal.dart';
+import 'screens/admin/aurora_tokens.dart';
 import 'screens/hr/candidate_report_screen.dart';
 import 'screens/hr/create_role_screen.dart';
 import 'screens/hr/hr_pipeline_screen.dart';
 import 'screens/hr/interview_review_screen.dart';
 import 'screens/hr/live_monitor_screen.dart';
-import 'screens/hr/org_team_screen.dart';
+import 'screens/hr/recruiter_observation_screen.dart';
 import 'screens/hr/rankings_screen.dart';
 import 'screens/hr/schedule_interview_screen.dart';
 import 'screens/hr/settings_screen.dart';
 import 'screens/hr/job_listings_screen.dart';
 import 'screens/hr/recruiter_job_detail_screen.dart';
-import 'screens/hr/recruiter_settings_hub_screen.dart';
+import 'screens/hr/recruiter_profile_screen.dart';
 import 'screens/signup/terms_privacy_screen.dart';
 import 'screens/welcome/aperture_splash_screen.dart';
 import 'screens/welcome/welcome_screen.dart';
 import 'widgets/role_guard.dart';
 import 'widgets/recruiter_scaffold.dart';
+import 'widgets/mobile_home_indicator.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'services/route_storage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final adminLaunchRoute = adminRoutes.values.cast<String?>().firstWhere(
+    (route) => route == Uri.base.fragment.split('?').first || route == Uri.base.path,
+    orElse: () => null,
+  );
+  if (adminLaunchRoute != null) {
+    runApp(SkillSenseApp(initialAdminRoute: adminLaunchRoute));
+    return;
+  }
 
   // Set the status bar style
   SystemChrome.setSystemUIOverlayStyle(
@@ -100,6 +114,7 @@ class AuthInitializationFailure extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      builder: mobileHomeIndicatorBuilder,
       home: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         body: Center(
@@ -158,7 +173,7 @@ class AppRouteObserver extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
-    if (route.settings.name != null && route.settings.name != '/') {
+    if (route.settings.name != null && route.settings.name != '/' && !adminRoutes.containsValue(route.settings.name)) {
       RouteStorage.saveLastRoute(route.settings.name!);
     }
   }
@@ -166,33 +181,53 @@ class AppRouteObserver extends NavigatorObserver {
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
-    if (newRoute?.settings.name != null && newRoute!.settings.name != '/') {
+    if (newRoute?.settings.name != null && newRoute!.settings.name != '/' && !adminRoutes.containsValue(newRoute.settings.name)) {
       RouteStorage.saveLastRoute(newRoute.settings.name!);
     }
   }
 }
 
 class SkillSenseApp extends StatelessWidget {
-  const SkillSenseApp({super.key});
+  const SkillSenseApp({super.key, this.initialAdminRoute});
+  final String? initialAdminRoute;
 
   @override
   Widget build(BuildContext context) {
     // Configure ApiClient token supplier dynamically from the auth service.
-    ApiClient.setTokenSupplier(() async {
-      try {
-        return await AuthService.getSessionToken();
-      } catch (_) {
-        return null;
-      }
-    });
+    if (initialAdminRoute == null) {
+      ApiClient.setTokenSupplier(() async {
+        try {
+          return await AuthService.getSessionToken();
+        } catch (_) {
+          return null;
+        }
+      });
+    }
 
     return MaterialApp(
       title: 'SkillSense AI',
       debugShowCheckedModeBanner: false,
+      builder: mobileHomeIndicatorBuilder,
       navigatorKey: navigatorKey,
-      navigatorObservers: [AppRouteObserver()],
-      initialRoute: AuthService.isGoogleCallback ? '/oauth/callback' : null,
-      onGenerateInitialRoutes: AuthService.isGoogleCallback
+      navigatorObservers: [AppRouteObserver(), interviewMediaRouteObserver],
+      initialRoute: initialAdminRoute ?? (AuthService.isGoogleCallback ? '/oauth/callback' : null),
+      onGenerateInitialRoutes: initialAdminRoute != null
+          ? (_) => [
+              MaterialPageRoute<void>(
+                settings: RouteSettings(name: initialAdminRoute),
+                builder: (adminContext) {
+                  final brightness = MediaQuery.platformBrightnessOf(adminContext);
+                  return Theme(
+                    data: auroraTheme(
+                      brightness == Brightness.dark ? AuroraTokens.auroraNight : AuroraTokens.auroraDay,
+                      brightness,
+                    ),
+                    child: AdminPortal(module: adminRoutes.entries.firstWhere((e) => e.value == initialAdminRoute).key),
+                  );
+                },
+              ),
+            ]
+          : AuthService.isGoogleCallback
           ? (_) => [
               MaterialPageRoute<void>(
                 settings: const RouteSettings(name: '/oauth/callback'),
@@ -206,9 +241,12 @@ class SkillSenseApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         useMaterial3: true,
+        extensions: const [AuroraTokens.auroraDay],
       ),
+      darkTheme: auroraTheme(AuroraTokens.auroraNight, Brightness.dark),
+      themeMode: ThemeMode.system,
       // Routing observes only backend-verified application sessions.
-      home: buildPlatformHome(
+      home: initialAdminRoute == null ? buildPlatformHome(
         signedInBuilder: (role) {
           return const RoleGuard(
             allowedRoles: [EnvConfig.roleRecruiter, EnvConfig.roleCandidate],
@@ -216,14 +254,29 @@ class SkillSenseApp extends StatelessWidget {
           );
         },
         signedOutWidget: const ApertureSplashScreen(),
-      ),
+      ) : null,
       onGenerateRoute: (settings) {
-        if (settings.name != null && settings.name != '/') {
+        if (settings.name != null && settings.name != '/' && !adminRoutes.containsValue(settings.name)) {
           RouteStorage.saveLastRoute(settings.name!);
         }
 
         final name = settings.name ?? '';
         Widget builder;
+
+        if (adminRoutes.containsValue(name)) {
+          final module = adminRoutes.entries.firstWhere((e) => e.value == name).key;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (adminContext) => Theme(
+              data: auroraTheme(
+                MediaQuery.platformBrightnessOf(adminContext)==Brightness.dark
+                    ? AuroraTokens.auroraNight : AuroraTokens.auroraDay,
+                MediaQuery.platformBrightnessOf(adminContext),
+              ),
+              child: AdminPortal(module: module, initialAnalyticsTab: settings.arguments as String?),
+            ),
+          );
+        }
 
         // Deep link handling for job detail route: /candidate/jobs/:id
         if (name.startsWith('/candidate/jobs/') &&
@@ -322,16 +375,19 @@ class SkillSenseApp extends StatelessWidget {
               break;
             case '/report':
             case '/recruiter/candidate-report':
-              builder = const RoleGuard(
+              builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleRecruiter],
-                child: CandidateReportScreen(),
+                child: settings.arguments is RecruiterObservationTarget
+                    ? RecruiterObservationScreen(target: settings.arguments! as RecruiterObservationTarget)
+                    : const CandidateReportScreen(),
               );
               break;
             case '/monitor':
             case '/recruiter/live-monitor':
-              builder = const RoleGuard(
+              builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleRecruiter],
-                child: LiveMonitorScreen(),
+                child: LiveMonitorScreen(observationTarget: settings.arguments is RecruiterObservationTarget
+                    ? settings.arguments! as RecruiterObservationTarget : null),
               );
               break;
             case '/create-role':
@@ -394,17 +450,10 @@ class SkillSenseApp extends StatelessWidget {
                 child: SettingsScreen(),
               );
               break;
-            case '/recruiter/settings':
+            case '/recruiter/profile':
               builder = const RoleGuard(
                 allowedRoles: [EnvConfig.roleRecruiter],
-                child: RecruiterSettingsHubScreen(),
-              );
-              break;
-            case '/org':
-            case '/recruiter/company-team':
-              builder = const RoleGuard(
-                allowedRoles: [EnvConfig.roleRecruiter],
-                child: OrgTeamScreen(),
+                child: RecruiterProfileScreen(),
               );
               break;
             case '/recruiter/job-listings':
@@ -444,15 +493,20 @@ class SkillSenseApp extends StatelessWidget {
               );
               break;
             case '/candidate/interview-lobby':
-              builder = const RoleGuard(
+              builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleCandidate],
-                child: CandidateInterviewLobbyScreen(),
+                child: CandidateInterviewLobbyScreen(
+                  identity: settings.arguments is InterviewSessionIdentity
+                    ? settings.arguments as InterviewSessionIdentity : null,
+                ),
               );
               break;
             case '/candidate/interview-session':
-              builder = const RoleGuard(
+              builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleCandidate],
-                child: CandidateInterviewSessionScreen(),
+                child: settings.arguments is InterviewSessionIdentity
+                  ? CandidateInterviewSessionScreen(identity: settings.arguments as InterviewSessionIdentity)
+                  : const Scaffold(body: Center(child: Text('A valid interview session is required.'))),
               );
               break;
             case '/candidate/feedback-report':
@@ -500,7 +554,6 @@ class SkillSenseApp extends StatelessWidget {
           '/analytics': '/recruiter/analytics',
           '/review': '/recruiter/interview-review',
           '/settings': '/recruiter/scoring-model',
-          '/org': '/recruiter/company-team',
         };
         final canonicalRecruiterRoute =
             recruiterAliases[settings.name] ?? settings.name;
@@ -512,18 +565,12 @@ class SkillSenseApp extends StatelessWidget {
               ? RecruiterScaffold(
                   currentRoute: canonicalRecruiterRoute!,
                   selectedRoute:
-                      canonicalRecruiterRoute == '/recruiter/company-team'
-                      ? '/recruiter/command-deck'
-                      : canonicalRecruiterRoute.startsWith(
-                              '/recruiter/jobs/',
-                            ) &&
-                            canonicalRecruiterRoute.endsWith('/pipeline')
+                      canonicalRecruiterRoute.startsWith('/recruiter/jobs/') &&
+                          canonicalRecruiterRoute.endsWith('/pipeline')
                       ? '/recruiter/pipeline'
                       : canonicalRecruiterRoute.startsWith('/recruiter/jobs/')
                       ? '/recruiter/job-listings'
                       : null,
-                  glowSelected:
-                      canonicalRecruiterRoute == '/recruiter/company-team',
                   body: builder,
                 )
               : builder,

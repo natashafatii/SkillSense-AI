@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../models/candidate_profile.dart';
 import 'app_tooltip.dart';
+import 'candidate_avatar_image.dart';
 
 class CandidateSideNav extends StatefulWidget {
   final String currentRoute;
@@ -27,9 +30,12 @@ class CandidateSideNav extends StatefulWidget {
 class _CandidateSideNavState extends State<CandidateSideNav>
     with SingleTickerProviderStateMixin {
   static bool globalIsExpanded = false;
-  static int? globalExpandedIndex;
+  static final Map<String, Set<int>> _sectionsByUser = {};
+  static final Map<String, bool> _expandedByUser = {};
+  static final Set<String> _changedPreferences = {};
 
   late bool _isExpanded;
+  late String _preferenceKey;
   Timer? _hoverIntentTimer;
   int? _hoveredIndex;
 
@@ -51,8 +57,12 @@ class _CandidateSideNavState extends State<CandidateSideNav>
   @override
   void initState() {
     super.initState();
-    _isExpanded = widget.initialExpanded || globalIsExpanded;
+    _preferenceKey = _keyForCurrentUser();
+    _isExpanded =
+        widget.initialExpanded ||
+        (_expandedByUser[_preferenceKey] ?? globalIsExpanded);
     _syncActiveDestinationAccordion();
+    _restorePreferences();
     if (ProfileService.currentProfileNotifier.value == null) {
       ProfileService.getCandidateProfile();
     }
@@ -69,21 +79,89 @@ class _CandidateSideNavState extends State<CandidateSideNav>
         break;
       }
     }
-    final int openIdx = globalExpandedIndex ?? activeIdx;
+    final openSections = _sectionsByUser[_preferenceKey] ?? {activeIdx};
     for (int i = 0; i < 5; i++) {
-      _accordionExpanded[i] = (i == openIdx);
+      _accordionExpanded[i] = openSections.contains(i);
     }
   }
 
-  void _expandOnlyDestination(int index) {
+  String _keyForCurrentUser() {
+    final user = AuthService.currentUserData;
+    final id =
+        AuthService.currentUserId ??
+        user?['clerk_id']?.toString() ??
+        user?['id']?.toString() ??
+        user?['email']?.toString().trim().toLowerCase() ??
+        'anonymous';
+    return 'candidate_sidebar_v1_${Uri.encodeComponent(id)}';
+  }
+
+  Future<void> _restorePreferences() async {
+    final key = _preferenceKey;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted ||
+          key != _preferenceKey ||
+          _changedPreferences.contains(key)) {
+        return;
+      }
+      final storedSections = prefs.getStringList('${key}_sections');
+      final storedExpanded = prefs.getBool('${key}_expanded');
+      if (storedSections == null && storedExpanded == null) return;
+      setState(() {
+        if (storedSections != null) {
+          final sections = storedSections
+              .map(int.tryParse)
+              .whereType<int>()
+              .where((index) => index >= 0 && index < 5)
+              .toSet();
+          _sectionsByUser[key] = sections;
+          for (int i = 0; i < 5; i++) {
+            _accordionExpanded[i] = sections.contains(i);
+          }
+        }
+        if (storedExpanded != null && !widget.initialExpanded) {
+          _expandedByUser[key] = storedExpanded;
+          _isExpanded = storedExpanded;
+          globalIsExpanded = storedExpanded;
+        }
+      });
+    } catch (_) {
+      // Keep the current rail state if local storage is unavailable.
+    }
+  }
+
+  void _rememberPreferences() {
+    final key = _preferenceKey;
+    _changedPreferences.add(key);
+    final sections = <int>{
+      for (int i = 0; i < 5; i++)
+        if (_accordionExpanded[i] ?? false) i,
+    };
+    final expanded = _isExpanded;
+    _sectionsByUser[key] = sections;
+    _expandedByUser[key] = expanded;
+    unawaited(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList(
+          '${key}_sections',
+          sections.map((index) => index.toString()).toList(),
+        );
+        await prefs.setBool('${key}_expanded', expanded);
+      } catch (_) {
+        // Keep the in-memory choice when local storage is unavailable.
+      }
+    }());
+  }
+
+  void _expandDestination(int index) {
     setState(() {
       _isExpanded = true;
       globalIsExpanded = true;
-      globalExpandedIndex = index;
-      for (int i = 0; i < 5; i++) {
-        _accordionExpanded[i] = (i == index);
-      }
+      _accordionExpanded[index] = true;
     });
+    _rememberPreferences();
   }
 
   @override
@@ -98,6 +176,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
       _isExpanded = !_isExpanded;
       globalIsExpanded = _isExpanded;
     });
+    _rememberPreferences();
   }
 
   void _onRailMouseEnter() {
@@ -212,7 +291,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
   @override
   Widget build(BuildContext context) {
-    final double targetWidth = _isExpanded ? 216.0 : 60.0;
+    final double targetWidth = _isExpanded ? 272.0 : 60.0;
     const Color tealAccent = Color(0xFF2EE6C8);
 
     return KeyboardListener(
@@ -263,16 +342,21 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
               // ── DESTINATIONS LIST ──────────────────────────────────────────
               Expanded(
-                child: ListView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: _isExpanded ? 10 : 10,
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(
+                    context,
+                  ).copyWith(scrollbars: false),
+                  child: ListView(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: _isExpanded ? 10 : 10,
+                    ),
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      // Work Destinations (Index 0 to 3)
+                      for (int i = 0; i < 5; i++)
+                        _buildDestinationTile(i, tealAccent),
+                    ],
                   ),
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    // Work Destinations (Index 0 to 3)
-                    for (int i = 0; i < 5; i++)
-                      _buildDestinationTile(i, tealAccent),
-                  ],
                 ),
               ),
 
@@ -296,39 +380,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
             ? MainAxisAlignment.spaceBetween
             : MainAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              // Logo from Assets (matching HR screens)
-              SvgPicture.asset('assets/images/logo.svg', height: 32),
-
-              if (_isExpanded) ...[
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'SkillSense',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: const Color(0xFF0F172A),
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        height: 1.1,
-                      ),
-                    ),
-                    Text(
-                      'CANDIDATE WORKSPACE',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: const Color(0xFF66748F),
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
+          if (_isExpanded) Expanded(child: _buildBrand()) else _buildBrand(),
 
           if (_isExpanded)
             AppTooltip(
@@ -360,6 +412,46 @@ class _CandidateSideNavState extends State<CandidateSideNav>
     );
   }
 
+  Widget _buildBrand() => Row(
+    children: [
+      // Logo from Assets (matching HR screens)
+      SvgPicture.asset('assets/images/logo.svg', height: 32),
+
+      if (_isExpanded) ...[
+        const SizedBox(width: 10),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'SkillSense',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.spaceGrotesk(
+                  color: const Color(0xFF0F172A),
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  height: 1.1,
+                ),
+              ),
+              Text(
+                'CANDIDATE WORKSPACE',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.spaceGrotesk(
+                  color: const Color(0xFF66748F),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ],
+  );
+
   // ── FOOTER USER PROFILE & SETTINGS TILES ─────────────────────────────────
   Widget _buildFooter() {
     final isProfileActive = widget.currentRoute == '/candidate/profile';
@@ -377,16 +469,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                 final fn = profile?.user.firstName?.trim() ?? '';
                 final ln = profile?.user.lastName?.trim() ?? '';
                 final email = profile?.user.email.trim() ?? '';
-
-                String initials = '';
-                if (fn.isNotEmpty) {
-                  initials =
-                      fn[0].toUpperCase() +
-                      (ln.isNotEmpty ? ln[0].toUpperCase() : '');
-                } else if (email.isNotEmpty) {
-                  initials = email[0].toUpperCase();
-                }
-                if (initials.isEmpty) initials = 'C';
 
                 return AppTooltip(
                   message: fn.isNotEmpty
@@ -438,14 +520,12 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                                   color: const Color(0xFFA7F3D0),
                                 ),
                               ),
-                              child: Center(
-                                child: Text(
-                                  initials,
-                                  style: GoogleFonts.spaceGrotesk(
-                                    color: const Color(0xFF047857),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                              child: CandidateAvatarImage(
+                                profile: profile,
+                                initialsStyle: GoogleFonts.spaceGrotesk(
+                                  color: const Color(0xFF047857),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
@@ -520,17 +600,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                         : email;
                   }
 
-                  String initials = '';
-                  if (fn.isNotEmpty) {
-                    initials =
-                        fn[0].toUpperCase() +
-                        (ln.isNotEmpty ? ln[0].toUpperCase() : '');
-                  } else if (name.isNotEmpty) {
-                    initials = name[0].toUpperCase();
-                  }
-
                   final displayName = name.isNotEmpty ? name : 'Candidate';
-                  final displayInitials = initials.isNotEmpty ? initials : 'C';
 
                   return Container(
                     decoration: BoxDecoration(
@@ -559,14 +629,12 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                             shape: BoxShape.circle,
                             border: Border.all(color: const Color(0xFFA7F3D0)),
                           ),
-                          child: Center(
-                            child: Text(
-                              displayInitials,
-                              style: GoogleFonts.spaceGrotesk(
-                                color: const Color(0xFF047857),
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          child: CandidateAvatarImage(
+                            profile: profile,
+                            initialsStyle: GoogleFonts.spaceGrotesk(
+                              color: const Color(0xFF047857),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
@@ -640,91 +708,91 @@ class _CandidateSideNavState extends State<CandidateSideNav>
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () {
-              _expandOnlyDestination(index);
-              _handleNavigation(primaryRoute, index);
-            },
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: isParentActive
-                        ? tealAccent.withValues(alpha: 0.12)
-                        : (_hoveredIndex == index
-                              ? const Color(0xFFF1F5F9)
-                              : Colors.transparent),
-                    boxShadow: isParentActive
-                        ? [
-                            BoxShadow(
-                              color: tealAccent.withValues(alpha: 0.25),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
+                _expandDestination(index);
+                _handleNavigation(primaryRoute, index);
+              },
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: isParentActive
+                          ? tealAccent.withValues(alpha: 0.12)
+                          : (_hoveredIndex == index
+                                ? const Color(0xFFF1F5F9)
+                                : Colors.transparent),
+                      boxShadow: isParentActive
+                          ? [
+                              BoxShadow(
+                                color: tealAccent.withValues(alpha: 0.25),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Icon(
+                      dest['icon'] as IconData,
+                      size: 20,
+                      color: isParentActive
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFF64748B),
+                    ),
                   ),
-                  child: Icon(
-                    dest['icon'] as IconData,
-                    size: 20,
-                    color: isParentActive
-                        ? const Color(0xFF0F172A)
-                        : const Color(0xFF64748B),
-                  ),
-                ),
 
-                // ── CHILD SEAM: 3px x 22px teal bar on left edge ──
-                if (isParentActive && isChildScreen)
-                  Positioned(
-                    left: 0,
-                    child: Container(
-                      width: 3,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: tealAccent,
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(3),
-                          bottomRight: Radius.circular(3),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: tealAccent.withValues(alpha: 0.8),
-                            blurRadius: 4,
+                  // ── CHILD SEAM: 3px x 22px teal bar on left edge ──
+                  if (isParentActive && isChildScreen)
+                    Positioned(
+                      left: 0,
+                      child: Container(
+                        width: 3,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: tealAccent,
+                          borderRadius: const BorderRadius.only(
+                            topRight: Radius.circular(3),
+                            bottomRight: Radius.circular(3),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // ── BADGE (Top-Right of Icon) ──
-                if (badgeCount > 0)
-                  Positioned(
-                    top: 2,
-                    right: 2,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEF4444),
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 14,
-                        minHeight: 14,
-                      ),
-                      child: Text(
-                        '$badgeCount',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.bold,
+                          boxShadow: [
+                            BoxShadow(
+                              color: tealAccent.withValues(alpha: 0.8),
+                              blurRadius: 4,
+                            ),
+                          ],
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
-                  ),
+
+                  // ── BADGE (Top-Right of Icon) ──
+                  if (badgeCount > 0)
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 14,
+                          minHeight: 14,
+                        ),
+                        child: Text(
+                          '$badgeCount',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -733,7 +801,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
       );
     }
 
-    // ── EXPANDED STATE (216px wide Accordion Item) ──
+    // ── EXPANDED STATE (272px wide Accordion Item) ──
     final bool isAccordionOpen = _accordionExpanded[index] ?? false;
     final List<Map<String, String>> subItems = List<Map<String, String>>.from(
       dest['subItems'],
@@ -751,11 +819,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
               onTap: () {
                 setState(() {
                   final bool willOpen = !isAccordionOpen;
-                  globalExpandedIndex = willOpen ? index : null;
-                  for (int i = 0; i < 5; i++) {
-                    _accordionExpanded[i] = (i == index) ? willOpen : false;
-                  }
+                  _accordionExpanded[index] = willOpen;
                 });
+                _rememberPreferences();
                 if (dest['id'] != 'explore_jobs') {
                   _handleNavigation(primaryRoute, index);
                 }

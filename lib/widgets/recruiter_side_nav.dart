@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_service.dart';
+import '../services/profile_service.dart';
 import 'app_tooltip.dart';
 
 /// The destinations are shared by the desktop rail, mobile drawer and search.
@@ -42,7 +43,6 @@ const recruiterSections = <RecruiterSection>[
   RecruiterSection('INTELLIGENCE & WORKSPACE', Icons.diamond_outlined, [
     RecruiterDestination('Analytics', '/recruiter/analytics'),
     RecruiterDestination('Scoring model', '/recruiter/scoring-model'),
-    RecruiterDestination('Company & team', '/recruiter/company-team'),
   ]),
 ];
 
@@ -51,12 +51,14 @@ class RecruiterSideNav extends StatefulWidget {
   final String? selectedRoute;
   final bool glowSelected;
   final bool inDrawer;
+  final double expandedWidth;
   const RecruiterSideNav({
     super.key,
     required this.currentRoute,
     this.selectedRoute,
     this.glowSelected = false,
     this.inDrawer = false,
+    this.expandedWidth = 272,
   });
 
   @override
@@ -236,9 +238,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
 
   Widget _section(int index) {
     final section = recruiterSections[index];
-    final active = section.items.any(
-      (item) => item.route == _selectedRoute,
-    );
+    final active = section.items.any((item) => item.route == _selectedRoute);
     if (!_contentExpanded) {
       return _tooltip(
         section.label,
@@ -381,32 +381,26 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
         final last = user?['last_name']?.toString().trim() ?? '';
         final email = user?['email']?.toString().trim() ?? '';
         final name = '$first $last'.trim();
-        final initials =
-            '${first.isEmpty ? '' : first[0]}${last.isEmpty ? '' : last[0]}'
-                .toUpperCase();
+        final sessionInitials = ProfileService.recruiterProfileInitialsFrom(
+          user ?? const <String, dynamic>{},
+        );
+        final sessionImageUrl = ProfileService.recruiterProfileImageUrlFrom(
+          user ?? const <String, dynamic>{},
+        );
+        Widget accountInitials(String initials) => Text(
+          initials,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: _accent,
+            fontWeight: FontWeight.w700,
+          ),
+        );
         return AppTooltip(
           message: name.isNotEmpty ? name : 'Account',
           position: TooltipPosition.right,
-          child: PopupMenuButton<String>(
+          child: InkWell(
             key: const Key('recruiter-account'),
-            tooltip: '',
-            onSelected: (value) async {
-              if (value == 'settings') _navigate('/recruiter/settings');
-              if (value == 'company') _navigate('/recruiter/company-team');
-              if (value == 'signout') {
-                final navigator = Navigator.of(context);
-                await AuthService.signOut(context);
-                if (navigator.mounted) {
-                  navigator.pushNamedAndRemoveUntil('/login', (_) => false);
-                }
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'settings', child: Text('Theme & settings')),
-              PopupMenuItem(value: 'company', child: Text('Company & team')),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'signout', child: Text('Sign out')),
-            ],
+            onTap: () => _navigate('/recruiter/profile'),
             child: Container(
               margin: const EdgeInsets.fromLTRB(12, 8, 12, 10),
               padding: const EdgeInsets.only(top: 9),
@@ -418,17 +412,63 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                     ? MainAxisAlignment.start
                     : MainAxisAlignment.center,
                 children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: const Color(0xFFE0E9FF),
-                    child: Text(
-                      initials.isEmpty ? 'R' : initials,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: _accent,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  ValueListenableBuilder<bool>(
+                    valueListenable:
+                        ProfileService.recruiterAvatarLoadedNotifier,
+                    builder: (context, profileLoaded, _) =>
+                        ValueListenableBuilder<String>(
+                          valueListenable: ProfileService
+                              .recruiterProfileImageInitialsNotifier,
+                          builder: (context, profileInitials, _) =>
+                              ValueListenableBuilder<String?>(
+                                valueListenable: ProfileService
+                                    .recruiterProfileImageUrlNotifier,
+                                builder: (context, imageUrl, _) {
+                                  final initials = profileLoaded
+                                      ? profileInitials
+                                      : sessionInitials;
+                                  final resolved =
+                                      ProfileService.resolveRecruiterProfileImageUrl(
+                                        profileLoaded
+                                            ? imageUrl
+                                            : sessionImageUrl,
+                                      );
+                                  return Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFE0E9FF),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: ClipOval(
+                                      child: resolved == null
+                                          ? Center(
+                                              child: accountInitials(initials),
+                                            )
+                                          : Image.network(
+                                              resolved,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) => Center(
+                                                child: accountInitials(
+                                                  initials,
+                                                ),
+                                              ),
+                                              loadingBuilder:
+                                                  (context, child, progress) =>
+                                                      progress == null
+                                                      ? child
+                                                      : Center(
+                                                          child:
+                                                              accountInitials(
+                                                                initials,
+                                                              ),
+                                                        ),
+                                            ),
+                                    ),
+                                  );
+                                },
+                              ),
+                        ),
                   ),
                   if (_contentExpanded) ...[
                     const SizedBox(width: 9),
@@ -500,7 +540,9 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
               }
             }
           },
-          width: widget.inDrawer ? 272 : (_expanded ? 272 : 60),
+          width: widget.inDrawer
+              ? widget.expandedWidth
+              : (_expanded ? widget.expandedWidth : 60),
           height: double.infinity,
           decoration: const BoxDecoration(
             color: Colors.white,
@@ -510,18 +552,45 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
             children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                  _contentExpanded ? 15 : 3,
-                  12,
-                  _contentExpanded ? 12 : 3,
-                  10,
+                  _contentExpanded ? 15 : 10,
+                  _contentExpanded ? 12 : 14,
+                  _contentExpanded ? 12 : 10,
+                  _contentExpanded ? 10 : 0,
                 ),
                 child: Row(
+                  mainAxisAlignment: _contentExpanded
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.center,
                   children: [
-                    SvgPicture.asset(
-                      'assets/images/logo.svg',
-                      width: _contentExpanded ? 28 : 24,
-                      height: _contentExpanded ? 28 : 24,
-                    ),
+                    if (widget.inDrawer)
+                      SvgPicture.asset(
+                        'assets/images/logo.svg',
+                        width: _contentExpanded ? 28 : 24,
+                        height: _contentExpanded ? 28 : 24,
+                      )
+                    else
+                      AppTooltip(
+                        message: _expanded
+                            ? 'Collapse sidebar'
+                            : 'Expand navigation',
+                        position: TooltipPosition.bottom,
+                        child: InkWell(
+                          key: _contentExpanded
+                              ? null
+                              : const Key('recruiter-collapse'),
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => setState(() {
+                            _expanded = !_expanded;
+                            if (!_expanded) _contentExpanded = false;
+                            _rememberExpanded(_expanded);
+                          }),
+                          child: SvgPicture.asset(
+                            'assets/images/logo.svg',
+                            width: _contentExpanded ? 28 : 32,
+                            height: _contentExpanded ? 28 : 32,
+                          ),
+                        ),
+                      ),
                     if (_contentExpanded) ...[
                       const SizedBox(width: 8),
                       Expanded(
@@ -548,31 +617,25 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                         ),
                       ),
                     ],
-                    if (!widget.inDrawer)
+                    if (_contentExpanded && !widget.inDrawer)
                       AppTooltip(
-                        message: _expanded
-                            ? 'Collapse sidebar'
-                            : 'Expand navigation',
+                        message: 'Collapse sidebar',
                         position: TooltipPosition.bottom,
                         child: InkWell(
                           key: const Key('recruiter-collapse'),
                           borderRadius: BorderRadius.circular(12),
                           onTap: () => setState(() {
-                            _expanded = !_expanded;
-                            if (!_expanded) _contentExpanded = false;
-                            _rememberExpanded(_expanded);
+                            _expanded = false;
+                            _contentExpanded = false;
+                            _rememberExpanded(false);
                           }),
-                          child: SizedBox(
+                          child: const SizedBox(
                             width: 24,
                             height: 24,
-                            child: AnimatedRotation(
-                              turns: _expanded ? 0 : .5,
-                              duration: const Duration(milliseconds: 200),
-                              child: const Icon(
-                                Icons.chevron_left,
-                                size: 17,
-                                color: _muted,
-                              ),
+                            child: Icon(
+                              Icons.chevron_left,
+                              size: 17,
+                              color: _muted,
                             ),
                           ),
                         ),
@@ -582,11 +645,16 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
               ),
 
               Expanded(
-                child: ListView(
-                  children: [
-                    for (var i = 0; i < recruiterSections.length; i++)
-                      _section(i),
-                  ],
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(
+                    context,
+                  ).copyWith(scrollbars: false),
+                  child: ListView(
+                    children: [
+                      for (var i = 0; i < recruiterSections.length; i++)
+                        _section(i),
+                    ],
+                  ),
                 ),
               ),
               const Divider(height: 1, color: _border),

@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
@@ -577,6 +578,44 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                SizedBox(
+                                  height: 48,
+                                  child: OutlinedButton(
+                                    onPressed: _isLoading
+                                        ? null
+                                        : _googleSignUp,
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: const Color(0xFF0F172A),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        SvgPicture.asset(
+                                          'assets/icons/google.svg',
+                                          height: 18,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Continue with Google',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: const Color(0xFF334155),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
                                 // ── Personal Info ──────────────────────────────────
                                 _section(
                                   'Personal Information',
@@ -710,21 +749,19 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                         ),
                                       ),
                                     ),
-                                    _glow(
-                                      focused: _phoneFocus.hasFocus,
-                                      child: CountryCodePhoneField(
-                                        controller: _phoneController,
-                                        focusNode: _phoneFocus,
-                                        hintText: 'Enter your phone number',
-                                        focusColor: _green,
-                                        onPhoneChanged: (val) {
-                                          setState(() {
-                                            _phoneNumber = val;
-                                          });
-                                        },
-                                        onValidityChanged: (valid) =>
-                                            setState(() => _phoneValid = valid),
-                                      ),
+                                    CountryCodePhoneField(
+                                      controller: _phoneController,
+                                      focusNode: _phoneFocus,
+                                      anchoredMobilePicker: true,
+                                      hintText: 'Enter your phone number',
+                                      focusColor: _green,
+                                      onPhoneChanged: (val) {
+                                        setState(() {
+                                          _phoneNumber = val;
+                                        });
+                                      },
+                                      onValidityChanged: (valid) =>
+                                          setState(() => _phoneValid = valid),
                                     ),
                                   ],
                                 ),

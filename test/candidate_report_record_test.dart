@@ -7,18 +7,24 @@ import 'package:skillsense_ai/models/application.dart';
 import 'package:skillsense_ai/models/resume_detail.dart';
 import 'package:skillsense_ai/screens/hr/candidate_report_screen.dart';
 
-Application application(String id, String resumeId, String email, {String? name}) =>
-    Application(
-      id: id,
-      candidate: 'candidate-$id',
-      candidateEmail: email,
-      candidateName: name,
-      job: 'job-$id',
-      jobTitle: 'Role $id',
-      resumeId: resumeId,
-      status: ApplicationStatus.applied,
-      createdAt: DateTime.utc(2026),
-    );
+Application application(
+  String id,
+  String resumeId,
+  String email, {
+  String? name,
+  double? score,
+}) => Application(
+  id: id,
+  candidate: 'candidate-$id',
+  candidateEmail: email,
+  candidateName: name,
+  resumeScore: score,
+  job: 'job-$id',
+  jobTitle: 'Role $id',
+  resumeId: resumeId,
+  status: ApplicationStatus.applied,
+  createdAt: DateTime.utc(2026),
+);
 
 ResumeDetail resume(String id, double score) => ResumeDetail(
   id: id,
@@ -73,7 +79,7 @@ void main() {
           applicationId: 'a-1',
           resumeId: 'r-1',
           loadApplication: (id) async =>
-              application(id, 'r-1', 'one@example.com'),
+              application(id, 'r-1', 'one@example.com', score: 63),
           loadResume: (id) async => resume(id, 63),
         ),
       ),
@@ -112,7 +118,7 @@ void main() {
           applicationId: 'a-2',
           resumeId: 'r-2',
           loadApplication: (id) async =>
-              application(id, 'r-2', 'two@example.com'),
+              application(id, 'r-2', 'two@example.com', score: 74),
           loadResume: (id) async => resume(id, 74),
         ),
       ),
@@ -131,7 +137,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const MaterialApp(home: CandidateReportScreen()));
     await tester.pump();
-    expect(find.textContaining('Choose an application'), findsOneWidget);
+    expect(find.text('No report to show'), findsOneWidget);
     await tester.pumpWidget(
       MaterialApp(
         home: CandidateReportScreen(
@@ -164,7 +170,7 @@ void main() {
           applicationId: 'a-1',
           resumeId: 'r-1',
           loadApplication: (id) async =>
-              application(id, 'r-1', 'one@example.com'),
+              application(id, 'r-1', 'one@example.com', score: 26.63),
           loadResume: (id) async => ResumeDetail(
             id: id,
             status: ResumeStatus.parsed,

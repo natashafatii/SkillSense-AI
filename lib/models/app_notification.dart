@@ -22,11 +22,10 @@ class AppNotification {
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 
-  String get title => switch (type) {
-    'application_received' => 'Application received',
-    'interview_scheduled' => 'Interview scheduled',
-    'score_ready' => 'Score ready',
-    'application_status_changed' => 'Application updated',
-    _ => 'Notification',
-  };
+  String get relativeTime {
+    final age = DateTime.now().difference(createdAt.toLocal());
+    if (age.inDays > 0) return '${age.inDays}d ago';
+    if (age.inHours > 0) return '${age.inHours}h ago';
+    return '${age.inMinutes < 1 ? 0 : age.inMinutes}m ago';
+  }
 }

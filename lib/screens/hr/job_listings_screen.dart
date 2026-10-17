@@ -474,7 +474,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
         icon == Icons.notifications) {
       tooltip = 'Notifications';
     } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
+      tooltip = 'Profile';
     } else if (icon == Icons.search || icon == Icons.search_rounded) {
       tooltip = 'Search or jump to (⌘K)';
     } else if (icon == Icons.help_outline) {
@@ -964,6 +964,7 @@ class _RecruiterNotificationsScreenState
   final Set<String> _marking = {};
   Timer? _poller;
   int _request = 0;
+  bool _missingRefetchQueued = false;
 
   @override
   void initState() {
@@ -1034,6 +1035,7 @@ class _RecruiterNotificationsScreenState
           byId[item.id] = item;
         }
         _items = byId.values.toList();
+        _missingRefetchQueued = false;
         _unread = results[1] as int;
         _page = page;
         _hasNext = response.hasNext;
@@ -1043,11 +1045,38 @@ class _RecruiterNotificationsScreenState
       if (mounted &&
           generation == SessionScope.generation &&
           request == _request) {
-        setState(
-          () => _error = error is ApiException
-              ? error.message
-              : 'Unable to load notifications. Please retry.',
-        );
+        if (error is ApiException && error.statusCode == 401) {
+          await AuthService.signOut(context);
+          if (mounted) {
+            Navigator.of(
+              context,
+            ).pushNamedAndRemoveUntil('/login', (_) => false);
+          }
+        } else if (error is ApiException && error.statusCode == 404) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Notification not found.')),
+          );
+          if (!_missingRefetchQueued) {
+            _missingRefetchQueued = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _fetch();
+            });
+          }
+        } else {
+          setState(
+            () => _error = error is ApiException && error.statusCode == 403
+                ? "You're not authorized to view notifications."
+                : "Couldn't load notifications. Retry.",
+          );
+          if (!(error is ApiException && error.statusCode == 403)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text("Couldn't load notifications. Retry."),
+                action: SnackBarAction(label: 'Retry', onPressed: _fetch),
+              ),
+            );
+          }
+        }
       }
     } finally {
       if (mounted && request == _request) setState(() => _busy = false);
@@ -1069,16 +1098,113 @@ class _RecruiterNotificationsScreenState
             .toList();
         if (_unread > 0) _unread--;
       });
-    } catch (_) {
-      if (mounted && generation == SessionScope.generation) {
+    } catch (error) {
+      if (mounted &&
+          generation == SessionScope.generation &&
+          error is ApiException &&
+          error.statusCode == 401) {
+        await AuthService.signOut(context);
+        if (mounted)
+          Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+      } else if (mounted &&
+          generation == SessionScope.generation &&
+          error is ApiException &&
+          error.statusCode == 404) {
+        if (!_missingRefetchQueued) {
+          _missingRefetchQueued = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _fetch();
+          });
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unable to mark notification as read. Please retry.'),
+          const SnackBar(content: Text('Notification not found.')),
+        );
+      } else if (mounted &&
+          generation == SessionScope.generation &&
+          error is ApiException &&
+          error.statusCode == 403) {
+        setState(() => _error = "You're not authorized to view notifications.");
+      } else if (mounted &&
+          generation == SessionScope.generation &&
+          (error is! ApiException || (error.statusCode ?? 500) >= 500)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Couldn't load notifications. Retry."),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () => _markRead(item),
+            ),
           ),
         );
       }
     } finally {
       if (mounted) setState(() => _marking.remove(item.id));
+    }
+  }
+
+  Future<void> _markAllRead() async {
+    if (_busy || _marking.isNotEmpty || _unread == 0) return;
+    final generation = SessionScope.generation;
+    setState(() => _busy = true);
+    try {
+      final unread = <String, AppNotification>{};
+      var page = 1;
+      while (true) {
+        final response =
+            await (widget.loadNotifications?.call(page) ??
+                NotificationService.list(page: page));
+        if (!mounted || generation != SessionScope.generation) return;
+        for (final item in response.results) {
+          if (!item.isRead) unread[item.id] = item;
+        }
+        if (!response.hasNext) break;
+        page++;
+      }
+      for (final item in unread.values) {
+        try {
+          final updated =
+              await (widget.markRead?.call(item.id) ??
+                  NotificationService.markRead(item.id));
+          if (!mounted || generation != SessionScope.generation) return;
+          setState(() {
+            _items = _items
+                .map((row) => row.id == item.id ? updated : row)
+                .toList();
+            if (_unread > 0) _unread--;
+          });
+        } on ApiException catch (error) {
+          if (error.statusCode == 400) continue;
+          if (error.statusCode == 404) {
+            if (mounted)
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Notification not found.')),
+              );
+            continue;
+          }
+          rethrow;
+        }
+      }
+    } catch (error) {
+      if (!mounted || generation != SessionScope.generation) return;
+      if (error is ApiException && error.statusCode == 401) {
+        await AuthService.signOut(context);
+        if (mounted)
+          Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+      } else if (error is ApiException && error.statusCode == 403) {
+        setState(() => _error = "You're not authorized to view notifications.");
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Couldn't load notifications. Retry."),
+            action: SnackBarAction(label: 'Retry', onPressed: _markAllRead),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        if (generation == SessionScope.generation) _fetch();
+      }
     }
   }
 
@@ -1091,26 +1217,52 @@ class _RecruiterNotificationsScreenState
           pageTitle: 'Notifications',
           breadcrumbSegments: const ['Notifications'],
           hasUnread: _unread > 0,
+          useExactUnread: true,
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          padding: const EdgeInsets.fromLTRB(30, 24, 30, 8),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: Text(
-                  '$_unread unread',
-                  style: const TextStyle(color: Color(0xFF64748B)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Notifications',
+                      style: GoogleFonts.spaceGrotesk(
+                        color: const Color(0xFF0F172A),
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (_items.isNotEmpty && _unread > 0)
+                      Text(
+                        '$_unread unread',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF64748B),
+                          fontSize: 13,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Refresh notifications',
-                onPressed: _busy ? null : () => _fetch(),
-                icon: const Icon(Icons.refresh),
-              ),
+              if (_items.isNotEmpty && _unread > 0)
+                TextButton(
+                  onPressed: _busy ? null : _markAllRead,
+                  child: Text(
+                    'Mark all read',
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF0A8A76),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
-        if (_busy) const LinearProgressIndicator(),
+        if (_busy && !_loaded) const LinearProgressIndicator(),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1134,47 +1286,60 @@ class _RecruiterNotificationsScreenState
             onRefresh: () => _fetch(),
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
               children: [
+                if (!_loaded && _busy)
+                  for (var i = 0; i < 3; i++)
+                    const Card(
+                      child: ListTile(
+                        title: LinearProgressIndicator(),
+                        subtitle: SizedBox(height: 16),
+                      ),
+                    ),
                 if (_loaded && _items.isEmpty && _error == null)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 80),
-                    child: Center(child: Text('You’re all caught up.')),
-                  ),
-                for (final item in _items)
-                  Card(
-                    key: ValueKey(item.id),
-                    color: item.isRead ? Colors.white : const Color(0xFFEFF6FF),
-                    child: ListTile(
-                      isThreeLine: true,
-                      leading: Icon(
-                        item.isRead
-                            ? Icons.notifications_none_rounded
-                            : Icons.notifications_active_outlined,
-                      ),
-                      title: Text(
-                        item.title,
-                        style: TextStyle(
-                          fontWeight: item.isRead
-                              ? FontWeight.w400
-                              : FontWeight.w600,
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.notifications_none_rounded,
+                          size: 24,
+                          color: Color(0xFF292929),
                         ),
-                      ),
-                      subtitle: Text(
-                        '${item.message}\n${item.createdAt.toLocal()}',
-                      ),
-                      onTap: () => _markRead(item),
-                      trailing: item.isRead
-                          ? null
-                          : IconButton(
-                              tooltip: 'Mark as read',
-                              onPressed: _marking.contains(item.id) || _busy
-                                  ? null
-                                  : () => _markRead(item),
-                              icon: const Icon(Icons.done),
-                            ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "You're all caught up.",
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF292929),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                if (_loaded && _items.isNotEmpty && _error == null) ...[
+                  _notificationGroup(
+                    'TODAY',
+                    _items.where((item) {
+                      final local = item.createdAt.toLocal();
+                      final today = DateTime.now();
+                      return local.year == today.year &&
+                          local.month == today.month &&
+                          local.day == today.day;
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  _notificationGroup(
+                    'EARLIER',
+                    _items.where((item) {
+                      final local = item.createdAt.toLocal();
+                      final today = DateTime.now();
+                      return local.year != today.year ||
+                          local.month != today.month ||
+                          local.day != today.day;
+                    }).toList(),
+                  ),
+                ],
                 if (_hasNext)
                   Center(
                     child: TextButton(
@@ -1187,6 +1352,111 @@ class _RecruiterNotificationsScreenState
           ),
         ),
       ],
+    ),
+  );
+
+  Widget _notificationGroup(String label, List<AppNotification> items) =>
+      Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .025),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF94A3B8),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+            if (items.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 36),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.notifications_none_rounded),
+                      Text("You're all caught up."),
+                    ],
+                  ),
+                ),
+              ),
+            for (var index = 0; index < items.length; index++) ...[
+              if (index > 0)
+                const Divider(
+                  color: Color(0xFFF1F5F9),
+                  height: 1,
+                  thickness: 1,
+                  indent: 20,
+                  endIndent: 20,
+                ),
+              _notificationRow(items[index]),
+            ],
+            const SizedBox(height: 4),
+          ],
+        ),
+      );
+
+  Widget _notificationRow(AppNotification item) => Opacity(
+    opacity: item.isRead ? .75 : 1,
+    child: ListTile(
+      key: ValueKey(item.id),
+      tileColor: item.isRead ? Colors.white : const Color(0xFFFAFCFF),
+      leading: item.isRead
+          ? const SizedBox(width: 8)
+          : const Icon(Icons.circle, color: Color(0xFFE85D5B), size: 8),
+      title: Text(
+        item.message,
+        style: GoogleFonts.inter(
+          color: const Color(0xFF0F172A),
+          fontSize: 13.5,
+          fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w700,
+        ),
+      ),
+      subtitle: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDBEAFE),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Text(
+              item.type.toUpperCase(),
+              style: GoogleFonts.inter(
+                color: const Color(0xFF1D4ED8),
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            item.relativeTime,
+            style: GoogleFonts.inter(
+              color: const Color(0xFF64748B),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+      onTap: () => _markRead(item),
     ),
   );
 }

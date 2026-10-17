@@ -28,8 +28,10 @@ class CandidateProfile {
   static const int headlineMaxLength = 150;
 
   factory CandidateProfile.fromJson(Map<String, dynamic> json) {
+    final user = UserSummary.fromJson(json['user'] as Map<String, dynamic>);
+    final imageUrl = imageUrlFrom(json);
     return CandidateProfile(
-      user: UserSummary.fromJson(json['user'] as Map<String, dynamic>),
+      user: user.withProfileImageUrl(imageUrl),
       phone: json['phone'] as String? ?? '',
       location: json['location'] as String? ?? '',
       linkedinUrl: json['linkedin_url'] as String? ?? '',
@@ -38,6 +40,49 @@ class CandidateProfile {
       headline: json['headline'] as String? ?? '',
     );
   }
+
+  static String? imageUrlFrom(Map<String, dynamic> json) {
+    final user = json['user'];
+    final nested = user is Map ? user : const <String, dynamic>{};
+    final uploaded = json['profile_image'];
+    final uploadedUrl = uploaded is Map
+        ? uploaded['url'] ?? uploaded['image_url']
+        : uploaded;
+    if (uploadedUrl is String && uploadedUrl.trim().isNotEmpty) {
+      return uploadedUrl.trim();
+    }
+    // An explicit empty profile_image means the candidate has no uploaded
+    // photo. In that case a provider-supplied avatar URL may be a silhouette.
+    if (json.containsKey('profile_image') &&
+        (uploaded == null || uploaded == '')) {
+      return null;
+    }
+    if (nested['has_image'] == false || nested['has_profile_image'] == false) {
+      return null;
+    }
+    for (final value in [
+      json['profile_image'],
+      nested['profile_image'],
+      nested['profile_image_url'],
+      json['profile_image_url'],
+      nested['avatar_url'],
+      json['avatar_url'],
+    ]) {
+      final url = value is Map ? value['url'] ?? value['image_url'] : value;
+      if (url is String && url.trim().isNotEmpty) return url.trim();
+    }
+    return null;
+  }
+
+  CandidateProfile withProfileImageUrl(String? url) => CandidateProfile(
+    user: user.withProfileImageUrl(url),
+    phone: phone,
+    location: location,
+    linkedinUrl: linkedinUrl,
+    portfolioUrl: portfolioUrl,
+    yearsExperience: yearsExperience,
+    headline: headline,
+  );
 
   /// Returns a JSON map suitable for a PATCH request.
   ///

@@ -146,7 +146,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       } catch (error) {
         if (error is ApiException && error.statusCode == 404) {
           if (!_interviewsNotFound) {
-            debugPrint('Command Deck interviews endpoint returned 404; stopping refreshes.');
+            debugPrint(
+              'Command Deck interviews endpoint returned 404; stopping refreshes.',
+            );
           }
           _interviewsNotFound = true;
         } else {
@@ -162,7 +164,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     } catch (error) {
       if (error is ApiException && error.statusCode == 404) {
         if (!_jobsNotFound) {
-          debugPrint('Command Deck jobs endpoint returned 404; stopping refreshes.');
+          debugPrint(
+            'Command Deck jobs endpoint returned 404; stopping refreshes.',
+          );
         }
         _jobsNotFound = true;
       } else {
@@ -181,8 +185,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed &&
-        _route?.isCurrent == true) {
+    if (state == AppLifecycleState.resumed && _route?.isCurrent == true) {
       _refreshDashboard();
     }
   }
@@ -194,7 +197,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   final FocusNode _keyboardFocusNode = FocusNode();
 
   bool _isSearchDropdownOpen = false;
-  bool _isNotificationDropdownOpen = false;
   bool _isSearchFocused = false;
 
   // Animations
@@ -236,14 +238,11 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) {
-        if (mounted && _route?.isCurrent == true) {
-          _refreshDashboard();
-        }
-      },
-    );
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && _route?.isCurrent == true) {
+        _refreshDashboard();
+      }
+    });
     _filteredSearchData = List.from(_searchData);
 
     // Setup pulsing live animation
@@ -298,9 +297,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          _initialRefreshStarted ||
-          _route?.isCurrent != true) {
+      if (!mounted || _initialRefreshStarted || _route?.isCurrent != true) {
         return;
       }
       _initialRefreshStarted = true;
@@ -475,13 +472,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                     // Floating Autocomplete Search Dropdown
                                     if (_isSearchDropdownOpen)
                                       _buildSearchAutocompleteDropdown(
-                                        screenWidth < 980,
-                                        currentTheme,
-                                      ),
-
-                                    // Floating Notifications Dropdown
-                                    if (_isNotificationDropdownOpen)
-                                      _buildNotificationsDropdown(
                                         screenWidth < 980,
                                         currentTheme,
                                       ),
@@ -866,8 +856,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             onSelected: (value) async {
               if (value == 'recruiter') {
                 Navigator.of(context).pushReplacementNamed('/dashboard');
-              } else if (value == 'org') {
-                Navigator.of(context).pushReplacementNamed('/org');
               } else if (value == 'settings') {
                 Navigator.of(context).pushReplacementNamed('/settings');
               } else if (value == 'signout') {
@@ -891,16 +879,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 value: 'recruiter',
                 child: Text(
                   'Recruiter Workspace',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'org',
-                child: Text(
-                  'Organization & Team',
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1107,12 +1085,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
         if (mounted) _searchFocusNode.requestFocus();
       });
     },
-    onBellTap: () {
-      setState(() {
-        _isNotificationDropdownOpen = !_isNotificationDropdownOpen;
-        AppNavState.hasUnreadNotifications = false;
-      });
-    },
   );
   // ── FLOATING OVERLAYS ──────────────────────────────────────────────────────
   Widget _buildSearchAutocompleteDropdown(bool isMobile, DeckTheme theme) {
@@ -1192,89 +1164,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     );
                   },
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNotificationsDropdown(bool isMobile, DeckTheme theme) {
-    return Positioned(
-      top: isMobile ? 56 : 50,
-      right: isMobile ? 16 : 24,
-      child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(12),
-        color: theme.cardBg,
-        child: Container(
-          width: 300,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: theme.border, width: 1.5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Notifications',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: theme.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.close_rounded,
-                      size: 16,
-                      color: theme.textSecondary,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isNotificationDropdownOpen = false;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              const Divider(),
-              Column(
-                children: AppNavState.notifications.map((notif) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          margin: const EdgeInsets.only(top: 5, right: 8),
-                          decoration: const BoxDecoration(
-                            color: AppColors.dashboardBlue,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            notif,
-                            style: GoogleFonts.inter(
-                              color: theme.textPrimary,
-                              fontSize: 11.5,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
               ),
             ],
           ),
@@ -2698,17 +2587,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             isMobile: isMobile,
             onTap: () =>
                 Navigator.of(context).pushReplacementNamed('/settings'),
-          ),
-          Divider(color: theme.border, height: 1),
-          _buildChecklistRow(
-            theme: theme,
-            step: 3,
-            title: 'Invite your team',
-            subtitle: 'Bring in co-recruiters to share the pipeline.',
-            actionLabel: 'Invite',
-            isActive: false,
-            isMobile: isMobile,
-            onTap: () => Navigator.of(context).pushReplacementNamed('/org'),
           ),
         ],
       ),

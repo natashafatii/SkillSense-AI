@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:skillsense_ai/screens/signup/signup_role_selection_screen_web.dart';
 import 'package:skillsense_ai/screens/login/role_selection_screen_mobile.dart';
+import 'package:skillsense_ai/screens/signup/signup_role_selection_screen_web.dart';
+import 'package:skillsense_ai/screens/signup/signup_role_selection_screen_mobile.dart';
 
 /// Responsive wrapper for the signup role selection flow.
-/// > 900 px → [SignupRoleSelectionScreenWeb]
-/// ≤ 900 px → [RoleSelectionScreenMobile] (shared mobile layout)
+/// >= 900 px uses the existing web layout; smaller widths use the signup layout.
 class SignupRoleSelectionScreen extends StatefulWidget {
   const SignupRoleSelectionScreen({super.key});
 
@@ -16,6 +16,7 @@ class SignupRoleSelectionScreen extends StatefulWidget {
 class _SignupRoleSelectionScreenState extends State<SignupRoleSelectionScreen>
     with SingleTickerProviderStateMixin {
   String? _selectedRole;
+  bool _mobileSignInFlow = false;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -60,11 +61,21 @@ class _SignupRoleSelectionScreenState extends State<SignupRoleSelectionScreen>
   }
 
   void _onContinue() {
-    if (_selectedRole == 'recruiter') {
+    final signInOnMobile =
+        _mobileSignInFlow && MediaQuery.sizeOf(context).width < 900;
+    if (signInOnMobile && _selectedRole == 'recruiter') {
+      Navigator.pushNamed(context, '/login/recruiter');
+    } else if (signInOnMobile && _selectedRole == 'job_seeker') {
+      Navigator.pushNamed(context, '/login/candidate');
+    } else if (_selectedRole == 'recruiter') {
       Navigator.pushNamed(context, '/onboarding/hr');
     } else if (_selectedRole == 'job_seeker') {
       Navigator.pushNamed(context, '/onboarding/candidate');
     }
+  }
+
+  void _toggleMobileFlow() {
+    setState(() => _mobileSignInFlow = !_mobileSignInFlow);
   }
 
   void _onLoginTap() {
@@ -89,14 +100,23 @@ class _SignupRoleSelectionScreenState extends State<SignupRoleSelectionScreen>
             slideAnimation: _slideAnimation,
           );
         } else {
-          return RoleSelectionScreenMobile(
+          if (_mobileSignInFlow) {
+            return RoleSelectionScreenMobile(
+              selectedRole: _selectedRole,
+              onRoleSelected: _selectRole,
+              onContinue: _onContinue,
+              onSignUpTap: _toggleMobileFlow,
+              fadeAnimation: _fadeAnimation,
+              slideAnimation: _slideAnimation,
+            );
+          }
+          return SignupRoleSelectionScreenMobile(
             selectedRole: _selectedRole,
             onRoleSelected: _selectRole,
             onContinue: _onContinue,
-            onSignUpTap: _onLoginTap,
+            onFlowToggle: _toggleMobileFlow,
             fadeAnimation: _fadeAnimation,
             slideAnimation: _slideAnimation,
-            isSignUpFlow: true,
           );
         }
       },

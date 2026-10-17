@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 class AppNavState {
   static int unreadInterviews = 0;
   static bool hasUnreadNotifications = false;
-  static List<String> notifications = [];
 }
 
 /// Shared workspace header for recruiter and candidate screens.
@@ -24,6 +23,8 @@ class RecruiterTopBar extends StatelessWidget {
     this.onTrailingTap,
     this.trailingTooltip = 'Workspace settings',
     this.hasUnread = false,
+    this.useExactUnread = false,
+    this.bellActive = false,
     this.showWorkspacePrefix = true,
     this.subduedPageTitle = false,
     this.forceSearchField = false,
@@ -33,6 +34,8 @@ class RecruiterTopBar extends StatelessWidget {
     this.breadcrumbSegments,
     this.mobileTitle,
     this.showTrailingButton = false,
+    this.mobileBreakpoint = 900,
+    this.profileReference = false,
   });
 
   final String pageTitle;
@@ -45,6 +48,8 @@ class RecruiterTopBar extends StatelessWidget {
   final VoidCallback? onTrailingTap;
   final String trailingTooltip;
   final bool hasUnread;
+  final bool useExactUnread;
+  final bool bellActive;
   final bool showWorkspacePrefix;
   final bool subduedPageTitle;
   final bool forceSearchField;
@@ -54,27 +59,30 @@ class RecruiterTopBar extends StatelessWidget {
   final List<String>? breadcrumbSegments;
   final String? mobileTitle;
   final bool showTrailingButton;
+  final double mobileBreakpoint;
+  final bool profileReference;
 
   @override
   Widget build(BuildContext context) {
-    const surface = Colors.white;
-    const field = Color(0xFFF8FAFC);
-    const edge = Color(0xFFE2E8F0);
-    const text = Color(0xFF0F172A);
-    const text2 = Color(0xFF475569);
-    const text3 = Color(0xFF64748B);
-    const accent = Color(0xFF3E6FF0);
-    final mobile = MediaQuery.sizeOf(context).width < 900;
-    final showUnread =
-        hasUnread ||
-        AppNavState.hasUnreadNotifications ||
-        AppNavState.unreadInterviews > 0;
+    final surface = dark ? const Color(0xFF0D1424) : Colors.white;
+    final field = dark ? const Color(0xFF0A1120) : const Color(0xFFF8FAFC);
+    final edge = dark ? const Color(0x243A4A70) : const Color(0xFFE2E8F0);
+    final text = dark ? const Color(0xFFE8EDF8) : const Color(0xFF0F172A);
+    final text2 = dark ? const Color(0xFFA3AFC8) : const Color(0xFF475569);
+    final text3 = dark ? const Color(0xFF8593B0) : const Color(0xFF64748B);
+    final accent = dark ? const Color(0xFF6C9BFF) : const Color(0xFF3E6FF0);
+    final mobile = MediaQuery.sizeOf(context).width < mobileBreakpoint;
+    final showUnread = useExactUnread
+        ? hasUnread
+        : hasUnread ||
+              AppNavState.hasUnreadNotifications ||
+              AppNavState.unreadInterviews > 0;
     void openNotifications() => Navigator.of(context).pushNamed(
       candidate ? '/candidate/notifications' : '/recruiter/notifications',
     );
     void openSettings() => Navigator.of(
       context,
-    ).pushNamed(candidate ? '/candidate/profile' : '/recruiter/settings');
+    ).pushNamed(candidate ? '/candidate/profile' : '/recruiter/profile');
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -94,24 +102,29 @@ class RecruiterTopBar extends StatelessWidget {
           ),
         );
         Widget breadcrumbText(int index) => Text(
-          breadcrumbs[index].toUpperCase(),
+          profileReference
+              ? breadcrumbs[index]
+              : breadcrumbs[index].toUpperCase(),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.spaceGrotesk(
-            color: index == breadcrumbs.length - 1 ? text : text3,
-            fontSize: 12,
-            fontWeight: index == breadcrumbs.length - 1
-                ? FontWeight.w700
-                : FontWeight.w500,
-            letterSpacing: 1.2,
-          ),
+          style:
+              (profileReference ? GoogleFonts.inter : GoogleFonts.spaceGrotesk)(
+                color: index == breadcrumbs.length - 1 ? text : text3,
+                fontSize: profileReference ? 13.5 : 12,
+                fontWeight: index == breadcrumbs.length - 1
+                    ? (profileReference ? FontWeight.w600 : FontWeight.w700)
+                    : FontWeight.w500,
+                letterSpacing: profileReference ? 0 : 1.2,
+              ),
         );
         return ClipRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
             child: Container(
               height: 58,
-              padding: const EdgeInsets.symmetric(horizontal: 22),
+              padding: EdgeInsets.symmetric(
+                horizontal: profileReference ? 32 : 22,
+              ),
               decoration: BoxDecoration(
                 color: surface.withValues(alpha: .92),
                 border: Border(bottom: BorderSide(color: edge)),
@@ -170,10 +183,12 @@ class RecruiterTopBar extends StatelessWidget {
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       width: 300,
-                      height: 34,
+                      height: profileReference ? 36 : 34,
                       decoration: BoxDecoration(
                         color: field,
-                        borderRadius: BorderRadius.circular(11),
+                        borderRadius: BorderRadius.circular(
+                          profileReference ? 8 : 11,
+                        ),
                         border: Border.all(
                           color: searchFocused ? accent : edge,
                           width: searchFocused ? 1.5 : 1,
@@ -184,17 +199,20 @@ class RecruiterTopBar extends StatelessWidget {
                         focusNode: searchFocusNode,
                         readOnly: searchController == null,
                         onTap: onSearchTap,
-                        style: GoogleFonts.inter(color: text, fontSize: 12),
+                        style: GoogleFonts.inter(
+                          color: text,
+                          fontSize: profileReference ? 13.5 : 12,
+                        ),
                         decoration: InputDecoration(
                           hintText: 'Search or jump to…',
                           hintStyle: GoogleFonts.inter(
                             color: text3,
-                            fontSize: 12,
+                            fontSize: profileReference ? 13.5 : 12,
                           ),
                           prefixIcon: Icon(
                             Icons.search_rounded,
                             color: text3,
-                            size: 12,
+                            size: profileReference ? 18 : 12,
                           ),
                           prefixIconConstraints: const BoxConstraints(
                             minWidth: 32,
@@ -237,8 +255,8 @@ class RecruiterTopBar extends StatelessWidget {
                     key: const Key('recruiter-top-bell'),
                     icon: Icons.notifications_none_rounded,
                     label: 'Notifications',
-                    color: text2,
-                    field: field,
+                    color: bellActive ? accent : text2,
+                    field: bellActive ? accent.withValues(alpha: .10) : field,
                     edge: edge,
                     hasUnread: showUnread,
                     onTap: onBellTap ?? openNotifications,

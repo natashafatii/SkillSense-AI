@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
@@ -8,7 +9,6 @@ import '../../services/auth_service.dart';
 import 'hr_register_screen_web.dart';
 import 'email_verification_screen.dart';
 import 'terms_privacy_screen.dart';
-import '../../widgets/country_code_phone_field.dart';
 
 const _blue = AppColors.buttonBlue;
 
@@ -26,7 +26,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
   bool _isLoading = false;
 
   // ── Phone length tracker ───────────────────────────────────────────────────
-  String _phoneNumber = '';
+  final String _phoneNumber = '';
 
   // ── Form ───────────────────────────────────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
@@ -151,6 +151,11 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _registerMobile() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    _register(isWeb: true);
   }
 
   Future<void> _register({bool isWeb = false}) async {
@@ -552,102 +557,67 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            SizedBox(
+                              height: 48,
+                              child: OutlinedButton(
+                                onPressed: _isLoading ? null : _googleSignUp,
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: const Color(0xFF0F172A),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SvgPicture.asset('assets/icons/google.svg', height: 18),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Continue with Google',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF334155),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
                             // ── Personal Info ──────────────────────────────────
                             _section(
                               'Personal Information',
                               Icons.person_outline_rounded,
                             ),
 
-                            // First + Last Name
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: _glow(
-                                    focused: _firstNameFocus.hasFocus,
-                                    child: TextFormField(
-                                      controller: _firstNameController,
-                                      focusNode: _firstNameFocus,
-                                      textCapitalization:
-                                          TextCapitalization.words,
-                                      style: GoogleFonts.publicSans(
-                                        fontSize: 14,
-                                        color: const Color(0xFF212121),
-                                      ),
-                                      decoration: _decor(
-                                        'First Name',
-                                        'Enter your first name',
-                                        focused: _firstNameFocus.hasFocus,
-                                        prefix: _icon(
-                                          Icons.badge_outlined,
-                                          focused: _firstNameFocus.hasFocus,
-                                        ),
-                                      ),
-                                      validator: (v) =>
-                                          (v == null || v.trim().isEmpty)
-                                          ? 'Required'
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _glow(
-                                    focused: _lastNameFocus.hasFocus,
-                                    child: TextFormField(
-                                      controller: _lastNameController,
-                                      focusNode: _lastNameFocus,
-                                      textCapitalization:
-                                          TextCapitalization.words,
-                                      style: GoogleFonts.publicSans(
-                                        fontSize: 14,
-                                        color: const Color(0xFF212121),
-                                      ),
-                                      decoration: _decor(
-                                        'Last Name',
-                                        'Enter your last name',
-                                        focused: _lastNameFocus.hasFocus,
-                                        prefix: _icon(
-                                          Icons.badge_outlined,
-                                          focused: _lastNameFocus.hasFocus,
-                                        ),
-                                      ),
-                                      validator: (v) =>
-                                          (v == null || v.trim().isEmpty)
-                                          ? 'Required'
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Company Name
+                            // Full name
                             _glow(
-                              focused: _companyNameFocus.hasFocus,
+                              focused: _fullNameFocus.hasFocus,
                               child: TextFormField(
-                                controller: _companyNameController,
-                                focusNode: _companyNameFocus,
+                                controller: _fullNameController,
+                                focusNode: _fullNameFocus,
                                 textCapitalization: TextCapitalization.words,
                                 style: GoogleFonts.publicSans(
                                   fontSize: 14,
                                   color: const Color(0xFF212121),
                                 ),
                                 decoration: _decor(
-                                  'Company Name',
-                                  'Enter your company name',
-                                  focused: _companyNameFocus.hasFocus,
+                                  'Full name',
+                                  'Enter your full name',
+                                  focused: _fullNameFocus.hasFocus,
                                   prefix: _icon(
-                                    Icons.business_rounded,
-                                    focused: _companyNameFocus.hasFocus,
+                                    Icons.badge_outlined,
+                                    focused: _fullNameFocus.hasFocus,
                                   ),
                                 ),
                                 validator: (v) =>
                                     (v == null || v.trim().isEmpty)
-                                        ? 'Company Name is required'
-                                        : null,
-                               ),
+                                    ? 'Full name is required'
+                                    : null,
+                              ),
                             ),
 
                             _divider(),
@@ -670,7 +640,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                   color: const Color(0xFF212121),
                                 ),
                                 decoration: _decor(
-                                  'Email Address',
+                                  'Work email',
                                   'Enter your work email address',
                                   focused: _emailFocus.hasFocus,
                                   prefix: _icon(
@@ -692,36 +662,31 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Phone (all countries)
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 4, bottom: 6),
-                                  child: Text(
-                                    'Phone Number',
-                                    style: GoogleFonts.publicSans(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: _phoneFocus.hasFocus ? _blue : const Color(0xFF9E9E9E),
-                                    ),
+                            // Company
+                            _glow(
+                              focused: _companyNameFocus.hasFocus,
+                              child: TextFormField(
+                                controller: _companyNameController,
+                                focusNode: _companyNameFocus,
+                                textCapitalization: TextCapitalization.words,
+                                style: GoogleFonts.publicSans(
+                                  fontSize: 14,
+                                  color: const Color(0xFF212121),
+                                ),
+                                decoration: _decor(
+                                  'Company',
+                                  'Enter your company name',
+                                  focused: _companyNameFocus.hasFocus,
+                                  prefix: _icon(
+                                    Icons.business_rounded,
+                                    focused: _companyNameFocus.hasFocus,
                                   ),
                                 ),
-                                _glow(
-                                  focused: _phoneFocus.hasFocus,
-                                  child: CountryCodePhoneField(
-                                    controller: _phoneController,
-                                    focusNode: _phoneFocus,
-                                    hintText: 'Enter your phone number',
-                                    focusColor: _blue,
-                                    onPhoneChanged: (val) {
-                                      setState(() {
-                                        _phoneNumber = val;
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ],
+                                validator: (v) =>
+                                    (v == null || v.trim().isEmpty)
+                                    ? 'Company is required'
+                                    : null,
+                              ),
                             ),
 
                             _divider(),
@@ -839,7 +804,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                   color: const Color(0xFF212121),
                                 ),
                                 decoration: _decor(
-                                  'Confirm Password',
+                                  'Confirm password',
                                   'Re-enter your password',
                                   focused: _confirmFocus.hasFocus,
                                   prefix: _icon(
@@ -896,7 +861,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                 ],
                               ),
                               child: ElevatedButton(
-                                onPressed: _isLoading ? null : _register,
+                                onPressed: _isLoading ? null : _registerMobile,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.transparent,
                                   foregroundColor: Colors.white,

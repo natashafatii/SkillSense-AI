@@ -34,10 +34,10 @@ class CandidateReportScreen extends StatefulWidget {
 
 class _CandidateReportScreenState extends State<CandidateReportScreen> {
   // ── Design tokens ──────────────────────────────────────────────────────────
-  static const _ink    = Color(0xFF17233B);
-  static const _muted  = Color(0xFF8190A8);
-  static const _edge   = Color(0xFFE3EAF4);
-  static const _field  = Color(0xFFF1F5F9);
+  static const _ink = Color(0xFF17233B);
+  static const _muted = Color(0xFF8190A8);
+  static const _edge = Color(0xFFE3EAF4);
+  static const _field = Color(0xFFF1F5F9);
   static const _indigo = Color(0xFF4568E9);
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -87,11 +87,25 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
           await (widget.loadApplication?.call(applicationId) ??
               ApplicationService.getApplication(applicationId));
       if (!mounted || request != _request) return;
+      if (application.id != applicationId) {
+        throw const FormatException(
+          'The requested application was not returned.',
+        );
+      }
+      if (application.resumeId != resumeId) {
+        throw const FormatException(
+          'This application does not reference that resume.',
+        );
+      }
 
       final resume =
           await (widget.loadResume?.call(resumeId) ??
               ResumeService.getResumeDetail(resumeId));
       if (!mounted || request != _request) return;
+
+      if (resume.id != resumeId) {
+        throw const FormatException('The requested resume was not returned.');
+      }
 
       setState(() {
         _application = application;
@@ -166,12 +180,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
                   Expanded(child: body),
                 ],
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _mobileDock(),
-              ),
+              Positioned(left: 0, right: 0, bottom: 0, child: _mobileDock()),
             ],
           ),
         ),
@@ -213,10 +222,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
             children: [
               TextSpan(
                 text: 'PIPELINE',
-                style: TextStyle(
-                  color: _muted,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(color: _muted, fontWeight: FontWeight.w500),
               ),
               TextSpan(
                 text: ' / ',
@@ -224,10 +230,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
               ),
               TextSpan(
                 text: 'REPORT',
-                style: TextStyle(
-                  color: _ink,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(color: _ink, fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -277,7 +280,8 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
           Icons.notifications_none_rounded,
           hasDot: true,
           dotColor: const Color(0xFFEF4444),
-          onTap: () {},
+          onTap: () =>
+              Navigator.of(context).pushNamed('/recruiter/notifications'),
         ),
         const SizedBox(width: 10),
         // Settings icon
@@ -323,38 +327,37 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     bool hasDot = false,
     Color dotColor = Colors.red,
     VoidCallback? onTap,
-  }) =>
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _edge),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, size: 18, color: const Color(0xFF475569)),
-              if (hasDot)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: dotColor,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
+  }) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _edge),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF475569)),
+          if (hasDot)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: dotColor,
+                  shape: BoxShape.circle,
                 ),
-            ],
-          ),
-        ),
-      );
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 
   // ── Empty state ────────────────────────────────────────────────────────────
 
@@ -411,7 +414,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
                   child: Text(
                     compact
                         ? 'Pick a candidate to see their report.'
-                        : 'Open a candidate from the pipeline or rankings to see their AI interview report, skill breakdown and integrity timeline.',
+                        : 'Open a candidate from the pipeline or rankings to see their resume report. Behavioral observations require an explicitly selected interview session.',
                     style: GoogleFonts.inter(
                       color: _muted,
                       fontSize: compact ? 11 : 12.5,
@@ -485,12 +488,12 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   Widget _mobileDock() {
     // Dashboard · Jobs · Pipeline (active) · Interviews · Rankings · Analytics
     final items = <(IconData, String)>[
-      (Icons.dashboard_rounded,         '/recruiter/command-deck'),
-      (Icons.grid_view_rounded,         '/recruiter/job-listings'),
-      (Icons.view_column_rounded,        '/recruiter/pipeline'),
+      (Icons.dashboard_rounded, '/recruiter/command-deck'),
+      (Icons.grid_view_rounded, '/recruiter/job-listings'),
+      (Icons.view_column_rounded, '/recruiter/pipeline'),
       (Icons.radio_button_checked_rounded, '/recruiter/schedule-interview'),
-      (Icons.leaderboard_rounded,        '/recruiter/rankings'),
-      (Icons.diamond_rounded,            '/recruiter/analytics'),
+      (Icons.leaderboard_rounded, '/recruiter/rankings'),
+      (Icons.diamond_rounded, '/recruiter/analytics'),
     ];
     // Pipeline is the contextual active item for the report screen
     const activeIndex = 2;
@@ -531,7 +534,9 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
                   boxShadow: i == activeIndex
                       ? [
                           BoxShadow(
-                            color: const Color(0xFF4D7BFA).withValues(alpha: 0.30),
+                            color: const Color(
+                              0xFF4D7BFA,
+                            ).withValues(alpha: 0.30),
                             blurRadius: 10,
                             offset: const Offset(0, 3),
                           ),
@@ -584,10 +589,10 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
 
   Widget _report(Application app, ResumeDetail resume, bool compact) {
     final candidate = _candidateCard(app, resume);
-    final score     = _scoreCard(app, resume, compact);
-    final skills    = _skillsCard(resume);
-    final facts     = _factsCard(app, resume);
-    final extras    = _parsedSections(resume);
+    final score = _scoreCard(app, resume, compact);
+    final skills = _skillsCard(resume);
+    final facts = _factsCard(app, resume);
+    final extras = _parsedSections(resume);
 
     if (compact) {
       return Column(
@@ -644,10 +649,10 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   String _initials(Application app) {
     final source =
         ((app.candidateName?.isNotEmpty == true
-                    ? app.candidateName!
-                    : app.candidateEmail.split('@').first)
-                .replaceAll(RegExp(r'[._-]+'), ' ')
-                .trim());
+                ? app.candidateName!
+                : app.candidateEmail.split('@').first)
+            .replaceAll(RegExp(r'[._-]+'), ' ')
+            .trim());
     final parts = source.split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
     return parts.take(2).map((p) => p[0].toUpperCase()).join();
   }
@@ -770,11 +775,11 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   );
 
   Widget _scoreCard(Application app, ResumeDetail resume, bool compact) {
-    final score     = app.resumeScore;
+    final score = app.resumeScore;
     final safeScore = score?.clamp(0.0, 100.0).toDouble();
-    final band      = safeScore == null ? null : _scoreBand(safeScore);
-    final color     = band?.$2 ?? _muted;
-    final ringSize  = compact ? 100.0 : 120.0;
+    final band = safeScore == null ? null : _scoreBand(safeScore);
+    final color = band?.$2 ?? _muted;
+    final ringSize = compact ? 100.0 : 120.0;
 
     return Container(
       decoration: BoxDecoration(
@@ -849,8 +854,8 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
 
   (String, Color) _scoreBand(double score) {
     if (score >= 85) return ('Strong Yes', const Color(0xFF0DAF7F));
-    if (score >= 70) return ('Yes',         const Color(0xFF13A89B));
-    if (score >= 55) return ('Maybe',       const Color(0xFFD99A2B));
+    if (score >= 70) return ('Yes', const Color(0xFF13A89B));
+    if (score >= 55) return ('Maybe', const Color(0xFFD99A2B));
     return ('No', const Color(0xFFE45963));
   }
 
@@ -861,7 +866,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   Widget _scoreBadge(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     decoration: BoxDecoration(
-      color:  color.withValues(alpha: 0.11),
+      color: color.withValues(alpha: 0.11),
       border: Border.all(color: color.withValues(alpha: 0.25)),
       borderRadius: BorderRadius.circular(7),
     ),
@@ -916,9 +921,9 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: value));
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('$label copied')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('$label copied')));
                   }
                 },
                 icon: const Icon(Icons.copy_rounded, size: 15, color: _muted),
@@ -936,45 +941,54 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     void add(String label, List<String>? values) {
       if (values == null || values.isEmpty) return;
       if (sections.isNotEmpty) sections.add(const SizedBox(height: 16));
-      sections.add(_panel(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _panelHeading('$label · ${values.length}'),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [for (final v in values) _chip(v)],
-            ),
-          ],
+      sections.add(
+        _panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _panelHeading('$label · ${values.length}'),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [for (final v in values) _chip(v)],
+              ),
+            ],
+          ),
         ),
-      ));
+      );
     }
 
     void addRecords(String label, List<Map<String, dynamic>>? records) {
       if (records == null || records.isEmpty) return;
       if (sections.isNotEmpty) sections.add(const SizedBox(height: 16));
-      sections.add(_panel(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _panelHeading('$label · ${records.length}'),
-            const SizedBox(height: 14),
-            for (var idx = 0; idx < records.length; idx++) ...[
-              if (idx > 0) const Divider(height: 20, color: _edge),
-              Text(
-                records[idx].entries
-                    .where((e) =>
-                        e.value != null && e.value.toString().isNotEmpty)
-                    .map((e) => '${e.key}: ${e.value}')
-                    .join(' · '),
-                style: GoogleFonts.inter(color: _ink, fontSize: 12, height: 1.5),
-              ),
+      sections.add(
+        _panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _panelHeading('$label · ${records.length}'),
+              const SizedBox(height: 14),
+              for (var idx = 0; idx < records.length; idx++) ...[
+                if (idx > 0) const Divider(height: 20, color: _edge),
+                Text(
+                  records[idx].entries
+                      .where(
+                        (e) => e.value != null && e.value.toString().isNotEmpty,
+                      )
+                      .map((e) => '${e.key}: ${e.value}')
+                      .join(' · '),
+                  style: GoogleFonts.inter(
+                    color: _ink,
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-      ));
+      );
     }
 
     add('Certifications', resume.certifications);

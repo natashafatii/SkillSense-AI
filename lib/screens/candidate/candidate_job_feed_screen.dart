@@ -406,9 +406,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               Text('Could not load jobs: ${_error!}'),
               TextButton(
                 onPressed: () => _loadJobs(page: _page),
-                style: CandidateButtonStyle.secondary(
-                  TextButton.styleFrom(),
-                ),
+                style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
                 child: const Text('Retry'),
               ),
             ],

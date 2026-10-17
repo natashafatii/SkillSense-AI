@@ -60,7 +60,7 @@ void main() {
     expect(find.byType(RecruiterTopBar), findsOneWidget);
     expect(find.text('LIVE MONITOR'), findsOneWidget);
     expect(find.text('No live interviews right now'), findsOneWidget);
-    expect(find.text('Alerts also arrive in Notifications'), findsOneWidget);
+    expect(find.text('Observations require authorized access'), findsOneWidget);
     expect(find.byKey(const Key('live-monitor-view-schedule')), findsOneWidget);
     expect(find.text('Live transcript'), findsNothing);
     expect(find.text('Integrity'), findsNothing);
@@ -83,7 +83,7 @@ void main() {
     expect(find.text('Live'), findsOneWidget);
     expect(find.text('Nothing live'), findsOneWidget);
     expect(find.text('Running interviews show up here.'), findsOneWidget);
-    expect(find.text('Alerts also arrive in Notifications'), findsNothing);
+    expect(find.text('Observations require authorized access'), findsNothing);
     for (final name in [
       'dashboard',
       'jobs',
@@ -168,11 +168,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No live interviews right now'), findsNothing);
     expect(find.text('Natasha Fatima'), findsOneWidget);
-    expect(find.text('82'), findsOneWidget);
-    expect(find.text('I built the API.'), findsOneWidget);
-    expect(find.text('Interview started'), findsOneWidget);
+    expect(find.text('82'), findsNothing);
+    expect(find.text('I built the API.'), findsNothing);
+    expect(find.text('Interview started'), findsNothing);
     expect(
-      find.text('Live video is not available in this view.'),
+      find.textContaining('Observations unavailable: this interview response'),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -203,4 +203,39 @@ void main() {
     expect(find.text('No live interviews right now'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'refresh replaces a removed selection without stale dropdown state',
+    (tester) async {
+      _viewport(tester, 1280);
+      var removed = false;
+      await _stubInterviews(
+        () => [
+          {
+            'id': 'interview-a',
+            'status': 'LIVE',
+            'candidate_name': 'Interview A',
+          },
+          {
+            'id': removed ? 'interview-c' : 'interview-b',
+            'status': 'LIVE',
+            'candidate_name': removed ? 'Interview C' : 'Interview B',
+          },
+        ],
+      );
+      await tester.pumpWidget(const MaterialApp(home: LiveMonitorScreen()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Interview B').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Interview interview-b'), findsOneWidget);
+      removed = true;
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+      expect(find.text('Interview interview-a'), findsOneWidget);
+      expect(find.text('Interview interview-b'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
