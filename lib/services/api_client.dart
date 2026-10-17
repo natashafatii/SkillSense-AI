@@ -53,6 +53,23 @@ class ApiClient {
   }
 
   static String _getBaseUrl() {
+    const configured = String.fromEnvironment('API_BASE_URL');
+    if (configured.isNotEmpty) {
+      final uri = Uri.tryParse(configured);
+      if (uri == null ||
+          !['http', 'https'].contains(uri.scheme) ||
+          uri.host.isEmpty ||
+          uri.userInfo.isNotEmpty ||
+          uri.hasQuery ||
+          uri.hasFragment) {
+        throw const FormatException(
+          'API_BASE_URL must be an HTTP(S) API origin/path without credentials, query, or fragment.',
+        );
+      }
+      return configured.endsWith('/')
+          ? configured.substring(0, configured.length - 1)
+          : configured;
+    }
     if (kIsWeb) {
       return 'http://127.0.0.1:8000/api';
     } else if (Platform.isAndroid) {

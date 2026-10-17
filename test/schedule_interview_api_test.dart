@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,6 +55,192 @@ Future<void> _pickAvailableSlot(WidgetTester tester) async {
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
+  for (final hasShortlisted in [false, true]) {
+    testWidgets(
+      'waits for applications and interviews before showing ${hasShortlisted ? 'live' : 'empty'} layout',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final applications = Completer<List<Application>>();
+        final interviews = Completer<List<Interview>>();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ScheduleInterviewScreen(
+              jobId: 'job-1',
+              loadJobs: () async => [_job()],
+              loadForJob: (_) => applications.future,
+              loadBooked: (_) => interviews.future,
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.text('This week'), findsNothing);
+        expect(find.text('No interviews scheduled'), findsNothing);
+
+        applications.complete(
+          hasShortlisted
+              ? [Application.fromJson(_appJson('alice', 'SHORTLISTED'))]
+              : <Application>[],
+        );
+        await tester.pump();
+        expect(find.text('This week'), findsNothing);
+        expect(find.text('No interviews scheduled'), findsNothing);
+
+        interviews.complete(<Interview>[]);
+        await tester.pumpAndSettle();
+        expect(
+          find.text('This week'),
+          hasShortlisted ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.text('No interviews scheduled'),
+          hasShortlisted ? findsNothing : findsOneWidget,
+        );
+        await tester.pump(const Duration(seconds: 3));
+        expect(
+          find.text('This week'),
+          hasShortlisted ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.text('No interviews scheduled'),
+          hasShortlisted ? findsNothing : findsOneWidget,
+        );
+      },
+    );
+  }
+
+  testWidgets('scheduled interviews keep the live layout with no shortlist', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ScheduleInterviewScreen(
+          jobId: 'job-1',
+          loadJobs: () async => [_job()],
+          loadForJob: (_) async => [],
+          loadBooked: (_) async => [
+            _interview('alice', DateTime.now().add(const Duration(days: 1))),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('This week'), findsOneWidget);
+    expect(find.text('No interviews scheduled'), findsNothing);
+  });
+
+  testWidgets('multiple active jobs wait for a selection before loading', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final secondJob = Job.fromJson({
+      'id': 'job-2',
+      'recruiter': 'recruiter',
+      'title': 'Data Engineer',
+      'description': 'Role',
+      'location': 'Remote',
+      'status': 'ACTIVE',
+      'created_at': '2026-10-01T00:00:00Z',
+      'updated_at': '2026-10-01T00:00:00Z',
+    });
+    final requestedJobs = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ScheduleInterviewScreen(
+          loadJobs: () async => [_job(), secondJob],
+          loadForJob: (jobId) async {
+            requestedJobs.add(jobId);
+            return [
+              Application.fromJson(
+                _appJson('alice', 'SHORTLISTED', job: 'job-2'),
+              ),
+            ];
+          },
+          loadBooked: (_) async => [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Select a job to schedule interviews.'), findsOneWidget);
+    expect(find.text('This week'), findsNothing);
+    expect(requestedJobs, isEmpty);
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Data Engineer').last);
+    await tester.pumpAndSettle();
+    expect(requestedJobs, ['job-2']);
+    expect(find.text('This week'), findsOneWidget);
+    expect(find.text('Alice'), findsOneWidget);
+    expect(
+      tester
+          .widget<DropdownButton<String>>(find.byType(DropdownButton<String>))
+          .value,
+      'job-2',
+    );
+  });
+
+  testWidgets('no active jobs shows empty state without scheduling calls', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var applicationCalls = 0;
+    var interviewCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ScheduleInterviewScreen(
+          loadJobs: () async => [],
+          loadForJob: (_) {
+            applicationCalls++;
+            return Future.value([]);
+          },
+          loadBooked: (_) {
+            interviewCalls++;
+            return Future.value([]);
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(applicationCalls, 0);
+    expect(interviewCalls, 0);
+    expect(find.text('No interviews scheduled'), findsOneWidget);
+  });
+
+  testWidgets('scheduling errors show a friendly message and Retry', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ScheduleInterviewScreen(
+          jobId: 'job-1',
+          loadJobs: () async => [_job()],
+          loadForJob: (_) async => throw const ApiException(
+            statusCode: 400,
+            message:
+                'job: Recruiters must provide a ?job={id} query parameter.',
+          ),
+          loadBooked: (_) async => [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Select a job to schedule interviews.'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.textContaining('ApiException'), findsNothing);
+  });
+
   testWidgets('shared shell renders one recruiter nav beside schedule canvas', (
     tester,
   ) async {
@@ -60,47 +248,64 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp(
-      home: RecruiterScaffold(
-        currentRoute: '/recruiter/schedule-interview',
-        body: ScheduleInterviewScreen(
-          jobId: 'job-1',
-          loadJobs: () async => [_job()],
-          loadForJob: (_) async => [],
-          loadBooked: (_) async => [],
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RecruiterScaffold(
+          currentRoute: '/recruiter/schedule-interview',
+          body: ScheduleInterviewScreen(
+            jobId: 'job-1',
+            loadJobs: () async => [_job()],
+            loadForJob: (_) async => [],
+            loadBooked: (_) async => [],
+          ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(find.byType(RecruiterSideNav), findsOneWidget);
-    expect(tester.getSize(find.byType(RecruiterSideNav)).width, 272);
-    expect(tester.getRect(find.byType(ScheduleInterviewScreen)).left, 272);
+    expect(tester.getSize(find.byType(RecruiterSideNav)).width, 60);
+    expect(tester.getRect(find.byType(ScheduleInterviewScreen)).left, 60);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('mobile shell has one drawer nav and one schedule dock', (
+  testWidgets('mobile shell has no side nav and keeps the schedule dock', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp(
-      home: RecruiterScaffold(
-        currentRoute: '/recruiter/schedule-interview',
-        body: ScheduleInterviewScreen(
-          jobId: 'job-1',
-          loadJobs: () async => [_job()],
-          loadForJob: (_) async => [],
-          loadBooked: (_) async => [],
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RecruiterScaffold(
+          currentRoute: '/recruiter/schedule-interview',
+          body: ScheduleInterviewScreen(
+            jobId: 'job-1',
+            loadJobs: () async => [_job()],
+            loadForJob: (_) async => [],
+            loadBooked: (_) async => [],
+          ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('schedule-mobile-dock')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('recruiter-menu')));
+    expect(find.byKey(const Key('recruiter-menu')), findsNothing);
+    expect(find.byType(RecruiterSideNav), findsNothing);
+    expect(tester.widget<Scaffold>(find.byType(Scaffold).first).drawer, isNull);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: RecruiterScaffold(
+          currentRoute: '/recruiter/job-listings',
+          body: SizedBox.expand(),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
-    expect(find.byType(RecruiterSideNav), findsOneWidget);
+    expect(find.byKey(const Key('recruiter-menu')), findsNothing);
+    expect(find.byType(RecruiterSideNav), findsNothing);
+    expect(tester.widget<Scaffold>(find.byType(Scaffold)).drawer, isNull);
     expect(tester.takeException(), isNull);
   });
 
@@ -139,6 +344,43 @@ void main() {
       {'page': 2, 'job': 'job-1', 'status': 'SHORTLISTED'},
     ]);
   });
+
+  test(
+    'schedule data requests shortlisted applications and scheduled interviews',
+    () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://test.invalid'));
+      final requests = <String>[];
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests.add('${options.path}?${options.queryParameters}');
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                data: {'results': <dynamic>[], 'next': null},
+              ),
+            );
+          },
+        ),
+      );
+      await Future.wait([
+        ApplicationService.listAllForJob(
+          'job-1',
+          status: 'SHORTLISTED',
+          client: dio,
+        ),
+        InterviewService.listForJob('job-1', status: 'SCHEDULED', client: dio),
+      ]);
+      expect(
+        requests,
+        contains('/applications/?{page: 1, job: job-1, status: SHORTLISTED}'),
+      );
+      expect(
+        requests,
+        contains('/interviews/?{job: job-1, status: SCHEDULED, page: 1}'),
+      );
+    },
+  );
 
   test('schedule POST sends application and UTC ISO slot', () async {
     final dio = Dio(BaseOptions(baseUrl: 'https://test.invalid'));
@@ -197,7 +439,8 @@ void main() {
             loads++;
             return applications;
           },
-          loadBooked: (_) async => sentSlot == null ? [] : [_interview(sentId!, sentSlot!)],
+          loadBooked: (_) async =>
+              sentSlot == null ? [] : [_interview(sentId!, sentSlot!)],
           sendInvite: (id, slot) async {
             sentId = id;
             sentSlot = slot;

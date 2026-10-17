@@ -48,6 +48,7 @@ class CountryCodePhoneField extends StatefulWidget {
   final ValueChanged<String>? onPhoneChanged;
   final ValueChanged<bool>? onValidityChanged;
   final Color focusColor;
+  final bool anchoredMobilePicker;
 
   const CountryCodePhoneField({
     super.key,
@@ -57,6 +58,7 @@ class CountryCodePhoneField extends StatefulWidget {
     this.onPhoneChanged,
     this.onValidityChanged,
     this.focusColor = const Color(0xFF0F172A),
+    this.anchoredMobilePicker = false,
   });
 
   @override
@@ -288,7 +290,17 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
     if (_pickerOpen) return;
     _countrySearchController.clear();
     setState(() => _pickerOpen = true);
-    if (MediaQuery.sizeOf(context).width < 900) {
+    final anchoredMobilePicker =
+        widget.anchoredMobilePicker && MediaQuery.sizeOf(context).width < 900;
+    if (anchoredMobilePicker) {
+      await Scrollable.ensureVisible(
+        context,
+        alignment: 0.1,
+        duration: const Duration(milliseconds: 200),
+      );
+      if (!mounted) return;
+    }
+    if (MediaQuery.sizeOf(context).width < 900 && !anchoredMobilePicker) {
       final country = await showModalBottomSheet<CountryData>(
         context: context,
         isScrollControlled: true,
@@ -316,43 +328,58 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
       return;
     }
     _countryOverlay = OverlayEntry(
-      builder: (overlayContext) => Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _closeDesktopPicker,
-              child: const ColoredBox(color: Colors.transparent),
+      builder: (overlayContext) {
+        final fieldBox =
+            _formFieldKey.currentContext?.findRenderObject() as RenderBox?;
+        final fieldWidth = fieldBox?.size.width ?? 320.0;
+        final fieldTop = fieldBox?.localToGlobal(Offset.zero).dy ?? 0.0;
+        final media = MediaQuery.of(overlayContext);
+        final below =
+            media.size.height - media.viewInsets.bottom - fieldTop - 62;
+        final above = fieldTop - media.padding.top - 12;
+        final showAbove = anchoredMobilePicker && below < 220 && above > below;
+        final available = showAbove ? above : below;
+        final popupHeight = anchoredMobilePicker
+            ? available.clamp(100.0, 360.0).toDouble()
+            : 360.0;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _closeDesktopPicker,
+                child: const ColoredBox(color: Colors.transparent),
+              ),
             ),
-          ),
-          CompositedTransformFollower(
-            link: _fieldLink,
-            showWhenUnlinked: false,
-            offset: const Offset(0, 50),
-            child: Focus(
-              onKeyEvent: (_, event) {
-                if (event is KeyDownEvent &&
-                    event.logicalKey == LogicalKeyboardKey.escape) {
-                  _closeDesktopPicker();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: Material(
-                key: const Key('country-dropdown'),
-                elevation: 12,
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(11),
-                child: SizedBox(
-                  width: 320,
-                  height: 360,
-                  child: _countryList(false),
+            CompositedTransformFollower(
+              link: _fieldLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, showAbove ? -popupHeight - 6 : 50),
+              child: Focus(
+                onKeyEvent: (_, event) {
+                  if (event is KeyDownEvent &&
+                      event.logicalKey == LogicalKeyboardKey.escape) {
+                    _closeDesktopPicker();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: Material(
+                  key: const Key('country-dropdown'),
+                  elevation: 12,
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(11),
+                  child: SizedBox(
+                    width: anchoredMobilePicker ? fieldWidth : 320,
+                    height: popupHeight,
+                    child: _countryList(false),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
     Overlay.of(context).insert(_countryOverlay!);
     _countrySearchFocus.requestFocus();

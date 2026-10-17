@@ -42,285 +42,284 @@ class RoleSelectionScreenMobile extends StatelessWidget {
           );
 
           return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 600),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // --- HERO HEADER ---
-                      Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              AppColors.mobileHeaderBgStart,
-                              AppColors.mobileHeaderBgEnd,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(32),
-                            bottomRight: Radius.circular(32),
-                          ),
-                        ),
-                        child: SafeArea(
-                          bottom: false,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: horizontalPadding,
-                              vertical: 40,
-                            ),
-                            child: Column(
-                              children: [
-                                // Logo + Wordmark
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SvgPicture.asset(
-                                      'assets/images/logo.svg',
-                                      height: 28,
-                                      width: 28,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      'SkillSense AI',
-                                      style: GoogleFonts.inter(
-                                        color: AppColors.textDark,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -0.01,
-                                      ),
-                                    ),
-                                    // Balance the logo width to center the text perfectly
-                                    const SizedBox(
-                                      width: 38,
-                                    ), // 28 (logo width) + 10 (gap)
-                                  ],
-                                ),
-                                const SizedBox(height: 32),
-                                // Eyebrow
-                                Text(
-                                  AppConstants.roleEyebrow,
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.primary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                // Headline
-                                Text(
-                                  AppConstants.roleTitle,
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.hrTextDark,
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.15,
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                // Subcopy
-                                Text(
-                                  AppConstants.roleSubtitle,
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.hrTextGrey,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // --- WHITE BODY SECTION ---
-                      FadeTransition(
-                        opacity: fadeAnimation,
-                        child: SlideTransition(
-                          position: slideAnimation,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: horizontalPadding,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 32),
-                                Text(
-                                  AppConstants.selectRoleLabel,
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.hrTextLight,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                _MobileRoleCard(
-                                  title: AppConstants.recruiterTitle,
-                                  description:
-                                      AppConstants.recruiterDescription,
-                                  icon: Icons.work_outline_rounded,
-                                  isSelected: selectedRole == 'recruiter',
-                                  isHr: true,
-                                  onTap: () => onRoleSelected('recruiter'),
-                                ),
-                                const SizedBox(height: 16),
-                                _MobileRoleCard(
-                                  title: AppConstants.jobSeekerTitle,
-                                  description:
-                                      AppConstants.jobSeekerDescription,
-                                  icon: Icons.track_changes_rounded,
-                                  isSelected: selectedRole == 'job_seeker',
-                                  isHr: false,
-                                  onTap: () => onRoleSelected('job_seeker'),
-                                ),
-                                const SizedBox(height: 24),
-                                // Info Box
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 14,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.mobileInfoBg,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Padding(
-                                        padding: EdgeInsets.only(top: 2),
-                                        child: Icon(
-                                          Icons.info_outline,
-                                          size: 16,
-                                          color: Color(0xFF94A3B8),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          AppConstants.roleHelperText,
-                                          style: GoogleFonts.inter(
-                                            fontSize: 12,
-                                            color: AppColors.hrTextGrey,
-                                            height: 1.4,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // --- BOTTOM SECTION ---
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontalPadding,
-                          8,
-                          horizontalPadding,
-                          24,
-                        ),
-                        child: Column(
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              height: 56,
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeOut,
-                                decoration: BoxDecoration(
-                                  color: selectedRole == 'recruiter'
-                                      ? AppColors.webRoleHr
-                                      : selectedRole == 'job_seeker'
-                                      ? AppColors.webRoleCandidate
-                                      : AppColors.primary.withValues(
-                                          alpha: 0.4,
-                                        ),
-                                  borderRadius: BorderRadius.circular(28),
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(28),
-                                    onTap: selectedRole != null
-                                        ? onContinue
-                                        : null,
-                                    child: Center(
-                                      child: Text(
-                                        selectedRole == 'recruiter'
-                                            ? AppConstants.continueAsRecruiter
-                                            : AppConstants.continueAsCandidate,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white,
-                                          letterSpacing: 0,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            GestureDetector(
-                              onTap: onSignUpTap,
-                              child: RichText(
-                                text: TextSpan(
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.hrTextGrey,
-                                    fontSize: 13,
-                                  ),
-                                  children: [
-                                    TextSpan(
-                                      text: bottomPromptText != null
-                                          ? "$bottomPromptText "
-                                          : (isSignUpFlow
-                                              ? "${AppConstants.welcomeWebHaveAccount} "
-                                              : "${AppConstants.noAccount} "),
-                                    ),
-                                    TextSpan(
-                                      text: bottomLinkText ??
-                                          (isSignUpFlow
-                                              ? AppConstants.welcomeWebLoginLink.trim()
-                                              : AppConstants.signUp),
-                                      style: GoogleFonts.inter(
-                                        color:
-                                            AppColors.mobileButtonGradientStart,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Add a small safe area at the very bottom
-                            SafeArea(
-                              top: false,
-                              child: const SizedBox(height: 8),
-                            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // --- HERO HEADER ---
+                    Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            AppColors.mobileHeaderBgStart,
+                            AppColors.mobileHeaderBgEnd,
                           ],
                         ),
+                        borderRadius: BorderRadius.only(
+                          bottomLeft: Radius.circular(32),
+                          bottomRight: Radius.circular(32),
+                        ),
                       ),
-                    ],
-                  ),
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding,
+                            vertical: 40,
+                          ),
+                          child: Column(
+                            children: [
+                              // Logo + Wordmark
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SvgPicture.asset(
+                                    'assets/images/logo.svg',
+                                    height: 28,
+                                    width: 28,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'SkillSense AI',
+                                    style: GoogleFonts.inter(
+                                      color: AppColors.textDark,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.01,
+                                    ),
+                                  ),
+                                  // Balance the logo width to center the text perfectly
+                                  const SizedBox(
+                                    width: 38,
+                                  ), // 28 (logo width) + 10 (gap)
+                                ],
+                              ),
+                              const SizedBox(height: 32),
+                              // Eyebrow
+                              Text(
+                                AppConstants.roleEyebrow,
+                                style: const TextStyle(
+                                  fontFamily: 'Space Grotesk',
+                                  color: AppColors.primary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              // Headline
+                              Text(
+                                AppConstants.roleTitle,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontFamily: 'Space Grotesk',
+                                  color: AppColors.hrTextDark,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.15,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              // Subcopy
+                              Text(
+                                AppConstants.roleSubtitle,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  color: AppColors.hrTextGrey,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // --- WHITE BODY SECTION ---
+                    FadeTransition(
+                      opacity: fadeAnimation,
+                      child: SlideTransition(
+                        position: slideAnimation,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 32),
+                              Text(
+                                AppConstants.selectRoleLabel,
+                                style: const TextStyle(
+                                  fontFamily: 'Space Grotesk',
+                                  color: AppColors.hrTextLight,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              _MobileRoleCard(
+                                title: "I'm hiring",
+                                description:
+                                    'Post roles, screen with AI, run voice interviews and get explained scores.',
+                                icon: Icons.videocam_outlined,
+                                isSelected: selectedRole == 'recruiter',
+                                isHr: true,
+                                onTap: () => onRoleSelected('recruiter'),
+                              ),
+                              const SizedBox(height: 16),
+                              _MobileRoleCard(
+                                title: "I'm looking for a job",
+                                description:
+                                    'Apply with one resume, take AI interviews, see your own feedback.',
+                                icon: Icons.track_changes_rounded,
+                                isSelected: selectedRole == 'job_seeker',
+                                isHr: false,
+                                onTap: () => onRoleSelected('job_seeker'),
+                              ),
+                              const SizedBox(height: 24),
+                              // Info Box
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.mobileInfoBg,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 2),
+                                      child: Icon(
+                                        Icons.info_outline,
+                                        size: 16,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'One account can hold both roles — recruiters who also apply to jobs switch from the workspace menu.',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color: AppColors.hrTextGrey,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // --- BOTTOM SECTION ---
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalPadding,
+                        8,
+                        horizontalPadding,
+                        24,
+                      ),
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOut,
+                              decoration: BoxDecoration(
+                                color: selectedRole == 'recruiter'
+                                    ? AppColors.webRoleHr
+                                    : selectedRole == 'job_seeker'
+                                    ? AppColors.webRoleCandidate
+                                    : AppColors.primary.withValues(alpha: 0.4),
+                                borderRadius: BorderRadius.circular(28),
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(28),
+                                  onTap: selectedRole != null
+                                      ? onContinue
+                                      : null,
+                                  child: Center(
+                                    child: Text(
+                                      selectedRole == 'recruiter'
+                                          ? AppConstants.continueAsRecruiter
+                                          : AppConstants.continueAsCandidate,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                        letterSpacing: 0,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          GestureDetector(
+                            onTap: onSignUpTap,
+                            child: RichText(
+                              text: TextSpan(
+                                style: GoogleFonts.inter(
+                                  color: AppColors.hrTextGrey,
+                                  fontSize: 13,
+                                ),
+                                children: [
+                                  TextSpan(
+                                    text: bottomPromptText != null
+                                        ? "$bottomPromptText "
+                                        : (isSignUpFlow
+                                              ? "${AppConstants.welcomeWebHaveAccount} "
+                                              : "${AppConstants.noAccount} "),
+                                  ),
+                                  TextSpan(
+                                    text:
+                                        bottomLinkText ??
+                                        (isSignUpFlow
+                                            ? AppConstants.welcomeWebLoginLink
+                                                  .trim()
+                                            : AppConstants.signUp),
+                                    style: GoogleFonts.inter(
+                                      color:
+                                          AppColors.mobileButtonGradientStart,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Add a small safe area at the very bottom
+                          SafeArea(
+                            top: false,
+                            child: const SizedBox(height: 8),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

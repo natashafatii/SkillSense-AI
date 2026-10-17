@@ -1,19 +1,25 @@
 import '../../widgets/candidate_button_style.dart';
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../models/candidate_profile.dart';
 import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import '../../widgets/candidate_scaffold.dart';
+import '../../widgets/candidate_avatar_image.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'candidate_notifications_screen.dart';
 
 enum AppThemeMode { daylight, night, auto }
+
+enum _PhotoAction { gallery, camera, remove }
 
 /// Candidate Profile & Settings (CD-10). The spacing follows the supplied
 /// profile reference, with the candidate console's teal accent.
@@ -84,6 +90,9 @@ class _CandidateProfileSettingsScreenState
   Timer? _toastTimer;
   bool _signingOut = false;
   bool _requestingExport = false;
+  bool _avatarHovered = false;
+  bool _photoSaving = false;
+  Offset? _avatarTapPosition;
 
   @override
   void initState() {
@@ -91,7 +100,7 @@ class _CandidateProfileSettingsScreenState
     _editFocus.addListener(() {
       if (mounted) setState(() {});
     });
-    _loadProfile();
+    _loadProfile(forceRefresh: true);
   }
 
   Future<void> _loadProfile({bool forceRefresh = false}) async {
@@ -139,6 +148,360 @@ class _CandidateProfileSettingsScreenState
     _toastTimer = Timer(const Duration(milliseconds: 2400), () {
       if (mounted) setState(() => _toast = null);
     });
+  }
+
+  bool get _cameraAvailable =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
+  bool get _hasProfilePhoto =>
+      ProfileService
+          .currentProfileNotifier
+          .value
+          ?.user
+          .profileImageUrl
+          ?.isNotEmpty ==
+      true;
+
+  Future<void> _openPhotoMenu() async {
+    if (_photoSaving) return;
+    final c = _Colors(_isDark(context));
+    final mobile = MediaQuery.sizeOf(context).width < 900;
+    final _PhotoAction? action;
+    if (mobile) {
+      action = await showModalBottomSheet<_PhotoAction>(
+        context: context,
+        backgroundColor: c.surface,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Upload from gallery'),
+                onTap: () => Navigator.pop(sheetContext, _PhotoAction.gallery),
+              ),
+              if (_cameraAvailable)
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: const Text('Take a photo'),
+                  onTap: () => Navigator.pop(sheetContext, _PhotoAction.camera),
+                ),
+              if (_hasProfilePhoto)
+                ListTile(
+                  leading: Icon(Icons.delete_outline, color: c.error),
+                  title: Text('Remove photo', style: TextStyle(color: c.error)),
+                  onTap: () => Navigator.pop(sheetContext, _PhotoAction.remove),
+                ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      final overlay =
+          Overlay.of(context).context.findRenderObject() as RenderBox;
+      final position = _avatarTapPosition ?? Offset.zero;
+      action = await showMenu<_PhotoAction>(
+        context: context,
+        color: c.surface,
+        constraints: const BoxConstraints(minWidth: 230, maxWidth: 260),
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          overlay.size.width - position.dx,
+          overlay.size.height - position.dy,
+        ),
+        items: [
+          const PopupMenuItem(
+            value: _PhotoAction.gallery,
+            child: Row(
+              children: [
+                Icon(Icons.photo_library_outlined),
+                SizedBox(width: 12),
+                Expanded(child: Text('Upload from gallery')),
+              ],
+            ),
+          ),
+          if (_cameraAvailable)
+            const PopupMenuItem(
+              value: _PhotoAction.camera,
+              child: Row(
+                children: [
+                  Icon(Icons.photo_camera_outlined),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('Take a photo')),
+                ],
+              ),
+            ),
+          if (_hasProfilePhoto)
+            PopupMenuItem(
+              value: _PhotoAction.remove,
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline, color: c.error),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Remove photo',
+                      style: TextStyle(color: c.error),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _PhotoAction.gallery:
+        await _pickProfilePhoto();
+      case _PhotoAction.camera:
+        await _takeProfilePhoto();
+      case _PhotoAction.remove:
+        await _confirmRemoveProfilePhoto();
+    }
+  }
+
+  Future<void> _pickProfilePhoto() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
+        withData: true,
+      );
+      if (!mounted || result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      if (!_validPhoto(file.name, file.size) || file.bytes == null) {
+        _showToast('Image must be JPG, PNG, or WEBP under 5MB.');
+        return;
+      }
+      await _showPhotoPreview(file.bytes!, file.name);
+    } catch (_) {
+      if (mounted) _showToast("Couldn't open files. Try again.");
+    }
+  }
+
+  Future<void> _takeProfilePhoto() async {
+    try {
+      final photo = await ImagePicker().pickImage(source: ImageSource.camera);
+      if (!mounted || photo == null) return;
+      final bytes = await photo.readAsBytes();
+      if (!mounted) return;
+      if (!_validPhoto(photo.name, bytes.length)) {
+        _showToast('Image must be JPG, PNG, or WEBP under 5MB.');
+        return;
+      }
+      await _showPhotoPreview(bytes, photo.name);
+    } catch (_) {
+      if (mounted) _showToast("Couldn't open camera. Try again.");
+    }
+  }
+
+  bool _validPhoto(String filename, int size) =>
+      const {
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+      }.contains(filename.split('.').last.toLowerCase()) &&
+      size <= 5 * 1024 * 1024;
+
+  Future<void> _applyPhotoResponse(
+    Map<String, dynamic> response, {
+    required bool uploaded,
+    required String? previousUrl,
+  }) async {
+    String? url = uploaded ? CandidateProfile.imageUrlFrom(response) : null;
+    if (uploaded && url == null) {
+      final refreshed = await ProfileService.getCandidateProfile(
+        forceRefresh: true,
+      );
+      url = refreshed?.user.profileImageUrl;
+    }
+    if (uploaded && url == null) {
+      throw const ApiException(message: "Couldn't upload. Try again.");
+    }
+    if (!mounted) return;
+    final previousUri = previousUrl == null ? null : Uri.tryParse(previousUrl);
+    final previousQuery = previousUri == null
+        ? null
+        : (Map<String, String>.from(previousUri.queryParameters)..remove('v'));
+    final previousBaseUrl = previousUri
+        ?.replace(queryParameters: previousQuery)
+        .toString();
+    if (uploaded && url != null && url == previousBaseUrl) {
+      final uri = Uri.parse(url);
+      url = uri
+          .replace(
+            queryParameters: {
+              ...uri.queryParameters,
+              'v': DateTime.now().millisecondsSinceEpoch.toString(),
+            },
+          )
+          .toString();
+    }
+    ProfileService.setCandidateProfileImageUrl(url);
+    final cached = ProfileService.currentProfileNotifier.value;
+    if (cached != null) setState(() => _profile = cached);
+  }
+
+  Future<void> _handlePhotoError(
+    ApiException error, {
+    required bool upload,
+  }) async {
+    if (!mounted) return;
+    switch (error.statusCode) {
+      case 400:
+        _showToast(error.message);
+      case 401:
+        await _signOut();
+      case 403:
+        _showToast("You're not authorized to update your profile.");
+      case 404:
+        await _loadProfile(forceRefresh: true);
+        if (mounted) _showToast('Profile not found.');
+      default:
+        _showToast(
+          upload
+              ? "Couldn't upload. Try again."
+              : "Couldn't remove photo. Try again.",
+        );
+    }
+  }
+
+  Future<void> _showPhotoPreview(Uint8List bytes, String filename) async {
+    final c = _Colors(_isDark(context));
+    var busy = false;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, refresh) {
+          Future<void> save() async {
+            if (busy) return;
+            refresh(() => busy = true);
+            final previousUrl = ProfileService
+                .currentProfileNotifier
+                .value
+                ?.user
+                .profileImageUrl;
+            try {
+              final response = await ProfileService.uploadCandidateProfilePhoto(
+                bytes,
+                filename,
+              );
+              await _applyPhotoResponse(
+                response,
+                uploaded: true,
+                previousUrl: previousUrl,
+              );
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+              if (mounted) _showToast('Profile photo updated.');
+            } on ApiException catch (error) {
+              if (error.statusCode == 401 && dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+              await _handlePhotoError(error, upload: true);
+            } catch (_) {
+              if (mounted) _showToast("Couldn't upload. Try again.");
+            } finally {
+              if (dialogContext.mounted) refresh(() => busy = false);
+            }
+          }
+
+          return AlertDialog(
+            backgroundColor: c.surface,
+            title: Text('Use this photo?', style: _grotesk(18, c.text)),
+            content: SizedBox(
+              width: 220,
+              child: Center(
+                heightFactor: 1,
+                child: Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: c.accentBorder),
+                  ),
+                  child: ClipOval(
+                    child: Image.memory(bytes, fit: BoxFit.cover),
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: busy ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: busy ? null : save,
+                child: const Text('Save photo'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmRemoveProfilePhoto() async {
+    if (!_hasProfilePhoto || _photoSaving) return;
+    final c = _Colors(_isDark(context));
+    var busy = false;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, refresh) {
+          Future<void> remove() async {
+            if (busy) return;
+            refresh(() => busy = true);
+            setState(() => _photoSaving = true);
+            try {
+              final response =
+                  await ProfileService.removeCandidateProfilePhoto();
+              await _applyPhotoResponse(
+                response,
+                uploaded: false,
+                previousUrl: null,
+              );
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+              if (mounted) _showToast('Profile photo removed.');
+            } on ApiException catch (error) {
+              if (error.statusCode == 401 && dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+              await _handlePhotoError(error, upload: false);
+            } catch (_) {
+              if (mounted) _showToast("Couldn't remove photo. Try again.");
+            } finally {
+              if (mounted) setState(() => _photoSaving = false);
+              if (dialogContext.mounted) refresh(() => busy = false);
+            }
+          }
+
+          return AlertDialog(
+            backgroundColor: c.surface,
+            content: Text(
+              'Remove your profile photo? Your initials will be shown instead.',
+              style: _inter(15, c.text),
+            ),
+            actions: [
+              TextButton(
+                onPressed: busy ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: busy ? null : remove,
+                child: Text('Remove', style: TextStyle(color: c.error)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   void _beginEdit(String key) {
@@ -215,127 +578,144 @@ class _CandidateProfileSettingsScreenState
     String? errorMessage;
 
     await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            Widget field(String key, String label, {TextInputType? inputType}) =>
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: TextFormField(
-                    key: Key('candidate-profile-edit-$key'),
-                    initialValue: initial[key],
-                    onChanged: (value) => edited[key] = value,
-                    keyboardType: inputType,
-                    enabled: !saving,
-                    decoration: InputDecoration(
-                      labelText: label,
-                      border: const OutlineInputBorder(),
-                    ),
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          Widget field(String key, String label, {TextInputType? inputType}) =>
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextFormField(
+                  key: Key('candidate-profile-edit-$key'),
+                  initialValue: initial[key],
+                  onChanged: (value) => edited[key] = value,
+                  keyboardType: inputType,
+                  enabled: !saving,
+                  decoration: InputDecoration(
+                    labelText: label,
+                    border: const OutlineInputBorder(),
                   ),
-                );
+                ),
+              );
 
-            Future<void> save() async {
-              if (saving) return;
-              final values = {
-                for (final entry in edited.entries)
-                  entry.key: entry.value.trim(),
-              };
-              final yearsText = values['years_experience']!;
-              final years = yearsText.isEmpty ? null : int.tryParse(yearsText);
-              if (yearsText.isNotEmpty && (years == null || years < 0)) {
-                setDialogState(() => errorMessage = 'Enter valid years of experience.');
+          Future<void> save() async {
+            if (saving) return;
+            final values = {
+              for (final entry in edited.entries) entry.key: entry.value.trim(),
+            };
+            final yearsText = values['years_experience']!;
+            final years = yearsText.isEmpty ? null : int.tryParse(yearsText);
+            if (yearsText.isNotEmpty && (years == null || years < 0)) {
+              setDialogState(
+                () => errorMessage = 'Enter valid years of experience.',
+              );
+              return;
+            }
+            final patch = <String, dynamic>{};
+            for (final key in [
+              'headline',
+              'location',
+              'phone',
+              'linkedin_url',
+              'portfolio_url',
+            ]) {
+              if (values[key] != initial[key]) patch[key] = values[key];
+            }
+            if (yearsText != initial['years_experience']) {
+              patch['years_experience'] = years;
+            }
+            final firstChanged = values['first_name'] != initial['first_name'];
+            final lastChanged = values['last_name'] != initial['last_name'];
+            setDialogState(() {
+              saving = true;
+              errorMessage = null;
+            });
+            try {
+              if (patch.isNotEmpty) {
+                await ProfileService.updateCandidateProfile(patch);
+              }
+              if (firstChanged || lastChanged) {
+                await AuthService.updateUserProfile(
+                  firstName: firstChanged ? values['first_name'] : null,
+                  lastName: lastChanged ? values['last_name'] : null,
+                );
+              }
+              await _loadProfile(forceRefresh: true);
+              if (!mounted || !dialogContext.mounted) return;
+              Navigator.of(dialogContext).pop();
+              _showToast('Profile saved.');
+            } catch (error) {
+              if (!mounted || !dialogContext.mounted) return;
+              if (error is ApiException && error.statusCode == 401) {
+                Navigator.of(dialogContext).pop();
+                await _signOut();
                 return;
               }
-              final patch = <String, dynamic>{};
-              for (final key in [
-                'headline',
-                'location',
-                'phone',
-                'linkedin_url',
-                'portfolio_url',
-              ]) {
-                if (values[key] != initial[key]) patch[key] = values[key];
-              }
-              if (yearsText != initial['years_experience']) {
-                patch['years_experience'] = years;
-              }
-              final firstChanged = values['first_name'] != initial['first_name'];
-              final lastChanged = values['last_name'] != initial['last_name'];
               setDialogState(() {
-                saving = true;
-                errorMessage = null;
+                errorMessage = error is ApiException
+                    ? error.message
+                    : 'Could not save your profile. Please try again.';
               });
-              try {
-                if (patch.isNotEmpty) {
-                  await ProfileService.updateCandidateProfile(patch);
-                }
-                if (firstChanged || lastChanged) {
-                  await AuthService.updateUserProfile(
-                    firstName: firstChanged ? values['first_name'] : null,
-                    lastName: lastChanged ? values['last_name'] : null,
-                  );
-                }
-                await _loadProfile(forceRefresh: true);
-                if (!mounted || !dialogContext.mounted) return;
-                Navigator.of(dialogContext).pop();
-                _showToast('Profile saved.');
-              } catch (error) {
-                if (!mounted || !dialogContext.mounted) return;
-                if (error is ApiException && error.statusCode == 401) {
-                  Navigator.of(dialogContext).pop();
-                  await _signOut();
-                  return;
-                }
-                setDialogState(() {
-                  errorMessage = error is ApiException
-                      ? error.message
-                      : 'Could not save your profile. Please try again.';
-                });
-              } finally {
-                if (dialogContext.mounted) {
-                  setDialogState(() => saving = false);
-                }
+            } finally {
+              if (dialogContext.mounted) {
+                setDialogState(() => saving = false);
               }
             }
+          }
 
-            return AlertDialog(
-              title: const Text('Edit profile'),
-              content: SizedBox(
-                width: 420,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      field('first_name', 'First name'),
-                      field('last_name', 'Last name'),
-                      field('headline', 'Headline'),
-                      field('location', 'Location'),
-                      field('phone', 'Phone', inputType: TextInputType.phone),
-                      field('linkedin_url', 'LinkedIn', inputType: TextInputType.url),
-                      field('portfolio_url', 'Portfolio', inputType: TextInputType.url),
-                      field('years_experience', 'Years of experience',
-                          inputType: TextInputType.number),
-                      if (errorMessage != null)
-                        Text(errorMessage!, style: const TextStyle(color: Colors.red)),
-                    ],
-                  ),
+          return AlertDialog(
+            title: const Text('Edit profile'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    field('first_name', 'First name'),
+                    field('last_name', 'Last name'),
+                    field('headline', 'Headline'),
+                    field('location', 'Location'),
+                    field('phone', 'Phone', inputType: TextInputType.phone),
+                    field(
+                      'linkedin_url',
+                      'LinkedIn',
+                      inputType: TextInputType.url,
+                    ),
+                    field(
+                      'portfolio_url',
+                      'Portfolio',
+                      inputType: TextInputType.url,
+                    ),
+                    field(
+                      'years_experience',
+                      'Years of experience',
+                      inputType: TextInputType.number,
+                    ),
+                    if (errorMessage != null)
+                      Text(
+                        errorMessage!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                  ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
-                  style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: saving ? null : save,
-                  style: CandidateButtonStyle.primary(TextButton.styleFrom()),
-                  child: Text(saving ? 'Saving…' : 'Save'),
-                ),
-              ],
-            );
-          },
-        ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+                style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: saving ? null : save,
+                style: CandidateButtonStyle.primary(TextButton.styleFrom()),
+                child: Text(saving ? 'Saving…' : 'Save'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -346,76 +726,85 @@ class _CandidateProfileSettingsScreenState
     bool saving = false;
     String? errorMessage;
     await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (dialogContext, setDialogState) => AlertDialog(
-            title: const Text('Account management'),
-            content: SizedBox(
-              width: 380,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    initialValue: first,
-                    onChanged: (value) => first = value,
-                    enabled: !saving,
-                    decoration: const InputDecoration(labelText: 'First name'),
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Account management'),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  initialValue: first,
+                  onChanged: (value) => first = value,
+                  enabled: !saving,
+                  decoration: const InputDecoration(labelText: 'First name'),
+                ),
+                TextFormField(
+                  initialValue: last,
+                  onChanged: (value) => last = value,
+                  enabled: !saving,
+                  decoration: const InputDecoration(labelText: 'Last name'),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  user?.email ??
+                      AuthService.currentUserData?['email']?.toString() ??
+                      '',
+                ),
+                if (errorMessage != null)
+                  Text(
+                    errorMessage!,
+                    style: const TextStyle(color: Colors.red),
                   ),
-                  TextFormField(
-                    initialValue: last,
-                    onChanged: (value) => last = value,
-                    enabled: !saving,
-                    decoration: const InputDecoration(labelText: 'Last name'),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(user?.email ?? AuthService.currentUserData?['email']?.toString() ?? ''),
-                  if (errorMessage != null)
-                    Text(errorMessage!, style: const TextStyle(color: Colors.red)),
-                ],
-              ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
-                style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: saving
-                    ? null
-                    : () async {
-                        setDialogState(() {
-                          saving = true;
-                          errorMessage = null;
-                        });
-                        try {
-                          await AuthService.updateUserProfile(
-                            firstName: first,
-                            lastName: last,
-                          );
-                          await _loadProfile(forceRefresh: true);
-                          if (!mounted || !dialogContext.mounted) return;
-                          Navigator.of(dialogContext).pop();
-                          _showToast('Account updated.');
-                        } catch (error) {
-                          if (!mounted || !dialogContext.mounted) return;
-                          setDialogState(() {
-                            errorMessage = error is ApiException
-                                ? error.message
-                                : 'Could not update your account.';
-                          });
-                        } finally {
-                          if (dialogContext.mounted) {
-                            setDialogState(() => saving = false);
-                          }
-                        }
-                      },
-                style: CandidateButtonStyle.primary(TextButton.styleFrom()),
-                child: Text(saving ? 'Saving…' : 'Save'),
-              ),
-            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: saving
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        saving = true;
+                        errorMessage = null;
+                      });
+                      try {
+                        await AuthService.updateUserProfile(
+                          firstName: first,
+                          lastName: last,
+                        );
+                        await _loadProfile(forceRefresh: true);
+                        if (!mounted || !dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop();
+                        _showToast('Account updated.');
+                      } catch (error) {
+                        if (!mounted || !dialogContext.mounted) return;
+                        setDialogState(() {
+                          errorMessage = error is ApiException
+                              ? error.message
+                              : 'Could not update your account.';
+                        });
+                      } finally {
+                        if (dialogContext.mounted) {
+                          setDialogState(() => saving = false);
+                        }
+                      }
+                    },
+              style: CandidateButtonStyle.primary(TextButton.styleFrom()),
+              child: Text(saving ? 'Saving…' : 'Save'),
+            ),
+          ],
         ),
+      ),
     );
   }
 
@@ -506,7 +895,8 @@ class _CandidateProfileSettingsScreenState
       key: Key(mobile ? 'candidate-mobile-sign-out' : 'candidate-web-sign-out'),
       onPressed: _signingOut ? null : _confirmSignOut,
       style: CandidateButtonStyle.destructive(
-        OutlinedButton.styleFrom(), radius: mobile ? 14 : 12,
+        OutlinedButton.styleFrom(),
+        radius: mobile ? 14 : 12,
       ),
       child: Text(
         'Sign out',
@@ -1256,21 +1646,13 @@ class _CandidateProfileSettingsScreenState
           _mobileSettingRow(
             'Signed in with Clerk',
             'Google SSO, session lasts 30 days',
-            _button(
-              'Manage',
-              c,
-              onPressed: _openAccountManagement,
-            ),
+            _button('Manage', c, onPressed: _openAccountManagement),
             c,
           ),
           _mobileSettingRow(
             'Download my data',
             'Interviews, scores and recordings',
-            _button(
-              'Request',
-              c,
-              onPressed: _requestDataExport,
-            ),
+            _button('Request', c, onPressed: _requestDataExport),
             c,
           ),
         ],
@@ -1722,26 +2104,56 @@ class _CandidateProfileSettingsScreenState
       user?.lastName,
     ].where((s) => s != null && s.trim().isNotEmpty).join(' ');
     final displayName = name.isEmpty ? 'Candidate' : name;
-    final initials = name.isEmpty
-        ? 'CA'
-        : name
-              .split(RegExp(r'\s+'))
-              .take(2)
-              .map((part) => part[0].toUpperCase())
-              .join();
     final avatarSize = mobile ? 68.0 : 88.0;
-    final avatar = Container(
-      width: avatarSize,
-      height: avatarSize,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: c.accentSoft,
-        border: Border.all(color: c.accentBorder),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: _inter(mobile ? 24 : 30, c.accent, weight: FontWeight.w600),
+    final avatar = MouseRegion(
+      onEnter: mobile ? null : (_) => setState(() => _avatarHovered = true),
+      onExit: mobile ? null : (_) => setState(() => _avatarHovered = false),
+      child: InkWell(
+        key: const Key('candidate-profile-avatar'),
+        onTapDown: (details) => _avatarTapPosition = details.globalPosition,
+        onTap: _openPhotoMenu,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: avatarSize,
+          height: avatarSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: c.accentSoft,
+            border: Border.all(color: c.accentBorder),
+          ),
+          child: ClipOval(
+            child: ValueListenableBuilder<CandidateProfile?>(
+              valueListenable: ProfileService.currentProfileNotifier,
+              builder: (context, cached, _) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  CandidateAvatarImage(
+                    profile: cached ?? _profile,
+                    initialsStyle: _inter(
+                      mobile ? 24 : 30,
+                      c.accent,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                  if (!mobile && _avatarHovered)
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Container(
+                        height: avatarSize * .34,
+                        color: const Color(0x99070B14),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.photo_camera_outlined,
+                          size: avatarSize * .21,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
     final who = Column(
@@ -1767,11 +2179,7 @@ class _CandidateProfileSettingsScreenState
       ],
     );
     final strength = _strengthCard(c);
-    final edit = _button(
-      'Edit profile',
-      c,
-      onPressed: _openProfileEditor,
-    );
+    final edit = _button('Edit profile', c, onPressed: _openProfileEditor);
     if (mobile) {
       return Padding(
         padding: const EdgeInsets.only(top: 34, bottom: 30),
@@ -2210,11 +2618,7 @@ class _CandidateProfileSettingsScreenState
           ),
         ),
         const SizedBox(height: 14),
-        _link(
-          'Add ${title.toLowerCase()}',
-          c,
-          _openResumes,
-        ),
+        _link('Add ${title.toLowerCase()}', c, _openResumes),
       ],
     ),
   );
@@ -2285,21 +2689,13 @@ class _CandidateProfileSettingsScreenState
                 c,
                 title: 'Signed in with Clerk',
                 subtitle: 'Google SSO, session lasts 30 days',
-                action: _button(
-                  'Manage',
-                  c,
-                  onPressed: _openAccountManagement,
-                ),
+                action: _button('Manage', c, onPressed: _openAccountManagement),
               ),
               _settingsRow(
                 c,
                 title: 'Download my data',
                 subtitle: 'Interviews, scores and recordings',
-                action: _button(
-                  'Request',
-                  c,
-                  onPressed: _requestDataExport,
-                ),
+                action: _button('Request', c, onPressed: _requestDataExport),
               ),
             ],
           ),

@@ -64,6 +64,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   String? _busyApplicationId;
   String? _error;
   bool _loading = true;
+  bool _hasAnyShortlisted = false;
   int _request = 0;
   late DateTime _monday;
   late int _selectedDay;
@@ -134,26 +135,35 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _error = null;
     });
     try {
+      final requested = _jobId;
       final jobs = List<Job>.from(
-        await (widget.loadJobs?.call() ?? JobService.listAllJobs()),
+        await (widget.loadJobs?.call() ??
+            (requested == null
+                ? JobService.listAllJobs(status: JobStatus.active)
+                : JobService.getJob(requested).then((job) => [job]))),
       );
       if (!mounted || request != _request) return;
-      final requested = _jobId;
-      if (requested != null && !jobs.any((job) => job.id == requested)) {
+      if (requested != null &&
+          widget.loadJobs != null &&
+          !jobs.any((job) => job.id == requested)) {
         jobs.add(await JobService.getJob(requested));
         if (!mounted || request != _request) return;
       }
       setState(() {
         _jobs = jobs;
-        _jobId ??= jobs.isEmpty ? null : jobs.first.id;
+        _jobId = requested ?? (jobs.length == 1 ? jobs.first.id : null);
+        _awaiting = [];
+        _booked = [];
+        _hasAnyShortlisted = false;
+        if (_jobId == null) _loading = false;
       });
-      await _loadAwaiting();
+      if (_jobId != null) await _loadAwaiting();
     } catch (error) {
       if (!mounted || request != _request) return;
       if (await _handleUnauthorized(error)) return;
       setState(() {
         _loading = false;
-        _error = 'Could not load roles: $error';
+        _error = _friendlyLoadError(error);
       });
     }
   }
@@ -163,9 +173,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     final jobId = _jobId;
     if (jobId == null || jobId.isEmpty) {
       setState(() {
-        _awaiting = [];
-        _booked = null;
         _loading = false;
+        _booked = [];
       });
       return;
     }
@@ -176,14 +185,15 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _booked = null;
     });
     try {
-      final applications =
-          await (widget.loadForJob?.call(jobId) ??
-              ApplicationService.listAllForJob(
-                jobId,
-                status: 'SHORTLISTED',
-                eligibleForInterview: true,
-              ));
+      final results = await Future.wait<Object>([
+        widget.loadForJob?.call(jobId) ??
+            ApplicationService.listAllForJob(jobId, status: 'SHORTLISTED'),
+        widget.loadBooked?.call(jobId) ??
+            InterviewService.listForJob(jobId, status: 'SCHEDULED'),
+      ]);
       if (!mounted || request != _request || jobId != _jobId) return;
+      final applications = results[0] as List<Application>;
+      final booked = results[1] as List<Interview>;
       final shortlisted =
           applications
               .where(
@@ -213,18 +223,19 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         }
       }
       setState(() {
+        _hasAnyShortlisted = shortlisted.isNotEmpty;
         _awaiting = shortlisted;
+        _booked = booked;
         if (!shortlisted.any((app) => app.id == _applicationId)) {
           _applicationId = null;
         }
         _loading = false;
       });
-      _loadBookings(jobId, request);
     } catch (error) {
       if (!mounted || request != _request || jobId != _jobId) return;
       if (await _handleUnauthorized(error)) return;
       setState(() {
-        _error = 'Could not load shortlisted applications: $error';
+        _error = _friendlyLoadError(error);
         _loading = false;
       });
     }
@@ -233,19 +244,18 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   bool _isShortlisted(Application app) =>
       (app.rawStatus ?? app.status.value).toUpperCase() == 'SHORTLISTED';
 
-  Future<void> _loadBookings(String jobId, int request) async {
-    try {
-      final booked =
-          await (widget.loadBooked?.call(jobId) ??
-              InterviewService.listForJob(jobId));
-      if (!mounted || request != _request || jobId != _jobId) return;
-      setState(() => _booked = booked);
-    } catch (error) {
-      if (!mounted || request != _request || jobId != _jobId) return;
-      await _handleUnauthorized(error);
-      // Some backends do not expose a readable interview list. Unknown
-      // availability is shown as a dash rather than an invented count.
+  String _friendlyLoadError(Object error) {
+    if (error is ApiException) {
+      switch (error.statusCode) {
+        case 400:
+          return 'Select a job to schedule interviews.';
+        case 403:
+          return "You're not authorized.";
+        case 404:
+          return 'Job not found.';
+      }
     }
+    return 'Something went wrong. Try again.';
   }
 
   Future<bool> _handleUnauthorized(Object error) async {
@@ -436,7 +446,57 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     }
   }
 
-  bool get _showEmptyState => !_loading && (_jobs.isEmpty || (_booked != null && _booked!.isEmpty && _awaiting.isEmpty));
+  bool get _showEmptyState => !_hasAnyShortlisted && (_booked?.isEmpty ?? true);
+
+  Widget _buildLoadingSkeleton(bool compact) => Padding(
+    padding: EdgeInsets.all(compact ? 16 : 22),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final height in [28.0, 160.0, 110.0]) ...[
+          Container(
+            height: height,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE9EDF5),
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+      ],
+    ),
+  );
+
+  Widget _buildJobPicker(bool compact) => Align(
+    alignment: Alignment.topLeft,
+    child: Padding(
+      padding: EdgeInsets.all(compact ? 16 : 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Select a job to schedule interviews.',
+            style: GoogleFonts.spaceGrotesk(
+              color: _ink,
+              fontSize: compact ? 17 : 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButton<String>(
+            hint: const Text('Select an active job'),
+            value: _jobId,
+            items: [
+              for (final job in _jobs)
+                DropdownMenuItem(value: job.id, child: Text(job.title)),
+            ],
+            onChanged: _changeJob,
+          ),
+        ],
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -457,15 +517,40 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                         breadcrumbSegments: ['Schedule interview'],
                       ),
                       Expanded(
-                        child: _showEmptyState
+                        child: _loading
+                            ? _buildLoadingSkeleton(compact)
+                            : _error != null
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _error!,
+                                      style: const TextStyle(
+                                        color: Color(0xFFDC354A),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: _loadJobs,
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : _jobId == null && _jobs.length > 1
+                            ? _buildJobPicker(compact)
+                            : _showEmptyState
                             ? _buildEmptyState(compact)
                             : SingleChildScrollView(
                                 padding: EdgeInsets.all(compact ? 16 : 22),
                                 child: Center(
                                   child: ConstrainedBox(
-                                    constraints: const BoxConstraints(maxWidth: 1240),
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 1240,
+                                    ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
                                       children: [
                                         if (_jobs.length > 1) ...[
                                           Align(
@@ -479,24 +564,13 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                                                     child: Text(job.title),
                                                   ),
                                               ],
-                                              onChanged: _busyApplicationId == null
+                                              onChanged:
+                                                  _busyApplicationId == null
                                                   ? _changeJob
                                                   : null,
                                             ),
                                           ),
                                           const SizedBox(height: 14),
-                                        ],
-                                        if (_loading)
-                                          const LinearProgressIndicator(minHeight: 2),
-                                        if (_error != null) ...[
-                                          Text(
-                                            _error!,
-                                            style: const TextStyle(color: Color(0xFFDC354A)),
-                                          ),
-                                          TextButton(
-                                            onPressed: _loadJobs,
-                                            child: const Text('Retry'),
-                                          ),
                                         ],
                                         if (compact)
                                           Column(
@@ -510,7 +584,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                                           )
                                         else
                                           Row(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Expanded(
                                                 flex: 14,
@@ -523,7 +598,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                                                 ),
                                               ),
                                               const SizedBox(width: 14),
-                                              Expanded(flex: 10, child: _awaitingPanel()),
+                                              Expanded(
+                                                flex: 10,
+                                                child: _awaitingPanel(),
+                                              ),
                                             ],
                                           ),
                                         if (_interview != null) ...[
@@ -611,16 +689,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                   border: Border.all(color: _edge, width: 1),
                 ),
                 child: TextField(
-                  style: GoogleFonts.inter(
-                    color: _ink,
-                    fontSize: 13,
-                  ),
+                  style: GoogleFonts.inter(color: _ink, fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: _muted,
-                      fontSize: 13,
-                    ),
+                    hintStyle: GoogleFonts.inter(color: _muted, fontSize: 13),
                     prefixIcon: const Icon(
                       Icons.search_rounded,
                       color: _muted,
@@ -659,7 +731,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 icon: Icons.notifications_none_rounded,
                 hasBadge: true,
                 badgeColor: const Color(0xFFEF4444),
-                onTap: () {},
+                onTap: () =>
+                    Navigator.of(context).pushNamed('/recruiter/notifications'),
               ),
               const SizedBox(width: 10),
               _buildTopBarIconButton(
@@ -790,10 +863,15 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                   ),
                 ),
                 onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/recruiter/schedule-interview');
+                  final jobId = _jobId;
+                  Navigator.of(context).pushReplacementNamed(
+                    jobId == null || jobId.isEmpty
+                        ? '/recruiter/pipeline'
+                        : '/recruiter/jobs/${Uri.encodeComponent(jobId)}/pipeline',
+                  );
                 },
                 child: Text(
-                  '＋ Schedule interview',
+                  'Go to pipeline',
                   style: GoogleFonts.inter(
                     color: Colors.white,
                     fontSize: 14,
@@ -825,7 +903,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       {'icon': Icons.dashboard_rounded, 'route': '/recruiter/command-deck'},
       {'icon': Icons.grid_view_rounded, 'route': '/recruiter/job-listings'},
       {'icon': Icons.view_column_rounded, 'route': '/recruiter/pipeline'},
-      {'icon': Icons.radio_button_checked_rounded, 'route': '/recruiter/schedule-interview'},
+      {
+        'icon': Icons.radio_button_checked_rounded,
+        'route': '/recruiter/schedule-interview',
+      },
       {'icon': Icons.leaderboard_rounded, 'route': '/recruiter/rankings'},
       {'icon': Icons.diamond_rounded, 'route': '/recruiter/analytics'},
     ];
@@ -874,7 +955,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: const Color(0xFF4D7BFA).withValues(alpha: 0.3),
+                              color: const Color(
+                                0xFF4D7BFA,
+                              ).withValues(alpha: 0.3),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
                             ),
@@ -883,9 +966,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                   ),
                   child: Icon(
                     item['icon'],
-                    color: isSelected
-                        ? Colors.white
-                        : const Color(0xFF94A3B8),
+                    color: isSelected ? Colors.white : const Color(0xFF94A3B8),
                     size: 20,
                   ),
                 ),

@@ -2,16 +2,16 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_client.dart';
 import '../../services/auth_service.dart';
+import '../../services/session_scope.dart';
+import '../../models/phase8_contract.dart';
+import 'recruiter_observation_screen.dart';
 import '../../widgets/recruiter_top_bar.dart';
 
 const _background = Color(0xFFF5F7FC);
-const _surface = Colors.white;
 const _field = Color(0xFFF8FAFE);
 const _edge = Color(0xFFE1E6F0);
 const _text = Color(0xFF16213A);
@@ -21,7 +21,8 @@ const _text4 = Color(0xFF95A1B7);
 const _accent = Color(0xFF3E68ED);
 
 class LiveMonitorScreen extends StatefulWidget {
-  const LiveMonitorScreen({super.key});
+  const LiveMonitorScreen({super.key, this.observationTarget});
+  final RecruiterObservationTarget? observationTarget;
 
   @override
   State<LiveMonitorScreen> createState() => _LiveMonitorScreenState();
@@ -37,31 +38,44 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
   bool _initialLoadStarted = false;
   bool _endpointNotFound = false;
   ModalRoute<dynamic>? _route;
+  final int _account = SessionScope.generation;
+  final CancelToken _requests = CancelToken();
+
+  void _accountChanged() {
+    _requests.cancel('Account changed.');
+    _refreshTimer?.cancel();
+    _requestId++;
+    if (mounted) {
+      setState(() {
+        _sessions = const [];
+        _loading = false;
+        _error = 'Your account changed. Reopen the monitor.';
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 10),
-      (_) {
-        if (mounted && _route?.isCurrent == true) {
-          _load(silent: true);
-        }
-      },
-    );
+    SessionScope.invalidations.addListener(_accountChanged);
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted && _route?.isCurrent == true) {
+        _load(silent: true);
+      }
+    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _route = ModalRoute.of(context);
-    if (_initialLoadStarted || _route?.isCurrent != true) {
+    if (widget.observationTarget != null ||
+        _initialLoadStarted ||
+        _route?.isCurrent != true) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          _initialLoadStarted ||
-          _route?.isCurrent != true) {
+      if (!mounted || _initialLoadStarted || _route?.isCurrent != true) {
         return;
       }
       _initialLoadStarted = true;
@@ -72,11 +86,16 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _requests.cancel('Monitor disposed.');
+    SessionScope.invalidations.removeListener(_accountChanged);
     super.dispose();
   }
 
   Future<void> _load({bool silent = false}) async {
-    if (_endpointNotFound ||
+    if (widget.observationTarget != null ||
+        _account != SessionScope.generation ||
+        AuthService.getUserRole() == 'CANDIDATE' ||
+        _endpointNotFound ||
         !mounted ||
         _route?.isCurrent != true) {
       return;
@@ -90,12 +109,14 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
     }
     try {
       final client = await ApiClient.getInstance();
+      if (_requests.isCancelled) return;
       final sessions = <_LiveSession>[];
       for (var page = 1; page <= 100; page++) {
         if (!mounted || _route?.isCurrent != true) return;
         final response = await client.get(
           '/interviews/',
           queryParameters: {'status': 'LIVE', if (page > 1) 'page': page},
+          cancelToken: _requests,
         );
         final data = response.data;
         final rows = data is List
@@ -112,7 +133,11 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
         }
         if (data is! Map || data['next'] == null || data['next'] == '') break;
       }
-      if (!mounted || requestId != _requestId) return;
+      if (!mounted ||
+          requestId != _requestId ||
+          _account != SessionScope.generation) {
+        return;
+      }
       setState(() {
         _sessions = sessions;
         _selectedId = sessions.any((session) => session.id == _selectedId)
@@ -131,7 +156,9 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
       }
       if (error.response?.statusCode == 404) {
         if (!_endpointNotFound) {
-          debugPrint('Live interviews endpoint returned 404; stopping refreshes.');
+          debugPrint(
+            'Live interviews endpoint returned 404; stopping refreshes.',
+          );
         }
         _endpointNotFound = true;
       }
@@ -158,6 +185,14 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (AuthService.getUserRole() == 'CANDIDATE') {
+      return const Scaffold(
+        body: Center(child: Text('Recruiter access is required.')),
+      );
+    }
+    if (widget.observationTarget != null) {
+      return RecruiterObservationScreen(target: widget.observationTarget!);
+    }
     final mobile = _mobile;
     return Scaffold(
       backgroundColor: _background,
@@ -197,28 +232,6 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
     );
   }
 
-  Widget _mobileHeader() => SizedBox(
-    height: 56,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          SvgPicture.asset('assets/images/logo.svg', width: 26, height: 26),
-          const SizedBox(width: 10),
-          Text(
-            'Live',
-            style: GoogleFonts.inter(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -.57,
-              color: _text,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
   Widget _emptyState(bool mobile) => Center(
     child: Padding(
       padding: EdgeInsets.fromLTRB(20, 0, 20, mobile ? 80 : 0),
@@ -257,7 +270,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
             child: Text(
               mobile
                   ? 'Running interviews show up here.'
-                  : 'When a candidate starts an interview, their live session and integrity alerts appear here in real time.',
+                  : 'Running interviews appear here. Authorized observations require an available session identity and analysis service.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: mobile ? 11 : 12.5,
@@ -308,7 +321,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
           if (!mobile) ...[
             const SizedBox(height: 4),
             Text(
-              'Alerts also arrive in Notifications',
+              'Observations require authorized access',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(fontSize: 10.5, color: _text4),
             ),
@@ -411,9 +424,9 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         mobile ? 16 : 28,
-        mobile ? 20 : 28,
+        24,
         mobile ? 16 : 28,
-        mobile ? 110 : 48,
+        mobile ? 110 : 40,
       ),
       child: Center(
         child: ConstrainedBox(
@@ -421,406 +434,98 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      session.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: mobile ? 20 : 26,
-                        fontWeight: FontWeight.w700,
-                        color: _text,
+              Text(
+                session.displayName,
+                style: GoogleFonts.inter(
+                  fontSize: mobile ? 20 : 26,
+                  fontWeight: FontWeight.w700,
+                  color: _text,
+                ),
+              ),
+              if (_sessions.length > 1)
+                DropdownButtonFormField<String>(
+                  key: ValueKey(_selectedId),
+                  initialValue: _selectedId,
+                  decoration: const InputDecoration(
+                    labelText: 'Select interview to observe',
+                  ),
+                  items: [
+                    for (final item in _sessions)
+                      DropdownMenuItem(
+                        value: item.id,
+                        child: Text(
+                          item.displayName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                  ],
+                  onChanged: (id) => setState(() => _selectedId = id),
+                ),
+              Text('Interview ${session.id}'),
+              const SizedBox(height: 16),
+              if (session.target == null)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text(
+                      'Observations unavailable: this interview response does not provide an explicit session and application identity. No session identifier is inferred from the interview ID.',
                     ),
                   ),
-                  if (_sessions.length > 1)
-                    DropdownButton<String>(
-                      value: _selectedId,
-                      items: [
-                        for (final item in _sessions)
-                          DropdownMenuItem(
-                            value: item.id,
-                            child: Text(
-                              item.displayName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                      onChanged: (id) => setState(() => _selectedId = id),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Interview ${session.id}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.jetBrainsMono(fontSize: 11, color: _text3),
-              ),
-              const SizedBox(height: 20),
-              if (mobile) ...[
-                _cameraTile(session, true),
-                const SizedBox(height: 16),
-                _integrityPanel(session),
-                const SizedBox(height: 16),
-                _transcriptPanel(session),
-                const SizedBox(height: 16),
-                _sessionLogPanel(session),
-              ] else
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Column(
-                        children: [
-                          _cameraTile(session, false),
-                          const SizedBox(height: 20),
-                          _transcriptPanel(session),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        children: [
-                          _integrityPanel(session),
-                          const SizedBox(height: 20),
-                          _sessionLogPanel(session),
-                        ],
-                      ),
-                    ),
-                  ],
+                )
+              else ...[
+                OutlinedButton(
+                  onPressed: () => Navigator.of(context).pushNamed(
+                    '/recruiter/candidate-report',
+                    arguments: session.target,
+                  ),
+                  child: const Text('Open behavioral report for this session'),
                 ),
+                RecruiterObservationView(
+                  key: ValueKey(session.target!.key),
+                  target: session.target!,
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
   }
-
-  Widget _panel(String title, Widget content) => Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: _surface,
-      border: Border.all(color: _edge),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: _text,
-          ),
-        ),
-        const SizedBox(height: 16),
-        content,
-      ],
-    ),
-  );
-
-  Widget _cameraTile(_LiveSession session, bool mobile) => Container(
-    height: mobile ? 220 : 380,
-    decoration: BoxDecoration(
-      color: const Color(0xFF0F172A),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: Stack(
-      children: [
-        if (session.frameUrl != null)
-          Positioned.fill(
-            child: Image.network(
-              session.frameUrl!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _unavailableVideo(),
-            ),
-          )
-        else
-          Positioned.fill(child: _unavailableVideo()),
-        Positioned(
-          top: 14,
-          left: 14,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0x99000000),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              'LIVE',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-        if (session.streamUrl != null)
-          Positioned(
-            bottom: 16,
-            left: 16,
-            child: TextButton.icon(
-              onPressed: () => launchUrl(
-                Uri.parse(session.streamUrl!),
-                mode: LaunchMode.externalApplication,
-              ),
-              icon: const Icon(Icons.open_in_new, size: 16),
-              label: const Text('Open live video'),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: _text,
-              ),
-            ),
-          ),
-      ],
-    ),
-  );
-
-  Widget _unavailableVideo() => Center(
-    child: Text(
-      'Live video is not available in this view.',
-      textAlign: TextAlign.center,
-      style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF94A3B8)),
-    ),
-  );
-
-  Widget _integrityPanel(_LiveSession session) => _panel(
-    'Integrity',
-    session.integrityScore == null
-        ? Text(
-            'No integrity data yet.',
-            style: GoogleFonts.inter(fontSize: 13, color: _text3),
-          )
-        : Row(
-            children: [
-              SizedBox(
-                width: 86,
-                height: 86,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox.expand(
-                      child: CircularProgressIndicator(
-                        value: session.integrityScore! / 100,
-                        strokeWidth: 7,
-                        backgroundColor: _edge,
-                        valueColor: const AlwaysStoppedAnimation(
-                          Color(0xFF14B584),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '${session.integrityScore!.round()}',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 21,
-                        fontWeight: FontWeight.w700,
-                        color: _text,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  session.integrityLabel ?? 'Integrity score',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: _text2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-  );
-
-  Widget _transcriptPanel(_LiveSession session) => _panel(
-    'Live transcript',
-    session.transcript.isEmpty
-        ? Text(
-            'Transcript will appear when the interview sends it.',
-            style: GoogleFonts.inter(fontSize: 13, color: _text3),
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final line in session.transcript)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 80,
-                        child: Text(
-                          line.speaker,
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: _accent,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          line.text,
-                          style: GoogleFonts.inter(fontSize: 13, color: _text2),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-  );
-
-  Widget _sessionLogPanel(_LiveSession session) => _panel(
-    'Session log',
-    session.events.isEmpty
-        ? Text(
-            'No session events yet.',
-            style: GoogleFonts.inter(fontSize: 13, color: _text3),
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final event in session.events)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 60,
-                        child: Text(
-                          event.time,
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 10,
-                            color: _text3,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          event.text,
-                          style: GoogleFonts.inter(
-                            fontSize: 12.5,
-                            color: _text2,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-  );
 }
 
 class _LiveSession {
   const _LiveSession({
     required this.id,
     required this.displayName,
-    this.frameUrl,
-    this.streamUrl,
-    this.integrityScore,
-    this.integrityLabel,
-    required this.transcript,
-    required this.events,
+    this.target,
   });
   final String id, displayName;
-  final String? frameUrl, streamUrl, integrityLabel;
-  final double? integrityScore;
-  final List<_TranscriptLine> transcript;
-  final List<_SessionEvent> events;
-
+  final RecruiterObservationTarget? target;
   factory _LiveSession.fromJson(Map<dynamic, dynamic> json) {
-    final id = json['id']?.toString() ?? '';
+    final id = phase8Identity(json['id']);
     final candidate = json['candidate'];
     final name =
         (json['candidate_name'] ??
-                (candidate is Map ? candidate['name'] : null) ??
-                json['candidate_email'])
+                (candidate is Map ? candidate['name'] : null))
             ?.toString()
             .trim();
-    final score = _number(
-      json['integrity_score'] ?? json['integrity'] ?? json['proctoring_score'],
-    );
+    // Required backend serializer addition; absent data stays unavailable.
+    final sessionId = json['interview_session_id'];
+    final applicationId = json['application'];
     return _LiveSession(
       id: id,
-      displayName: name != null && name.isNotEmpty ? name : 'Live interview',
-      frameUrl: _safeUrl(
-        json['camera_snapshot_url'] ??
-            json['video_frame_url'] ??
-            json['thumbnail_url'],
-      ),
-      streamUrl: _safeUrl(json['stream_url'] ?? json['video_url']),
-      integrityScore: score?.clamp(0, 100).toDouble(),
-      integrityLabel:
-          json['integrity_label']?.toString() ?? json['risk_level']?.toString(),
-      transcript: _lines(json['transcript'] ?? json['transcript_lines']),
-      events: _events(json['session_log'] ?? json['events'] ?? json['alerts']),
+      displayName: name == null || name.isEmpty ? 'Live interview' : name,
+      target: sessionId == null || applicationId == null
+          ? null
+          : RecruiterObservationTarget(
+              identity: InterviewSessionIdentity(
+                interviewId: id,
+                sessionId: phase8Identity(sessionId),
+              ),
+              applicationId: phase8Identity(applicationId),
+            ),
     );
   }
-
-  static num? _number(dynamic value) {
-    if (value is num) return value;
-    if (value is String) return num.tryParse(value);
-    if (value is Map) return _number(value['score'] ?? value['value']);
-    return null;
-  }
-
-  static String? _safeUrl(dynamic value) {
-    final uri = Uri.tryParse(value?.toString() ?? '');
-    return uri != null && (uri.scheme == 'https' || uri.scheme == 'http')
-        ? uri.toString()
-        : null;
-  }
-
-  static List<_TranscriptLine> _lines(dynamic value) {
-    if (value is! List) return const [];
-    return [
-      for (final raw in value)
-        if (raw is Map && (raw['text'] ?? raw['content']) != null)
-          _TranscriptLine(
-            (raw['speaker'] ?? raw['role'] ?? 'Speaker').toString(),
-            (raw['text'] ?? raw['content']).toString(),
-          ),
-    ];
-  }
-
-  static List<_SessionEvent> _events(dynamic value) {
-    if (value is! List) return const [];
-    return [
-      for (final raw in value)
-        if (raw is Map &&
-            (raw['message'] ?? raw['text'] ?? raw['event']) != null)
-          _SessionEvent(
-            (raw['time'] ?? raw['timestamp'] ?? '').toString(),
-            (raw['message'] ?? raw['text'] ?? raw['event']).toString(),
-          ),
-    ];
-  }
-}
-
-class _TranscriptLine {
-  const _TranscriptLine(this.speaker, this.text);
-  final String speaker, text;
-}
-
-class _SessionEvent {
-  const _SessionEvent(this.time, this.text);
-  final String time, text;
 }
 
 class _MonitorGridPainter extends CustomPainter {

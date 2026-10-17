@@ -8,42 +8,14 @@ import '../../widgets/candidate_side_nav.dart';
 import 'candidate_home_screen.dart';
 import 'candidate_applications_screen.dart';
 import 'candidate_job_feed_screen.dart';
-import 'candidate_interview_lobby_screen.dart';
 import 'candidate_resume_management_screen.dart';
 import 'candidate_profile_settings_screen.dart';
-
-// ── NOTIFICATION DATA MODEL ──────────────────────────────────────────────────
-class _Notif {
-  final String id;
-  final String tag;
-  final Color tagColor;
-  final Color tagTextColor;
-  final Color dotColor;
-  final String title;
-  final String subtitle;
-  final String timeAgo;
-  final String statusChip;
-  final Color chipColor;
-  final Color chipTextColor;
-  final String? actionLabel;
-  bool isRead;
-
-  _Notif({
-    required this.id,
-    required this.tag,
-    required this.tagColor,
-    required this.tagTextColor,
-    required this.dotColor,
-    required this.title,
-    required this.subtitle,
-    required this.timeAgo,
-    required this.statusChip,
-    required this.chipColor,
-    required this.chipTextColor,
-    this.actionLabel,
-    this.isRead = false,
-  });
-}
+import '../../models/app_notification.dart';
+import '../../models/paginated_response.dart';
+import '../../services/notification_service.dart';
+import '../../services/api_exception.dart';
+import '../../services/auth_service.dart';
+import '../../services/session_scope.dart';
 
 class CandidateNotificationsScreen extends StatefulWidget {
   const CandidateNotificationsScreen({super.key});
@@ -56,120 +28,120 @@ class CandidateNotificationsScreen extends StatefulWidget {
 class _CandidateNotificationsScreenState
     extends State<CandidateNotificationsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  List<AppNotification> _items = [];
+  int _unreadCount = 0;
+  int _page = 1;
+  bool _hasNext = false;
+  bool _loading = true;
+  bool _loaded = false;
+  String? _error;
+  final Set<String> _marking = {};
+  int _request = 0;
+  bool _missingRefetchQueued = false;
 
-  // ── MOCK NOTIFICATION DATA ─────────────────────────────────────────────────
-  final List<_Notif> _todayNotifs = [
-    _Notif(
-      id: 't1',
-      tag: 'INTERVIEW',
-      tagColor: const Color(0xFFDBEAFE),
-      tagTextColor: const Color(0xFF1D4ED8),
-      dotColor: const Color(0xFFEF4444),
-      title: 'Your ML Engineer interview starts in 45 min',
-      subtitle: 'NeuralTech · device check recommended',
-      timeAgo: 'Now',
-      statusChip: 'SOON',
-      chipColor: const Color(0xFFFEF3C7),
-      chipTextColor: const Color(0xFFB45309),
-      actionLabel: 'Join lobby',
-    ),
-    _Notif(
-      id: 't2',
-      tag: 'FEEDBACK',
-      tagColor: const Color(0xFFD1FAE5),
-      tagTextColor: const Color(0xFF065F46),
-      dotColor: const Color(0xFF10B981),
-      title: 'Feedback is ready — Backend Engineer',
-      subtitle: 'TechVerse · scored and coached · 1h ago',
-      timeAgo: '1h ago',
-      statusChip: 'READY',
-      chipColor: const Color(0xFFD1FAE5),
-      chipTextColor: const Color(0xFF065F46),
-    ),
-    _Notif(
-      id: 't3',
-      tag: 'APPLICATION',
-      tagColor: const Color(0xFFEDE9FE),
-      tagTextColor: const Color(0xFF6D28D9),
-      dotColor: const Color(0xFF8B5CF6),
-      title: 'Full Stack Developer moved to Interview',
-      subtitle: 'CodeCraft · 3h ago',
-      timeAgo: '3h ago',
-      statusChip: 'UPDATE',
-      chipColor: const Color(0xFFEDE9FE),
-      chipTextColor: const Color(0xFF6D28D9),
-    ),
-  ];
-
-  final List<_Notif> _earlierNotifs = [
-    _Notif(
-      id: 'e1',
-      tag: 'MATCH',
-      tagColor: const Color(0xFFCCFBF1),
-      tagTextColor: const Color(0xFF0F766E),
-      dotColor: const Color(0xFF14B8A6),
-      title: '3 new roles match your profile 80%+',
-      subtitle: 'Updated overnight · 1d ago',
-      timeAgo: '1d ago',
-      statusChip: 'NEW',
-      chipColor: const Color(0xFFCCFBF1),
-      chipTextColor: const Color(0xFF0F766E),
-      isRead: true,
-    ),
-    _Notif(
-      id: 'e2',
-      tag: 'APPLICATION',
-      tagColor: const Color(0xFFEDE9FE),
-      tagTextColor: const Color(0xFF6D28D9),
-      dotColor: const Color(0xFF8B5CF6),
-      title: 'DataFlow viewed your application',
-      subtitle: 'Backend Engineer · 2d ago',
-      timeAgo: '2d ago',
-      statusChip: 'SEEN',
-      chipColor: const Color(0xFFF1F5F9),
-      chipTextColor: const Color(0xFF64748B),
-      isRead: true,
-    ),
-    _Notif(
-      id: 'e3',
-      tag: 'SYSTEM',
-      tagColor: const Color(0xFFF1F5F9),
-      tagTextColor: const Color(0xFF475569),
-      dotColor: const Color(0xFF94A3B8),
-      title: 'Add 2 projects with metrics',
-      subtitle: 'Would lift your profile to 85+ · 3d ago',
-      timeAgo: '3d ago',
-      statusChip: 'TIP',
-      chipColor: const Color(0xFFF8FAFC),
-      chipTextColor: const Color(0xFF64748B),
-      isRead: true,
-    ),
-  ];
-
-  int get _unreadCount {
-    return [
-      ..._todayNotifs,
-      ..._earlierNotifs,
-    ].where((n) => !n.isRead).length;
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
   }
 
-  void _markAllRead() {
+  Future<void> _fetch({bool more = false}) async {
+    if (_loading && _loaded) return;
+    final request = ++_request;
+    final generation = SessionScope.generation;
+    final page = more ? _page + 1 : 1;
     setState(() {
-      for (final n in _todayNotifs) {
-        n.isRead = true;
-      }
-      for (final n in _earlierNotifs) {
-        n.isRead = true;
-      }
+      _loading = true;
+      _error = null;
     });
+    try {
+      final results = await Future.wait<Object>([
+        NotificationService.list(page: page),
+        NotificationService.unreadCount(),
+      ]);
+      if (!mounted ||
+          request != _request ||
+          generation != SessionScope.generation)
+        return;
+      final response = results[0] as PaginatedResponse<AppNotification>;
+      setState(() {
+        final byId = {
+          for (final item in more ? _items : <AppNotification>[]) item.id: item,
+        };
+        for (final item in response.results) {
+          byId[item.id] = item;
+        }
+        _items = byId.values.toList();
+        _missingRefetchQueued = false;
+        _unreadCount = results[1] as int;
+        _page = page;
+        _hasNext = response.hasNext;
+        _loaded = true;
+      });
+    } catch (error) {
+      if (!mounted ||
+          request != _request ||
+          generation != SessionScope.generation)
+        return;
+      await _handleError(error, retry: () => _fetch(more: more));
+    } finally {
+      if (mounted && request == _request) setState(() => _loading = false);
+    }
   }
 
-  void _markRead(String id) {
-    setState(() {
-      for (final n in [..._todayNotifs, ..._earlierNotifs]) {
-        if (n.id == id) n.isRead = true;
+  Future<void> _handleError(Object error, {required VoidCallback retry}) async {
+    final code = error is ApiException ? error.statusCode : null;
+    if (code == 401) {
+      await AuthService.signOut(context);
+      if (mounted)
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+    } else if (code == 404) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Notification not found.')));
+      if (!_missingRefetchQueued) {
+        _missingRefetchQueued = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _fetch();
+        });
       }
-    });
+    } else if (code == 403) {
+      setState(() => _error = "You're not authorized to view notifications.");
+    } else if (code == null || code >= 500) {
+      setState(() => _error = "Couldn't load notifications. Retry.");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Couldn't load notifications. Retry."),
+          action: SnackBarAction(label: 'Retry', onPressed: retry),
+        ),
+      );
+    }
+  }
+
+  Future<void> _markRead(String id) async {
+    final index = _items.indexWhere((item) => item.id == id);
+    if (index < 0 || _items[index].isRead || !_marking.add(id)) return;
+    final generation = SessionScope.generation;
+    try {
+      final updated = await NotificationService.markRead(id);
+      if (!mounted || generation != SessionScope.generation) return;
+      setState(() {
+        _items = _items.map((item) => item.id == id ? updated : item).toList();
+        if (_unreadCount > 0) _unreadCount--;
+      });
+    } catch (error) {
+      if (mounted && generation == SessionScope.generation) {
+        await _handleError(error, retry: () => _markRead(id));
+      }
+    } finally {
+      _marking.remove(id);
+    }
+  }
+
+  Future<void> _markAllRead() async {
+    for (final item in _items.where((item) => !item.isRead).toList()) {
+      await _markRead(item.id);
+    }
   }
 
   @override
@@ -241,7 +213,12 @@ class _CandidateNotificationsScreenState
                         child: Column(
                           children: [
                             // Top Bar
-                            RecruiterTopBar(pageTitle: 'Notifications', candidate: true),
+                            RecruiterTopBar(
+                              pageTitle: 'Notifications',
+                              candidate: true,
+                              hasUnread: _unreadCount > 0,
+                              useExactUnread: true,
+                            ),
 
                             // Scrollable Content
                             Expanded(
@@ -286,18 +263,16 @@ class _CandidateNotificationsScreenState
   }
 
   // ── TOP BAR ──────────────────────────────────────────────────────────────────
-  Widget _buildTopBar(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
+  Widget _buildTopBar(bool isMobile, Color textPrimary, Color textSecondary) {
     if (isMobile) {
       return Container(
         height: 56,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: const BoxDecoration(
           color: Colors.white,
-          border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+          border: Border(
+            bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+          ),
         ),
         child: Row(
           children: [
@@ -305,7 +280,11 @@ class _CandidateNotificationsScreenState
               onTap: () => Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
               ),
-              child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF64748B), size: 22),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: Color(0xFF64748B),
+                size: 22,
+              ),
             ),
             const SizedBox(width: 12),
             SvgPicture.asset('assets/images/logo.svg', height: 28),
@@ -373,7 +352,11 @@ class _CandidateNotificationsScreenState
                     suffixIcon: Container(
                       width: 30,
                       alignment: Alignment.center,
-                      margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
+                      margin: const EdgeInsets.only(
+                        right: 6,
+                        top: 4,
+                        bottom: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(4),
@@ -403,7 +386,9 @@ class _CandidateNotificationsScreenState
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: _unreadCount > 0 ? const Color(0xFF0FB89B) : Colors.white,
+                    color: _unreadCount > 0
+                        ? const Color(0xFF0FB89B)
+                        : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: _unreadCount > 0
                         ? null
@@ -416,7 +401,9 @@ class _CandidateNotificationsScreenState
                         _unreadCount > 0
                             ? Icons.notifications_rounded
                             : Icons.notifications_none_rounded,
-                        color: _unreadCount > 0 ? Colors.white : const Color(0xFF475569),
+                        color: _unreadCount > 0
+                            ? Colors.white
+                            : const Color(0xFF475569),
                         size: 18,
                       ),
                       if (_unreadCount > 0)
@@ -527,28 +514,85 @@ class _CandidateNotificationsScreenState
         ),
         const SizedBox(height: 24),
 
-        // ── TODAY GROUP ────────────────────────────────────────────────────────
-        _buildGroupCard(
-          label: 'TODAY',
-          notifs: _todayNotifs,
-          isMobile: isMobile,
-          textPrimary: textPrimary,
-          textSecondary: textSecondary,
-          cardBg: cardBg,
-          cardBorder: cardBorder,
-        ),
-        const SizedBox(height: 16),
-
-        // ── EARLIER GROUP ──────────────────────────────────────────────────────
-        _buildGroupCard(
-          label: 'EARLIER',
-          notifs: _earlierNotifs,
-          isMobile: isMobile,
-          textPrimary: textPrimary,
-          textSecondary: textSecondary,
-          cardBg: cardBg,
-          cardBorder: cardBorder,
-        ),
+        if (_loading && !_loaded)
+          for (var i = 0; i < 3; i++)
+            const Card(
+              child: ListTile(
+                title: LinearProgressIndicator(),
+                subtitle: SizedBox(height: 20),
+              ),
+            ),
+        if (_error != null)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _error!,
+                  style: GoogleFonts.inter(color: const Color(0xFFEF4444)),
+                ),
+              ),
+              if (_error != "You're not authorized to view notifications.")
+                TextButton(
+                  onPressed: () => _fetch(),
+                  child: const Text('Retry'),
+                ),
+            ],
+          ),
+        if (_loaded && _items.isEmpty && _error == null)
+          const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.notifications_none_rounded),
+                Text("You're all caught up."),
+              ],
+            ),
+          ),
+        if (_items.any(
+          (n) => DateTime.now().difference(n.createdAt.toLocal()).inDays == 0,
+        ))
+          _buildGroupCard(
+            label: 'TODAY',
+            notifs: _items
+                .where(
+                  (n) =>
+                      DateTime.now().difference(n.createdAt.toLocal()).inDays ==
+                      0,
+                )
+                .toList(),
+            isMobile: isMobile,
+            textPrimary: textPrimary,
+            textSecondary: textSecondary,
+            cardBg: cardBg,
+            cardBorder: cardBorder,
+          ),
+        if (_items.any(
+          (n) => DateTime.now().difference(n.createdAt.toLocal()).inDays > 0,
+        )) ...[
+          const SizedBox(height: 16),
+          _buildGroupCard(
+            label: 'EARLIER',
+            notifs: _items
+                .where(
+                  (n) =>
+                      DateTime.now().difference(n.createdAt.toLocal()).inDays >
+                      0,
+                )
+                .toList(),
+            isMobile: isMobile,
+            textPrimary: textPrimary,
+            textSecondary: textSecondary,
+            cardBg: cardBg,
+            cardBorder: cardBorder,
+          ),
+        ],
+        if (_hasNext)
+          Center(
+            child: TextButton(
+              onPressed: _loading ? null : () => _fetch(more: true),
+              child: const Text('Load more'),
+            ),
+          ),
       ],
     );
   }
@@ -556,7 +600,7 @@ class _CandidateNotificationsScreenState
   // ── GROUP CARD (TODAY / EARLIER) ─────────────────────────────────────────────
   Widget _buildGroupCard({
     required String label,
-    required List<_Notif> notifs,
+    required List<AppNotification> notifs,
     required bool isMobile,
     required Color textPrimary,
     required Color textSecondary,
@@ -631,7 +675,7 @@ class _CandidateNotificationsScreenState
 
   // ── SINGLE NOTIFICATION ROW ─────────────────────────────────────────────────
   Widget _buildNotifRow({
-    required _Notif notif,
+    required AppNotification notif,
     required bool isMobile,
     required Color textPrimary,
     required Color textSecondary,
@@ -653,7 +697,7 @@ class _CandidateNotificationsScreenState
   }
 
   Widget _buildWebNotifContent(
-    _Notif notif,
+    AppNotification notif,
     Color textPrimary,
     Color textSecondary,
   ) {
@@ -669,104 +713,67 @@ class _CandidateNotificationsScreenState
             margin: const EdgeInsets.only(right: 12),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: notif.isRead ? Colors.transparent : notif.dotColor,
+              color: notif.isRead
+                  ? Colors.transparent
+                  : const Color(0xFFEF4444),
             ),
           ),
 
-        // Tag badge
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          decoration: BoxDecoration(
-            color: notif.tagColor,
-            borderRadius: BorderRadius.circular(5),
-          ),
-          child: Text(
-            notif.tag,
-            style: GoogleFonts.inter(
-              color: notif.tagTextColor,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.3,
+          // Tag badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDBEAFE),
+              borderRadius: BorderRadius.circular(5),
             ),
-          ),
-        ),
-        const SizedBox(width: 14),
-
-        // Title + Subtitle
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                notif.title,
-                style: GoogleFonts.inter(
-                  color: textPrimary,
-                  fontSize: 13.5,
-                  fontWeight: notif.isRead ? FontWeight.w500 : FontWeight.w700,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                notif.subtitle,
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-
-        // Status chip
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: notif.chipColor,
-            borderRadius: BorderRadius.circular(5),
-          ),
-          child: Text(
-            notif.statusChip,
-            style: GoogleFonts.inter(
-              color: notif.chipTextColor,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.3,
-            ),
-          ),
-        ),
-
-        // Action button
-        if (notif.actionLabel != null) ...[
-          const SizedBox(width: 14),
-          GestureDetector(
-            onTap: () {
-              _markRead(notif.id);
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => const CandidateInterviewLobbyScreen(),
-                ),
-              );
-            },
             child: Text(
-              notif.actionLabel!,
+              notif.type.toUpperCase(),
               style: GoogleFonts.inter(
-                color: const Color(0xFF0A8A76),
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1D4ED8),
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.3,
               ),
             ),
           ),
+          const SizedBox(width: 14),
+
+          // Title + Subtitle
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  notif.message,
+                  style: GoogleFonts.inter(
+                    color: textPrimary,
+                    fontSize: 13.5,
+                    fontWeight: notif.isRead
+                        ? FontWeight.w500
+                        : FontWeight.w700,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  notif.relativeTime,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
         ],
-      ],
-    ),
+      ),
     );
   }
 
   Widget _buildMobileNotifContent(
-    _Notif notif,
+    AppNotification notif,
     Color textPrimary,
     Color textSecondary,
   ) {
@@ -783,96 +790,66 @@ class _CandidateNotificationsScreenState
               height: 7,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: notif.isRead ? Colors.transparent : notif.dotColor,
+                color: notif.isRead
+                    ? Colors.transparent
+                    : const Color(0xFFEF4444),
               ),
             ),
           ),
 
-        // Content
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Tag + chip row
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: notif.tagColor,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      notif.tag,
-                      style: GoogleFonts.inter(
-                        color: notif.tagTextColor,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
+          // Content
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tag + chip row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDBEAFE),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        notif.type.toUpperCase(),
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF1D4ED8),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: notif.chipColor,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      notif.statusChip,
-                      style: GoogleFonts.inter(
-                        color: notif.chipTextColor,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                notif.title,
-                style: GoogleFonts.inter(
-                  color: textPrimary,
-                  fontSize: 13,
-                  fontWeight: notif.isRead ? FontWeight.w500 : FontWeight.w700,
-                  height: 1.3,
+                  ],
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                notif.subtitle,
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
-                  fontSize: 11.5,
+                const SizedBox(height: 6),
+                Text(
+                  notif.message,
+                  style: GoogleFonts.inter(
+                    color: textPrimary,
+                    fontSize: 13,
+                    fontWeight: notif.isRead
+                        ? FontWeight.w500
+                        : FontWeight.w700,
+                    height: 1.3,
+                  ),
                 ),
-              ),
-              if (notif.actionLabel != null) ...[
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () {
-                    _markRead(notif.id);
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => const CandidateInterviewLobbyScreen(),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    notif.actionLabel!,
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF0A8A76),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  notif.relativeTime,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF64748B),
+                    fontSize: 11.5,
                   ),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
-      ],
-    ),
+        ],
+      ),
     );
   }
 
@@ -910,23 +887,33 @@ class _CandidateNotificationsScreenState
               switch (item['index'] as int) {
                 case 0:
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateHomeScreen(),
+                    ),
                   );
                 case 1:
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateApplicationsScreen(),
+                    ),
                   );
                 case 2:
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateJobFeedScreen(),
+                    ),
                   );
                 case 4:
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateResumeManagementScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateResumeManagementScreen(),
+                    ),
                   );
                 case 5:
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const CandidateProfileSettingsScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const CandidateProfileSettingsScreen(),
+                    ),
                   );
               }
             },

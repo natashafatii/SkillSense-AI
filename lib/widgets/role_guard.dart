@@ -6,7 +6,15 @@ import '../services/auth_service.dart';
 class RoleGuard extends StatefulWidget {
   final List<String> allowedRoles;
   final Widget child;
-  const RoleGuard({super.key, required this.allowedRoles, required this.child});
+
+  /// Embedded protected panels use inline verification instead of a Scaffold.
+  final bool inline;
+  const RoleGuard({
+    super.key,
+    required this.allowedRoles,
+    required this.child,
+    this.inline = false,
+  });
   @override
   State<RoleGuard> createState() => _RoleGuardState();
 }
@@ -69,42 +77,40 @@ class _RoleGuardState extends State<RoleGuard> {
     if (_allowed && widget.allowedRoles.contains(AuthService.getUserRole())) {
       return widget.child;
     }
-    return Scaffold(
-      body: Center(
-        child: _error == null
-            ? const CircularProgressIndicator()
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(_error!, textAlign: TextAlign.center),
-                  ),
-                  TextButton(
-                    onPressed: _verifyAccess,
-                    child: const Text('Retry'),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      try {
-                        await AuthService.signOut();
-                        if (context.mounted) {
-                          Navigator.of(context).pushNamedAndRemoveUntil(
-                            '/login/role',
-                            (_) => false,
-                          );
-                        }
-                      } catch (error) {
-                        if (context.mounted) {
-                          setState(() => _error = 'Sign out failed: $error');
-                        }
+    final content = Center(
+      child: _error == null
+          ? const CircularProgressIndicator()
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(_error!, textAlign: TextAlign.center),
+                ),
+                TextButton(
+                  onPressed: _verifyAccess,
+                  child: const Text('Retry'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      await AuthService.signOut();
+                      if (context.mounted) {
+                        Navigator.of(
+                          context,
+                        ).pushNamedAndRemoveUntil('/login/role', (_) => false);
                       }
-                    },
-                    child: const Text('Back to login'),
-                  ),
-                ],
-              ),
-      ),
+                    } catch (error) {
+                      if (context.mounted) {
+                        setState(() => _error = 'Sign out failed: $error');
+                      }
+                    }
+                  },
+                  child: const Text('Back to login'),
+                ),
+              ],
+            ),
     );
+    return widget.inline ? content : Scaffold(body: content);
   }
 }

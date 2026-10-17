@@ -10,13 +10,17 @@ class NotificationService {
 
   static Future<PaginatedResponse<AppNotification>> list({
     int page = 1,
+    bool? isRead,
     Dio? client,
   }) async {
     try {
       final dio = client ?? await ApiClient.getInstance();
       final response = await dio.get(
         '/notifications/',
-        queryParameters: {'page': page},
+        queryParameters: {
+          if (page > 1) 'page': page,
+          if (isRead != null) 'is_read': isRead,
+        },
       );
       return PaginatedResponse.fromJson(
         Map<String, dynamic>.from(response.data as Map),

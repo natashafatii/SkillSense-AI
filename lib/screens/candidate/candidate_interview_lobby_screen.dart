@@ -1,6 +1,6 @@
 import '../../widgets/candidate_button_style.dart';
-import 'dart:async';
 import 'dart:ui';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,9 +14,24 @@ import '../../widgets/candidate_side_nav.dart';
 import 'candidate_notifications_screen.dart';
 import 'candidate_profile_settings_screen.dart';
 import '../../services/api_client.dart';
+import '../../services/session_scope.dart';
+import '../../models/interview.dart';
+import '../../models/phase8_contract.dart';
+import '../../services/media/camera_adapter.dart';
+import '../../services/media/interview_media_controller.dart';
+import '../../widgets/interview_media_panel.dart';
+import '../../services/voice/voice_lifecycle_backend.dart';
+import '../../models/voice/voice_contract.dart';
 
 class CandidateInterviewLobbyScreen extends StatefulWidget {
-  const CandidateInterviewLobbyScreen({super.key});
+  const CandidateInterviewLobbyScreen({
+    super.key,
+    this.identity,
+    this.mediaAdapter,
+  });
+
+  final InterviewSessionIdentity? identity;
+  final CameraAdapter? mediaAdapter;
 
   @override
   State<CandidateInterviewLobbyScreen> createState() =>
@@ -26,31 +41,38 @@ class CandidateInterviewLobbyScreen extends StatefulWidget {
 class _CandidateInterviewLobbyScreenState
     extends State<CandidateInterviewLobbyScreen> {
   final int _activeNavIndex = 3; // Interviews is index 3
-  Timer? _countdownTimer;
-  int _secondsRemaining = 276; // 4 minutes 36 seconds
+  final int _account = SessionScope.generation;
+  Interview? _interview;
+  InterviewSessionIdentity? _identity;
+  String? _loadError;
+  late final InterviewMediaController _media;
 
-  // Device check states: 'CHECKING', 'READY', 'FAILED'
-  String _cameraStatus = 'CHECKING';
-  String _micStatus = 'CHECKING';
-  String _connectionStatus = 'CHECKING';
-
-  Timer? _cameraTimer;
-  Timer? _micTimer;
-  Timer? _connectionTimer;
-
+  final VoiceLifecycleBackend _voiceBackend = VoiceLifecycleBackend();
+  final CancelToken _voiceRequests = CancelToken();
+  bool _starting = false;
+  bool _startUncertain = false;
+  String? _startError;
   bool _isLoading = true;
   bool _hasInterview = false;
 
   @override
   void initState() {
     super.initState();
+    _media = InterviewMediaController(adapter: widget.mediaAdapter);
+    _media.addListener(_mediaChanged);
+    SessionScope.invalidations.addListener(_clearSession);
+    _identity = widget.identity;
     _checkInterviews();
   }
 
   Future<void> _checkInterviews() async {
     try {
       final dio = await ApiClient.getInstance();
-      final response = await dio.get('/interviews/', queryParameters: {'candidate': 'me'});
+      final response = await dio.get(
+        '/interviews/',
+        queryParameters: {'candidate': 'me'},
+        cancelToken: _voiceRequests,
+      );
       final data = response.data;
       final List rows;
       if (data is List) {
@@ -58,17 +80,29 @@ class _CandidateInterviewLobbyScreenState
       } else if (data is Map && data['results'] is List) {
         rows = data['results'] as List;
       } else {
-        rows = [];
+        throw const FormatException('Unexpected interview list response.');
       }
 
-      if (rows.isNotEmpty) {
+      if (!mounted || _account != SessionScope.generation) return;
+      final interviews = rows
+          .map(
+            (row) => Interview.fromJson(Map<String, dynamic>.from(row as Map)),
+          )
+          .toList();
+      final matches = interviews
+          .where(
+            (item) => _identity != null
+                ? item.id == _identity!.interviewId
+                : item.status == 'SCHEDULED' || item.status == 'LIVE',
+          )
+          .toList();
+      if (matches.isNotEmpty) {
+        _interview = matches.first;
         if (mounted) {
           setState(() {
             _hasInterview = true;
             _isLoading = false;
           });
-          _startCountdown();
-          _runDeviceChecks();
         }
       } else {
         if (mounted) {
@@ -79,8 +113,9 @@ class _CandidateInterviewLobbyScreenState
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && _account == SessionScope.generation) {
         setState(() {
+          _loadError = 'Interview availability could not be loaded.';
           _hasInterview = false;
           _isLoading = false;
         });
@@ -88,92 +123,124 @@ class _CandidateInterviewLobbyScreenState
     }
   }
 
+  Future<void> _startVideoInterview() async {
+    final interview = _interview;
+    if (_starting ||
+        _startUncertain ||
+        interview == null ||
+        !mounted ||
+        _account != SessionScope.generation) {
+      return;
+    }
+    setState(() {
+      _starting = true;
+      _startError = null;
+    });
+    _media.stop(); // Release lobby tests before session/provider handoff.
+    try {
+      final snapshot = await _voiceBackend
+          .start(interview.id, videoRequired: true, cancelToken: _voiceRequests)
+          .timeout(const Duration(seconds: 20));
+      if (!mounted || _account != SessionScope.generation) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => CandidateInterviewSessionScreen(
+            identity: snapshot.identity,
+            initialSnapshot: snapshot,
+          ),
+        ),
+      );
+    } on VoiceContractUnavailable catch (error) {
+      if (mounted && _account == SessionScope.generation) {
+        setState(() {
+          _startError = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted && _account == SessionScope.generation) {
+        setState(() {
+          _startUncertain = true;
+          _startError =
+              'Start was not confirmed. Check the existing session before retrying; no second provider call is created automatically.';
+        });
+      }
+    } finally {
+      if (mounted && _account == SessionScope.generation) {
+        setState(() {
+          _starting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _resumeInterview() async {
+    final interview = _interview;
+    if (_starting || interview == null || _account != SessionScope.generation) {
+      return;
+    }
+    setState(() {
+      _starting = true;
+      _startError = null;
+    });
+    _media.stop();
+    try {
+      final snapshot = await _voiceBackend
+          .read(interview.id, cancelToken: _voiceRequests)
+          .timeout(const Duration(seconds: 20));
+      if (!mounted || _account != SessionScope.generation) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => CandidateInterviewSessionScreen(
+            identity: snapshot.identity,
+            initialSnapshot: snapshot,
+          ),
+        ),
+      );
+    } on VoiceContractUnavailable catch (error) {
+      if (mounted && _account == SessionScope.generation) {
+        setState(() {
+          _startError = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted && _account == SessionScope.generation) {
+        setState(() {
+          _startError =
+              'Existing session could not be verified. No replacement session was created.';
+        });
+      }
+    } finally {
+      if (mounted && _account == SessionScope.generation) {
+        setState(() {
+          _starting = false;
+        });
+      }
+    }
+  }
+
+  void _mediaChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _clearSession() {
+    _voiceRequests.cancel('Account changed.');
+    if (!mounted) return;
+    setState(() {
+      _identity = null;
+      _interview = null;
+      _hasInterview = false;
+      _isLoading = false;
+      _loadError = 'Your account session changed. Reopen the interview lobby.';
+    });
+  }
+
   @override
   void dispose() {
-    _countdownTimer?.cancel();
-    _cameraTimer?.cancel();
-    _micTimer?.cancel();
-    _connectionTimer?.cancel();
+    _voiceRequests.cancel('Lobby disposed.');
+    _media.removeListener(_mediaChanged);
+    _media.dispose();
+    SessionScope.invalidations.removeListener(_clearSession);
     super.dispose();
-  }
-
-  void _startCountdown() {
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_secondsRemaining > 0) {
-        setState(() {
-          _secondsRemaining--;
-        });
-      } else {
-        _countdownTimer?.cancel();
-      }
-    });
-  }
-
-  void _runDeviceChecks() {
-    // Camera check ready after 1.5s
-    _cameraTimer = Timer(const Duration(milliseconds: 1500), () {
-      if (mounted) {
-        setState(() {
-          _cameraStatus = 'READY';
-        });
-      }
-    });
-
-    // Mic check ready after 1.5s
-    _micTimer = Timer(const Duration(milliseconds: 1500), () {
-      if (mounted) {
-        setState(() {
-          _micStatus = 'READY';
-        });
-      }
-    });
-
-    // Connection check ready after 3.0s
-    _connectionTimer = Timer(const Duration(milliseconds: 3000), () {
-      if (mounted) {
-        setState(() {
-          _connectionStatus = 'READY';
-        });
-      }
-    });
-  }
-
-  void _retryCheck(String device) {
-    setState(() {
-      if (device == 'Camera') _cameraStatus = 'CHECKING';
-      if (device == 'Microphone') _micStatus = 'CHECKING';
-      if (device == 'Connection') _connectionStatus = 'CHECKING';
-    });
-
-    Timer(const Duration(milliseconds: 1500), () {
-      if (mounted) {
-        setState(() {
-          if (device == 'Camera') _cameraStatus = 'READY';
-          if (device == 'Microphone') _micStatus = 'READY';
-          if (device == 'Connection') _connectionStatus = 'READY';
-        });
-      }
-    });
-  }
-
-  String _formatTime(int totalSeconds) {
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  bool _allChecksPassed() {
-    return _cameraStatus == 'READY' &&
-        _micStatus == 'READY' &&
-        _connectionStatus == 'READY';
-  }
-
-  int _getReadyCount() {
-    int count = 0;
-    if (_cameraStatus == 'READY') count++;
-    if (_micStatus == 'READY') count++;
-    if (_connectionStatus == 'READY') count++;
-    return count;
   }
 
   @override
@@ -238,7 +305,10 @@ class _CandidateInterviewLobbyScreenState
                       Expanded(
                         child: Column(
                           children: [
-                            RecruiterTopBar(pageTitle: 'Interview lobby', candidate: true),
+                            RecruiterTopBar(
+                              pageTitle: 'Interview lobby',
+                              candidate: true,
+                            ),
                             Expanded(
                               child: _isLoading
                                   ? const Center(
@@ -247,29 +317,29 @@ class _CandidateInterviewLobbyScreenState
                                       ),
                                     )
                                   : !_hasInterview
-                                      ? _buildEmptyState(isMobile)
-                                      : SingleChildScrollView(
-                                          physics: const BouncingScrollPhysics(),
-                                          padding: EdgeInsets.only(
-                                            left: isMobile ? 16 : 24,
-                                            right: isMobile ? 16 : 24,
-                                            top: 16,
-                                            bottom: isMobile ? 100 : 32,
-                                          ),
-                                          child: isMobile
-                                              ? _buildMobileLayout(
-                                                  textPrimary,
-                                                  textSecondary,
-                                                  cardBg,
-                                                  cardBorder,
-                                                )
-                                              : _buildWebLayout(
-                                                  textPrimary,
-                                                  textSecondary,
-                                                  cardBg,
-                                                  cardBorder,
-                                                ),
-                                        ),
+                                  ? _buildEmptyState(isMobile)
+                                  : SingleChildScrollView(
+                                      physics: const BouncingScrollPhysics(),
+                                      padding: EdgeInsets.only(
+                                        left: isMobile ? 16 : 24,
+                                        right: isMobile ? 16 : 24,
+                                        top: 16,
+                                        bottom: isMobile ? 100 : 32,
+                                      ),
+                                      child: isMobile
+                                          ? _buildMobileLayout(
+                                              textPrimary,
+                                              textSecondary,
+                                              cardBg,
+                                              cardBorder,
+                                            )
+                                          : _buildWebLayout(
+                                              textPrimary,
+                                              textSecondary,
+                                              cardBg,
+                                              cardBorder,
+                                            ),
+                                    ),
                             ),
                           ],
                         ),
@@ -322,7 +392,8 @@ class _CandidateInterviewLobbyScreenState
             ),
             const SizedBox(height: 16),
             Text(
-              isMobile ? 'Nothing scheduled' : 'No interview scheduled',
+              _loadError ??
+                  (isMobile ? 'Nothing scheduled' : 'No interview scheduled'),
               style: GoogleFonts.inter(
                 color: const Color(0xFF0F172A),
                 fontSize: isMobile ? 15 : 18,
@@ -494,8 +565,8 @@ class _CandidateInterviewLobbyScreenState
     Color cardBorder,
     bool isMobile,
   ) {
-    final allChecksPassed = _allChecksPassed();
-    final bool canEnter = allChecksPassed; // counts countdown too if needed
+    final bool canEnter =
+        _media.cameraReady && _media.microphoneChecked && _identity != null;
 
     return Container(
       padding: EdgeInsets.all(isMobile ? 20 : 32),
@@ -515,7 +586,7 @@ class _CandidateInterviewLobbyScreenState
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'SENIOR DJANGO DEVELOPER · TECHVERSE',
+            'Interview ${_interview?.id ?? ''}',
             style: GoogleFonts.spaceGrotesk(
               color: AppColors.dashboardTeal,
               fontSize: isMobile ? 11 : 12,
@@ -526,7 +597,7 @@ class _CandidateInterviewLobbyScreenState
           const SizedBox(height: 12),
 
           Text(
-            'Your interview starts in',
+            'Interview preparation',
             style: GoogleFonts.spaceGrotesk(
               color: textPrimary,
               fontSize: isMobile ? 18 : 20,
@@ -537,7 +608,8 @@ class _CandidateInterviewLobbyScreenState
 
           // Countdown Numbers
           Text(
-            _formatTime(_secondsRemaining),
+            (_interview?.scheduledAt?.toLocal().toString() ??
+                'Time unavailable'),
             style: GoogleFonts.jetBrainsMono(
               color: textPrimary,
               fontSize: isMobile ? 37 : 44,
@@ -548,7 +620,7 @@ class _CandidateInterviewLobbyScreenState
           const SizedBox(height: 12),
 
           Text(
-            'The room opens 5 minutes early · 8 questions · ~25 minutes',
+            'Voice and frame transport availability are checked separately in the session.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: textSecondary,
@@ -556,6 +628,35 @@ class _CandidateInterviewLobbyScreenState
               fontWeight: FontWeight.w500,
             ),
           ),
+          if (_startError != null)
+            Semantics(liveRegion: true, child: Text(_startError!)),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed:
+                    !_starting &&
+                        !_startUncertain &&
+                        _voiceBackend.available &&
+                        _media.cameraReady &&
+                        _media.microphoneChecked
+                    ? _startVideoInterview
+                    : null,
+                child: const Text('Start video-enabled interview'),
+              ),
+              OutlinedButton(
+                onPressed: !_starting && _voiceBackend.available
+                    ? _resumeInterview
+                    : null,
+                child: const Text('Find / resume existing session'),
+              ),
+            ],
+          ),
+          if (!_voiceBackend.available)
+            const Text(
+              'Candidate voice start/rejoin requires backend contract support. Local camera checks remain available.',
+            ),
           const SizedBox(height: 24),
 
           // Enter Button CTA
@@ -578,21 +679,26 @@ class _CandidateInterviewLobbyScreenState
                     : [],
               ),
               child: ElevatedButton(
-                style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.dashboardTeal,
-                  foregroundColor: const Color(0xFF0F172A),
-                  elevation: 0,
-                  minimumSize: const Size(double.infinity, 48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                style: CandidateButtonStyle.primary(
+                  ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.dashboardTeal,
+                    foregroundColor: const Color(0xFF0F172A),
+                    elevation: 0,
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                )),
+                ),
                 onPressed: canEnter
                     ? () {
+                        _media
+                            .stop(); // Release all lobby test tracks before handoff.
                         Navigator.of(context).pushReplacement(
                           MaterialPageRoute(
-                            builder: (_) =>
-                                const CandidateInterviewSessionScreen(),
+                            builder: (_) => CandidateInterviewSessionScreen(
+                              identity: _identity!,
+                            ),
                           ),
                         );
                       }
@@ -613,7 +719,9 @@ class _CandidateInterviewLobbyScreenState
           const SizedBox(height: 12),
 
           Text(
-            canEnter ? 'Ready to enter' : 'Unlocks when all checks pass',
+            canEnter
+                ? 'Ready to enter'
+                : 'Requires session identity, camera preview and microphone check',
             style: GoogleFonts.inter(
               color: textSecondary,
               fontSize: 11.5,
@@ -626,13 +734,9 @@ class _CandidateInterviewLobbyScreenState
   }
 
   void _showBlockerToast() {
-    String msg = 'Blocker: ';
-    if (!_allChecksPassed()) {
-      final missingCount = 3 - _getReadyCount();
-      msg += 'Waiting for $missingCount device checks to pass.';
-    } else {
-      msg += 'Lobby opens 5 minutes before start.';
-    }
+    final msg = _identity == null
+        ? 'A backend interview session identity is required. You can still check devices locally.'
+        : 'Start the camera preview and check microphone permission before continuing.';
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -655,180 +759,7 @@ class _CandidateInterviewLobbyScreenState
     Color cardBorder,
     bool isMobile,
   ) {
-    final int readyCount = _getReadyCount();
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Device check',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: readyCount == 3
-                      ? const Color(0xFFECFDF5)
-                      : const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$readyCount OF 3',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: readyCount == 3
-                        ? const Color(0xFF10B981)
-                        : AppColors.dashboardBlue,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          _buildCheckRow(
-            'Camera',
-            _cameraStatus,
-            '1080p · good lighting',
-            isMobile,
-          ),
-          const Divider(height: 20, color: Color(0xFFF1F5F9)),
-          _buildCheckRow(
-            'Microphone',
-            _micStatus,
-            'Input level −12 dB',
-            isMobile,
-          ),
-          const Divider(height: 20, color: Color(0xFFF1F5F9)),
-          _buildCheckRow(
-            'Connection',
-            _connectionStatus,
-            _connectionStatus == 'CHECKING'
-                ? 'Testing bandwidth...'
-                : '15 Mbps · ready',
-            isMobile,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCheckRow(
-    String label,
-    String status,
-    String detail,
-    bool isMobile,
-  ) {
-    Color badgeColor = const Color(0xFF64748B);
-    Color badgeText = Colors.white;
-    String badgeLabel = 'CHECKING...';
-
-    if (status == 'READY') {
-      badgeColor = const Color(0xFFECFDF5);
-      badgeText = const Color(0xFF10B981);
-      badgeLabel = 'READY';
-    } else if (status == 'FAILED') {
-      badgeColor = const Color(0xFFFEF2F2);
-      badgeText = const Color(0xFFEF4444);
-      badgeLabel = 'FAILED';
-    }
-
-    return GestureDetector(
-      onTap: status == 'FAILED' ? () => _retryCheck(label) : null,
-      child: Row(
-        children: [
-          // Pulse / Check icon
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: status == 'READY'
-                  ? const Color(0xFF10B981)
-                  : const Color(0xFF38BDF8),
-            ),
-          ),
-          const SizedBox(width: 14),
-
-          // Details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.spaceGrotesk(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  detail,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF64748B),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Status Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: badgeColor,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              badgeLabel,
-              style: GoogleFonts.jetBrainsMono(
-                color: badgeText,
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-
-          if (status == 'FAILED') ...[
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(
-                Icons.refresh_rounded,
-                size: 16,
-                color: Color(0xFF64748B),
-              ),
-              onPressed: () => _retryCheck(label),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-          ],
-        ],
-      ),
-    );
+    return InterviewMediaPanel(controller: _media);
   }
 
   // ── HOUSE RULES PANEL ──────────────────────────────────────────────────────
@@ -1072,7 +1003,11 @@ class _CandidateInterviewLobbyScreenState
         ),
         child: Row(
           children: [
-            const Icon(Icons.auto_awesome, color: AppColors.dashboardBlue, size: 26),
+            const Icon(
+              Icons.auto_awesome,
+              color: AppColors.dashboardBlue,
+              size: 26,
+            ),
             const SizedBox(width: 8),
             Text(
               'Lobby',
@@ -1206,7 +1141,9 @@ class _CandidateInterviewLobbyScreenState
     VoidCallback? onTap,
   }) {
     String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
+    if (icon == Icons.notifications_none_rounded ||
+        icon == Icons.notifications_outlined ||
+        icon == Icons.notifications) {
       tooltip = 'Notifications';
     } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
       tooltip = 'Theme & settings';
