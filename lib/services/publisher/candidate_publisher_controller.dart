@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import '../../models/phase8_contract.dart';
+import '../../models/interview_analysis_contract.dart';
 import '../api_client.dart';
 import '../api_exception.dart';
 import '../media/camera_adapter.dart';
 import '../media/interview_media_controller.dart';
-import '../phase8_service.dart';
+import '../interview_analysis_service.dart';
 import '../session_scope.dart';
 import 'publisher_socket.dart';
 import 'publisher_socket_factory.dart';
@@ -70,13 +70,13 @@ class CandidatePublisherController extends ChangeNotifier {
   CandidatePublisherController(
     this.identity,
     this.media, {
-    Phase8Service? service,
+    InterviewAnalysisService? service,
     PublisherSocketConnector? connector,
     PublisherPolicy? policy,
     Uri? apiBaseUri,
     DateTime Function()? now,
     double Function()? jitter,
-  }) : service = service ?? Phase8Service(),
+  }) : service = service ?? InterviewAnalysisService(),
        connector = connector ?? createPublisherSocketConnector(),
        policy = policy ?? PublisherPolicy(),
        apiBaseUri = apiBaseUri ?? Uri.parse(ApiClient.baseUrl),
@@ -88,7 +88,7 @@ class CandidatePublisherController extends ChangeNotifier {
   }
   final InterviewSessionIdentity identity;
   final InterviewMediaController media;
-  final Phase8Service service;
+  final InterviewAnalysisService service;
   final PublisherSocketConnector connector;
   final PublisherPolicy policy;
   final Uri apiBaseUri;
@@ -101,12 +101,23 @@ class CandidatePublisherController extends ChangeNotifier {
   String? _lastTicket, _lastGeneration;
   PublisherSocket? _socket;
   CancelToken? _request;
-  Timer? _retryTimer, _handshakeTimer, _ackTimer, _leaseTimer;
+  Timer? _retryTimer, _handshakeTimer, _ackTimer, _leaseTimer, _heartbeatTimer;
+  DateTime? _lastPong;
   DateTime? _outageStarted, _deadline;
   ReadyMessage? _ready;
   PublisherState _state = PublisherState.idle;
   String _notice = 'Frame transport has not started.';
   int _sent = 0, _accepted = 0, _serverDropped = 0, _localDropped = 0;
+  int _peakBufferedBytes = 0;
+  Map<String, int> get diagnostics => {
+    'sent': _sent,
+    'accepted': _accepted,
+    'server_dropped': _serverDropped,
+    'local_skips': _localDropped,
+    'pending_ack': _pendingSequence == null ? 0 : 1,
+    'buffered_bytes': _socket?.bufferedAmount ?? 0,
+    'peak_buffered_bytes': _peakBufferedBytes,
+  };
   PublisherState get state => _state;
   String get notice => _notice;
   int get sent => _sent;
@@ -271,12 +282,13 @@ class CandidatePublisherController extends ChangeNotifier {
       throw const FormatException('Invalid publisher endpoint.');
     }
     // Tickets never choose an arbitrary destination. Same configured backend authority.
-    return apiBaseUri.replace(
-      scheme: apiBaseUri.scheme == 'https' ? 'wss' : 'ws',
-      path: ticket.socketPath,
-      queryParameters: {'ticket': ticket.ticket},
-      fragment: '',
-    );
+    return apiBaseUri
+        .replace(
+          scheme: apiBaseUri.scheme == 'https' ? 'wss' : 'ws',
+          path: ticket.socketPath,
+          queryParameters: {'ticket': ticket.ticket},
+        )
+        .removeFragment();
   }
 
   void _message(int epoch, Object? raw) {
@@ -293,22 +305,21 @@ class CandidatePublisherController extends ChangeNotifier {
         purpose: SocketPurpose.publisher,
         sessionId: identity.sessionId,
       );
+      if (jsonDecode(raw)['type'] == 'pong') _lastPong = _now();
       if (message is ReadyMessage) {
         _onReady(epoch, message);
       } else if (message is AckMessage) {
         _onAck(epoch, message);
       } else if (message is TransportErrorMessage) {
         switch (message.code) {
-          case 'authorization_expired':
-          case 'authorization_renewal_required':
+          case 'lease_expired':
             _recover(epoch, 'The server requires renewed frame authorization.');
-          case 'permission_denied':
+          case 'access_denied':
           case 'account_inactive':
             _terminal(
               'Your account is not authorized to publish this session.',
             );
-          case 'session_ended':
-          case 'session_ineligible':
+          case 'session_not_publishable':
             _terminal(
               'This session is no longer eligible for frame publishing.',
             );
@@ -316,8 +327,8 @@ class CandidatePublisherController extends ChangeNotifier {
             _terminal(
               'Another publisher is active. Check other interview tabs.',
             );
-          case 'capacity':
-          case 'temporarily_unavailable':
+          case 'authorization_unavailable':
+          case 'internal_error':
             _recover(epoch, 'Frame transport is temporarily unavailable.');
           default:
             _terminal(
@@ -346,11 +357,10 @@ class CandidatePublisherController extends ChangeNotifier {
     final expiry = ready.authorizationExpiresAt;
     if (ready.maxWidth == null ||
         ready.maxHeight == null ||
-        ready.frameOrientation != 'unmirrored_browser_video' ||
         expiry == null ||
         expiry.difference(_now()) <= policy.renewAhead) {
       throw const FormatException(
-        'B1 publisher limits/lease/orientation must be explicit.',
+        'Publisher limits and lease must be explicit.',
       );
     }
     final limits = CaptureLimits.fromReady(
@@ -371,6 +381,25 @@ class CandidatePublisherController extends ChangeNotifier {
       unawaited(
         _attempt(),
       ); // Fresh Clerk-authenticated ticket; never finish-video.
+    });
+    _lastPong = _now();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!_current(epoch)) return;
+      final socket = _socket;
+      if (socket == null ||
+          !socket.isOpen ||
+          _now().difference(_lastPong!) >= const Duration(seconds: 15)) {
+        _recover(epoch, 'Frame transport heartbeat timed out.');
+        return;
+      }
+      // Heartbeats never renew the authorization lease or enqueue behind frames.
+      if ((socket.bufferedAmount ?? 0) == 0) {
+        try {
+          socket.send('{"type":"ping"}');
+        } catch (_) {
+          _recover(epoch, 'Frame transport heartbeat failed.');
+        }
+      }
     });
     _publish(
       PublisherState.ready,
@@ -470,6 +499,7 @@ class CandidatePublisherController extends ChangeNotifier {
     );
     try {
       socket.send(payload);
+      _peakBufferedBytes = max(_peakBufferedBytes, socket.bufferedAmount ?? 0);
       _sent++;
       if (_current(epoch)) {
         _publish(
@@ -560,6 +590,9 @@ class CandidatePublisherController extends ChangeNotifier {
     _handshakeTimer?.cancel();
     _ackTimer?.cancel();
     _leaseTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _lastPong = null;
     _retryTimer = null;
     _handshakeTimer = null;
     _ackTimer = null;

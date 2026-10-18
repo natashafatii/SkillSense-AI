@@ -98,12 +98,12 @@ class InterviewMediaController extends ChangeNotifier {
       final frame = await adapter.encodeJpeg(CaptureLimits());
       if (!isCurrent || generation != _generation) return;
       sampleNotice = frame == null
-          ? 'Camera sample unavailable; retry.'
-          : 'Local JPEG sample encoded and discarded; this check did not upload it.';
+          ? 'Camera capture unavailable. Try again.'
+          : 'Camera capture checked. Nothing was uploaded.';
     } catch (_) {
       if (isCurrent && generation == _generation) {
         sampleNotice =
-            'Local camera encoding failed. Restart the preview and retry.';
+            'Camera capture failed. Restart the preview and try again.';
       }
     } finally {
       _sampleBusy = false;

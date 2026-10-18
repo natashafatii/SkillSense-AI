@@ -203,8 +203,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
-  late AnimationController _ringController;
-  late Animation<double> _ringAnimation;
 
   // Hover states for rows/cards
   int? _hoveredApplicantIndex;
@@ -212,7 +210,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   int? _hoveredRoleIndex;
   bool _hoveredAllApplicants = false;
   bool _hoveredManageRoles = false;
-  bool _hoveredOpenMonitor = false;
 
   // Pipeline hover stage
   String? _hoveredPipelineStage;
@@ -254,16 +251,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Setup average match ring sweep (0 -> 71% in 700ms ease-out)
-    _ringController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _ringAnimation = Tween<double>(
-      begin: 0.0,
-      end: 0.71,
-    ).animate(CurvedAnimation(parent: _ringController, curve: Curves.easeOut));
-    _ringController.forward();
 
     // Listen for focus changes to style the search field
     _searchFocusNode.addListener(() {
@@ -337,7 +324,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
     _pulseController.dispose();
-    _ringController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _keyboardFocusNode.dispose();
@@ -724,7 +710,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             child: GestureDetector(
               onTap: () {
                 if (_activeNavIndex != 0) {
-                  Navigator.of(context).pushReplacementNamed('/dashboard');
+                  Navigator.of(context).pushNamed('/dashboard');
                 }
               },
               child: SvgPicture.asset('assets/images/logo.svg', height: 48),
@@ -798,7 +784,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                 }
                                 Navigator.of(
                                   context,
-                                ).pushReplacementNamed(item['route']);
+                                ).pushNamed(item['route']);
                               }
                             },
                             child: AnimatedContainer(
@@ -855,9 +841,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             tooltip: 'Switch Workspace Role',
             onSelected: (value) async {
               if (value == 'recruiter') {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
+                Navigator.of(context).pushNamed('/dashboard');
               } else if (value == 'settings') {
-                Navigator.of(context).pushReplacementNamed('/settings');
+                Navigator.of(context).pushNamed('/settings');
               } else if (value == 'signout') {
                 final navigator = Navigator.of(context);
                 try {
@@ -1006,7 +992,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                       AppNavState.unreadInterviews = 0;
                     });
                   }
-                  Navigator.of(context).pushReplacementNamed(item['route']);
+                  Navigator.of(context).pushNamed(item['route']);
                 }
               },
               child: AnimatedContainer(
@@ -1159,7 +1145,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                         });
                         Navigator.of(
                           context,
-                        ).pushReplacementNamed(item['route']!);
+                        ).pushNamed(item['route']!);
                       },
                     );
                   },
@@ -1247,7 +1233,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/create-role');
+                  Navigator.of(context).pushNamed('/create-role');
                 },
                 child: Text(
                   '+ Post your first job',
@@ -1266,32 +1252,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   }
 
   // ── HERO & APPLICANTS (Web Row) ────────────────────────────────────────────
-  Widget _buildHeroAndApplicantsRow(DeckTheme theme) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 960;
-        if (isWide) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(width: 380, child: _buildHeroCard(theme)),
-              const SizedBox(width: 24),
-              Expanded(child: _buildTopApplicantsCard(theme, false)),
-            ],
-          );
-        } else {
-          return Column(
-            children: [
-              _buildHeroCard(theme),
-              const SizedBox(height: 24),
-              _buildTopApplicantsCard(theme, false),
-            ],
-          );
-        }
-      },
-    );
-  }
-
   // Hero Card (Web)
   Widget _buildHeroCard(DeckTheme theme) {
     final hour = DateTime.now().hour;
@@ -1362,7 +1322,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   onPressed: () {
-                    Navigator.of(context).pushReplacementNamed('/create-role');
+                    Navigator.of(context).pushNamed('/create-role');
                   },
                   child: Text(
                     '+ Post your first job',
@@ -1382,148 +1342,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           _buildMetricsGrid(theme),
         ],
       ),
-    );
-  }
-
-  Widget _buildLiveAlertCard(DeckTheme theme) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFCA5A5), width: 1),
-      ),
-      child: Row(
-        children: [
-          // Pulsing red live indicator
-          AnimatedBuilder(
-            animation: _pulseAnimation,
-            builder: (context, child) {
-              return Opacity(
-                opacity: _pulseAnimation.value,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppColors.dashboardRed,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 10),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppConstants.deckLiveCandidate,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF7F1D1D),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  AppConstants.deckLiveDetails,
-                  style: GoogleFonts.jetBrainsMono(
-                    color: const Color(0xFFB91C1C),
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Open monitor button with hover states
-          MouseRegion(
-            onEnter: (_) => setState(() => _hoveredOpenMonitor = true),
-            onExit: (_) => setState(() => _hoveredOpenMonitor = false),
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushReplacementNamed('/monitor');
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: _hoveredOpenMonitor
-                      ? const Color(0xFF1D4ED8)
-                      : AppColors.dashboardBlue,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  AppConstants.deckOpenMonitor,
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCircularMatchProgress(DeckTheme theme, double size) {
-    return AnimatedBuilder(
-      animation: _ringAnimation,
-      builder: (context, child) {
-        return SizedBox(
-          width: size,
-          height: size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: size,
-                height: size,
-                child: CircularProgressIndicator(
-                  value: _ringAnimation.value,
-                  strokeWidth: 6,
-                  backgroundColor: const Color(0xFFE2E8F0),
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    AppColors.dashboardTeal,
-                  ),
-                ),
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    '${(_ringAnimation.value * 100).toInt()}%',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: theme.textPrimary,
-                      fontSize: size == 64 ? 14 : 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    AppConstants.deckAvgMatch,
-                    style: GoogleFonts.inter(
-                      color: theme.textSecondary,
-                      fontSize: size == 64 ? 7 : 8,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -1633,7 +1451,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
                   onTap: () =>
-                      Navigator.of(context).pushReplacementNamed('/pipeline'),
+                      Navigator.of(context).pushNamed('/pipeline'),
                   child: SizedBox(
                     width: 68,
                     child: Text(
@@ -1748,7 +1566,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
                   onTap: () {
-                    Navigator.of(context).pushReplacementNamed('/report');
+                    Navigator.of(context).pushNamed('/report');
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
@@ -1883,32 +1701,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   }
 
   // ── PIPELINE & INTERVIEWS ROW ──────────────────────────────────────────────
-  Widget _buildPipelineAndInterviewsRow(DeckTheme theme) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 800;
-        if (isWide) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: _buildPipelineCard(theme)),
-              const SizedBox(width: 24),
-              Expanded(flex: 2, child: _buildInterviewsTodayCard(theme, false)),
-            ],
-          );
-        } else {
-          return Column(
-            children: [
-              _buildPipelineCard(theme),
-              const SizedBox(height: 24),
-              _buildInterviewsTodayCard(theme, false),
-            ],
-          );
-        }
-      },
-    );
-  }
-
   Widget _buildPipelineCard(DeckTheme theme) {
     const names = [
       'APPLIED',
@@ -2074,7 +1866,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
               ),
               GestureDetector(
                 onTap: () {
-                  Navigator.of(context).pushReplacementNamed('/schedule');
+                  Navigator.of(context).pushNamed('/schedule');
                 },
                 child: Container(
                   width: 20,
@@ -2103,9 +1895,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   onTap: () {
                     // Navigate to appropriate screen depending on live/upcoming
                     if (slot['live'] == true) {
-                      Navigator.of(context).pushReplacementNamed('/monitor');
+                      Navigator.of(context).pushNamed('/monitor');
                     } else {
-                      Navigator.of(context).pushReplacementNamed('/schedule');
+                      Navigator.of(context).pushNamed('/schedule');
                     }
                   },
                   child: AnimatedContainer(
@@ -2223,7 +2015,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           cursor: SystemMouseCursors.click,
           child: GestureDetector(
             onTap: () =>
-                Navigator.of(context).pushReplacementNamed('/create-role'),
+                Navigator.of(context).pushNamed('/create-role'),
             child: Text(
               AppConstants.deckManage,
               style: GoogleFonts.inter(
@@ -2263,7 +2055,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   margin: const EdgeInsets.only(right: 12, bottom: 8),
                   child: GestureDetector(
                     onTap: () =>
-                        Navigator.pushReplacementNamed(context, '/pipeline'),
+                        Navigator.pushNamed(context, '/pipeline'),
                     child: _buildGlassCard(
                       theme: theme,
                       padding: const EdgeInsets.all(16),
@@ -2353,7 +2145,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
                       onTap: () =>
-                          Navigator.pushReplacementNamed(context, '/pipeline'),
+                          Navigator.pushNamed(context, '/pipeline'),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         transform: isHovered
@@ -2574,7 +2366,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             isActive: true,
             isMobile: isMobile,
             onTap: () =>
-                Navigator.of(context).pushReplacementNamed('/create-role'),
+                Navigator.of(context).pushNamed('/create-role'),
           ),
           Divider(color: theme.border, height: 1),
           _buildChecklistRow(
@@ -2586,7 +2378,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             isActive: false,
             isMobile: isMobile,
             onTap: () =>
-                Navigator.of(context).pushReplacementNamed('/settings'),
+                Navigator.of(context).pushNamed('/settings'),
           ),
         ],
       ),

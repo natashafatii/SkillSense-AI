@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
@@ -44,14 +43,11 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) {
-        if (mounted && _route?.isCurrent == true) {
-          _load(silent: true);
-        }
-      },
-    );
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted && _route?.isCurrent == true) {
+        _load(silent: true);
+      }
+    });
   }
 
   @override
@@ -62,9 +58,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          _initialLoadStarted ||
-          _route?.isCurrent != true) {
+      if (!mounted || _initialLoadStarted || _route?.isCurrent != true) {
         return;
       }
       _initialLoadStarted = true;
@@ -80,9 +74,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
   }
 
   Future<void> _load({bool silent = false}) async {
-    if (_endpointNotFound ||
-        !mounted ||
-        _route?.isCurrent != true) {
+    if (_endpointNotFound || !mounted || _route?.isCurrent != true) {
       return;
     }
     final requestId = ++_requestId;
@@ -135,7 +127,9 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
       }
       if (error.response?.statusCode == 404) {
         if (!_endpointNotFound) {
-          debugPrint('Interview reviews endpoint returned 404; stopping refreshes.');
+          debugPrint(
+            'Interview reviews endpoint returned 404; stopping refreshes.',
+          );
         }
         _endpointNotFound = true;
       }
@@ -233,28 +227,6 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
       ),
     );
   }
-
-  Widget _mobileHeader() => SizedBox(
-    height: 56,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          SvgPicture.asset('assets/images/logo.svg', width: 26, height: 26),
-          const SizedBox(width: 10),
-          Text(
-            'Review',
-            style: GoogleFonts.inter(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -.57,
-              color: _text,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 
   Widget _emptyState(bool mobile) => Center(
     child: Padding(
@@ -407,7 +379,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                         ? null
                         : () => Navigator.of(
                             context,
-                          ).pushReplacementNamed(destination.$2),
+                          ).pushNamed(destination.$2),
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
                       decoration: destination.$3 == 'Interviews'

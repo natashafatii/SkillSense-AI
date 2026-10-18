@@ -12,6 +12,14 @@ import 'app_tooltip.dart';
 import 'candidate_avatar_image.dart';
 
 class CandidateSideNav extends StatefulWidget {
+  @visibleForTesting
+  static void resetPreferencesForTesting() {
+    _CandidateSideNavState.globalIsExpanded = false;
+    _CandidateSideNavState._sectionsByUser.clear();
+    _CandidateSideNavState._expandedByUser.clear();
+    _CandidateSideNavState._changedPreferences.clear();
+  }
+
   final String currentRoute;
   final Function(String route)? onNavigate;
   final bool initialExpanded;
@@ -219,7 +227,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
       widget.onNavigate!(targetRoute);
     } else {
       if (widget.currentRoute != targetRoute) {
-        Navigator.of(context).pushReplacementNamed(targetRoute);
+        Navigator.of(context).pushNamed(targetRoute);
       }
     }
   }
@@ -246,7 +254,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
       'isChildScreen': (String route) => route == '/candidate/job-detail',
       'subItems': [
         {'label': 'Job feed', 'route': '/candidate/jobs'},
-        {'label': 'Job detail', 'route': '/candidate/job-detail'},
       ],
     },
     {

@@ -2,14 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/candidate_side_nav.dart';
-import 'candidate_home_screen.dart';
-import 'candidate_applications_screen.dart';
-import 'candidate_job_feed_screen.dart';
-import 'candidate_resume_management_screen.dart';
-import 'candidate_profile_settings_screen.dart';
 import '../../models/app_notification.dart';
 import '../../models/paginated_response.dart';
 import '../../services/notification_service.dart';
@@ -61,8 +55,9 @@ class _CandidateNotificationsScreenState
       ]);
       if (!mounted ||
           request != _request ||
-          generation != SessionScope.generation)
+          generation != SessionScope.generation) {
         return;
+      }
       final response = results[0] as PaginatedResponse<AppNotification>;
       setState(() {
         final byId = {
@@ -81,8 +76,9 @@ class _CandidateNotificationsScreenState
     } catch (error) {
       if (!mounted ||
           request != _request ||
-          generation != SessionScope.generation)
+          generation != SessionScope.generation) {
         return;
+      }
       await _handleError(error, retry: () => _fetch(more: more));
     } finally {
       if (mounted && request == _request) setState(() => _loading = false);
@@ -93,8 +89,9 @@ class _CandidateNotificationsScreenState
     final code = error is ApiException ? error.statusCode : null;
     if (code == 401) {
       await AuthService.signOut(context);
-      if (mounted)
+      if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+      }
     } else if (code == 404) {
       ScaffoldMessenger.of(
         context,
@@ -263,197 +260,6 @@ class _CandidateNotificationsScreenState
   }
 
   // ── TOP BAR ──────────────────────────────────────────────────────────────────
-  Widget _buildTopBar(bool isMobile, Color textPrimary, Color textSecondary) {
-    if (isMobile) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-          ),
-        ),
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: () => Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
-              ),
-              child: const Icon(
-                Icons.arrow_back_rounded,
-                color: Color(0xFF64748B),
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 12),
-            SvgPicture.asset('assets/images/logo.svg', height: 28),
-            const SizedBox(width: 10),
-            Text(
-              'Notifications',
-              style: GoogleFonts.spaceGrotesk(
-                color: textPrimary,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'NOTIFICATIONS',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
-            ),
-          ),
-          Row(
-            children: [
-              // Search bar
-              Container(
-                width: 240,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF94A3B8),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF94A3B8),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 30,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.spaceGrotesk(
-                          color: const Color(0xFF94A3B8),
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // Notification bell button (active state when _unreadCount > 0)
-              GestureDetector(
-                onTap: () {}, // Already on notifications screen
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _unreadCount > 0
-                        ? const Color(0xFF0FB89B)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: _unreadCount > 0
-                        ? null
-                        : Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Icon(
-                        _unreadCount > 0
-                            ? Icons.notifications_rounded
-                            : Icons.notifications_none_rounded,
-                        color: _unreadCount > 0
-                            ? Colors.white
-                            : const Color(0xFF475569),
-                        size: 18,
-                      ),
-                      if (_unreadCount > 0)
-                        Positioned(
-                          top: 7,
-                          right: 7,
-                          child: Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              // Settings icon button
-              GestureDetector(
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateProfileSettingsScreen(),
-                  ),
-                ),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Icon(
-                    Icons.settings_outlined,
-                    color: Color(0xFF64748B),
-                    size: 18,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── MAIN BODY ────────────────────────────────────────────────────────────────
   Widget _buildBody(
     bool isMobile,
@@ -886,35 +692,15 @@ class _CandidateNotificationsScreenState
             onTap: () {
               switch (item['index'] as int) {
                 case 0:
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateHomeScreen(),
-                    ),
-                  );
+                  Navigator.of(context).pushNamed('/candidate/home');
                 case 1:
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateApplicationsScreen(),
-                    ),
-                  );
+                  Navigator.of(context).pushNamed('/candidate/applications');
                 case 2:
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateJobFeedScreen(),
-                    ),
-                  );
+                  Navigator.of(context).pushNamed('/candidate/jobs');
                 case 4:
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateResumeManagementScreen(),
-                    ),
-                  );
+                  Navigator.of(context).pushNamed('/candidate/resumes');
                 case 5:
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateProfileSettingsScreen(),
-                    ),
-                  );
+                  Navigator.of(context).pushNamed('/candidate/profile');
               }
             },
             child: Container(

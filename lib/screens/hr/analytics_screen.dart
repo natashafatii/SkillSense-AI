@@ -280,7 +280,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                     onPressed: () => Navigator.of(
                       context,
-                    ).pushReplacementNamed('/recruiter/job-listings'),
+                    ).pushNamed('/recruiter/job-listings'),
                     child: Text(
                       'Go to job listings',
                       style: GoogleFonts.inter(
@@ -364,7 +364,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         ? null
                         : () => Navigator.of(
                             context,
-                          ).pushReplacementNamed(destination.$2),
+                          ).pushNamed(destination.$2),
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
                       decoration: destination.$3 == 'Analytics'

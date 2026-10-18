@@ -22,6 +22,7 @@ export function createRetellBridge(Client, notify) {
         call_ended:'ended', error:'error'})) client.on(name, forward(event));
       try {
         await client.startCall({accessToken: config.accessToken, callId: config.callId,
+          ...(Array.isArray(config.iceServers) && config.iceServers.length ? {iceServers: config.iceServers.map(({urls,username,credential}) => ({urls,...(username?{username}:{}),...(credential?{credential}:{})}))} : {}),
           transport: config.transport, ...(config.url ? {url: config.url} : {}),
           baseURL:'https://api.retellai.com', sampleRate:24000, emitRawAudioSamples:false});
       } catch (_) { if (!disposed && current === client) notify('error'); }

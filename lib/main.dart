@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:skillsense_ai/constants/app_colors.dart';
 import 'package:skillsense_ai/constants/env_config.dart';
 import 'models/job.dart';
-import 'models/phase8_contract.dart';
+import 'models/interview_analysis_contract.dart';
 import 'services/media/interview_media_route_observer.dart';
 
 // Conditional import: picks the web or native platform integration.
@@ -171,6 +171,15 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class AppRouteObserver extends NavigatorObserver {
   @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    final name = previousRoute?.settings.name;
+    if (name != null && name != '/' && !adminRoutes.containsValue(name)) {
+      RouteStorage.saveLastRoute(name);
+    }
+  }
+
+  @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
     if (route.settings.name != null && route.settings.name != '/' && !adminRoutes.containsValue(route.settings.name)) {
@@ -204,13 +213,14 @@ class SkillSenseApp extends StatelessWidget {
       });
     }
 
+    final googleCallback = initialAdminRoute == null && AuthService.isGoogleCallback;
     return MaterialApp(
       title: 'SkillSense AI',
       debugShowCheckedModeBanner: false,
       builder: mobileHomeIndicatorBuilder,
       navigatorKey: navigatorKey,
       navigatorObservers: [AppRouteObserver(), interviewMediaRouteObserver],
-      initialRoute: initialAdminRoute ?? (AuthService.isGoogleCallback ? '/oauth/callback' : null),
+      initialRoute: initialAdminRoute ?? (googleCallback ? '/oauth/callback' : null),
       onGenerateInitialRoutes: initialAdminRoute != null
           ? (_) => [
               MaterialPageRoute<void>(
@@ -227,7 +237,7 @@ class SkillSenseApp extends StatelessWidget {
                 },
               ),
             ]
-          : AuthService.isGoogleCallback
+          : googleCallback
           ? (_) => [
               MaterialPageRoute<void>(
                 settings: const RouteSettings(name: '/oauth/callback'),
@@ -246,7 +256,7 @@ class SkillSenseApp extends StatelessWidget {
       darkTheme: auroraTheme(AuroraTokens.auroraNight, Brightness.dark),
       themeMode: ThemeMode.system,
       // Routing observes only backend-verified application sessions.
-      home: initialAdminRoute == null ? buildPlatformHome(
+      home: initialAdminRoute == null && !googleCallback ? buildPlatformHome(
         signedInBuilder: (role) {
           return const RoleGuard(
             allowedRoles: [EnvConfig.roleRecruiter, EnvConfig.roleCandidate],
@@ -256,6 +266,16 @@ class SkillSenseApp extends StatelessWidget {
         signedOutWidget: const ApertureSplashScreen(),
       ) : null,
       onGenerateRoute: (settings) {
+        // Old detail links carry their ID only in memory. Keep the ID in the
+        // URL so refresh restores it; an unselected detail link opens the feed.
+        if (settings.name == '/candidate/job-detail') {
+          final id = CandidateJobDetailRoute.jobIdFrom(settings.arguments);
+          settings = RouteSettings(
+            name: id == null
+                ? '/candidate/jobs'
+                : '/candidate/jobs/${Uri.encodeComponent(id)}',
+          );
+        }
         if (settings.name != null && settings.name != '/' && !adminRoutes.containsValue(settings.name)) {
           RouteStorage.saveLastRoute(settings.name!);
         }
@@ -281,7 +301,9 @@ class SkillSenseApp extends StatelessWidget {
         // Deep link handling for job detail route: /candidate/jobs/:id
         if (name.startsWith('/candidate/jobs/') &&
             name.length > '/candidate/jobs/'.length) {
-          final id = name.substring('/candidate/jobs/'.length);
+          final id = Uri.decodeComponent(
+            name.substring('/candidate/jobs/'.length),
+          );
           builder = RoleGuard(
             allowedRoles: const [EnvConfig.roleCandidate],
             child: CandidateJobDetailRoute(arguments: id),

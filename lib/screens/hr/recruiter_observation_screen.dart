@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/phase8_contract.dart';
+import '../../models/interview_analysis_contract.dart';
 import '../../services/media/interview_media_route_observer.dart';
 import '../../services/recruiter_observation_controller.dart';
 import '../../widgets/recruiter_observation_panel.dart';

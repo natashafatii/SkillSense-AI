@@ -98,7 +98,7 @@ class CandidateScaffold extends StatelessWidget {
               if (onNavigate != null) {
                 onNavigate!(route);
               } else if (currentRoute != route) {
-                Navigator.of(context).pushReplacementNamed(route);
+                Navigator.of(context).pushNamed(route);
               }
             },
             child: Column(

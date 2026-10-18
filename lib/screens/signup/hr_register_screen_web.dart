@@ -209,13 +209,18 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Text(
-                                                AppConstants.hrRegisterEyebrow.toUpperCase(),
-                                                style: GoogleFonts.jetBrainsMono(
-                                                  color: const Color(0xFF7BA5FF),
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 1.8,
-                                                ),
+                                                AppConstants.hrRegisterEyebrow
+                                                    .toUpperCase(),
+                                                style:
+                                                    GoogleFonts.jetBrainsMono(
+                                                      color: const Color(
+                                                        0xFF7BA5FF,
+                                                      ),
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      letterSpacing: 1.8,
+                                                    ),
                                               ),
                                             ),
                                           ],
@@ -248,8 +253,11 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                                   text: 'Your workspace,\nin ',
                                                 ),
                                                 WidgetSpan(
-                                                  alignment: PlaceholderAlignment.baseline,
-                                                  baseline: TextBaseline.alphabetic,
+                                                  alignment:
+                                                      PlaceholderAlignment
+                                                          .baseline,
+                                                  baseline:
+                                                      TextBaseline.alphabetic,
                                                   child: ShaderMask(
                                                     blendMode: BlendMode.srcIn,
                                                     shaderCallback: (bounds) =>
@@ -260,8 +268,8 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                                             AppColors
                                                                 .webHeadlineFairlyEnd,
                                                           ],
-                                                          begin:
-                                                              Alignment.centerLeft,
+                                                          begin: Alignment
+                                                              .centerLeft,
                                                           end: Alignment
                                                               .centerRight,
                                                         ).createShader(bounds),
@@ -393,7 +401,9 @@ class HrRegisterScreenWeb extends StatelessWidget {
 
                                           // Google Button
                                           _GoogleSignInButton(
-                                            onTap: isLoading ? null : onGoogleSignIn,
+                                            onTap: isLoading
+                                                ? null
+                                                : onGoogleSignIn,
                                           ),
                                           const SizedBox(height: 16),
 
@@ -422,7 +432,8 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: emailController,
                                             focusNode: emailFocus,
-                                            hintText: 'Enter your work email address',
+                                            hintText:
+                                                'Enter your work email address',
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                           ),
@@ -448,7 +459,8 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           _CustomTextField(
                                             controller: passwordController,
                                             focusNode: passwordFocus,
-                                            hintText: 'Create a password (min 8 characters)',
+                                            hintText:
+                                                'Create a password (min 8 characters)',
                                             obscureText: obscurePassword,
                                             suffixIcon: GestureDetector(
                                               onTap: onObscureToggle,
@@ -465,14 +477,21 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                           AnimatedBuilder(
                                             animation: passwordFocus,
                                             builder: (context, child) {
-                                              if (!passwordFocus.hasFocus) return const SizedBox.shrink();
+                                              if (!passwordFocus.hasFocus) {
+                                                return const SizedBox.shrink();
+                                              }
                                               return Padding(
-                                                padding: const EdgeInsets.only(top: 6, left: 4),
+                                                padding: const EdgeInsets.only(
+                                                  top: 6,
+                                                  left: 4,
+                                                ),
                                                 child: Text(
                                                   'Use at least 8 characters with a number',
                                                   style: GoogleFonts.inter(
                                                     fontSize: 12,
-                                                    color: const Color(0xFF64748B),
+                                                    color: const Color(
+                                                      0xFF64748B,
+                                                    ),
                                                   ),
                                                 ),
                                               );
@@ -554,29 +573,38 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                               text: TextSpan(
                                                 style: GoogleFonts.inter(
                                                   fontSize: 12,
-                                                  color: const Color(0xFF64748B),
+                                                  color: const Color(
+                                                    0xFF64748B,
+                                                  ),
                                                   height: 1.5,
                                                 ),
                                                 children: [
                                                   const TextSpan(
-                                                    text: 'By continuing you agree to the ',
+                                                    text:
+                                                        'By continuing you agree to the ',
                                                   ),
                                                   TextSpan(
-                                                    text: 'Terms and Privacy Policy',
+                                                    text:
+                                                        'Terms and Privacy Policy',
                                                     style: GoogleFonts.inter(
-                                                      color: AppColors.webRoleHr,
-                                                      fontWeight: FontWeight.w600,
-                                                      decoration: TextDecoration.underline,
+                                                      color:
+                                                          AppColors.webRoleHr,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      decoration: TextDecoration
+                                                          .underline,
                                                     ),
-                                                    recognizer: TapGestureRecognizer()
-                                                      ..onTap = () {
-                                                        Navigator.push(
-                                                          context,
-                                                          MaterialPageRoute(
-                                                            builder: (_) => const TermsPrivacyScreen(),
-                                                          ),
-                                                        );
-                                                      },
+                                                    recognizer:
+                                                        TapGestureRecognizer()
+                                                          ..onTap = () {
+                                                            Navigator.push(
+                                                              context,
+                                                              MaterialPageRoute(
+                                                                builder: (_) =>
+                                                                    const TermsPrivacyScreen(),
+                                                              ),
+                                                            );
+                                                          },
                                                   ),
                                                   const TextSpan(text: '.'),
                                                 ],
@@ -591,34 +619,36 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                               cursor: SystemMouseCursors.click,
                                               child: GestureDetector(
                                                 onTap: onLoginTap,
-                                              child: RichText(
-                                                text: TextSpan(
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 13,
-                                                    color: const Color(
-                                                      0xFF64748B,
-                                                    ),
-                                                  ),
-                                                  children: [
-                                                    TextSpan(
-                                                      text: AppConstants
-                                                          .alreadyAccountPrompt,
-                                                    ),
-                                                    TextSpan(
-                                                      text: AppConstants
-                                                          .loginLinkText,
-                                                      style: GoogleFonts.inter(
-                                                        color:
-                                                            AppColors.webRoleHr,
-                                                        fontWeight:
-                                                            FontWeight.w600,
+                                                child: RichText(
+                                                  text: TextSpan(
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 13,
+                                                      color: const Color(
+                                                        0xFF64748B,
                                                       ),
                                                     ),
-                                                  ],
+                                                    children: [
+                                                      TextSpan(
+                                                        text: AppConstants
+                                                            .alreadyAccountPrompt,
+                                                      ),
+                                                      TextSpan(
+                                                        text: AppConstants
+                                                            .loginLinkText,
+                                                        style:
+                                                            GoogleFonts.inter(
+                                                              color: AppColors
+                                                                  .webRoleHr,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
                                           ),
                                         ],
                                       ),

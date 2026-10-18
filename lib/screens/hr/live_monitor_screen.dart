@@ -7,7 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/api_client.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_scope.dart';
-import '../../models/phase8_contract.dart';
+import '../../services/voice/voice_lifecycle_backend.dart';
+import '../../models/interview_analysis_contract.dart';
 import 'recruiter_observation_screen.dart';
 import '../../widgets/recruiter_top_bar.dart';
 
@@ -137,6 +138,36 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
           requestId != _requestId ||
           _account != SessionScope.generation) {
         return;
+      }
+      // Resolve only the selected interview through the existing owned read.
+      // No unbounded per-row fan-out and no inferred interview/session IDs.
+      final selectedIndex = sessions.indexWhere(
+        (session) => session.id == _selectedId,
+      );
+      final index = selectedIndex >= 0
+          ? selectedIndex
+          : (sessions.isEmpty ? -1 : 0);
+      final voice = VoiceLifecycleBackend();
+      if (index >= 0 &&
+          sessions[index].target == null &&
+          sessions[index].applicationId != null &&
+          voice.available) {
+        try {
+          final identity = await voice.resolveSession(
+            sessions[index].id,
+            cancelToken: _requests,
+          );
+          if (!mounted ||
+              requestId != _requestId ||
+              _account != SessionScope.generation) {
+            return;
+          }
+          if (identity != null) {
+            sessions[index] = sessions[index].withIdentity(identity);
+          }
+        } catch (_) {
+          // Missing/denied/unavailable session remains explicitly unavailable.
+        }
       }
       setState(() {
         _sessions = sessions;
@@ -385,7 +416,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
                         ? null
                         : () => Navigator.of(
                             context,
-                          ).pushReplacementNamed(destination.$2),
+                          ).pushNamed(destination.$2),
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
                       decoration: destination.$3 == 'Interviews'
@@ -459,7 +490,10 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
                         ),
                       ),
                   ],
-                  onChanged: (id) => setState(() => _selectedId = id),
+                  onChanged: (id) {
+                    setState(() => _selectedId = id);
+                    _load(silent: true);
+                  },
                 ),
               Text('Interview ${session.id}'),
               const SizedBox(height: 16),
@@ -468,7 +502,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
                   child: Padding(
                     padding: EdgeInsets.all(20),
                     child: Text(
-                      'Observations unavailable: this interview response does not provide an explicit session and application identity. No session identifier is inferred from the interview ID.',
+                      'Observations unavailable: an authorized session and application identity could not be resolved. No session identifier is inferred from the interview ID.',
                     ),
                   ),
                 )
@@ -498,11 +532,22 @@ class _LiveSession {
     required this.id,
     required this.displayName,
     this.target,
+    this.applicationId,
   });
   final String id, displayName;
+  final String? applicationId;
   final RecruiterObservationTarget? target;
+  _LiveSession withIdentity(InterviewSessionIdentity identity) => _LiveSession(
+    id: id,
+    displayName: displayName,
+    applicationId: applicationId,
+    target: RecruiterObservationTarget(
+      identity: identity,
+      applicationId: applicationId!,
+    ),
+  );
   factory _LiveSession.fromJson(Map<dynamic, dynamic> json) {
-    final id = phase8Identity(json['id']);
+    final id = requireInterviewIdentity(json['id']);
     final candidate = json['candidate'];
     final name =
         (json['candidate_name'] ??
@@ -515,14 +560,17 @@ class _LiveSession {
     return _LiveSession(
       id: id,
       displayName: name == null || name.isEmpty ? 'Live interview' : name,
+      applicationId: applicationId == null
+          ? null
+          : requireInterviewIdentity(applicationId),
       target: sessionId == null || applicationId == null
           ? null
           : RecruiterObservationTarget(
               identity: InterviewSessionIdentity(
                 interviewId: id,
-                sessionId: phase8Identity(sessionId),
+                sessionId: requireInterviewIdentity(sessionId),
               ),
-              applicationId: phase8Identity(applicationId),
+              applicationId: requireInterviewIdentity(applicationId),
             ),
     );
   }

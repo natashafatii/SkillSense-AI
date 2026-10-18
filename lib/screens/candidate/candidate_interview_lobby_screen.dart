@@ -2,21 +2,17 @@ import '../../widgets/candidate_button_style.dart';
 import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../../utils/interview_testing.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
-import 'candidate_home_screen.dart';
-import 'candidate_applications_screen.dart';
-import 'candidate_job_feed_screen.dart';
 import 'candidate_interview_session_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
-import 'candidate_notifications_screen.dart';
-import 'candidate_profile_settings_screen.dart';
 import '../../services/api_client.dart';
+import '../../services/api_exception.dart';
 import '../../services/session_scope.dart';
 import '../../models/interview.dart';
-import '../../models/phase8_contract.dart';
+import '../../models/interview_analysis_contract.dart';
 import '../../services/media/camera_adapter.dart';
 import '../../services/media/interview_media_controller.dart';
 import '../../widgets/interview_media_panel.dart';
@@ -28,10 +24,12 @@ class CandidateInterviewLobbyScreen extends StatefulWidget {
     super.key,
     this.identity,
     this.mediaAdapter,
+    this.voiceBackend,
   });
 
   final InterviewSessionIdentity? identity;
   final CameraAdapter? mediaAdapter;
+  final VoiceLifecycleBackend? voiceBackend;
 
   @override
   State<CandidateInterviewLobbyScreen> createState() =>
@@ -47,17 +45,23 @@ class _CandidateInterviewLobbyScreenState
   String? _loadError;
   late final InterviewMediaController _media;
 
-  final VoiceLifecycleBackend _voiceBackend = VoiceLifecycleBackend();
+  late final VoiceLifecycleBackend _voiceBackend;
+  late final VoiceLifecycleBackend _immediateBackend;
   final CancelToken _voiceRequests = CancelToken();
   bool _starting = false;
   bool _startUncertain = false;
   String? _startError;
   bool _isLoading = true;
   bool _hasInterview = false;
+  bool get _allowImmediateTesting => allowImmediateInterviewTesting();
 
   @override
   void initState() {
     super.initState();
+    _voiceBackend = widget.voiceBackend ?? VoiceLifecycleBackend();
+    _immediateBackend =
+        widget.voiceBackend ??
+        VoiceLifecycleBackend(contractConfirmed: _allowImmediateTesting);
     _media = InterviewMediaController(adapter: widget.mediaAdapter);
     _media.addListener(_mediaChanged);
     SessionScope.invalidations.addListener(_clearSession);
@@ -123,7 +127,7 @@ class _CandidateInterviewLobbyScreenState
     }
   }
 
-  Future<void> _startVideoInterview() async {
+  Future<void> _startVideoInterview({bool immediately = false}) async {
     final interview = _interview;
     if (_starting ||
         _startUncertain ||
@@ -136,10 +140,31 @@ class _CandidateInterviewLobbyScreenState
       _starting = true;
       _startError = null;
     });
-    _media.stop(); // Release lobby tests before session/provider handoff.
+    final backend = immediately ? _immediateBackend : _voiceBackend;
     try {
-      final snapshot = await _voiceBackend
-          .start(interview.id, videoRequired: true, cancelToken: _voiceRequests)
+      if (immediately) {
+        // The explicit click owns the device permission flow. A denied device
+        // must not create a paid provider call or pretend the interview started.
+        if (!_media.cameraReady) await _media.requestCamera();
+        if (!mounted || _account != SessionScope.generation) return;
+        if (!_media.microphoneChecked) await _media.checkMicrophone();
+        if (!mounted || _account != SessionScope.generation) return;
+        if (!_media.cameraReady || !_media.microphoneChecked) {
+          setState(() {
+            _startError =
+                'Allow camera and microphone access to start the interview.';
+          });
+          return;
+        }
+      }
+      _media.stop(); // Release lobby tests before session/provider handoff.
+      final snapshot = await backend
+          .start(
+            interview.id,
+            videoRequired: true,
+            startNow: immediately,
+            cancelToken: _voiceRequests,
+          )
           .timeout(const Duration(seconds: 20));
       if (!mounted || _account != SessionScope.generation) return;
       Navigator.of(context).pushReplacement(
@@ -147,9 +172,18 @@ class _CandidateInterviewLobbyScreenState
           builder: (_) => CandidateInterviewSessionScreen(
             identity: snapshot.identity,
             initialSnapshot: snapshot,
+            startImmediately: immediately,
           ),
         ),
       );
+    } on ApiException catch (error) {
+      if (mounted && _account == SessionScope.generation) {
+        setState(() {
+          _startError = error.message;
+          _startUncertain =
+              error.statusCode == null || error.statusCode! >= 500;
+        });
+      }
     } on VoiceContractUnavailable catch (error) {
       if (mounted && _account == SessionScope.generation) {
         setState(() {
@@ -184,7 +218,10 @@ class _CandidateInterviewLobbyScreenState
     });
     _media.stop();
     try {
-      final snapshot = await _voiceBackend
+      final backend = _voiceBackend.available
+          ? _voiceBackend
+          : _immediateBackend;
+      final snapshot = await backend
           .read(interview.id, cancelToken: _voiceRequests)
           .timeout(const Duration(seconds: 20));
       if (!mounted || _account != SessionScope.generation) return;
@@ -193,6 +230,8 @@ class _CandidateInterviewLobbyScreenState
           builder: (_) => CandidateInterviewSessionScreen(
             identity: snapshot.identity,
             initialSnapshot: snapshot,
+            startImmediately:
+                _allowImmediateTesting && !_voiceBackend.available,
           ),
         ),
       );
@@ -446,11 +485,7 @@ class _CandidateInterviewLobbyScreenState
                   ),
                 ),
                 onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateApplicationsScreen(),
-                    ),
-                  );
+                  Navigator.of(context).pushNamed('/candidate/applications');
                 },
                 child: Text(
                   'View applications',
@@ -630,6 +665,40 @@ class _CandidateInterviewLobbyScreenState
           ),
           if (_startError != null)
             Semantics(liveRegion: true, child: Text(_startError!)),
+          if (_allowImmediateTesting) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              key: const ValueKey('start-interview-now'),
+              onPressed: !_starting && !_startUncertain && !_media.busy
+                  ? () => _startVideoInterview(immediately: true)
+                  : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.dashboardTeal,
+                foregroundColor: const Color(0xFF0F172A),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
+              ),
+              icon: _starting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.play_arrow_rounded),
+              label: Text(
+                _starting ? 'Starting interview…' : 'Start interview now',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Development test: start now instead of waiting for the scheduled time.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(color: textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -646,7 +715,9 @@ class _CandidateInterviewLobbyScreenState
                 child: const Text('Start video-enabled interview'),
               ),
               OutlinedButton(
-                onPressed: !_starting && _voiceBackend.available
+                onPressed:
+                    !_starting &&
+                        (_voiceBackend.available || _allowImmediateTesting)
                     ? _resumeInterview
                     : null,
                 child: const Text('Find / resume existing session'),
@@ -759,7 +830,10 @@ class _CandidateInterviewLobbyScreenState
     Color cardBorder,
     bool isMobile,
   ) {
-    return InterviewMediaPanel(controller: _media);
+    return InterviewMediaPanel(
+      controller: _media,
+      brightness: Brightness.light,
+    );
   }
 
   // ── HOUSE RULES PANEL ──────────────────────────────────────────────────────
@@ -874,32 +948,17 @@ class _CandidateInterviewLobbyScreenState
 
           return GestureDetector(
             onTap: () {
+              if (isSelected) return;
               if (index == 0) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateHomeScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/home');
               } else if (index == 1) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateApplicationsScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/applications');
               } else if (index == 2) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateJobFeedScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/jobs');
               } else if (index == 3) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateInterviewLobbyScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/interview-lobby');
               } else {
-                _showMockNavigation(item['route']);
+                _navigateTo(item['route']);
               }
             },
             child: Stack(
@@ -986,224 +1045,9 @@ class _CandidateInterviewLobbyScreenState
   }
 
   // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-  Widget _buildTopBar(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    if (isMobile) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: cardBg,
-          border: Border(bottom: BorderSide(color: cardBorder, width: 1)),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.auto_awesome,
-              color: AppColors.dashboardBlue,
-              size: 26,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Lobby',
-              style: GoogleFonts.inter(
-                color: textPrimary,
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.03,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Text(
-                'INTERVIEW LOBBY',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF64748B),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.05,
-                ),
-              ),
-            ],
-          ),
-
-          // Actions
-          Row(
-            children: [
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                ),
-                child: TextField(
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Notification bell button
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: AppColors.dashboardTeal,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateNotificationsScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              // Settings icon
-              _buildTopBarIconButton(
-                icon: Icons.settings_outlined,
-                hasBadge: false,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateProfileSettingsScreen(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-    VoidCallback? onTap,
-  }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded ||
-        icon == Icons.notifications_outlined ||
-        icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    }
-
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 18),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: badgeColor ?? Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showMockNavigation(String destination) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          'Navigating to: $destination',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+  void _navigateTo(String destination) {
+    Navigator.of(context).pushNamed(
+      destination == '/candidate/settings' ? '/candidate/profile' : destination,
     );
   }
 }

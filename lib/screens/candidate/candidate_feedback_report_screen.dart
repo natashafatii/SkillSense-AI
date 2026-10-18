@@ -3,15 +3,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
-import 'candidate_home_screen.dart';
-import 'candidate_applications_screen.dart';
-import 'candidate_job_feed_screen.dart';
-import 'candidate_interview_lobby_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
-import 'candidate_notifications_screen.dart';
 import '../../services/api_client.dart';
+
 class CandidateFeedbackReportScreen extends StatefulWidget {
   const CandidateFeedbackReportScreen({super.key});
 
@@ -111,7 +106,10 @@ class _CandidateFeedbackReportScreenState
   Future<void> _checkFeedback() async {
     try {
       final dio = await ApiClient.getInstance();
-      final response = await dio.get('/feedback/', queryParameters: {'candidate': 'me'});
+      final response = await dio.get(
+        '/feedback/',
+        queryParameters: {'candidate': 'me'},
+      );
       final data = response.data;
       final List rows;
       if (data is List) {
@@ -218,7 +216,10 @@ class _CandidateFeedbackReportScreenState
                           children: [
                             RecruiterTopBar(
                               pageTitle: 'Feedback',
-                              breadcrumbSegments: const ['Interviews', 'Feedback'],
+                              breadcrumbSegments: const [
+                                'Interviews',
+                                'Feedback',
+                              ],
                               candidate: true,
                             ),
                             Expanded(
@@ -229,29 +230,29 @@ class _CandidateFeedbackReportScreenState
                                       ),
                                     )
                                   : !_hasFeedback
-                                      ? _buildEmptyState(isMobile)
-                                      : SingleChildScrollView(
-                                          physics: const BouncingScrollPhysics(),
-                                          padding: EdgeInsets.only(
-                                            left: isMobile ? 16 : 24,
-                                            right: isMobile ? 16 : 24,
-                                            top: 16,
-                                            bottom: isMobile ? 100 : 32,
-                                          ),
-                                          child: isMobile
-                                              ? _buildMobileLayout(
-                                                  textPrimary,
-                                                  textSecondary,
-                                                  cardBg,
-                                                  cardBorder,
-                                                )
-                                              : _buildWebLayout(
-                                                  textPrimary,
-                                                  textSecondary,
-                                                  cardBg,
-                                                  cardBorder,
-                                                ),
-                                        ),
+                                  ? _buildEmptyState(isMobile)
+                                  : SingleChildScrollView(
+                                      physics: const BouncingScrollPhysics(),
+                                      padding: EdgeInsets.only(
+                                        left: isMobile ? 16 : 24,
+                                        right: isMobile ? 16 : 24,
+                                        top: 16,
+                                        bottom: isMobile ? 100 : 32,
+                                      ),
+                                      child: isMobile
+                                          ? _buildMobileLayout(
+                                              textPrimary,
+                                              textSecondary,
+                                              cardBg,
+                                              cardBorder,
+                                            )
+                                          : _buildWebLayout(
+                                              textPrimary,
+                                              textSecondary,
+                                              cardBg,
+                                              cardBorder,
+                                            ),
+                                    ),
                             ),
                           ],
                         ),
@@ -357,11 +358,7 @@ class _CandidateFeedbackReportScreenState
                   ),
                 ),
                 onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateInterviewLobbyScreen(),
-                    ),
-                  );
+                  Navigator.of(context).pushNamed('/candidate/interview-lobby');
                 },
                 child: Text(
                   'Go to interview lobby',
@@ -984,15 +981,17 @@ class _CandidateFeedbackReportScreenState
                           ),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
-                            style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              foregroundColor: const Color(0xFF334155),
-                              elevation: 0,
-                              minimumSize: const Size(120, 32),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
+                            style: CandidateButtonStyle.secondary(
+                              ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFF1F5F9),
+                                foregroundColor: const Color(0xFF334155),
+                                elevation: 0,
+                                minimumSize: const Size(120, 32),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
                               ),
-                            )),
+                            ),
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -1045,7 +1044,10 @@ class _CandidateFeedbackReportScreenState
       {'icon': Icons.home_rounded, 'route': '/candidate/home'},
       {'icon': Icons.adjust_rounded, 'route': '/candidate/jobs'},
       {'icon': Icons.layers_rounded, 'route': '/candidate/applications'},
-      {'icon': Icons.radio_button_checked_rounded, 'route': '/candidate/interview-lobby'},
+      {
+        'icon': Icons.radio_button_checked_rounded,
+        'route': '/candidate/interview-lobby',
+      },
       {'icon': Icons.contrast_rounded, 'route': '/candidate/feedback-report'},
     ];
 
@@ -1074,28 +1076,19 @@ class _CandidateFeedbackReportScreenState
 
           return GestureDetector(
             onTap: () {
+              if (isSelected) return;
               if (index == 0) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateHomeScreen()),
-                );
+                Navigator.of(context).pushNamed('/candidate/home');
               } else if (index == 1) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateJobFeedScreen()),
-                );
+                Navigator.of(context).pushNamed('/candidate/jobs');
               } else if (index == 2) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
-                );
+                Navigator.of(context).pushNamed('/candidate/applications');
               } else if (index == 3) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateInterviewLobbyScreen()),
-                );
+                Navigator.of(context).pushNamed('/candidate/interview-lobby');
               } else if (index == 4) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CandidateFeedbackReportScreen()),
-                );
+                Navigator.of(context).pushNamed('/candidate/feedback-report');
               } else {
-                _showMockNavigation(item['route']);
+                _navigateTo(item['route']);
               }
             },
             child: Stack(
@@ -1182,244 +1175,9 @@ class _CandidateFeedbackReportScreenState
   }
 
   // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-  Widget _buildTopBar(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    if (isMobile) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: cardBg,
-          border: Border(bottom: BorderSide(color: cardBorder, width: 1)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.auto_awesome, color: AppColors.dashboardBlue, size: 26),
-            const SizedBox(width: 8),
-            Text(
-              'Feedback',
-              style: GoogleFonts.inter(
-                color: textPrimary,
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.03,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Breadcrumbs: INTERVIEWS / FEEDBACK
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateHomeScreen(),
-                    ),
-                  );
-                },
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Text(
-                    'INTERVIEWS',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: textSecondary,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.05,
-                    ),
-                  ),
-                ),
-              ),
-              Text(
-                '  /  ',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textSecondary,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.05,
-                ),
-              ),
-              Text(
-                'FEEDBACK',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.05,
-                ),
-              ),
-            ],
-          ),
-
-          // Actions
-          Row(
-            children: [
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                ),
-                child: TextField(
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: AppColors.dashboardTeal,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateNotificationsScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              _buildTopBarIconButton(
-                icon: Icons.language_rounded,
-                hasBadge: false,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-    VoidCallback? onTap,
-  }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    } else if (icon == Icons.language_rounded) {
-      tooltip = 'Language';
-    }
-
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 18),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: badgeColor ?? Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showMockNavigation(String destination) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          'Navigating to: $destination',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+  void _navigateTo(String destination) {
+    Navigator.of(context).pushNamed(
+      destination == '/candidate/settings' ? '/candidate/profile' : destination,
     );
   }
 }

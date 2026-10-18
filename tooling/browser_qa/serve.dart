@@ -38,8 +38,8 @@ Future<void> main(List<String> args) async {
             'max_pixels': 307200,
             'max_width': 640,
             'max_height': 480,
-            'frame_orientation': 'unmirrored_browser_video',
-            'authorization_expires_at': DateTime.now()
+            'auth_check_seconds': 5,
+            'lease_expires_at': DateTime.now()
                 .toUtc()
                 .add(const Duration(minutes: 1))
                 .toIso8601String(),
@@ -60,6 +60,15 @@ Future<void> main(List<String> args) async {
               return;
             }
             final row = jsonDecode(raw) as Map<String, dynamic>;
+            if (row['type'] == 'ping') {
+              ws.add(
+                jsonEncode({
+                  'type': 'pong',
+                  'server_ts': DateTime.now().toUtc().toIso8601String(),
+                }),
+              );
+              return;
+            }
             if (row['type'] != 'frame' || row['sequence'] is! int) {
               ws.close(1002);
               return;

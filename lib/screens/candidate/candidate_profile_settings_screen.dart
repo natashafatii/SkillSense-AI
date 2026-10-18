@@ -15,7 +15,6 @@ import '../../services/profile_service.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/candidate_avatar_image.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import 'candidate_notifications_screen.dart';
 
 enum AppThemeMode { daylight, night, auto }
 
@@ -1812,7 +1811,7 @@ class _CandidateProfileSettingsScreenState
               child: InkWell(
                 onTap: item.$1 == 'Profile'
                     ? null
-                    : () => Navigator.of(context).pushReplacementNamed(item.$3),
+                    : () => Navigator.of(context).pushNamed(item.$3),
                 borderRadius: BorderRadius.circular(10),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1992,110 +1991,6 @@ class _CandidateProfileSettingsScreenState
     _editFocus.unfocus();
     _editing = null;
   }
-
-  Widget _topBar(_Colors c, bool narrow, bool mobile) => Container(
-    height: 58,
-    padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
-    decoration: BoxDecoration(
-      color: c.surface,
-      border: Border(bottom: BorderSide(color: c.border)),
-    ),
-    child: Row(
-      children: [
-        Text('Profile', style: _inter(13.5, c.text3)),
-        const SizedBox(width: 8),
-        Text('/', style: _inter(13.5, c.text3)),
-        const SizedBox(width: 8),
-        Text('Settings', style: _inter(13.5, c.text, weight: FontWeight.w600)),
-        const Spacer(),
-        if (!narrow) ...[
-          Container(
-            width: 300,
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: c.surface2,
-              border: Border.all(color: c.border),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.search, size: 17, color: c.text3),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Search or jump to…',
-                    style: _inter(13.5, c.text3),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: c.border),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '⌘K',
-                    style: _inter(11, c.text3, weight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-        ],
-        SizedBox(
-          width: 36,
-          height: 36,
-          child: Stack(
-            children: [
-              IconButton(
-                tooltip: 'Notifications',
-                padding: EdgeInsets.zero,
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateNotificationsScreen(),
-                  ),
-                ),
-                icon: Icon(
-                  Icons.notifications_none_rounded,
-                  size: 20,
-                  color: c.text2,
-                ),
-              ),
-              Positioned(
-                top: 7,
-                right: 8,
-                child: Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: c.accent,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: c.surface, width: 1.5),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 36,
-          height: 36,
-          child: IconButton(
-            tooltip: 'Sign Out',
-            padding: EdgeInsets.zero,
-            onPressed: _signingOut ? null : _confirmSignOut,
-            icon: Icon(Icons.logout_rounded, size: 19, color: c.error),
-          ),
-        ),
-      ],
-    ),
-  );
 
   Widget _identity(_Colors c, bool mobile) {
     final user = _profile?.user;

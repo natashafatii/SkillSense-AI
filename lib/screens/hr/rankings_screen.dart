@@ -303,7 +303,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
                           ),
                         ),
                         onPressed: () {
-                          Navigator.of(context).pushReplacementNamed(
+                          Navigator.of(context).pushNamed(
                             '/recruiter/pipeline',
                             arguments: widget.jobId,
                           );
@@ -1170,7 +1170,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () {
-                Navigator.of(context).pushReplacementNamed('/dashboard');
+                Navigator.of(context).pushNamed('/dashboard');
               },
               child: SvgPicture.asset('assets/images/logo.svg', height: 48),
             ),
@@ -1236,7 +1236,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
                               if (!isSelected) {
                                 Navigator.of(
                                   context,
-                                ).pushReplacementNamed(item['route']);
+                                ).pushNamed(item['route']);
                               }
                             },
                             child: Container(
@@ -1381,7 +1381,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
     return GestureDetector(
       onTap: () {
         if (!isActive) {
-          Navigator.of(context).pushReplacementNamed(route);
+          Navigator.of(context).pushNamed(route);
         }
       },
       child: Container(

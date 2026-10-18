@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/phase8_contract.dart';
+import '../models/interview_analysis_contract.dart';
 import '../services/recruiter_observation_controller.dart';
 
 class RecruiterObservationPanel extends StatelessWidget {
@@ -84,13 +84,13 @@ class RecruiterObservationPanel extends StatelessWidget {
                   'Unknown or unusable observations are not evidence of absence. Frame counts are not elapsed time.',
                 ),
                 Text(
-                  'Centered among valid gaze observations: ${report?.centeredPercentage == null ? 'unavailable' : '${report!.centeredPercentage!.toStringAsFixed(1)}%'}',
+                  'Centered during supported gaze duration (approximate): ${report?.centeredPercentage == null ? 'unavailable' : '${report!.centeredPercentage!.toStringAsFixed(1)}%'}',
                 ),
                 if (counts == null)
                   const Text('Frame accounting: unavailable for this revision.')
                 else
                   Text(
-                    'Frames — received: ${counts.received}; admitted: ${counts.admitted}; processed: ${counts.processed}; dropped: ${counts.dropped}; failed: ${counts.failed}; expired: ${counts.expired}.',
+                    'Frames — received: ${counts.received}; admitted: ${counts.admitted}; processed: ${counts.processed}; dropped: ${counts.dropped}; superseded: ${counts.superseded}; failed: ${counts.failed}; expired: ${counts.expired}.',
                   ),
                 const SizedBox(height: 12),
                 Text(
@@ -108,7 +108,7 @@ class RecruiterObservationPanel extends StatelessWidget {
                 else
                   for (final event in snapshot.eventSummaries!)
                     Text(
-                      '${event.type}: ${event.eventCount} events; observed duration ${event.observedDurationSeconds == null ? 'unknown' : '${event.observedDurationSeconds!.toStringAsFixed(2)} seconds'}',
+                      '${event.type}: ${event.eventCount?.toString() ?? 'unknown'} events; observed duration ${event.observedDurationSeconds == null ? 'unknown' : '${event.observedDurationSeconds!.toStringAsFixed(2)} seconds'}',
                     ),
                 Text(
                   'Expression analysis: ${_expression(snapshot.expressionStatus)}',

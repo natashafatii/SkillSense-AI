@@ -282,7 +282,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   String _workType = 'Remote';
   String _experience = 'Mid';
   DateTime? _deadline;
-  Brightness? _themeOverride;
   int _highlighted = -1;
   double _threshold = 66;
   bool _autoShortlist = true;
@@ -290,17 +289,12 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   String? _savedJobId;
   double _scrollOffset = 0;
 
-  CreateRoleTokens get _c =>
-      (_themeOverride ?? MediaQuery.platformBrightnessOf(context)) ==
-          Brightness.dark
-      ? CreateRoleTokens.dark
-      : _isMobile
+  // The recruiter workspace has a light navigation shell. Keep the form and
+  // its overlays in the same palette regardless of the OS appearance setting.
+  CreateRoleTokens get _c => _isMobile
       ? CreateRoleTokens.mobileLight
       : CreateRoleTokens.light;
   bool get _isMobile => MediaQuery.sizeOf(context).width < 900;
-  bool get _dark =>
-      (_themeOverride ?? MediaQuery.platformBrightnessOf(context)) ==
-      Brightness.dark;
 
   @override
   void initState() {
@@ -443,7 +437,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     border: Border.all(color: _c.border),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withValues(alpha: _dark ? .25 : .06),
+        color: Colors.black.withValues(alpha: .06),
         blurRadius: 22,
         offset: const Offset(0, 8),
       ),
@@ -457,11 +451,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: Theme(
         data: Theme.of(context).copyWith(
-          brightness: _dark ? Brightness.dark : Brightness.light,
+          brightness: Brightness.light,
           extensions: [c],
           colorScheme: ColorScheme.fromSeed(
             seedColor: c.accent,
-            brightness: _dark ? Brightness.dark : Brightness.light,
+            brightness: Brightness.light,
           ),
         ),
         child: _isMobile
@@ -1112,7 +1106,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     breadcrumbSegments: [
       widget.initialJob == null ? 'Create a Role' : 'Edit role',
     ],
-    dark: _dark,
     hasUnread:
         AppNavState.hasUnreadNotifications || AppNavState.unreadInterviews > 0,
     onBellTap: () =>
@@ -1734,33 +1727,36 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _label('Applications close'),
-      InkWell(
-        key: _dateFieldKey,
-        onTap: _showCalendarPopover,
-        borderRadius: BorderRadius.circular(_isMobile ? 12 : 10),
-        child: Container(
-          height: _isMobile ? 48 : 46,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: _inputBox(
-            _calendarOverlay != null,
-            _errors.containsKey('date'),
-            radius: _isMobile ? 12 : 10,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _deadline == null
-                      ? 'Select a closing date'
-                      : _dateLabel(_deadline!),
-                  style: _body(
-                    14.5,
-                    color: _deadline == null ? _c.text3 : _c.text,
+      KeyedSubtree(
+        key: const Key('create-role-date'),
+        child: InkWell(
+          key: _dateFieldKey,
+          onTap: _showCalendarPopover,
+          borderRadius: BorderRadius.circular(_isMobile ? 12 : 10),
+          child: Container(
+            height: _isMobile ? 48 : 46,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: _inputBox(
+              _calendarOverlay != null,
+              _errors.containsKey('date'),
+              radius: _isMobile ? 12 : 10,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _deadline == null
+                        ? 'Select a closing date'
+                        : _dateLabel(_deadline!),
+                    style: _body(
+                      14.5,
+                      color: _deadline == null ? _c.text3 : _c.text,
+                    ),
                   ),
                 ),
-              ),
-              Icon(Icons.calendar_today_outlined, size: 17, color: _c.text3),
-            ],
+                Icon(Icons.calendar_today_outlined, size: 17, color: _c.text3),
+              ],
+            ),
           ),
         ),
       ),

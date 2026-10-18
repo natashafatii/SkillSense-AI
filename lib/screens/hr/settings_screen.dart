@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../services/scoring_model_service.dart';
-import '../../widgets/app_tooltip.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter;
 
 typedef ScoringModelScreen = SettingsScreen;
@@ -480,7 +478,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Score weights',
+                'Scoring preview',
                 style: GoogleFonts.spaceGrotesk(
                   color: _tx,
                   fontSize: 16,
@@ -493,7 +491,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: 24),
-
+          const Text(
+            'Local preview only. Changes are not saved to the server.',
+          ),
+          const SizedBox(height: 12),
           // Technical Weight Slider
           _buildRebalancingSliderRow(
             label: 'TECHNICAL SKILLS',
@@ -1116,190 +1117,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ── WEB TOP BAR (58px height, 1px bottom border --edge2) ───────────────────
-  Widget _buildTopBar() {
-    return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: _edge2, width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Breadcrumb on left: "SCORING MODEL" — Space Grotesk 10.5px uppercase, 0.1em tracking, --tx3
-          Text(
-            'SCORING MODEL',
-            style: GoogleFonts.spaceGrotesk(
-              color: _tx3,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 10.5 * 0.1,
-            ),
-          ),
-
-          // Actions on right: Search ("⌕ Search or jump to… ⌘K"), Bell (◔) with red dot, Settings (◍)
-          Row(
-            children: [
-              // Search Input
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _edge2, width: 1),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: GoogleFonts.inter(color: _tx, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to…',
-                    hintStyle: GoogleFonts.inter(color: _tx3, fontSize: 13),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: _tx3,
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: _edge2),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: _tx3,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Notification bell icon (◔) with red dot
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: const Color(0xFFEF4444),
-                tooltip: 'Notifications',
-                onTap: () =>
-                    Navigator.of(context).pushNamed('/recruiter/notifications'),
-              ),
-              const SizedBox(width: 10),
-
-              // Settings icon (◍)
-              _buildTopBarIconButton(
-                icon: Icons.settings_outlined,
-                hasBadge: false,
-                tooltip: 'Profile',
-                onTap: () {
-                  Navigator.of(context).pushNamed('/recruiter/profile');
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    required String tooltip,
-    required VoidCallback onTap,
-    Color? badgeColor,
-  }) {
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _edge2, width: 1),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(icon, color: _tx2, size: 18),
-                if (hasBadge)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: badgeColor ?? Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   // ── MOBILE HEADER (Small logomark 26px + "Scoring" title) ───────────────────
-  Widget _buildMobileHeader() {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: _edge2, width: 1)),
-      ),
-      child: Row(
-        children: [
-          SvgPicture.asset(
-            'assets/images/logo.svg',
-            height: 26,
-            placeholderBuilder: (_) => const Icon(
-              Icons.auto_awesome,
-              size: 24,
-              color: Color(0xFF4D7BFA),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Scoring',
-            style: GoogleFonts.inter(
-              color: _tx,
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.03 * 19,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── MOBILE FLOATING BOTTOM DOCK (6 icons, Analytics active glowing indigo) ───
   Widget _buildMobileBottomDock() {
     final List<Map<String, dynamic>> dockItems = [
@@ -1364,7 +1182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (!isSelected) {
                 Navigator.of(
                   context,
-                ).pushReplacementNamed(item['route'] as String);
+                ).pushNamed(item['route'] as String);
               }
             },
             child: Stack(

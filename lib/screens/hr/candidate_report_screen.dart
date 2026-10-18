@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/application.dart';
@@ -122,7 +121,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   }
 
   void _goToPipeline() =>
-      Navigator.of(context).pushReplacementNamed('/recruiter/pipeline');
+      Navigator.of(context).pushNamed('/recruiter/pipeline');
 
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
@@ -202,162 +201,6 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   }
 
   // ── Top bars ───────────────────────────────────────────────────────────────
-
-  Widget _webTopBar() => Container(
-    height: 58,
-    padding: const EdgeInsets.symmetric(horizontal: 24),
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(bottom: BorderSide(color: _edge)),
-    ),
-    child: Row(
-      children: [
-        // Breadcrumb: PIPELINE / REPORT
-        RichText(
-          text: TextSpan(
-            style: GoogleFonts.spaceGrotesk(
-              fontSize: 10.5,
-              letterSpacing: 1.05,
-            ),
-            children: [
-              TextSpan(
-                text: 'PIPELINE',
-                style: TextStyle(color: _muted, fontWeight: FontWeight.w500),
-              ),
-              TextSpan(
-                text: ' / ',
-                style: TextStyle(color: _muted, fontWeight: FontWeight.w400),
-              ),
-              TextSpan(
-                text: 'REPORT',
-                style: TextStyle(color: _ink, fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-        ),
-        const Spacer(),
-        // Search box
-        Container(
-          width: 260,
-          height: 36,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _edge),
-          ),
-          child: TextField(
-            style: GoogleFonts.inter(fontSize: 13, color: _ink),
-            decoration: InputDecoration(
-              hintText: '⌕ Search or jump to…',
-              hintStyle: GoogleFonts.inter(fontSize: 13, color: _muted),
-              suffixIcon: Container(
-                width: 32,
-                alignment: Alignment.center,
-                margin: const EdgeInsets.fromLTRB(0, 4, 6, 4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: _edge),
-                ),
-                child: Text(
-                  '⌘K',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: _muted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              contentPadding: const EdgeInsets.fromLTRB(12, 0, 0, 0),
-              border: InputBorder.none,
-              isDense: true,
-            ),
-          ),
-        ),
-        const SizedBox(width: 14),
-        // Bell icon with red dot
-        _topBarIcon(
-          Icons.notifications_none_rounded,
-          hasDot: true,
-          dotColor: const Color(0xFFEF4444),
-          onTap: () =>
-              Navigator.of(context).pushNamed('/recruiter/notifications'),
-        ),
-        const SizedBox(width: 10),
-        // Settings icon
-        _topBarIcon(Icons.settings_outlined, onTap: () {}),
-      ],
-    ),
-  );
-
-  Widget _mobileTopBar() => Container(
-    height: 56,
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(bottom: BorderSide(color: _edge)),
-    ),
-    child: Row(
-      children: [
-        SvgPicture.asset(
-          'assets/images/logo.svg',
-          height: 26,
-          placeholderBuilder: (_) => const Icon(
-            Icons.auto_awesome,
-            size: 24,
-            color: Color(0xFF4D7BFA),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          'Report',
-          style: GoogleFonts.inter(
-            color: _ink,
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _topBarIcon(
-    IconData icon, {
-    bool hasDot = false,
-    Color dotColor = Colors.red,
-    VoidCallback? onTap,
-  }) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _edge),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, size: 18, color: const Color(0xFF475569)),
-          if (hasDot)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: dotColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-        ],
-      ),
-    ),
-  );
 
   // ── Empty state ────────────────────────────────────────────────────────────
 
@@ -520,7 +363,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
             GestureDetector(
               onTap: () {
                 if (i != activeIndex) {
-                  Navigator.of(context).pushReplacementNamed(items[i].$2);
+                  Navigator.of(context).pushNamed(items[i].$2);
                 }
               },
               child: Container(

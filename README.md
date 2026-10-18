@@ -2,6 +2,14 @@
 
 SkillSense AI Flutter Frontend (Web & Native Mobile).
 
+Feature names and deployment configuration: [Interview analysis naming](../AI_Interview_Recruitment/docs/interview_analysis_naming.md).
+
+Interview Analysis setup, audit results, browser checklist, and remaining backend integration
+dependencies: [F6 validation and troubleshooting](docs/interview_analysis_validation.md).
+
+Current validation results, failure root causes, existing-route voice integration,
+and reproduction: [F6 repair audit](docs/interview_analysis_validation_repairs.md).
+
 ## Unified Cross-Platform Auth Architecture (Clerk)
 
 This project ships Flutter Web + iOS/Android from a single codebase. Rather than using a single SDK across targets, auth is split by platform underneath a unified facade:
@@ -19,7 +27,9 @@ This project ships Flutter Web + iOS/Android from a single codebase. Rather than
 > **Do not attempt to "simplify" auth back into a single SDK.** Merging web back into `clerk_flutter` will reintroduce the header conflict and dev-browser unauthenticated errors.
 
 ### Sign-out Handling
-Sign-out is defined on `AuthServiceInterface.signOut()` but is not yet called by any UI screen. When adding sign-out UI buttons in settings/profile screens, invoke `AuthService.signOut(context)`.
+Profile/settings sign-out controls confirm the action, await Clerk sign-out, and
+leave protected navigation only after success. A failure keeps the verified
+screen available and offers retry; account invalidation releases session media.
 
 ### Dev-Only Setting: Bot Sign-Up Protection (CAPTCHA)
 When using headless sign-up flows (`signUp` / `attemptSignUp`), Clerk requires either a Turnstile CAPTCHA token or for **Bot sign-up protection** to be toggled off in the Clerk Dashboard for development:

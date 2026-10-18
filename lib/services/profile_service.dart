@@ -50,6 +50,15 @@ class ProfileService {
     if (first.isNotEmpty && last.isNotEmpty) {
       return '${first[0]}${last[0]}'.toUpperCase();
     }
+    final names = (profile['full_name']?.toString() ?? '')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((name) => name.isNotEmpty)
+        .toList();
+    if (names.isNotEmpty) {
+      return '${names.first[0]}${names.length > 1 ? names.last[0] : ''}'
+          .toUpperCase();
+    }
     final email =
         (profile['email'] ?? nested['email'])?.toString().trim() ?? '';
     return email.isEmpty ? '?' : email[0].toUpperCase();

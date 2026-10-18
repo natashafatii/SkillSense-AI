@@ -76,17 +76,17 @@ class _AppTooltipState extends State<AppTooltip> {
 
   void _showTooltip() {
     if (_overlayEntry != null || widget.message.isEmpty) return;
-    
+
     final renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null || !renderBox.attached) return;
 
     final size = renderBox.size;
     final offset = renderBox.localToGlobal(Offset.zero);
-    
+
     _overlayEntry = OverlayEntry(
       builder: (context) {
         final isNight = Theme.of(context).brightness == Brightness.dark;
-        
+
         return CustomSingleChildLayout(
           delegate: _TooltipLayoutDelegate(
             targetOffset: offset,
@@ -99,9 +99,14 @@ class _AppTooltipState extends State<AppTooltip> {
             child: Material(
               color: Colors.transparent,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
-                  color: isNight ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
+                  color: isNight
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFF0F172A),
                   borderRadius: BorderRadius.circular(9),
                   boxShadow: const [
                     BoxShadow(
@@ -146,10 +151,7 @@ class _AppTooltipState extends State<AppTooltip> {
       child: MouseRegion(
         onEnter: (_) => _onEnter(),
         onExit: (_) => _onExit(),
-        child: Focus(
-          focusNode: _focusNode,
-          child: widget.child,
-        ),
+        child: Focus(focusNode: _focusNode, child: widget.child),
       ),
     );
   }
@@ -169,7 +171,8 @@ class _TooltipLayoutDelegate extends SingleChildLayoutDelegate {
   });
 
   @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) => constraints.loosen();
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      constraints.loosen();
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
@@ -194,8 +197,12 @@ class _TooltipLayoutDelegate extends SingleChildLayoutDelegate {
     // Basic bounds checking
     if (x < 10) x = 10;
     if (y < 10) y = 10;
-    if (x + childSize.width > size.width - 10) x = size.width - childSize.width - 10;
-    if (y + childSize.height > size.height - 10) y = size.height - childSize.height - 10;
+    if (x + childSize.width > size.width - 10) {
+      x = size.width - childSize.width - 10;
+    }
+    if (y + childSize.height > size.height - 10) {
+      y = size.height - childSize.height - 10;
+    }
 
     return Offset(x, y);
   }

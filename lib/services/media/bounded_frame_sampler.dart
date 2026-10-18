@@ -13,6 +13,17 @@ class BoundedFrameSampler {
   Timer? _timer;
   bool _busy = false, _disposed = false;
   int _generation = 0;
+  int _attempts = 0, _encoded = 0, _busyTicks = 0, _encodeMicros = 0;
+
+  /// Aggregate local diagnostics only: no bytes, credentials or device identity.
+  Map<String, int> get diagnostics => {
+    'encode_attempts': _attempts,
+    'encoded_frames': _encoded,
+    'busy_ticks_skipped': _busyTicks,
+    'encode_total_microseconds': _encodeMicros,
+    'in_flight': _busy ? 1 : 0,
+    'queued_frames': 0,
+  };
   void stop() {
     _generation++;
     _timer?.cancel();
@@ -35,14 +46,20 @@ class BoundedFrameSampler {
     );
     final period = interval > serverInterval ? interval : serverInterval;
     _timer = Timer.periodic(period, (_) async {
+      if (_busy) _busyTicks++;
       if (_busy ||
           !adapter.cameraReady ||
           (canCapture != null && !canCapture())) {
         return;
       }
       _busy = true;
+      _attempts++;
+      final watch = Stopwatch()..start();
       try {
         final frame = await adapter.encodeJpeg(limits);
+        watch.stop();
+        _encodeMicros += watch.elapsedMicroseconds;
+        if (frame != null) _encoded++;
         if (_disposed ||
             generation != _generation ||
             !adapter.cameraReady ||
@@ -64,6 +81,10 @@ class BoundedFrameSampler {
           );
         }
       } finally {
+        if (watch.isRunning) {
+          watch.stop();
+          _encodeMicros += watch.elapsedMicroseconds;
+        }
         _busy = false;
       }
     });

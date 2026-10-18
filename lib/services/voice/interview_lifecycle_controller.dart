@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import '../../models/phase8_contract.dart';
+import '../../models/interview_analysis_contract.dart';
 import '../../models/voice/voice_contract.dart';
 import '../media/interview_media_controller.dart';
-import '../phase8_service.dart';
+import '../interview_analysis_service.dart';
 import '../publisher/candidate_publisher_controller.dart';
 import '../session_scope.dart';
 import 'retell_voice_client.dart';
@@ -29,14 +29,14 @@ class InterviewLifecycleController extends ChangeNotifier {
     this.media,
     this.publisher, {
     VoiceLifecycleBackend? backend,
-    Phase8Service? analysis,
+    InterviewAnalysisService? analysis,
     RetellVoiceClient? voice,
     VoiceSessionSnapshot? initialSnapshot,
     this.pollInterval = const Duration(seconds: 2),
     this.maxPolls = 12,
     this.requestTimeout = const Duration(seconds: 20),
   }) : backend = backend ?? VoiceLifecycleBackend(),
-       analysis = analysis ?? Phase8Service(),
+       analysis = analysis ?? InterviewAnalysisService(),
        voice = voice ?? createRetellVoiceClient(),
        _account = SessionScope.generation {
     if (initialSnapshot != null) _apply(initialSnapshot);
@@ -46,7 +46,7 @@ class InterviewLifecycleController extends ChangeNotifier {
   final InterviewMediaController media;
   final CandidatePublisherController publisher;
   final VoiceLifecycleBackend backend;
-  final Phase8Service analysis;
+  final InterviewAnalysisService analysis;
   final RetellVoiceClient voice;
   final Duration pollInterval, requestTimeout;
   final int maxPolls, _account;
@@ -135,6 +135,10 @@ class InterviewLifecycleController extends ChangeNotifier {
       throw const FormatException('Lifecycle identity mismatch.');
     }
     if (_snapshot != null && result.revision < _snapshot!.revision) return;
+    // Voice GET has no server revision. Never let a late read reopen verified
+    // terminal audio/completion at an equal analysis revision.
+    if (_snapshot?.completed == true && !result.completed) return;
+    if (_snapshot?.audioEndedAt != null && result.audioEndedAt == null) return;
     if (_snapshot != null && result.videoRequired != _snapshot!.videoRequired) {
       throw const FormatException('Immutable session mode changed.');
     }
@@ -255,7 +259,7 @@ class InterviewLifecycleController extends ChangeNotifier {
     _notice = 'Checking backend session and provider credentials…';
     _emit();
     try {
-      final result = await backend
+      var result = await backend
           .read(
             identity.interviewId,
             sessionId: identity.sessionId,
@@ -278,6 +282,18 @@ class InterviewLifecycleController extends ChangeNotifier {
         throw const VoiceContractUnavailable(
           'Start the real camera preview before joining this video-enabled session.',
         );
+      }
+      if (result.credential == null) {
+        result = await backend
+            .join(
+              identity,
+              videoRequired: result.videoRequired,
+              cancelToken: _requests,
+            )
+            .bounded(this);
+        if (!isCurrent || epoch != _voiceEpoch) return;
+        _apply(result);
+        if (!canUseMedia) return;
       }
       final credential = result.credential;
       if (credential == null ||
@@ -504,7 +520,7 @@ class InterviewLifecycleController extends ChangeNotifier {
           .finishVideo(identity, cancelToken: _requests)
           .bounded(this);
       if (!isCurrent) return false;
-      if (!['FINALIZING', 'ENDED'].contains(result.analysis.videoState)) {
+      if (!['finalizing', 'ended'].contains(result.videoState)) {
         return false;
       }
       _videoSealConfirmed = true;
