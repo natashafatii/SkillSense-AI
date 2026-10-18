@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import '../../models/phase8_contract.dart';
+import '../../models/interview_analysis_contract.dart';
 
 enum MediaFailureCode {
   denied,

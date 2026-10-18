@@ -219,7 +219,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
         await JobService.deleteJob(job.id);
         if (!mounted) return;
         _toast('Draft deleted.');
-        Navigator.of(context).pushReplacementNamed('/recruiter/job-listings');
+        Navigator.of(context).pushNamed('/recruiter/job-listings');
         return;
       }
       final updated = action == _DetailAction.publish
@@ -960,7 +960,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
           OutlinedButton(
             onPressed: () => Navigator.of(
               context,
-            ).pushReplacementNamed('/recruiter/job-listings'),
+            ).pushNamed('/recruiter/job-listings'),
             child: const Text('Back to Job Listings'),
           ),
           if (status != 404 && status != 403)
@@ -1004,7 +1004,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
               ? Navigator.of(context).pop()
               : Navigator.of(
                   context,
-                ).pushReplacementNamed('/recruiter/job-listings'),
+                ).pushNamed('/recruiter/job-listings'),
         ),
         const SizedBox(width: 4),
         Expanded(
@@ -1052,7 +1052,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
               icon,
               color: route == '/recruiter/job-listings' ? _blue : _muted,
             ),
-            onPressed: () => Navigator.of(context).pushReplacementNamed(route),
+            onPressed: () => Navigator.of(context).pushNamed(route),
           ),
       ],
     ),

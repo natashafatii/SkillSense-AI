@@ -488,7 +488,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
             }).toList(),
     );
     if (!mounted || selected == null || selected.id == _jobId) return;
-    Navigator.of(context).pushReplacementNamed(
+    Navigator.of(context).pushNamed(
       '/recruiter/jobs/${Uri.encodeComponent(selected.id)}/pipeline',
     );
   }
@@ -765,7 +765,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
                     ),
                     onPressed: () => Navigator.of(
                       context,
-                    ).pushReplacementNamed('/recruiter/create-role'),
+                    ).pushNamed('/recruiter/create-role'),
                     child: Text(
                       'Create a role',
                       style: GoogleFonts.inter(
@@ -871,7 +871,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
                         ? null
                         : () => Navigator.of(
                             context,
-                          ).pushReplacementNamed(destination.$2),
+                          ).pushNamed(destination.$2),
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
                       decoration: destination.$3 == 'Pipeline'

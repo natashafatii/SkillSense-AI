@@ -1,16 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
 
 import '../../models/job.dart';
 import 'create_role_screen.dart';
 import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
-import '../../constants/app_colors.dart';
 import '../../models/app_notification.dart';
 import '../../models/paginated_response.dart';
 import '../../services/notification_service.dart';
@@ -29,8 +26,6 @@ class JobListingsScreen extends StatefulWidget {
 
 class _JobListingsScreenState extends State<JobListingsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
-  bool _isSearchFocused = false;
   JobStatus _activeFilter = JobStatus.active;
   bool _isLoading = true;
   List<Job> _allJobs = [];
@@ -47,16 +42,12 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
   @override
   void initState() {
     super.initState();
-    _searchFocusNode.addListener(() {
-      if (mounted) setState(() => _isSearchFocused = _searchFocusNode.hasFocus);
-    });
     _fetchJobs();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -339,207 +330,6 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
             ),
           ),
           if (isMobile) _buildBottomDock(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebTopBar() {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Text(
-                'WORKSPACE',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              Text(
-                ' / ',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFFCBD5E1),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'JOB LISTINGS',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: _isSearchFocused
-                        ? AppColors.dashboardBlue
-                        : const Color(0xFFE2E8F0),
-                    width: _isSearchFocused ? 1.8 : 1,
-                  ),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-              ),
-              const SizedBox(width: 10),
-              _buildTopBarIconButton(
-                icon: Icons.language_rounded,
-                hasBadge: false,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-  }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded ||
-        icon == Icons.notifications_outlined ||
-        icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Profile';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    } else if (icon == Icons.language_rounded) {
-      tooltip = 'Language';
-    }
-
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 18),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(
-                      color: AppColors.dashboardRed,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileTopBar() {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-      ),
-      child: Row(
-        children: [
-          SvgPicture.asset('assets/images/logo.svg', width: 26, height: 26),
-          const SizedBox(width: 8),
-          Text(
-            'Jobs',
-            style: GoogleFonts.spaceGrotesk(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
         ],
       ),
     );
@@ -912,7 +702,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
   Widget _dockIcon(IconData icon, String route, {bool isActive = false}) {
     return GestureDetector(
       onTap: () {
-        if (!isActive) Navigator.of(context).pushReplacementNamed(route);
+        if (!isActive) Navigator.of(context).pushNamed(route);
       },
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -1024,8 +814,9 @@ class _RecruiterNotificationsScreenState
       ]);
       if (!mounted ||
           generation != SessionScope.generation ||
-          request != _request)
+          request != _request) {
         return;
+      }
       final response = results[0] as PaginatedResponse<AppNotification>;
       setState(() {
         final byId = {
@@ -1104,8 +895,9 @@ class _RecruiterNotificationsScreenState
           error is ApiException &&
           error.statusCode == 401) {
         await AuthService.signOut(context);
-        if (mounted)
+        if (mounted) {
           Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+        }
       } else if (mounted &&
           generation == SessionScope.generation &&
           error is ApiException &&
@@ -1175,10 +967,11 @@ class _RecruiterNotificationsScreenState
         } on ApiException catch (error) {
           if (error.statusCode == 400) continue;
           if (error.statusCode == 404) {
-            if (mounted)
+            if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Notification not found.')),
               );
+            }
             continue;
           }
           rethrow;
@@ -1188,8 +981,9 @@ class _RecruiterNotificationsScreenState
       if (!mounted || generation != SessionScope.generation) return;
       if (error is ApiException && error.statusCode == 401) {
         await AuthService.signOut(context);
-        if (mounted)
+        if (mounted) {
           Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+        }
       } else if (error is ApiException && error.statusCode == 403) {
         setState(() => _error = "You're not authorized to view notifications.");
       } else {
@@ -1236,16 +1030,20 @@ class _RecruiterNotificationsScreenState
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (_items.isNotEmpty && _unread > 0)
-                      Text(
-                        '$_unread unread',
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF64748B),
-                          fontSize: 13,
-                        ),
+                    Text(
+                      '$_unread unread',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF64748B),
+                        fontSize: 13,
                       ),
+                    ),
                   ],
                 ),
+              ),
+              IconButton(
+                tooltip: 'Refresh notifications',
+                onPressed: _busy ? null : _fetch,
+                icon: const Icon(Icons.refresh_rounded),
               ),
               if (_items.isNotEmpty && _unread > 0)
                 TextButton(
@@ -1308,7 +1106,7 @@ class _RecruiterNotificationsScreenState
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          "You're all caught up.",
+                          'You’re all caught up.',
                           style: GoogleFonts.inter(
                             color: const Color(0xFF292929),
                             fontSize: 14,
@@ -1356,107 +1154,136 @@ class _RecruiterNotificationsScreenState
   );
 
   Widget _notificationGroup(String label, List<AppNotification> items) =>
-      Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: .025),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-              child: Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF94A3B8),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1,
-                ),
+      items.isEmpty
+      ? const SizedBox.shrink()
+      : Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .025),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-            ),
-            if (items.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 36),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.notifications_none_rounded),
-                      Text("You're all caught up."),
-                    ],
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                child: Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF94A3B8),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
                   ),
                 ),
               ),
-            for (var index = 0; index < items.length; index++) ...[
-              if (index > 0)
-                const Divider(
-                  color: Color(0xFFF1F5F9),
-                  height: 1,
-                  thickness: 1,
-                  indent: 20,
-                  endIndent: 20,
+              if (items.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 36),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.notifications_none_rounded),
+                        Text("You're all caught up."),
+                      ],
+                    ),
+                  ),
                 ),
-              _notificationRow(items[index]),
+              for (var index = 0; index < items.length; index++) ...[
+                if (index > 0)
+                  const Divider(
+                    color: Color(0xFFF1F5F9),
+                    height: 1,
+                    thickness: 1,
+                    indent: 20,
+                    endIndent: 20,
+                  ),
+                _notificationRow(items[index]),
+              ],
+              const SizedBox(height: 4),
             ],
-            const SizedBox(height: 4),
-          ],
-        ),
-      );
+          ),
+        );
 
   Widget _notificationRow(AppNotification item) => Opacity(
     opacity: item.isRead ? .75 : 1,
-    child: ListTile(
-      key: ValueKey(item.id),
-      tileColor: item.isRead ? Colors.white : const Color(0xFFFAFCFF),
-      leading: item.isRead
-          ? const SizedBox(width: 8)
-          : const Icon(Icons.circle, color: Color(0xFFE85D5B), size: 8),
-      title: Text(
-        item.message,
-        style: GoogleFonts.inter(
-          color: const Color(0xFF0F172A),
-          fontSize: 13.5,
-          fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w700,
+    child: Material(
+      color: item.isRead ? Colors.white : const Color(0xFFFAFCFF),
+      child: ListTile(
+        key: ValueKey(item.id),
+        leading: item.isRead
+            ? const SizedBox(width: 8)
+            : const Icon(Icons.circle, color: Color(0xFFE85D5B), size: 8),
+        title: Text(
+          item.type
+              .split('_')
+              .map(
+                (word) => word.isEmpty
+                    ? ''
+                    : word[0].toUpperCase() + word.substring(1),
+              )
+              .join(' ')
+              .replaceFirst(' Received', ' received'),
+          style: GoogleFonts.inter(
+            color: const Color(0xFF0F172A),
+            fontSize: 13.5,
+            fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w700,
+          ),
         ),
-      ),
-      subtitle: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-              color: const Color(0xFFDBEAFE),
-              borderRadius: BorderRadius.circular(5),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.message),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDBEAFE),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    item.type.toUpperCase(),
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF1D4ED8),
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  item.relativeTime,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF64748B),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
-            child: Text(
-              item.type.toUpperCase(),
-              style: GoogleFonts.inter(
-                color: const Color(0xFF1D4ED8),
-                fontSize: 9.5,
-                fontWeight: FontWeight.w800,
+          ],
+        ),
+        trailing: item.isRead
+            ? null
+            : IconButton(
+                tooltip: 'Mark as read',
+                onPressed: () => _markRead(item),
+                icon: const Icon(Icons.done_rounded),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            item.relativeTime,
-            style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
-              fontSize: 12,
-            ),
-          ),
-        ],
+        onTap: () => _markRead(item),
       ),
-      onTap: () => _markRead(item),
     ),
   );
 }

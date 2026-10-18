@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import '../../models/phase8_contract.dart';
+import '../../models/interview_analysis_contract.dart';
 import '../../models/voice/voice_contract.dart';
 import '../api_client.dart';
 import '../api_exception.dart';
@@ -15,16 +15,26 @@ class VoiceLifecycleBindings {
   final String read, stop, sync;
   final bool candidateStartAuthorized;
   static VoiceLifecycleBindings? configured() {
-    const read = String.fromEnvironment('PHASE8_VOICE_READ_PATH');
-    const stop = String.fromEnvironment('PHASE8_VOICE_STOP_PATH');
-    const sync = String.fromEnvironment('PHASE8_VOICE_SYNC_PATH');
+    const read = String.fromEnvironment(
+      'INTERVIEW_ANALYSIS_VOICE_READ_PATH',
+      defaultValue: '/interviews/{interview_id}/voice-session/',
+    );
+    const stop = String.fromEnvironment(
+      'INTERVIEW_ANALYSIS_VOICE_STOP_PATH',
+      defaultValue: '/interviews/{interview_id}/end-voice-session/',
+    );
+    const sync = String.fromEnvironment(
+      'INTERVIEW_ANALYSIS_VOICE_SYNC_PATH',
+      defaultValue: '/interviews/{interview_id}/sync-voice-session/',
+    );
     if ([read, stop, sync].any((value) => value.isEmpty)) return null;
     return const VoiceLifecycleBindings(
       read: read,
       stop: stop,
       sync: sync,
       candidateStartAuthorized: bool.fromEnvironment(
-        'PHASE8_CANDIDATE_START_AUTHORIZED',
+        'INTERVIEW_ANALYSIS_CANDIDATE_START_AUTHORIZED',
+        defaultValue: true,
       ),
     );
   }
@@ -32,10 +42,10 @@ class VoiceLifecycleBindings {
   String path(String template, String interviewId, {String? sessionId}) {
     var path = template.replaceAll(
       '{interview_id}',
-      phase8Identity(interviewId),
+      requireInterviewIdentity(interviewId),
     );
     if (sessionId != null) {
-      path = path.replaceAll('{session_id}', phase8Identity(sessionId));
+      path = path.replaceAll('{session_id}', requireInterviewIdentity(sessionId));
     }
     if (!path.startsWith('/') ||
         path.startsWith('//') ||
@@ -54,7 +64,7 @@ class VoiceLifecycleBackend {
   VoiceLifecycleBackend({
     VoiceLifecycleBindings? bindings,
     this.contractConfirmed = const bool.fromEnvironment(
-      'PHASE8_CONTRACT_CONFIRMED',
+      'INTERVIEW_ANALYSIS_CONTRACT_CONFIRMED',
     ),
     Future<Dio> Function()? client,
   }) : bindings = bindings ?? VoiceLifecycleBindings.configured(),
@@ -66,12 +76,12 @@ class VoiceLifecycleBackend {
   void _require() {
     if (!available) {
       throw const VoiceContractUnavailable(
-        'Candidate voice start/read/end/sync and provider credentials are not available in the current backend contract.',
+        'Interview Analysis backend contract confirmation is required before using voice lifecycle APIs.',
       );
     }
   }
 
-  Future<Object?> _request(
+  Future<Response<Object?>> _response(
     String path, {
     bool post = false,
     Object? data,
@@ -84,25 +94,56 @@ class VoiceLifecycleBackend {
       if (cancelToken?.isCancelled == true) {
         throw cancelToken!.cancelError!;
       }
-      return (await dio.request<Object?>(
+      return await dio.request<Object?>(
         path,
         data: data,
         cancelToken: cancelToken,
         options: Options(method: post ? 'POST' : 'GET'),
-      )).data;
+      );
     } on DioException catch (error) {
       if (CancelToken.isCancel(error)) rethrow;
       throw ApiException.fromDioException(error);
     }
   }
 
+  Future<Object?> _request(
+    String path, {
+    bool post = false,
+    Object? data,
+    CancelToken? cancelToken,
+  }) async => (await _response(
+    path,
+    post: post,
+    data: data,
+    cancelToken: cancelToken,
+  )).data;
+
+  /// Read-only session discovery; the owned interview route binds this ID.
+  Future<InterviewSessionIdentity?> resolveSession(
+    String interviewId, {
+    CancelToken? cancelToken,
+  }) async {
+    _require();
+    final voice = requireJsonObject(
+      await _request(
+        bindings!.path(bindings!.read, interviewId),
+        cancelToken: cancelToken,
+      ),
+    );
+    if (voice['interview_session_id'] == null) return null;
+    return InterviewSessionIdentity(
+      interviewId: interviewId,
+      sessionId: requireInterviewIdentity(voice['interview_session_id']),
+    );
+  }
+
   Future<CandidateInterviewData> interview(
     String interviewId, {
     CancelToken? cancelToken,
   }) async => CandidateInterviewData.fromJson(
-    phase8Object(
+    requireJsonObject(
       await _request(
-        '/interviews/${phase8Identity(interviewId)}/',
+        '/interviews/${requireInterviewIdentity(interviewId)}/',
         cancelToken: cancelToken,
       ),
     ),
@@ -111,28 +152,77 @@ class VoiceLifecycleBackend {
   Future<VoiceSessionSnapshot> start(
     String interviewId, {
     required bool videoRequired,
+    bool startNow = false,
     CancelToken? cancelToken,
   }) async {
     _require();
     if (!bindings!.candidateStartAuthorized) {
       throw const VoiceContractUnavailable(
-        'The current voice start route is recruiter-owned; candidate start is not authorized.',
+        'Candidate voice start is disabled by configuration.',
       );
     }
     final response = await _request(
-      '/interviews/${phase8Identity(interviewId)}/start-voice-session/',
+      '/interviews/${requireInterviewIdentity(interviewId)}/start-voice-session/',
       post: true,
-      data: {'video_required': videoRequired},
+      data: {'video_required': videoRequired, if (startNow) 'start_now': true},
       cancelToken: cancelToken,
     );
-    final snapshot = VoiceSessionSnapshot.fromJson(
-      phase8Object(response),
-      interviewId: interviewId,
+    final join = requireJsonObject(response);
+    final sessionId = requireInterviewIdentity(join['interview_session_id']);
+    final snapshot = await read(
+      interviewId,
+      sessionId: sessionId,
+      cancelToken: cancelToken,
     );
     if (snapshot.videoRequired != videoRequired) {
       throw const FormatException('Session video mode was not confirmed.');
     }
-    return snapshot;
+    final expires = join['expires_at'];
+    if (expires is! int ||
+        expires <= 0 ||
+        join['retell_session_id'] != snapshot.callId ||
+        join['call_id'] != snapshot.callId) {
+      throw const FormatException('Invalid backend join credentials.');
+    }
+    final credential = RetellCredential.fromJson({
+      'call_id': join['call_id'],
+      'access_token': join['access_token'],
+      'transport': join['transport'],
+      'ice_servers': join['ice_servers'],
+      'expires_at': DateTime.fromMillisecondsSinceEpoch(
+        expires,
+        isUtc: true,
+      ).toIso8601String(),
+    });
+    if (!credential.expiresAt.isAfter(DateTime.now())) {
+      throw const VoiceContractUnavailable(
+        'Backend join credentials have expired. Recheck session status.',
+      );
+    }
+    return VoiceSessionSnapshot.withCredential(snapshot, credential);
+  }
+
+  /// Explicit join/rejoin only. Reading/restoring status never creates a call.
+  Future<VoiceSessionSnapshot> join(
+    InterviewSessionIdentity identity, {
+    required bool videoRequired,
+    CancelToken? cancelToken,
+  }) async {
+    // Verify the caller's session before an idempotent start can return credentials.
+    await read(
+      identity.interviewId,
+      sessionId: identity.sessionId,
+      cancelToken: cancelToken,
+    );
+    final result = await start(
+      identity.interviewId,
+      videoRequired: videoRequired,
+      cancelToken: cancelToken,
+    );
+    if (result.identity.sessionId != identity.sessionId) {
+      throw const FormatException('Rejoin changed the local session.');
+    }
+    return result;
   }
 
   Future<VoiceSessionSnapshot> read(
@@ -141,13 +231,25 @@ class VoiceLifecycleBackend {
     CancelToken? cancelToken,
   }) async {
     _require();
-    return VoiceSessionSnapshot.fromJson(
-      phase8Object(
-        await _request(
-          bindings!.path(bindings!.read, interviewId, sessionId: sessionId),
-          cancelToken: cancelToken,
-        ),
+    final voice = requireJsonObject(
+      await _request(
+        bindings!.path(bindings!.read, interviewId, sessionId: sessionId),
+        cancelToken: cancelToken,
       ),
+    );
+    final actual = requireInterviewIdentity(voice['interview_session_id']);
+    if (sessionId != null && actual != sessionId) {
+      throw const FormatException('Voice session identity mismatch.');
+    }
+    final analysis = requireJsonObject(
+      await _request(
+        '/interview-sessions/$actual/analysis-status/',
+        cancelToken: cancelToken,
+      ),
+    );
+    return VoiceSessionSnapshot.fromBackend(
+      voice,
+      analysis,
       interviewId: interviewId,
       sessionId: sessionId,
     );
@@ -158,19 +260,22 @@ class VoiceLifecycleBackend {
     CancelToken? cancelToken,
   }) async {
     _require();
-    final json = phase8Object(
-      await _request(
-        bindings!.path(
-          bindings!.stop,
-          identity.interviewId,
-          sessionId: identity.sessionId,
-        ),
-        post: true,
-        cancelToken: cancelToken,
-      ),
+    await read(
+      identity.interviewId,
+      sessionId: identity.sessionId,
+      cancelToken: cancelToken,
     );
-    if (json['session_id'] != identity.sessionId ||
-        json['stop_requested'] != true) {
+    final response = await _response(
+      bindings!.path(
+        bindings!.stop,
+        identity.interviewId,
+        sessionId: identity.sessionId,
+      ),
+      post: true,
+      data: const <String, dynamic>{},
+      cancelToken: cancelToken,
+    );
+    if (![200, 202].contains(response.statusCode)) {
       throw const FormatException('Voice stop was not acknowledged.');
     }
   }
@@ -180,20 +285,25 @@ class VoiceLifecycleBackend {
     CancelToken? cancelToken,
   }) async {
     _require();
-    return VoiceSessionSnapshot.fromJson(
-      phase8Object(
-        await _request(
-          bindings!.path(
-            bindings!.sync,
-            identity.interviewId,
-            sessionId: identity.sessionId,
-          ),
-          post: true,
-          cancelToken: cancelToken,
-        ),
-      ),
-      interviewId: identity.interviewId,
+    await read(
+      identity.interviewId,
       sessionId: identity.sessionId,
+      cancelToken: cancelToken,
+    );
+    await _request(
+      bindings!.path(
+        bindings!.sync,
+        identity.interviewId,
+        sessionId: identity.sessionId,
+      ),
+      post: true,
+      data: const <String, dynamic>{},
+      cancelToken: cancelToken,
+    );
+    return read(
+      identity.interviewId,
+      sessionId: identity.sessionId,
+      cancelToken: cancelToken,
     );
   }
 }

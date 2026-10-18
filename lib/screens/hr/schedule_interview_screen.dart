@@ -211,6 +211,13 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       if (_applicationId != null &&
           !shortlisted.any((app) => app.id == _applicationId)) {
         final id = _applicationId!;
+        // Keep the loaded job selector usable while a deep-linked detail waits.
+        setState(() {
+          _awaiting = shortlisted;
+          _booked = booked;
+          _hasAnyShortlisted = shortlisted.isNotEmpty;
+          _loading = false;
+        });
         final selected =
             await (widget.loadApplication?.call(id) ??
                 ApplicationService.getApplication(id));
@@ -446,7 +453,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     }
   }
 
-  bool get _showEmptyState => !_hasAnyShortlisted && (_booked?.isEmpty ?? true);
+  bool get _showEmptyState =>
+      _applicationId == null &&
+      !_hasAnyShortlisted &&
+      (_booked?.isEmpty ?? true);
 
   Widget _buildLoadingSkeleton(bool compact) => Padding(
     padding: EdgeInsets.all(compact ? 16 : 22),
@@ -632,157 +642,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     );
   }
 
-  Widget _topBar(bool compact) {
-    if (compact) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(bottom: BorderSide(color: _edge, width: 1)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.auto_awesome, color: Color(0xFF4D7BFA), size: 26),
-            const SizedBox(width: 8),
-            Text(
-              'Schedule',
-              style: GoogleFonts.inter(
-                color: _ink,
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.03,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: _edge, width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'SCHEDULE INTERVIEW',
-            style: GoogleFonts.spaceGrotesk(
-              color: _muted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.05,
-            ),
-          ),
-          Row(
-            children: [
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _edge, width: 1),
-                ),
-                child: TextField(
-                  style: GoogleFonts.inter(color: _ink, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(color: _muted, fontSize: 13),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: _muted,
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: _edge),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: _muted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: const Color(0xFFEF4444),
-                onTap: () =>
-                    Navigator.of(context).pushNamed('/recruiter/notifications'),
-              ),
-              const SizedBox(width: 10),
-              _buildTopBarIconButton(
-                icon: Icons.settings_outlined,
-                hasBadge: false,
-                onTap: () {},
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-    VoidCallback? onTap,
-  }) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _edge, width: 1),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF475569), size: 18),
-          if (hasBadge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: badgeColor ?? Colors.red,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildEmptyState(bool compact) {
     return Center(
       child: Padding(
@@ -864,7 +723,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 ),
                 onPressed: () {
                   final jobId = _jobId;
-                  Navigator.of(context).pushReplacementNamed(
+                  Navigator.of(context).pushNamed(
                     jobId == null || jobId.isEmpty
                         ? '/recruiter/pipeline'
                         : '/recruiter/jobs/${Uri.encodeComponent(jobId)}/pipeline',
@@ -937,7 +796,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
           return GestureDetector(
             onTap: () {
               if (!isSelected) {
-                Navigator.of(context).pushReplacementNamed(item['route']);
+                Navigator.of(context).pushNamed(item['route']);
               }
             },
             child: Stack(

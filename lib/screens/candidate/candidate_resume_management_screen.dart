@@ -9,8 +9,8 @@ import 'package:file_picker/file_picker.dart';
 import '../../constants/app_colors.dart';
 import '../../services/resume_manager.dart';
 import '../../services/resume_service.dart';
-import '../../services/auth_service.dart';
 import '../../services/api_exception.dart';
+import '../../services/session_scope.dart';
 import '../../widgets/candidate_side_nav.dart';
 
 class CandidateResumeManagementScreen extends StatefulWidget {
@@ -200,6 +200,39 @@ class _CandidateResumeManagementScreenState
         ),
       ),
     );
+  }
+
+  Future<void> _useResume(Map<String, dynamic> resume) async {
+    if (_mutatingResume || _isLoadingList) return;
+    final id = resume['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    final generation = SessionScope.generation;
+    setState(() => _mutatingResume = true);
+    try {
+      final confirmed = await ResumeService.patchResume(id, {
+        'is_default': true,
+      });
+      if (!mounted || generation != SessionScope.generation) return;
+      if (confirmed['id'] != id || confirmed['is_default'] != true) {
+        throw const FormatException('Default resume was not confirmed.');
+      }
+      await ResumeManager.loadFromApi();
+      if (!mounted || generation != SessionScope.generation) return;
+      if (ResumeManager.getActiveResume()['id'] != id) {
+        throw const FormatException('Default resume readback did not match.');
+      }
+      setState(() {});
+    } catch (_) {
+      if (mounted && generation == SessionScope.generation) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not change the default resume. Retry.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _mutatingResume = false);
+    }
   }
 
   void _triggerBrowseFiles() async {
@@ -532,169 +565,19 @@ class _CandidateResumeManagementScreenState
   }
 
   // ── TOP BAR HEADER ─────────────────────────────────────────────────────────
-  Widget _buildTopBar(bool isMobile) {
-    return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.65),
-        border: const Border(
-          bottom: BorderSide(
-            color: Color.fromRGBO(38, 51, 77, 0.08),
-            width: 0.88,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // RESUMES / UPLOAD Breadcrumb
-          Text(
-            'RESUMES',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF7A88A3),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 1.05,
-            ),
-          ),
-          Text(
-            ' / ',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF7A88A3),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(
-            'UPLOAD',
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF1B2740),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.05,
-            ),
-          ),
-
-          const Spacer(),
-
-          // Search Box & Actions (Desktop)
-          if (!isMobile) ...[
-            Container(
-              width: 300,
-              height: 34,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(
-                  color: const Color.fromRGBO(38, 51, 77, 0.08),
-                  width: 0.88,
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.search_rounded,
-                    color: Color(0xFF7A88A3),
-                    size: 15,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Search or jump to…',
-                      style: GoogleFonts.inter(
-                        color: const Color(0xFF7A88A3),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color.fromRGBO(38, 51, 77, 0.08),
-                        width: 0.88,
-                      ),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Text(
-                      '⌘K',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: const Color(0xFF98A4BB),
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-          ],
-
-          // Secondary Action Icon Button (◍)
-          InkWell(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: const Color(0xFF0F172A),
-                  duration: const Duration(seconds: 2),
-                  content: Text(
-                    'Resume upload settings & preferences',
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                  ),
-                ),
-              );
-            },
-            borderRadius: BorderRadius.circular(11),
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(
-                  color: const Color.fromRGBO(38, 51, 77, 0.08),
-                  width: 0.88,
-                ),
-              ),
-              child: const Center(
-                child: Text(
-                  '◍',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 14,
-                    color: Color(0xFF4A5875),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── WEB LAYOUT (Side-by-side columns matching Figma specifications) ────────
   Widget _buildWebLayout(bool hasResumes) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Divide the available canvas rather than assuming its full width.
-          Expanded(flex: 678, child: _buildAddResumeCard()),
-          const SizedBox(width: 14),
-          Expanded(
-            flex: 484,
-            child: _buildYourResumesCard(hasResumes, isWeb: true),
-          ),
-        ],
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Divide the available canvas rather than assuming its full width.
+        Expanded(flex: 678, child: _buildAddResumeCard()),
+        const SizedBox(width: 14),
+        Expanded(
+          flex: 484,
+          child: _buildYourResumesCard(hasResumes, isWeb: true),
+        ),
+      ],
     );
   }
 
@@ -738,7 +621,7 @@ class _CandidateResumeManagementScreenState
         children: [
           // Header Row: Add a resume
           Container(
-            height: 41.89,
+            constraints: const BoxConstraints(minHeight: 42),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: const BoxDecoration(
               border: Border(
@@ -1337,7 +1220,7 @@ class _CandidateResumeManagementScreenState
         children: [
           // Header Row: Your resumes
           Container(
-            height: 41.89,
+            constraints: const BoxConstraints(minHeight: 42),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: const BoxDecoration(
               border: Border(
@@ -1520,7 +1403,20 @@ class _CandidateResumeManagementScreenState
                           ),
                         )
                       else
-                        const SizedBox(width: 41.78),
+                        TextButton(
+                          onPressed: _mutatingResume
+                              ? null
+                              : () => _useResume(r),
+                          style: CandidateButtonStyle.secondary(
+                            TextButton.styleFrom(
+                              minimumSize: const Size(42, 32),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                            ),
+                          ),
+                          child: const Text('Use'),
+                        ),
                       const SizedBox(width: 6),
 
                       // Delete Icon Button
@@ -1631,7 +1527,7 @@ class _CandidateResumeManagementScreenState
                     ),
                   ),
                 );
-                return isWeb ? Expanded(child: emptyState) : emptyState;
+                return emptyState;
               },
             ),
         ],
@@ -1678,13 +1574,13 @@ class _CandidateResumeManagementScreenState
           return GestureDetector(
             onTap: () {
               if (index == 0) {
-                Navigator.of(context).pushReplacementNamed('/candidate/home');
+                Navigator.of(context).pushNamed('/candidate/home');
               } else if (index == 1) {
                 Navigator.of(
                   context,
-                ).pushReplacementNamed('/candidate/applications');
+                ).pushNamed('/candidate/applications');
               } else if (index == 2) {
-                Navigator.of(context).pushReplacementNamed('/candidate/jobs');
+                Navigator.of(context).pushNamed('/candidate/jobs');
               } else if (index == 3) {
                 _showInterviewOptions(context);
               } else if (index == 4) {
@@ -1692,7 +1588,7 @@ class _CandidateResumeManagementScreenState
               } else {
                 Navigator.of(
                   context,
-                ).pushReplacementNamed('/candidate/profile');
+                ).pushNamed('/candidate/profile');
               }
             },
             child: Container(
@@ -1735,19 +1631,21 @@ class _CandidateResumeManagementScreenState
           mainAxisSize: MainAxisSize.min,
           children: [
             ElevatedButton(
-              style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                backgroundColor: AppColors.dashboardTeal,
-                foregroundColor: const Color(0xFF0F172A),
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+              style: CandidateButtonStyle.primary(
+                ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.dashboardTeal,
+                  foregroundColor: const Color(0xFF0F172A),
+                  minimumSize: const Size(double.infinity, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              )),
+              ),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(
                   context,
-                ).pushReplacementNamed('/candidate/interviews');
+                ).pushNamed('/candidate/interviews');
               },
               child: Text(
                 'Interview History',
@@ -1756,19 +1654,21 @@ class _CandidateResumeManagementScreenState
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+              style: CandidateButtonStyle.secondary(
+                ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E293B),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              )),
+              ),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(
                   context,
-                ).pushReplacementNamed('/candidate/interview-lobby');
+                ).pushNamed('/candidate/interview-lobby');
               },
               child: Text(
                 'Interview Lobby',
@@ -1777,19 +1677,21 @@ class _CandidateResumeManagementScreenState
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+              style: CandidateButtonStyle.secondary(
+                ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E293B),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              )),
+              ),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(
                   context,
-                ).pushReplacementNamed('/candidate/feedback-report');
+                ).pushNamed('/candidate/feedback-report');
               },
               child: Text(
                 'Feedback Report',

@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import '../models/phase8_contract.dart';
+import '../models/interview_analysis_contract.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
 import 'auth_service.dart';
-import 'phase8_service.dart';
+import 'interview_analysis_service.dart';
 import 'publisher/publisher_socket.dart';
 import 'publisher/publisher_socket_factory.dart';
 import 'session_scope.dart';
@@ -26,7 +26,7 @@ enum ObserverState {
 class RecruiterObservationController extends ChangeNotifier {
   RecruiterObservationController(
     RecruiterObservationTarget target, {
-    Phase8Service? service,
+    InterviewAnalysisService? service,
     PublisherSocketConnector? connector,
     String Function()? role,
     Uri? apiBaseUri,
@@ -37,7 +37,7 @@ class RecruiterObservationController extends ChangeNotifier {
     this.maxTimelineEntries = 100,
     this.requestTimeout = const Duration(seconds: 15),
   }) : _target = target,
-       service = service ?? Phase8Service(),
+       service = service ?? InterviewAnalysisService(),
        connector = connector ?? createPublisherSocketConnector(),
        _role = role ?? AuthService.getUserRole,
        apiBaseUri = apiBaseUri ?? Uri.parse(ApiClient.baseUrl),
@@ -57,7 +57,7 @@ class RecruiterObservationController extends ChangeNotifier {
   }
   RecruiterObservationTarget _target;
   RecruiterObservationTarget get target => _target;
-  final Phase8Service service;
+  final InterviewAnalysisService service;
   final PublisherSocketConnector connector;
   final String Function() _role;
   final Uri apiBaseUri;
@@ -71,10 +71,11 @@ class RecruiterObservationController extends ChangeNotifier {
       _reading = false,
       _refreshAgain = false;
   int _epoch = 0, _attempts = 0;
-  Timer? _retry, _handshake, _lease, _poll, _readTimeout;
+  Timer? _retry, _handshake, _lease, _poll, _readTimeout, _heartbeat;
+  DateTime? _lastPong;
   PublisherSocket? _socket;
   CancelToken? _http;
-  String? _lastTicket, _lastGeneration;
+  String? _lastTicket;
   AnalysisSnapshot? _snapshot;
   BehavioralReport? _report;
   ObserverState _state = ObserverState.idle;
@@ -113,7 +114,6 @@ class RecruiterObservationController extends ChangeNotifier {
     _report = null;
     _truncated = false;
     _lastTicket = null;
-    _lastGeneration = null;
   }
 
   void start() {
@@ -126,7 +126,7 @@ class RecruiterObservationController extends ChangeNotifier {
     if (!service.contractConfirmed) {
       _state = ObserverState.unavailable;
       _notice =
-          'Observation APIs require the confirmed backend Phase 8 contract.';
+          'Observation APIs require the confirmed backend Interview Analysis contract.';
       _emit();
       return;
     }
@@ -175,12 +175,13 @@ class RecruiterObservationController extends ChangeNotifier {
         throw const FormatException('Unsafe observer endpoint.');
       }
       final socket = connector.connect(
-        apiBaseUri.replace(
-          scheme: apiBaseUri.scheme == 'https' ? 'wss' : 'ws',
-          path: ticket.socketPath,
-          queryParameters: {'ticket': ticket.ticket},
-          fragment: '',
-        ),
+        apiBaseUri
+            .replace(
+              scheme: apiBaseUri.scheme == 'https' ? 'wss' : 'ws',
+              path: ticket.socketPath,
+              queryParameters: {'ticket': ticket.ticket},
+            )
+            .removeFragment(),
         onMessage: (raw) => _message(epoch, raw),
         onDisconnect: () => _recover(epoch, 'Observer connection interrupted.'),
       );
@@ -217,8 +218,8 @@ class RecruiterObservationController extends ChangeNotifier {
         sessionId: target.identity.sessionId,
       );
       if (message is ObserverReadyMessage) {
-        if (_ready || message.connectionGeneration == _lastGeneration) {
-          throw const FormatException('Reused generation.');
+        if (_ready) {
+          throw const FormatException('Duplicate observer ready.');
         }
         final remaining = message.authorizationExpiresAt.difference(
           DateTime.now(),
@@ -228,7 +229,6 @@ class RecruiterObservationController extends ChangeNotifier {
           throw const FormatException('Invalid observer lease.');
         }
         _ready = true;
-        _lastGeneration = message.connectionGeneration;
         _handshake?.cancel();
         _lease = Timer(
           remaining - const Duration(seconds: 5),
@@ -239,6 +239,23 @@ class RecruiterObservationController extends ChangeNotifier {
         // Subscription is established before HTTP; updates can win the race.
         refresh();
         _poll = Timer.periodic(pollInterval, (_) => refresh());
+        _lastPong = DateTime.now();
+        _heartbeat = Timer.periodic(const Duration(seconds: 5), (_) {
+          if (!_current(epoch)) return;
+          final socket = _socket;
+          if (socket == null ||
+              !socket.isOpen ||
+              DateTime.now().difference(_lastPong!) >=
+                  const Duration(seconds: 15)) {
+            _recover(epoch, 'Observer heartbeat timed out.');
+          } else if ((socket.bufferedAmount ?? 0) == 0) {
+            try {
+              socket.send('{"type":"ping"}');
+            } catch (_) {
+              _recover(epoch, 'Observer heartbeat failed.');
+            }
+          }
+        });
       } else if (message is AnalysisUpdate) {
         if (!_ready) {
           throw const FormatException(
@@ -248,16 +265,17 @@ class RecruiterObservationController extends ChangeNotifier {
         _apply(message.snapshot);
       } else if (message is TransportErrorMessage) {
         if ([
-          'permission_denied',
-          'session_forbidden',
-          'session_not_found',
-          'account_disabled',
+          'access_denied',
+          'account_inactive',
+          'session_not_publishable',
         ].contains(message.code)) {
           _terminal('Observer permission or session availability changed.');
           return;
         }
         _recover(epoch, 'Observer transport requires recovery.');
         return;
+      } else if (jsonDecode(raw)['type'] == 'pong' && _ready) {
+        _lastPong = DateTime.now();
       }
       _emit();
     } catch (_) {
@@ -269,9 +287,9 @@ class RecruiterObservationController extends ChangeNotifier {
   }
 
   void _apply(AnalysisSnapshot next, {BehavioralReport? report}) {
-    if (next.sessionId != target.identity.sessionId ||
-        next.interviewId != target.identity.interviewId ||
-        next.applicationId != target.applicationId) {
+    // Frozen responses bind the session, with ownership enforced by the backend.
+    // Do not require invented interview/application fields in server snapshots.
+    if (next.sessionId != target.identity.sessionId) {
       throw const FormatException('Observer report target is unverified.');
     }
     final revision = _snapshot?.revision ?? -1;
@@ -308,7 +326,19 @@ class RecruiterObservationController extends ChangeNotifier {
           cancelToken: token,
         );
         if (!_current(epoch)) return;
-        _apply(result.snapshot, report: result);
+        if (result.report == null) {
+          // A pending HTTP read can race a newer live persisted revision.
+          if (result.availability == 'pending' &&
+              (_snapshot?.revision ?? 0) > result.revision) {
+            return;
+          }
+          _snapshot = null;
+          _report = null;
+          _notice =
+              'Analysis availability: ${result.availability}. No evidence is assumed.';
+        } else {
+          _apply(result.report!.snapshot, report: result.report);
+        }
         _attempts = 0;
         _emit();
       } on ApiException catch (error) {
@@ -387,6 +417,9 @@ class RecruiterObservationController extends ChangeNotifier {
     _lease?.cancel();
     _poll?.cancel();
     _readTimeout?.cancel();
+    _heartbeat?.cancel();
+    _heartbeat = null;
+    _lastPong = null;
     _http?.cancel('Observer generation ended.');
     _http = null;
     _socket?.close();

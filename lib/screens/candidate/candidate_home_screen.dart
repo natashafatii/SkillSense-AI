@@ -3,21 +3,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../models/application.dart';
 import '../../models/job.dart';
 import '../../services/application_service.dart';
 import '../../services/job_service.dart';
-import 'candidate_applications_screen.dart';
-import 'candidate_job_feed_screen.dart';
-import 'candidate_interview_lobby_screen.dart';
-import 'candidate_feedback_report_screen.dart';
-import 'candidate_resume_management_screen.dart';
-import 'candidate_interview_history_screen.dart';
-import 'candidate_profile_settings_screen.dart';
-import 'candidate_notifications_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/resume_manager.dart';
 import '../../widgets/candidate_side_nav.dart';
@@ -211,81 +201,89 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                                       ),
                                     )
                                   : _hasError
-                                      ? Center(
-                                          child: Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Text(
-                                                'Could not load data',
-                                                style: GoogleFonts.inter(
-                                                  color: const Color(0xFF64748B),
+                                  ? Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Could not load data',
+                                            style: GoogleFonts.inter(
+                                              color: const Color(0xFF64748B),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          ElevatedButton(
+                                            onPressed: () {
+                                              setState(() {
+                                                _isLoading = true;
+                                                _hasError = false;
+                                              });
+                                              _initializeData();
+                                            },
+                                            style: CandidateButtonStyle.primary(
+                                              ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(
+                                                  0xFF0FB89B,
+                                                ),
+                                                foregroundColor: Colors.white,
+                                                elevation: 0,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 20,
+                                                      vertical: 12,
+                                                    ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
                                                 ),
                                               ),
-                                              const SizedBox(height: 16),
-                                              ElevatedButton(
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _isLoading = true;
-                                                    _hasError = false;
-                                                  });
-                                                  _initializeData();
-                                                },
-                                                style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(0xFF0FB89B),
-                                                  foregroundColor: Colors.white,
-                                                  elevation: 0,
-                                                  padding: const EdgeInsets.symmetric(
-                                                    horizontal: 20,
-                                                    vertical: 12,
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius: BorderRadius.circular(20),
-                                                  ),
-                                                )),
-                                                child: const Text('Retry'),
-                                              ),
-                                            ],
+                                            ),
+                                            child: const Text('Retry'),
                                           ),
-                                        )
-                                      : ValueListenableBuilder<
-                                          List<Map<String, dynamic>>
-                                        >(
-                                          valueListenable:
-                                              ResumeManager.resumesNotifier,
-                                    builder: (context, resumesList, child) {
-                                      final bool hasUploadedResume =
-                                          resumesList.isNotEmpty;
-                                      final activeResume =
-                                          ResumeManager.getActiveResume();
+                                        ],
+                                      ),
+                                    )
+                                  : ValueListenableBuilder<
+                                      List<Map<String, dynamic>>
+                                    >(
+                                      valueListenable:
+                                          ResumeManager.resumesNotifier,
+                                      builder: (context, resumesList, child) {
+                                        final bool hasUploadedResume =
+                                            resumesList.isNotEmpty;
+                                        final activeResume =
+                                            ResumeManager.getActiveResume();
 
-                                      return SingleChildScrollView(
-                                        physics: const BouncingScrollPhysics(),
-                                        padding: EdgeInsets.only(
-                                          left: isMobile ? 16 : 24,
-                                          right: isMobile ? 16 : 24,
-                                          top: 16,
-                                          bottom: isMobile ? 100 : 32,
-                                        ),
-                                        child: isMobile
-                                            ? _buildMobileLayout(
-                                                textPrimary,
-                                                textSecondary,
-                                                cardBg,
-                                                cardBorder,
-                                                hasUploadedResume,
-                                                activeResume,
-                                              )
-                                            : _buildWebLayout(
-                                                textPrimary,
-                                                textSecondary,
-                                                cardBg,
-                                                cardBorder,
-                                                hasUploadedResume,
-                                                activeResume,
-                                              ),
-                                      );
-                                    },
-                                  ),
+                                        return SingleChildScrollView(
+                                          physics:
+                                              const BouncingScrollPhysics(),
+                                          padding: EdgeInsets.only(
+                                            left: isMobile ? 16 : 24,
+                                            right: isMobile ? 16 : 24,
+                                            top: 16,
+                                            bottom: isMobile ? 100 : 32,
+                                          ),
+                                          child: isMobile
+                                              ? _buildMobileLayout(
+                                                  textPrimary,
+                                                  textSecondary,
+                                                  cardBg,
+                                                  cardBorder,
+                                                  hasUploadedResume,
+                                                  activeResume,
+                                                )
+                                              : _buildWebLayout(
+                                                  textPrimary,
+                                                  textSecondary,
+                                                  cardBg,
+                                                  cardBorder,
+                                                  hasUploadedResume,
+                                                  activeResume,
+                                                ),
+                                        );
+                                      },
+                                    ),
                             ),
                           ],
                         ),
@@ -532,25 +530,22 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       children: [
                         ElevatedButton.icon(
                           onPressed: () {
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const CandidateResumeManagementScreen(),
-                              ),
-                            );
+                            Navigator.of(context).pushNamed('/candidate/resumes');
                           },
-                          style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0FB89B),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
+                          style: CandidateButtonStyle.primary(
+                            ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0FB89B),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                          )),
+                          ),
                           icon: const Icon(
                             Icons.add,
                             size: 16,
@@ -566,28 +561,25 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                         ),
                         OutlinedButton(
                           onPressed: () {
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const CandidateProfileSettingsScreen(),
-                              ),
-                            );
+                            Navigator.of(context).pushNamed('/candidate/profile');
                           },
-                          style: CandidateButtonStyle.secondary(OutlinedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF334155),
-                            side: const BorderSide(
-                              color: Color(0xFFE2E8F0),
-                              width: 1.5,
+                          style: CandidateButtonStyle.secondary(
+                            OutlinedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF334155),
+                              side: const BorderSide(
+                                color: Color(0xFFE2E8F0),
+                                width: 1.5,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                          )),
+                          ),
                           child: Text(
                             'Complete profile',
                             style: GoogleFonts.inter(
@@ -706,18 +698,20 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 children: [
                   ElevatedButton(
                     onPressed: () => _showInterviewOptions(context),
-                    style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0FB89B),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 22,
-                        vertical: 13,
+                    style: CandidateButtonStyle.primary(
+                      ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0FB89B),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 22,
+                          vertical: 13,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    )),
+                    ),
                     child: Text(
                       'Run device check',
                       style: GoogleFonts.inter(
@@ -835,11 +829,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => const CandidateProfileSettingsScreen(),
-            ),
-          );
+          Navigator.of(context).pushNamed('/candidate/profile');
         },
         child: Container(
           constraints: const BoxConstraints(minHeight: 110),
@@ -942,9 +932,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     bool hasResume,
   ) {
     return InkWell(
-      onTap: () => Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const CandidateApplicationsScreen()),
-      ),
+      onTap: () => Navigator.of(context).pushNamed('/candidate/applications'),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         constraints: const BoxConstraints(minHeight: 110),
@@ -1180,25 +1168,22 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const CandidateResumeManagementScreen(),
-                          ),
-                        );
+                        Navigator.of(context).pushNamed('/candidate/resumes');
                       },
-                      style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0FB89B),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
+                      style: CandidateButtonStyle.primary(
+                        ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0FB89B),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      )),
+                      ),
                       icon: const Icon(
                         Icons.add,
                         size: 16,
@@ -1269,7 +1254,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
               InkWell(
                 onTap: () => Navigator.of(
                   context,
-                ).pushReplacementNamed('/candidate/jobs'),
+                ).pushNamed('/candidate/jobs'),
                 child: Text(
                   'Feed >',
                   style: GoogleFonts.inter(
@@ -1492,37 +1477,17 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           return GestureDetector(
             onTap: () {
               if (index == 0) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateHomeScreen(),
-                  ),
-                );
+                return; // Home is already selected.
               } else if (index == 1) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateApplicationsScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/applications');
               } else if (index == 2) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateJobFeedScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/jobs');
               } else if (index == 3) {
                 _showInterviewOptions(context);
               } else if (index == 4) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateResumeManagementScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/resumes');
               } else {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateProfileSettingsScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/profile');
               }
             },
             child: Stack(
@@ -1593,233 +1558,6 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   }
 
   // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-  Widget _buildTopBar(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    if (isMobile) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: cardBg,
-          border: Border(bottom: BorderSide(color: cardBorder, width: 1)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                SvgPicture.asset('assets/images/logo.svg', height: 32),
-                const SizedBox(width: 10),
-                Text(
-                  'Home',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: Icon(Icons.search_rounded, color: textSecondary, size: 22),
-              onPressed: () => _showMockNavigation('/search-search'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Text(
-                'HOME',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
-                ),
-              ),
-            ],
-          ),
-
-          // Actions Search/Notifications
-          Row(
-            children: [
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Notification bell button
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: AppColors.dashboardTeal,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateNotificationsScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              // Settings icon
-              _buildTopBarIconButton(
-                icon: Icons.settings_outlined,
-                hasBadge: false,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateProfileSettingsScreen(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-    VoidCallback? onTap,
-  }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded || icon == Icons.notifications_outlined || icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    }
-
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: MouseRegion(
-        cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(icon, color: const Color(0xFF475569), size: 18),
-                if (hasBadge)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: badgeColor ?? Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showMockNavigation(String destination) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          'Navigating to mock path: $destination',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
   void _showInterviewOptions(BuildContext context) {
     showDialog(
       context: context,
@@ -1837,21 +1575,19 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ElevatedButton(
-              style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                backgroundColor: AppColors.dashboardTeal,
-                foregroundColor: const Color(0xFF0F172A),
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+              style: CandidateButtonStyle.primary(
+                ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.dashboardTeal,
+                  foregroundColor: const Color(0xFF0F172A),
+                  minimumSize: const Size(double.infinity, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              )),
+              ),
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateInterviewHistoryScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/interviews');
               },
               child: Text(
                 'Interview History (CD-09)',
@@ -1860,22 +1596,20 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Color(0xFF334155)),
+              style: CandidateButtonStyle.secondary(
+                ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E293B),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: const BorderSide(color: Color(0xFF334155)),
+                  ),
                 ),
-              )),
+              ),
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateInterviewLobbyScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/interview-lobby');
               },
               child: Text(
                 'Interview Lobby (CD-05)',
@@ -1884,22 +1618,20 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              style: CandidateButtonStyle.secondary(ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: Color(0xFF334155)),
+              style: CandidateButtonStyle.secondary(
+                ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E293B),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: const BorderSide(color: Color(0xFF334155)),
+                  ),
                 ),
-              )),
+              ),
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateFeedbackReportScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/feedback-report');
               },
               child: Text(
                 'Feedback Report (CD-07)',

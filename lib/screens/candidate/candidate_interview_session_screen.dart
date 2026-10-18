@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../constants/app_colors.dart';
-import '../../models/phase8_contract.dart';
+import '../../utils/interview_testing.dart';
+import '../../models/interview_analysis_contract.dart';
 import '../../services/interview_session_controller.dart';
-import '../../widgets/recruiter_top_bar.dart';
 import '../../services/media/interview_media_controller.dart';
-import '../../widgets/interview_media_panel.dart';
 import '../../services/publisher/candidate_publisher_controller.dart';
-import '../../widgets/candidate_publisher_panel.dart';
 import '../../services/voice/interview_lifecycle_controller.dart';
 import '../../models/voice/voice_contract.dart';
-import '../../widgets/interview_lifecycle_panel.dart';
+import '../../widgets/candidate_interview_workspace.dart';
+import '../../services/media/interview_media_route_observer.dart';
+import '../../services/interview_analysis_service.dart';
+import '../../services/voice/voice_lifecycle_backend.dart';
 
 /// Independent local media and candidate transport controls. Voice/provider
 /// activity is never simulated and network loss does not end the interview.
@@ -19,9 +18,13 @@ class CandidateInterviewSessionScreen extends StatefulWidget {
     super.key,
     required this.identity,
     this.initialSnapshot,
+    this.startImmediately = false,
   });
   final InterviewSessionIdentity identity;
   final VoiceSessionSnapshot? initialSnapshot;
+
+  /// Only honored in debug/local web builds after the explicit lobby test action.
+  final bool startImmediately;
 
   @override
   State<CandidateInterviewSessionScreen> createState() =>
@@ -29,25 +32,119 @@ class CandidateInterviewSessionScreen extends StatefulWidget {
 }
 
 class _CandidateInterviewSessionScreenState
-    extends State<CandidateInterviewSessionScreen> {
+    extends State<CandidateInterviewSessionScreen>
+    with WidgetsBindingObserver, RouteAware {
   late InterviewSessionController _controller;
   late InterviewMediaController _media;
   late CandidatePublisherController _publisher;
   late InterviewLifecycleController _lifecycle;
+  ModalRoute<dynamic>? _route;
 
   @override
   void initState() {
     super.initState();
-    _controller = InterviewSessionController(widget.identity);
+    WidgetsBinding.instance.addObserver(this);
+    _initializeControllers();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _route) {
+      interviewMediaRouteObserver.unsubscribe(this);
+      _route = route;
+      if (route != null) interviewMediaRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPushNext() => _lifecycle.pauseLocal();
+  @override
+  void didPop() => _lifecycle.pauseLocal();
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ([
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+      AppLifecycleState.detached,
+    ].contains(state)) {
+      _lifecycle.pauseLocal();
+    }
+  }
+
+  @override
+  void deactivate() {
+    _lifecycle.pauseLocal(notify: false);
+    super.deactivate();
+  }
+
+  Future<void> _joinInterview() async {
+    final lifecycle = _lifecycle;
+    final media = _media;
+    final publisher = _publisher;
+    if (!lifecycle.canUseMedia || media.busy) return;
+    if (lifecycle.videoRequired && !media.cameraReady) {
+      await media.requestCamera();
+    }
+    if (!mounted || !identical(lifecycle, _lifecycle) || !lifecycle.isCurrent) {
+      return;
+    }
+    if (lifecycle.videoRequired && !media.cameraReady) return;
+    await lifecycle.joinVoice();
+    if (mounted &&
+        identical(lifecycle, _lifecycle) &&
+        lifecycle.state == InterviewLifecycleState.live &&
+        lifecycle.videoRequired) {
+      publisher.start();
+    }
+  }
+
+  void _initializeControllers() {
+    final immediate =
+        allowImmediateInterviewTesting() && widget.startImmediately;
+    final analysis = immediate ? InterviewAnalysisService(contractConfirmed: true) : null;
+    _controller = InterviewSessionController(
+      widget.identity,
+      service: analysis,
+    );
     _media = InterviewMediaController();
-    _publisher = CandidatePublisherController(widget.identity, _media);
+    _publisher = CandidatePublisherController(
+      widget.identity,
+      _media,
+      service: analysis,
+    );
     _lifecycle = InterviewLifecycleController(
       widget.identity,
       _media,
       _publisher,
       initialSnapshot: widget.initialSnapshot,
+      backend: immediate
+          ? VoiceLifecycleBackend(contractConfirmed: true)
+          : null,
+      analysis: analysis,
     );
-    _lifecycle.restore();
+    if (immediate) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startImmediately());
+    } else {
+      _lifecycle.restore();
+    }
+  }
+
+  Future<void> _startImmediately() async {
+    final lifecycle = _lifecycle;
+    final media = _media;
+    final publisher = _publisher;
+    bool current() =>
+        mounted && identical(lifecycle, _lifecycle) && lifecycle.isCurrent;
+    await lifecycle.restore();
+    if (!current() || !lifecycle.canUseMedia) return;
+    await media.requestCamera();
+    if (!current() || !media.cameraReady) return;
+    await lifecycle.joinVoice();
+    if (current() && lifecycle.state == InterviewLifecycleState.live) {
+      publisher.start();
+    }
   }
 
   @override
@@ -59,21 +156,14 @@ class _CandidateInterviewSessionScreenState
       _publisher.dispose();
       _controller.dispose();
       _media.dispose();
-      _media = InterviewMediaController();
-      _publisher = CandidatePublisherController(widget.identity, _media);
-      _controller = InterviewSessionController(widget.identity);
-      _lifecycle = InterviewLifecycleController(
-        widget.identity,
-        _media,
-        _publisher,
-        initialSnapshot: widget.initialSnapshot,
-      );
-      _lifecycle.restore();
+      _initializeControllers();
     }
   }
 
   @override
   void dispose() {
+    interviewMediaRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _lifecycle.dispose();
     _publisher.dispose();
     _media.dispose();
@@ -82,92 +172,20 @@ class _CandidateInterviewSessionScreenState
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF05080F),
-    body: SafeArea(
-      child: Column(
-        children: [
-          const RecruiterTopBar(
-            pageTitle: 'Interview session',
-            candidate: true,
-          ),
-          Expanded(
-            child: Center(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: ListenableBuilder(
-                    listenable: Listenable.merge([
-                      _controller,
-                      _media,
-                      _publisher,
-                      _lifecycle,
-                    ]),
-                    builder: (context, _) {
-                      if (!_controller.isCurrent) {
-                        return Text(
-                          'Your account session changed. Reopen the interview lobby.',
-                          style: GoogleFonts.inter(color: Colors.white),
-                        );
-                      }
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Interview ${widget.identity.interviewId}',
-                            style: GoogleFonts.spaceGrotesk(
-                              color: AppColors.dashboardTeal,
-                              fontSize: 20,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          for (final status in [
-                            'Voice: ${_lifecycle.state.name}',
-                            'Frame transport: ${_publisher.state.name}',
-                          ])
-                            Text(
-                              status,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                height: 1.8,
-                              ),
-                            ),
-                          const SizedBox(height: 16),
-                          InterviewLifecyclePanel(
-                            key: ObjectKey(_lifecycle),
-                            controller: _lifecycle,
-                          ),
-                          if (_lifecycle.videoRequired &&
-                              _lifecycle.canUseMedia)
-                            InterviewMediaPanel(
-                              key: ObjectKey(_media),
-                              controller: _media,
-                            ),
-                          if (_lifecycle.videoRequired &&
-                              _lifecycle.canUseMedia)
-                            CandidatePublisherPanel(
-                              key: ObjectKey(_publisher),
-                              controller: _publisher,
-                            ),
-                          Text(
-                            _controller.transportNotice ??
-                                'Voice remains separate from camera frame transport.',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([_controller, _media, _publisher, _lifecycle]),
+    builder: (context, _) => CandidateInterviewWorkspace(
+      interviewId: widget.identity.interviewId,
+      lifecycle: _lifecycle,
+      media: _media,
+      publisher: _publisher,
+      onJoin: _joinInterview,
+      onHome: () => Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil('/candidate/home', (_) => false),
+      onHistory: () => Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil('/candidate/interviews', (_) => false),
     ),
   );
 }

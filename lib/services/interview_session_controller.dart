@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import '../models/phase8_contract.dart';
-import 'phase8_service.dart';
+import '../models/interview_analysis_contract.dart';
+import 'interview_analysis_service.dart';
 import 'session_scope.dart';
 
 enum CameraState {
@@ -38,14 +38,14 @@ enum ReportState {
 /// They register synchronous stop/close functions and use fenced callbacks.
 /// No frames, credentials, reports or provider payloads are buffered here.
 class InterviewSessionController extends ChangeNotifier {
-  InterviewSessionController(this.identity, {Phase8Service? service})
-    : service = service ?? Phase8Service(),
+  InterviewSessionController(this.identity, {InterviewAnalysisService? service})
+    : service = service ?? InterviewAnalysisService(),
       _account = SessionScope.generation {
     SessionScope.invalidations.addListener(_invalidate);
   }
 
   final InterviewSessionIdentity identity;
-  final Phase8Service service;
+  final InterviewAnalysisService service;
   final int _account;
   final CancelToken _requests = CancelToken();
   final Map<String, int> _generations = {};

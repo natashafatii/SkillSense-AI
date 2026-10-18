@@ -1,18 +1,10 @@
 import '../../widgets/candidate_button_style.dart';
-import '../application_screening_screen.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
-import 'candidate_home_screen.dart';
-import 'candidate_applications_screen.dart';
-import 'candidate_job_feed_screen.dart';
-import 'candidate_interview_lobby_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
-import 'candidate_notifications_screen.dart';
-import 'candidate_profile_settings_screen.dart';
 import 'candidate_resume_management_screen.dart';
 
 import 'dart:typed_data';
@@ -230,8 +222,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     if (_warnedMissingJobScore ||
         _job == null ||
         _resumeDetail?.isParsed != true ||
-        _job!.matchScore != null)
+        _job!.matchScore != null) {
       return;
+    }
     _warnedMissingJobScore = true;
     debugPrint(
       'Job ${_job!.id} has no match_score for a candidate with a parsed resume.',
@@ -471,17 +464,14 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         ),
         actions: [
           ElevatedButton(
-            style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-              backgroundColor: AppColors.dashboardTeal,
-            )),
+            style: CandidateButtonStyle.primary(
+              ElevatedButton.styleFrom(
+                backgroundColor: AppColors.dashboardTeal,
+              ),
+            ),
             onPressed: () {
               Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const CandidateApplicationsScreen(),
-                ),
-              );
+              Navigator.of(context).pushNamed('/candidate/applications');
             },
             child: Text(
               'View My Applications',
@@ -511,7 +501,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               TextButton(
                 onPressed: () => Navigator.of(
                   context,
-                ).pushReplacementNamed('/candidate/jobs'),
+                ).pushNamed('/candidate/jobs'),
                 style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
                 child: const Text('Back to jobs'),
               ),
@@ -1022,9 +1012,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         ? rawScore
         : null;
     final bool hasScore = score != null;
-    final ringColor = hasScore
-        ? _getRingColor(score!)
-        : const Color(0xFFCBD5E1);
+    final ringColor = hasScore ? _getRingColor(score) : const Color(0xFFCBD5E1);
 
     return Stack(
       children: [
@@ -1071,7 +1059,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       builder: (context, value, child) => CustomPaint(
                         size: const Size(104, 104),
                         painter: _RingPainter(
-                          progress: hasScore ? (score! / 100) * value : 0,
+                          progress: hasScore ? (score / 100) * value : 0,
                           ringColor: ringColor,
                           trackColor: const Color(0xFFF1F5F9),
                         ),
@@ -1081,7 +1069,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          hasScore ? '${score!.round()}' : '—',
+                          hasScore ? '${score.round()}' : '—',
                           style: GoogleFonts.spaceGrotesk(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
@@ -1134,15 +1122,17 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   ],
                 ),
                 child: ElevatedButton(
-                  style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.dashboardTeal,
-                    shadowColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 44),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                  style: CandidateButtonStyle.primary(
+                    ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.dashboardTeal,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 44),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                  )),
+                  ),
                   onPressed: _isApplied || _isSubmitting || _job == null
                       ? null
                       : _applyJob,
@@ -1284,14 +1274,16 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.dashboardTeal,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                    style: CandidateButtonStyle.primary(
+                      ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.dashboardTeal,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                    )),
+                    ),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -1642,32 +1634,17 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
 
           return GestureDetector(
             onTap: () {
+              if (isSelected) return;
               if (index == 0) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateHomeScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/home');
               } else if (index == 1) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateApplicationsScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/applications');
               } else if (index == 2) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateJobFeedScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/jobs');
               } else if (index == 3) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateInterviewLobbyScreen(),
-                  ),
-                );
+                Navigator.of(context).pushNamed('/candidate/interview-lobby');
               } else {
-                _showMockNavigation(item['route']);
+                _navigateTo(item['route']);
               }
             },
             child: Stack(
@@ -1754,270 +1731,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
   }
 
   // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-  Widget _buildTopBar(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    if (isMobile) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: cardBg,
-          border: Border(bottom: BorderSide(color: cardBorder, width: 1)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: Icon(
-                    Icons.arrow_back_rounded,
-                    color: textPrimary,
-                    size: 20,
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => const CandidateJobFeedScreen(),
-                      ),
-                    );
-                  },
-                ),
-                Text(
-                  'Job',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: Icon(Icons.search_rounded, color: textSecondary, size: 22),
-              onPressed: () => _showMockNavigation('/search'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Breadcrumbs: JOBS / JOB DETAILS
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const CandidateJobFeedScreen(),
-                    ),
-                  );
-                },
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Text(
-                    'JOBS',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-              ),
-              Text(
-                '  /  ',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'JOB DETAILS',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
-                ),
-              ),
-            ],
-          ),
-
-          // Actions
-          Row(
-            children: [
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                ),
-                child: TextField(
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Notification bell button
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: AppColors.dashboardTeal,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateNotificationsScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              // Settings icon
-              _buildTopBarIconButton(
-                icon: Icons.settings_outlined,
-                hasBadge: false,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateProfileSettingsScreen(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-    VoidCallback? onTap,
-  }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded ||
-        icon == Icons.notifications_outlined ||
-        icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    }
-
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: const Color(0xFF475569), size: 18),
-              if (hasBadge)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: badgeColor ?? Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showMockNavigation(String destination) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF0F172A),
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          'Navigating to: $destination',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+  void _navigateTo(String destination) {
+    Navigator.of(context).pushNamed(
+      destination == '/candidate/settings' ? '/candidate/profile' : destination,
     );
   }
 
@@ -2324,7 +2040,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
             TextButton(
               onPressed: () {
                 Navigator.of(context, rootNavigator: true).pop();
-                Navigator.pushReplacementNamed(context, '/candidate/resumes');
+                Navigator.pushNamed(context, '/candidate/resumes');
               },
               style: TextButton.styleFrom(
                 foregroundColor: CandidateButtonStyle.deepTeal,
@@ -2575,25 +2291,27 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                               : Colors.white,
                           borderRadius: BorderRadius.circular(12),
                           clipBehavior: Clip.antiAlias,
-                          child: RadioListTile<String>(
-                            value: r['id'].toString(),
+                          child: RadioGroup<String>(
                             groupValue: _selectedResumeId,
                             onChanged: _onResumeSelected,
-                            activeColor: const Color(0xFF10B981),
-                            title: Text(
-                              r['filename'].toString(),
-                              style: GoogleFonts.inter(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                            child: RadioListTile<String>(
+                              value: r['id'].toString(),
+                              activeColor: const Color(0xFF10B981),
+                              title: Text(
+                                r['filename'].toString(),
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
                               ),
-                            ),
-                            subtitle: Text(
-                              isDefault
-                                  ? 'Default · $cov% coverage'
-                                  : '$cov% coverage',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: const Color(0xFF64748B),
+                              subtitle: Text(
+                                isDefault
+                                    ? 'Default · $cov% coverage'
+                                    : '$cov% coverage',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: const Color(0xFF64748B),
+                                ),
                               ),
                             ),
                           ),
@@ -2692,13 +2410,15 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                       child: TextButton(
                         onPressed: () =>
                             Navigator.of(context, rootNavigator: true).pop(),
-                        style: CandidateButtonStyle.secondary(TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: const Color(0xFFF1F5F9),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                        style: CandidateButtonStyle.secondary(
+                          TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
                           ),
-                        )),
+                        ),
                         child: Text(
                           'Cancel',
                           style: GoogleFonts.inter(
@@ -2715,15 +2435,17 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                             _selectedResumeId == null || _isLoadingResumes
                             ? null
                             : _submit,
-                        style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: AppColors.dashboardTeal,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                        style: CandidateButtonStyle.primary(
+                          ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: AppColors.dashboardTeal,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
                           ),
-                        )),
+                        ),
                         child: Text(
                           'Submit application',
                           style: GoogleFonts.inter(fontWeight: FontWeight.bold),

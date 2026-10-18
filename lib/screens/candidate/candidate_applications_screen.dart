@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
-import '../../widgets/app_tooltip.dart';
 import '../../models/application.dart';
 import '../../models/paginated_response.dart';
 import '../../services/application_service.dart';
@@ -83,13 +82,15 @@ class _CandidateApplicationsScreenState
 
   List<Application> get _visibleApplications {
     return _applications.where((a) {
-      if (_filter == 'active')
+      if (_filter == 'active') {
         return a.status != ApplicationStatus.decision &&
             a.status != ApplicationStatus.rejected;
+      }
       if (_filter == 'offers') return a.status == ApplicationStatus.decision;
-      if (_filter == 'closed')
+      if (_filter == 'closed') {
         return a.status == ApplicationStatus.decision ||
             a.status == ApplicationStatus.rejected;
+      }
       return true;
     }).toList();
   }
@@ -114,7 +115,10 @@ class _CandidateApplicationsScreenState
                 Expanded(
                   child: Column(
                     children: [
-                      RecruiterTopBar(pageTitle: 'Applications', candidate: true),
+                      RecruiterTopBar(
+                        pageTitle: 'Applications',
+                        candidate: true,
+                      ),
                       Expanded(
                         child: _loading
                             ? const Center(
@@ -159,180 +163,6 @@ class _CandidateApplicationsScreenState
               bottom: 0,
               child: _buildMobileBottomDock(),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBar(bool isWeb) {
-    if (!isWeb) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-          ),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.auto_awesome,
-              color: AppColors.dashboardBlue,
-              size: 26,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Applications',
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A),
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.03,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'APPLICATIONS',
-            style: GoogleFonts.spaceGrotesk(
-              fontSize: 10.5,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.05,
-              color: const Color(0xFF64748B),
-            ),
-          ),
-          Row(
-            children: [
-              Container(
-                width: 250,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                ),
-                child: TextField(
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: const Color(0xFF64748B),
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      size: 16,
-                      color: Color(0xFF64748B),
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              AppTooltip(
-                message: 'Notifications',
-                position: TooltipPosition.bottom,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        const Icon(
-                          Icons.notifications_none_rounded,
-                          size: 18,
-                          color: Color(0xFF475569),
-                        ),
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: AppColors.dashboardTeal,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              AppTooltip(
-                message: 'Theme & settings',
-                position: TooltipPosition.bottom,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: const Icon(
-                      Icons.settings_outlined,
-                      size: 18,
-                      color: Color(0xFF475569),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -549,7 +379,7 @@ class _CandidateApplicationsScreenState
                   ),
                 ),
                 onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/candidate/jobs');
+                  Navigator.of(context).pushNamed('/candidate/jobs');
                 },
                 child: Text(
                   'Browse jobs',
@@ -634,7 +464,7 @@ class _CandidateApplicationsScreenState
           return GestureDetector(
             onTap: () {
               if (index != activeNavIndex) {
-                Navigator.of(context).pushReplacementNamed(item['route']);
+                Navigator.of(context).pushNamed(item['route']);
               }
             },
             child: Stack(
@@ -1002,7 +832,7 @@ class CandidateApplicationJobLink extends StatelessWidget {
         ? null
         : () => Navigator.of(
             context,
-          ).pushNamed('/candidate/job-detail', arguments: jobId),
+          ).pushNamed('/candidate/jobs/${Uri.encodeComponent(jobId.trim())}'),
     style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
     child: const Text('View Job Details'),
   );

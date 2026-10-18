@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -239,6 +238,15 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     final last = _lastName.trim();
     if (first.isNotEmpty && last.isNotEmpty) {
       return '${first[0]}${last[0]}'.toUpperCase();
+    }
+    final names = (_values['name'] ?? '')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((name) => name.isNotEmpty)
+        .toList();
+    if (names.isNotEmpty) {
+      return '${names.first[0]}${names.length > 1 ? names.last[0] : ''}'
+          .toUpperCase();
     }
     final email = (_values['email'] ?? '').trim();
     return email.isEmpty ? '?' : email[0].toUpperCase();
@@ -748,8 +756,8 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         ProfileService.recruiterProfileImageInitialsNotifier.value =
             _avatarInitials;
       }
-      if (_mobileSheetContext?.mounted ?? false) {
-        final sheet = _mobileSheetContext!;
+      final sheet = _mobileSheetContext;
+      if (sheet != null && sheet.mounted) {
         _mobileSheetContext = null;
         _mobileSheetRefresh = null;
         Navigator.of(sheet).pop();
@@ -977,8 +985,9 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       builder: (sheetContext) {
         _mobileSheetContext = sheetContext;
         Future.delayed(const Duration(milliseconds: 150), () {
-          if (sheetContext.mounted && _editing == key)
+          if (sheetContext.mounted && _editing == key) {
             _editFocus.requestFocus();
+          }
         });
         return StatefulBuilder(
           builder: (sheetContext, refresh) {
@@ -2382,8 +2391,9 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                             key: ValueKey('recruiter-mobile-tab-$tab'),
                             onTap: () {
                               setState(() => _mobileTab = tab);
-                              if (_mobileScroll.hasClients)
+                              if (_mobileScroll.hasClients) {
                                 _mobileScroll.jumpTo(0);
+                              }
                             },
                             child: Stack(
                               children: [

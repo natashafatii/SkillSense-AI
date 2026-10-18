@@ -526,6 +526,13 @@ class AuthService {
       if (epoch != SessionScope.generation) {
         throw StateError('Session changed.');
       }
+      // Protected-page retries can recover after the startup identity read
+      // failed. Publish that verified restoration as well as its role, so the
+      // API token supplier does not keep treating the active session as out.
+      // Interactive sign-in retains its own validation/activation boundary.
+      if (!_authOperation && !isGoogleCallback) {
+        _emit(true);
+      }
       return data;
     } catch (error) {
       if (epoch == SessionScope.generation) {

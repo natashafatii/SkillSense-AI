@@ -538,6 +538,10 @@ class LoginScreenWeb extends StatelessWidget {
                                             width: double.infinity,
                                             height: 48,
                                             child: OutlinedButton.icon(
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: Colors.black,
+                                                backgroundColor: Colors.white,
+                                              ),
                                               onPressed: isLoading
                                                   ? null
                                                   : onGoogleSignIn,

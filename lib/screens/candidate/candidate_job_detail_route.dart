@@ -18,18 +18,20 @@ class CandidateJobDetailRoute extends StatelessWidget {
   Widget build(BuildContext context) {
     final jobId = jobIdFrom(arguments);
     if (jobId != null) return CandidateJobDetailScreen(jobId: jobId);
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pick a job first.')),
-        );
-        Navigator.of(context).pushReplacementNamed('/candidate/jobs');
-      }
-    });
-
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Choose a job to view its details.'),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pushNamed('/candidate/jobs'),
+              child: const Text('Browse jobs'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

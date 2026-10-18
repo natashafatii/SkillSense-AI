@@ -1,17 +1,17 @@
 import 'package:dio/dio.dart';
-import '../models/phase8_contract.dart';
+import '../models/interview_analysis_contract.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
 
 /// Uses the existing Clerk SDK token supplier/interceptor; no token cache or
 /// independent refresh mechanism. Enable only after B1 confirms the schemas.
-class Phase8Service {
+class InterviewAnalysisService {
   final bool contractConfirmed;
   final Future<Dio> Function() _client;
 
-  Phase8Service({
+  InterviewAnalysisService({
     this.contractConfirmed = const bool.fromEnvironment(
-      'PHASE8_CONTRACT_CONFIRMED',
+      'INTERVIEW_ANALYSIS_CONTRACT_CONFIRMED',
     ),
     Future<Dio> Function()? client,
   }) : _client = client ?? ApiClient.getInstance;
@@ -23,9 +23,9 @@ class Phase8Service {
     Object? data,
     CancelToken? cancelToken,
   }) async {
-    phase8Identity(sessionId);
+    requireInterviewIdentity(sessionId);
     if (!contractConfirmed) {
-      throw StateError('Phase 8 requires backend B1 contract confirmation.');
+      throw StateError('Interview Analysis requires backend B1 contract confirmation.');
     }
     final dio = await _client();
     try {
@@ -51,7 +51,7 @@ class Phase8Service {
     SocketPurpose purpose, {
     CancelToken? cancelToken,
   }) async => SocketTicket.fromJson(
-    phase8Object(
+    requireJsonObject(
       await _request(
         identity.sessionId,
         'ws-ticket',
@@ -68,7 +68,7 @@ class Phase8Service {
     InterviewSessionIdentity identity, {
     CancelToken? cancelToken,
   }) async => AnalysisStatus.fromJson(
-    phase8Object(
+    requireJsonObject(
       await _request(
         identity.sessionId,
         'analysis-status',
@@ -82,11 +82,12 @@ class Phase8Service {
     InterviewSessionIdentity identity, {
     CancelToken? cancelToken,
   }) async => FinishVideoResult.fromJson(
-    phase8Object(
+    requireJsonObject(
       await _request(
         identity.sessionId,
         'finish-video',
         post: true,
+        data: const <String, dynamic>{},
         cancelToken: cancelToken,
       ),
     ),
@@ -94,11 +95,11 @@ class Phase8Service {
   );
 
   /// Recruiter-only API: backend must enforce ownership. Never load in candidate UI.
-  Future<BehavioralReport> recruiterReport(
+  Future<RecruiterReportResult> recruiterReport(
     InterviewSessionIdentity identity, {
     CancelToken? cancelToken,
-  }) async => BehavioralReport.fromJson(
-    phase8Object(
+  }) async => RecruiterReportResult.fromJson(
+    requireJsonObject(
       await _request(
         identity.sessionId,
         'behavioral-analysis',

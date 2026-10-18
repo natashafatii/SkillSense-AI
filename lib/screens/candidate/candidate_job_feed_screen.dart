@@ -5,15 +5,12 @@ import 'package:flutter/material.dart';
 import '../../widgets/candidate_button_style.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../widgets/app_tooltip.dart';
 import '../../constants/app_colors.dart';
 import '../../models/job.dart';
 import '../../models/paginated_response.dart';
 import '../../services/job_service.dart';
 import '../../services/resume_service.dart';
-import 'candidate_profile_settings_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
-import 'candidate_notifications_screen.dart';
 import 'widgets/candidate_job_card.dart';
 
 class CandidateJobFeedScreen extends StatefulWidget {
@@ -143,14 +140,6 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     _searchController.dispose();
     _locationController.dispose();
     super.dispose();
-  }
-
-  void _queueSearch() {
-    _searchDebounce?.cancel();
-    _searchDebounce = Timer(
-      const Duration(milliseconds: 350),
-      () => _loadJobs(),
-    );
   }
 
   void _selectFilter(String chip) {
@@ -339,36 +328,6 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                           letterSpacing: -0.025,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.auto_awesome,
-                              size: 10,
-                              color: AppColors.dashboardTeal,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'SBERT',
-                              style: GoogleFonts.inter(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF64748B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                   Text(
@@ -539,7 +498,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                 onPressed: () {
                   Navigator.of(
                     context,
-                  ).pushReplacementNamed('/candidate/profile');
+                  ).pushNamed('/candidate/profile');
                 },
                 child: Text(
                   'Complete my profile',
@@ -622,7 +581,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
   }
 
   void _openJobDetail(String title, String jobId) {
-    Navigator.of(context).pushReplacementNamed('/candidate/jobs/$jobId');
+    Navigator.of(context).pushNamed(
+      '/candidate/jobs/${Uri.encodeComponent(jobId)}',
+    );
   }
 
   // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
@@ -664,7 +625,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
           return GestureDetector(
             onTap: () {
               if (!isSelected) {
-                Navigator.of(context).pushReplacementNamed(item['route']);
+                Navigator.of(context).pushNamed(item['route']);
               }
             },
             child: Stack(
@@ -708,215 +669,6 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
   }
 
   // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-  Widget _buildTopBar(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    if (isMobile) {
-      return Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: cardBg,
-          border: Border(bottom: BorderSide(color: cardBorder, width: 1)),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.auto_awesome,
-              color: AppColors.dashboardBlue,
-              size: 26,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Jobs',
-              style: GoogleFonts.inter(
-                color: textPrimary,
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.03,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'JOB FEED',
-            style: GoogleFonts.spaceGrotesk(
-              color: textSecondary,
-              fontSize: 10.5,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.05,
-            ),
-          ),
-
-          // Actions Search/Notifications
-          Row(
-            children: [
-              // Search Input
-              Container(
-                width: 260,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (_) => _queueSearch(),
-                  onSubmitted: (_) {
-                    _searchDebounce?.cancel();
-                    _loadJobs();
-                  },
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search or jump to...',
-                    hintStyle: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF64748B),
-                      size: 16,
-                    ),
-                    suffixIcon: Container(
-                      width: 32,
-                      alignment: Alignment.center,
-                      margin: const EdgeInsets.only(
-                        right: 6,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        '⌘K',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: const Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Notification bell button
-              _buildTopBarIconButton(
-                icon: Icons.notifications_none_rounded,
-                hasBadge: true,
-                badgeColor: AppColors.dashboardTeal,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateNotificationsScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              // Settings icon
-              _buildTopBarIconButton(
-                icon: Icons.settings_outlined,
-                hasBadge: false,
-                onTap: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateProfileSettingsScreen(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required bool hasBadge,
-    Color? badgeColor,
-    VoidCallback? onTap,
-  }) {
-    String tooltip = '';
-    if (icon == Icons.notifications_none_rounded ||
-        icon == Icons.notifications_outlined ||
-        icon == Icons.notifications) {
-      tooltip = 'Notifications';
-    } else if (icon == Icons.settings_outlined || icon == Icons.settings) {
-      tooltip = 'Theme & settings';
-    } else if (icon == Icons.search || icon == Icons.search_rounded) {
-      tooltip = 'Search or jump to (⌘K)';
-    } else if (icon == Icons.help_outline) {
-      tooltip = 'Help & support';
-    }
-
-    return AppTooltip(
-      message: tooltip,
-      position: TooltipPosition.bottom,
-      child: MouseRegion(
-        cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(icon, color: const Color(0xFF475569), size: 18),
-                if (hasBadge)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: badgeColor ?? Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class GridPainter extends CustomPainter {

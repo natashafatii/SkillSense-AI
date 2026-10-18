@@ -1,14 +1,14 @@
-/// Phase 8 v1 foundation. Unfrozen fields are documented in docs/phase8_f1.md.
+/// Interview Analysis v1 foundation. Unfrozen fields are documented in docs/interview_analysis_contract_handoff.md.
 typedef JsonObject = Map<String, dynamic>;
 
-JsonObject phase8Object(Object? value) {
+JsonObject requireJsonObject(Object? value) {
   if (value is! Map<String, dynamic>) {
     throw const FormatException('Expected a JSON object.');
   }
   return value;
 }
 
-String phase8String(JsonObject json, String key) {
+String requireJsonString(JsonObject json, String key) {
   final value = json[key];
   if (value is! String || value.trim().isEmpty) {
     throw FormatException('Missing or invalid $key.');
@@ -16,7 +16,7 @@ String phase8String(JsonObject json, String key) {
   return value;
 }
 
-String phase8Identity(Object? value) {
+String requireInterviewIdentity(Object? value) {
   if (value is! String ||
       !RegExp(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$').hasMatch(value)) {
     throw const FormatException('Invalid interview/session identity.');
@@ -33,7 +33,7 @@ int _count(JsonObject json, String key, {int minimum = 0}) {
 }
 
 DateTime _date(JsonObject json, String key) {
-  final raw = phase8String(json, key);
+  final raw = requireJsonString(json, key);
   final date = DateTime.tryParse(raw);
   if (date == null || !date.isUtc) {
     throw FormatException('Invalid UTC $key.');
@@ -52,7 +52,7 @@ enum AnalysisState {
   unknown;
 
   static AnalysisState parse(JsonObject json) {
-    final raw = phase8String(json, 'status');
+    final raw = requireJsonString(json, 'status');
     return values.firstWhere((v) => v.name == raw, orElse: () => unknown);
   }
 }
@@ -64,13 +64,13 @@ class InterviewSessionIdentity {
   InterviewSessionIdentity({
     required String interviewId,
     required String sessionId,
-  }) : interviewId = phase8Identity(interviewId),
-       sessionId = phase8Identity(sessionId);
+  }) : interviewId = requireInterviewIdentity(interviewId),
+       sessionId = requireInterviewIdentity(sessionId);
 
   factory InterviewSessionIdentity.fromJson(JsonObject json) =>
       InterviewSessionIdentity(
-        interviewId: phase8Identity(json['interview_id']),
-        sessionId: phase8Identity(json['interview_session_id']),
+        interviewId: requireInterviewIdentity(json['interview_id']),
+        sessionId: requireInterviewIdentity(json['interview_session_id']),
       );
 }
 
@@ -94,9 +94,9 @@ class SocketTicket {
     required String sessionId,
     required SocketPurpose purpose,
   }) {
-    phase8Identity(sessionId);
+    requireInterviewIdentity(sessionId);
     _version(json, required: true);
-    final path = phase8String(json, 'socket_path');
+    final path = requireJsonString(json, 'socket_path');
     final expected =
         '/ws/analysis/$sessionId/${purpose == SocketPurpose.observer ? 'observe/' : ''}';
     if (path != expected) {
@@ -105,7 +105,7 @@ class SocketTicket {
       );
     }
     return SocketTicket._(
-      phase8String(json, 'ticket'),
+      requireJsonString(json, 'ticket'),
       _date(json, 'expires_at'),
       path,
       1,
@@ -120,7 +120,7 @@ class SocketTicket {
 void _version(JsonObject json, {bool required = false}) {
   if ((required || json.containsKey('protocol_version')) &&
       json['protocol_version'] != 1) {
-    throw const FormatException('Unsupported Phase 8 protocol version.');
+    throw const FormatException('Unsupported Interview Analysis protocol version.');
   }
 }
 
@@ -136,15 +136,15 @@ sealed class AnalysisMessage {
     required String sessionId,
   }) {
     if (negotiatedVersion != 1) {
-      throw const FormatException('Unsupported Phase 8 protocol version.');
+      throw const FormatException('Unsupported Interview Analysis protocol version.');
     }
-    phase8Identity(sessionId);
-    final json = phase8Object(value);
+    requireInterviewIdentity(sessionId);
+    final json = requireJsonObject(value);
     _version(json);
-    switch (phase8String(json, 'type')) {
+    switch (requireJsonString(json, 'type')) {
       case 'ready':
         return purpose == SocketPurpose.observer
-            ? ObserverReadyMessage.fromJson(json)
+            ? ObserverReadyMessage.fromJson(json, sessionId: sessionId)
             : ReadyMessage.fromJson(json);
       case 'ack':
         if (purpose != SocketPurpose.publisher) {
@@ -152,7 +152,7 @@ sealed class AnalysisMessage {
         }
         return AckMessage.fromJson(json);
       case 'error':
-        return TransportErrorMessage(phase8String(json, 'code'));
+        return TransportErrorMessage(requireJsonString(json, 'reason'));
       case 'analysis.update':
         if (purpose != SocketPurpose.observer) {
           throw const FormatException('Publisher received restricted event.');
@@ -172,17 +172,12 @@ class UnknownAnalysisMessage extends AnalysisMessage {
 
 /// Required observer-specific B1 extension; no publisher capture limits assumed.
 class ObserverReadyMessage extends AnalysisMessage {
-  ObserverReadyMessage.fromJson(JsonObject json)
-    : connectionGeneration = phase8String(json, 'connection_generation'),
-      authorizationExpiresAt = _date(json, 'authorization_expires_at') {
+  ObserverReadyMessage.fromJson(JsonObject json, {required String sessionId})
+    : sessionId = _matchingSession(json, sessionId),
+      authorizationExpiresAt = _date(json, 'lease_expires_at') {
     _version(json, required: true);
-    if (json['snapshot_mode'] != 'full') {
-      throw const FormatException(
-        'Observer requires full revisioned snapshots.',
-      );
-    }
   }
-  final String connectionGeneration;
+  final String sessionId;
   final DateTime authorizationExpiresAt;
 }
 
@@ -197,7 +192,7 @@ class ReadyMessage extends AnalysisMessage {
   final String? frameOrientation;
 
   ReadyMessage.fromJson(JsonObject json)
-    : connectionGeneration = phase8String(json, 'connection_generation'),
+    : connectionGeneration = requireJsonString(json, 'connection_generation'),
       targetFps = _fps(json),
       maxMessageBytes = _count(json, 'max_message_bytes', minimum: 1),
       maxJpegBytes = _count(json, 'max_jpeg_bytes', minimum: 1),
@@ -208,11 +203,11 @@ class ReadyMessage extends AnalysisMessage {
       maxHeight = json.containsKey('max_height')
           ? _count(json, 'max_height', minimum: 1)
           : null,
-      authorizationExpiresAt = json.containsKey('authorization_expires_at')
-          ? _date(json, 'authorization_expires_at')
+      authorizationExpiresAt = json.containsKey('lease_expires_at')
+          ? _date(json, 'lease_expires_at')
           : null,
       frameOrientation = json.containsKey('frame_orientation')
-          ? phase8String(json, 'frame_orientation')
+          ? requireJsonString(json, 'frame_orientation')
           : null {
     _version(json, required: true);
     if (maxJpegBytes > maxMessageBytes) {
@@ -238,14 +233,14 @@ class AckMessage extends AnalysisMessage {
   final String? reason;
 
   AckMessage.fromJson(JsonObject json)
-    : connectionGeneration = phase8String(json, 'connection_generation'),
+    : connectionGeneration = requireJsonString(json, 'connection_generation'),
       sequence = _count(json, 'sequence'),
       status = switch (json['status']) {
         'accepted' => AdmissionState.accepted,
         'dropped' => AdmissionState.dropped,
         _ => throw const FormatException('Invalid acknowledgement status.'),
       },
-      reason = json['reason'] == null ? null : phase8String(json, 'reason') {
+      reason = json['reason'] == null ? null : requireJsonString(json, 'reason') {
     if (status == AdmissionState.dropped && reason == null) {
       throw const FormatException('Dropped acknowledgement needs a reason.');
     }
@@ -264,13 +259,13 @@ class AnalysisStatus {
 
   AnalysisStatus.fromJson(JsonObject json, {required String sessionId})
     : sessionId = _matchingSession(json, sessionId),
-      status = AnalysisState.parse(json),
-      videoState = phase8String(json, 'video_state');
+      status = AnalysisState.parse({'status': json['analysis_state']}),
+      videoState = requireJsonString(json, 'video_state');
 }
 
 String _matchingSession(JsonObject json, String expected) {
-  phase8Identity(expected);
-  final actual = phase8Identity(json['session_id']);
+  requireInterviewIdentity(expected);
+  final actual = requireInterviewIdentity(json['session_id']);
   if (actual != expected) throw const FormatException('Session mismatch.');
   return actual;
 }
@@ -282,9 +277,9 @@ class BehavioralObservation {
   final double? durationSeconds;
 
   BehavioralObservation.fromJson(JsonObject json)
-    : type = phase8String(json, 'type'),
-      startedAt = _date(json, 'started_at'),
-      durationSeconds = _nullableNumber(json, 'duration_seconds');
+    : type = '${requireJsonString(json, 'kind')}: ${requireJsonString(json, 'value')}',
+      startedAt = _date(json, 'observed_at'),
+      durationSeconds = null;
 }
 
 double? _nullableNumber(JsonObject json, String key) {
@@ -302,8 +297,8 @@ class AnalysisCoverage {
   AnalysisCoverage.fromJson(JsonObject json)
     : processed = _count(json, 'processed'),
       validGaze = _count(json, 'valid_gaze'),
-      unknown = json['unknown'] == null ? null : _count(json, 'unknown') {
-    if (validGaze > processed || (unknown != null && unknown! > processed)) {
+      unknown = _count(json, 'unknown_gaze') {
+    if (validGaze + unknown! != processed) {
       throw const FormatException('Invalid coverage counts.');
     }
   }
@@ -348,29 +343,29 @@ class AnalysisSnapshot {
       revision = _count(json, 'revision'),
       serverTs = _date(json, 'server_ts'),
       status = AnalysisState.parse(json),
-      coverage = AnalysisCoverage.fromJson(phase8Object(json['coverage'])),
+      coverage = AnalysisCoverage.fromJson(requireJsonObject(json['coverage'])),
       observations = _observations(json),
-      frameCounts = json['counts'] == null
+      frameCounts = json['coverage'] == null
           ? null
-          : FrameCounts.fromJson(phase8Object(json['counts'])),
+          : FrameCounts.fromJson(requireJsonObject(json['coverage'])),
       eventSummaries = json['event_summaries'] == null
           ? null
           : _summaries(json['event_summaries']),
       expressionStatus = json['expression_status'] == null
           ? 'unknown'
-          : phase8String(json, 'expression_status'),
+          : requireJsonString(json, 'expression_status'),
       limitations = _limitations(json['limitations']),
       interviewId = json['interview_id'] == null
           ? null
-          : phase8Identity(json['interview_id']),
+          : requireInterviewIdentity(json['interview_id']),
       applicationId = json['application_id'] == null
           ? null
-          : phase8Identity(json['application_id']);
+          : requireInterviewIdentity(json['application_id']);
 
   static List<ObservationSummary> _summaries(Object? rows) {
     if (rows is! List) throw const FormatException('Invalid event summaries.');
     return List.unmodifiable(
-      rows.map((row) => ObservationSummary.fromJson(phase8Object(row))),
+      rows.map((row) => ObservationSummary.fromJson(requireJsonObject(row))),
     );
   }
 
@@ -389,7 +384,7 @@ class AnalysisSnapshot {
       throw const FormatException('Missing observations; cannot assume empty.');
     }
     return List.unmodifiable(
-      rows.map((v) => BehavioralObservation.fromJson(phase8Object(v))),
+      rows.map((v) => BehavioralObservation.fromJson(requireJsonObject(v))),
     );
   }
 }
@@ -397,14 +392,16 @@ class AnalysisSnapshot {
 /// Cumulative server-measured episodes; never inferred from frame/session counts.
 class ObservationSummary {
   ObservationSummary.fromJson(JsonObject json)
-    : type = phase8String(json, 'type'),
-      eventCount = _count(json, 'event_count'),
+    : type = requireJsonString(json, 'type'),
+      eventCount = json['event_count'] == null
+          ? null
+          : _count(json, 'event_count'),
       observedDurationSeconds = _nullableNumber(
         json,
         'observed_duration_seconds',
       );
   final String type;
-  final int eventCount;
+  final int? eventCount;
   final double? observedDurationSeconds;
 }
 
@@ -412,7 +409,7 @@ class RecruiterObservationTarget {
   RecruiterObservationTarget({
     required this.identity,
     required String applicationId,
-  }) : applicationId = phase8Identity(applicationId);
+  }) : applicationId = requireInterviewIdentity(applicationId);
   final InterviewSessionIdentity identity;
   final String applicationId;
   String get key =>
@@ -425,14 +422,79 @@ class AnalysisUpdate extends AnalysisMessage {
 }
 
 class FrameCounts {
-  final int received, admitted, processed, dropped, failed, expired;
+  final int received, admitted, processed, dropped, superseded, failed, expired;
   FrameCounts.fromJson(JsonObject json)
     : received = _count(json, 'received'),
       admitted = _count(json, 'admitted'),
       processed = _count(json, 'processed'),
       dropped = _count(json, 'dropped'),
+      superseded = _count(json, 'superseded'),
       failed = _count(json, 'failed'),
-      expired = _count(json, 'expired');
+      expired = _count(json, 'expired') {
+    if (received != admitted + dropped ||
+        processed + superseded + failed + expired > admitted) {
+      throw const FormatException('Invalid frame accounting.');
+    }
+  }
+}
+
+/// B6 envelopes may legitimately contain no report. Availability is not success.
+class RecruiterReportResult {
+  RecruiterReportResult.fromJson(JsonObject json, {required String sessionId})
+    : sessionId = _matchingSession(json, sessionId),
+      availability = requireJsonString(json, 'availability'),
+      revision = _count(json, 'revision'),
+      report = json['report'] == null
+          ? null
+          : BehavioralReport.fromJson({
+              ...requireJsonObject(json['report']),
+              'session_id': sessionId,
+            }, sessionId: sessionId) {
+    if (![
+          'ready',
+          'pending',
+          'disabled',
+          'legacy_unverified',
+        ].contains(availability) ||
+        (availability == 'ready') != (report != null) ||
+        (report != null && report!.snapshot.revision != revision) ||
+        (report == null && revision != 0)) {
+      throw const FormatException('Invalid report availability/revision.');
+    }
+  }
+  final String sessionId, availability;
+  final int revision;
+  final BehavioralReport? report;
+}
+
+JsonObject _reportSnapshot(JsonObject json) {
+  if (json['schema_version'] != 1) {
+    throw const FormatException('Unsupported report schema.');
+  }
+  final episodes = requireJsonObject(json['episodes']);
+  final counts = requireJsonObject(episodes['episode_counts']);
+  final durations = requireJsonObject(episodes['observed_seconds']);
+  return {
+    ...json,
+    'server_ts': json['generated_at'],
+    'expression_status': requireJsonObject(json['expression'])['status'],
+    'event_summaries': [
+      for (final kind in counts.keys)
+        {
+          'type': kind,
+          'event_count': counts[kind],
+          'observed_duration_seconds': durations[kind],
+        },
+    ],
+    'limitations': [
+      'Approximate sampled observations; real-world accuracy validation is outstanding.',
+      'Centered percentage uses supported gaze duration, not attention or ranking.',
+      if (episodes['events_truncated'] == true)
+        'Server episode window is truncated.',
+      if (json['versions_truncated'] == true)
+        'Server provenance list is truncated.',
+    ],
+  };
 }
 
 class BehavioralReport {
@@ -453,19 +515,27 @@ class BehavioralReport {
   BehavioralReport bounded(int limit) => BehavioralReport._bounded(this, limit);
 
   BehavioralReport.fromJson(JsonObject json, {required String sessionId})
-    : snapshot = AnalysisSnapshot.fromJson(json, sessionId: sessionId),
-      counts = FrameCounts.fromJson(phase8Object(json['counts'])),
-      centeredPercentage = _nullableNumber(json, 'centered_percentage'),
-      finalizationReason = json['finalization_reason'] == null
+    : snapshot = AnalysisSnapshot.fromJson(
+        _reportSnapshot(json),
+        sessionId: sessionId,
+      ),
+      counts = FrameCounts.fromJson(requireJsonObject(json['coverage'])),
+      centeredPercentage = _nullableNumber(json, 'gaze_centered_pct'),
+      finalizationReason = json['reason'] == null
           ? null
-          : phase8String(json, 'finalization_reason'),
+          : requireJsonString(json, 'reason'),
       finalizedAt = json['finalized_at'] == null
           ? null
           : _date(json, 'finalized_at'),
       versions = Map.unmodifiable(
-        phase8Object(
-          json['versions'],
-        ).map((key, value) => MapEntry(key, phase8String({key: value}, key))),
+        requireJsonObject(json['versions']).map((key, value) {
+          if (value is! List ||
+              value.length > 16 ||
+              value.any((v) => v is! String)) {
+            throw const FormatException('Invalid report provenance.');
+          }
+          return MapEntry(key, value.join(', '));
+        }),
       ) {
     if ((centeredPercentage != null && centeredPercentage! > 100) ||
         (snapshot.coverage.validGaze == 0 && centeredPercentage != null)) {
@@ -475,7 +545,13 @@ class BehavioralReport {
 }
 
 class FinishVideoResult {
-  final AnalysisStatus analysis;
+  final String sessionId, videoState, finishReason;
   FinishVideoResult.fromJson(JsonObject json, {required String sessionId})
-    : analysis = AnalysisStatus.fromJson(json, sessionId: sessionId);
+    : sessionId = _matchingSession(json, sessionId),
+      videoState = requireJsonString(json, 'video_state'),
+      finishReason = requireJsonString(json, 'finish_reason') {
+    if (!['finalizing', 'ended'].contains(videoState)) {
+      throw const FormatException('Video sealing was not acknowledged.');
+    }
+  }
 }
