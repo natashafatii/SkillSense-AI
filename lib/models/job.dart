@@ -108,6 +108,7 @@ class Job {
   final int applicantCount;
   final double? averageScore;
   final double? matchScore;
+  final bool hasApplied;
 
   const Job({
     this.screeningThreshold = 60,
@@ -134,6 +135,7 @@ class Job {
     this.applicantCount = 0,
     this.averageScore,
     this.matchScore,
+    this.hasApplied = false,
   });
 
   bool get isDraft => status == JobStatus.draft;
@@ -148,6 +150,7 @@ class Job {
         ? json['average_match_score']
         : json['average_score'];
     return Job(
+      hasApplied: json['has_applied'] == true,
       screeningThreshold:
           double.tryParse("${json['screening_threshold']}") ?? 60,
       autoShortlistEnabled: json['auto_shortlist_enabled'] == true,

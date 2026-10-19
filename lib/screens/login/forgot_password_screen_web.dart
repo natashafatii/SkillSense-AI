@@ -64,8 +64,14 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
       if (mounted) widget.onSend(email);
     } catch (e) {
       if (mounted) {
+        final error = e.toString().toLowerCase();
+        final accountNotFound = error.contains('form_identifier_not_found') ||
+            error.contains("couldn't find your account") ||
+            error.contains("couldn't find an account");
         setState(() {
-          _errorMessage = e.toString().replaceAll('Exception: ', '');
+          _errorMessage = accountNotFound
+              ? "Couldn't find an account with that email address. Please check and try again."
+              : 'Unable to send the reset code. Please try again.';
         });
       }
     } finally {
@@ -175,9 +181,11 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
                                             const SizedBox(height: 10),
                                             Text(
                                               _errorMessage!,
+                                              textAlign: TextAlign.start,
                                               style: GoogleFonts.inter(
                                                 fontSize: 13,
                                                 color: const Color(0xFFDC2626),
+                                                height: 1.5,
                                               ),
                                             ),
                                           ],

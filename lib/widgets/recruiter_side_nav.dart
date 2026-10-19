@@ -66,6 +66,20 @@ class RecruiterSideNav extends StatefulWidget {
 }
 
 class _RecruiterSideNavState extends State<RecruiterSideNav> {
+  static const Map<String, IconData> _destinationIcons = {
+    '/recruiter/command-deck': Icons.home_outlined,
+    '/recruiter/job-listings': Icons.work_outline_rounded,
+    '/recruiter/create-role': Icons.add_rounded,
+    '/recruiter/pipeline': Icons.view_kanban_outlined,
+    '/recruiter/rankings': Icons.format_list_numbered_rounded,
+    '/recruiter/candidate-report': Icons.person_outline_rounded,
+    '/recruiter/schedule-interview': Icons.calendar_today_outlined,
+    '/recruiter/live-monitor': Icons.videocam_outlined,
+    '/recruiter/interview-review': Icons.checklist_rounded,
+    '/recruiter/analytics': Icons.bar_chart_rounded,
+    '/recruiter/scoring-model': Icons.tune_rounded,
+  };
+
   static final Map<String, bool> _expandedByUser = {};
   static final Set<int> _persistedSections = <int>{0};
   static const _accent = Color(0xFF2563EB);
@@ -358,15 +372,27 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                 : null,
             borderRadius: BorderRadius.circular(7),
           ),
-          child: Text(
-            item.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-              color: active ? _ink : _textSecondary,
-            ),
+          child: Row(
+            children: [
+              Icon(
+                _destinationIcons[item.route],
+                size: 18,
+                color: active ? _accent : _textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    color: active ? _ink : _textSecondary,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -404,9 +430,6 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
             child: Container(
               margin: const EdgeInsets.fromLTRB(12, 8, 12, 10),
               padding: const EdgeInsets.only(top: 9),
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: _border)),
-              ),
               child: Row(
                 mainAxisAlignment: _contentExpanded
                     ? MainAxisAlignment.start

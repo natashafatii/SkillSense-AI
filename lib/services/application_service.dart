@@ -11,6 +11,17 @@ import 'api_exception.dart';
 class ApplicationService {
   ApplicationService._();
 
+  /// The API scopes this list to the authenticated user's applications.
+  static Future<List<Application>> listAllApplications({Dio? client}) async {
+    final applications = <Application>[];
+    for (var page = 1; page <= 100; page++) {
+      final result = await listApplications(page: page, client: client);
+      applications.addAll(result.results);
+      if (!result.hasNext) return applications;
+    }
+    throw StateError('Application pagination did not finish.');
+  }
+
   /// Loads every shortlisted application for the recruiter, across pages.
   static Future<List<Application>> listAllByStatus(
     String status, {

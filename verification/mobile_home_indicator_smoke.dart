@@ -12,7 +12,7 @@ void main() {
     });
   }
 
-  testWidgets('mobile indicator sits below a fixed bottom bar', (tester) async {
+  testWidgets('mobile indicator overlays a full-height page without a footer', (tester) async {
     await setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(
       MaterialApp(
@@ -25,10 +25,10 @@ void main() {
 
     final nav = tester.getRect(find.byKey(const Key('nav')));
     final pill = tester.getRect(find.byKey(const Key('mobile-home-indicator')));
-    expect(pill.width, 110);
-    expect(pill.height, 4);
-    expect(pill.top, greaterThanOrEqualTo(nav.bottom));
-    expect(pill.bottom, lessThanOrEqualTo(844));
+    expect(pill.width, 130);
+    expect(pill.height, 5);
+    expect(nav.bottom, 844);
+    expect(pill.bottom, 836);
   });
 
   testWidgets('mobile indicator stays at viewport bottom without navigation', (
@@ -41,7 +41,7 @@ void main() {
 
     final pill = tester.getRect(find.byKey(const Key('mobile-home-indicator')));
     expect(pill.center.dx, 195);
-    expect(pill.bottom, 844);
+    expect(pill.bottom, 836);
   });
 
   testWidgets('desktop has no custom indicator', (tester) async {
@@ -51,5 +51,25 @@ void main() {
     );
 
     expect(find.byKey(const Key('mobile-home-indicator')), findsNothing);
+  });
+
+  testWidgets('safe-area padding remains available to each page', (tester) async {
+    await setViewport(tester, const Size(390, 844));
+    tester.view.padding = const FakeViewPadding(bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    double? pagePadding;
+    await tester.pumpWidget(MaterialApp(
+      builder: mobileHomeIndicatorBuilder,
+      home: Builder(builder: (context) {
+        pagePadding = MediaQuery.paddingOf(context).bottom;
+        return const ColoredBox(key: Key('page-background'), color: Color(0xFF123456));
+      }),
+    ));
+    expect(pagePadding, 34);
+    expect(tester.getRect(find.byKey(const Key('page-background'))), const Rect.fromLTWH(0, 0, 390, 844));
+    final pill = tester.getRect(find.byKey(const Key('mobile-home-indicator')));
+    expect(pill.bottom, 844 - 34 - 8);
   });
 }

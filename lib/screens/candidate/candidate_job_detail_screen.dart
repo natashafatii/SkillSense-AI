@@ -118,6 +118,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       if (mounted && request == _jobRequest && jobId == widget.jobId) {
         setState(() {
           _job = job;
+          _isApplied = job.hasApplied;
           _isLoadingJob = false;
         });
         _warnIfMissingJobScore();
@@ -236,6 +237,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
   }
 
   void _showApplyModal() {
+    if (_isApplied || _isSubmitting) return;
     if (_job == null || !_job!.isActive) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -280,7 +282,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     Uint8List? bytes,
     String coverNote,
   ) async {
-    if (!mounted || _isSubmitting || _job == null) return;
+    if (!mounted || _isApplied || _isSubmitting || _job == null) return;
     final request = ++_submissionRequest;
     final jobId = _job!.id;
     setState(() => _isSubmitting = true);
@@ -1138,7 +1140,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       : _applyJob,
                   child: Text(
                     _isApplied
-                        ? 'Applied · ${_applicationId ?? ''}'
+                        ? (_applicationId == null
+                              ? 'Applied'
+                              : 'Applied · $_applicationId')
                         : (_isSubmitting
                               ? 'Submitting...'
                               : (_hasUploadedResume == true

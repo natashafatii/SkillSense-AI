@@ -11,11 +11,15 @@ CameraAdapter createCameraAdapter() => WebCameraAdapter();
 class WebCameraAdapter extends CameraAdapter {
   WebCameraAdapter({
     Future<web.MediaStream> Function(web.MediaStreamConstraints)? acquire,
+    Future<JSArray<web.MediaDeviceInfo>> Function()? enumerateDevices,
   }) : _acquire =
            acquire ??
            ((constraints) => web.window.navigator.mediaDevices
                .getUserMedia(constraints)
-               .toDart) {
+               .toDart),
+       _enumerateDevices =
+           enumerateDevices ??
+           (() => web.window.navigator.mediaDevices.enumerateDevices().toDart) {
     _visibility = ((web.Event _) {
       if (web.document.hidden) _interrupt(MediaFailureCode.background);
     }).toJS;
@@ -24,6 +28,7 @@ class WebCameraAdapter extends CameraAdapter {
     web.window.addEventListener('pagehide', _pageHide);
   }
   final Future<web.MediaStream> Function(web.MediaStreamConstraints) _acquire;
+  final Future<JSArray<web.MediaDeviceInfo>> Function() _enumerateDevices;
   late final JSFunction _visibility, _pageHide;
   web.MediaStream? _camera, _microphone;
   final web.HTMLVideoElement _video = web.HTMLVideoElement();
@@ -166,19 +171,7 @@ class WebCameraAdapter extends CameraAdapter {
       _attachPreview();
       // Enumeration is optional; a failed list must not invalidate a usable camera.
       try {
-        final devices = await web.window.navigator.mediaDevices
-            .enumerateDevices()
-            .toDart;
-        if (!_current(generation)) {
-          throw const MediaFailure(MediaFailureCode.cancelled);
-        }
-        final byId = <String, CameraDevice>{};
-        for (final device in devices.toDart) {
-          if (device.kind == 'videoinput' && device.deviceId.isNotEmpty) {
-            byId[device.deviceId] = CameraDevice(device.deviceId, device.label);
-          }
-        }
-        _cameras = List.unmodifiable(byId.values);
+        await refreshCameras();
       } catch (_) {
         /* Camera selection may be unavailable under browser policy. */
       }
@@ -193,6 +186,22 @@ class WebCameraAdapter extends CameraAdapter {
     } finally {
       _opening = false;
     }
+  }
+
+  @override
+  Future<void> refreshCameras() async {
+    _check();
+    final generation = _generation;
+    final devices = await _enumerateDevices();
+    if (!_current(generation)) return;
+    final byId = <String, CameraDevice>{};
+    for (final device in devices.toDart) {
+      if (device.kind == 'videoinput' && device.deviceId.isNotEmpty) {
+        byId[device.deviceId] = CameraDevice(device.deviceId, device.label);
+      }
+    }
+    _cameras = List.unmodifiable(byId.values);
+    notifyListeners();
   }
 
   void _attachPreview() {

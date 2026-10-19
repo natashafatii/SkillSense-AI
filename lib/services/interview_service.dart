@@ -8,7 +8,7 @@ import 'api_exception.dart';
 class InterviewService {
   InterviewService._();
 
-  /// Lists the current recruiter's interviews across all jobs.
+  /// Lists interviews scoped by the API to the signed-in candidate or recruiter.
   static Future<List<Interview>> listAll({String? status, Dio? client}) async {
     final dio = client ?? await ApiClient.getInstance();
     final interviews = <Interview>[];

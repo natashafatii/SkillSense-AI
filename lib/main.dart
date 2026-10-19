@@ -114,6 +114,7 @@ class AuthInitializationFailure extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const MaterialScrollBehavior().copyWith(scrollbars: false),
       builder: mobileHomeIndicatorBuilder,
       home: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
@@ -217,6 +218,7 @@ class SkillSenseApp extends StatelessWidget {
     return MaterialApp(
       title: 'SkillSense AI',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const MaterialScrollBehavior().copyWith(scrollbars: false),
       builder: mobileHomeIndicatorBuilder,
       navigatorKey: navigatorKey,
       navigatorObservers: [AppRouteObserver(), interviewMediaRouteObserver],
@@ -518,6 +520,7 @@ class SkillSenseApp extends StatelessWidget {
               builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleCandidate],
                 child: CandidateInterviewLobbyScreen(
+                  interviewId: settings.arguments is String ? settings.arguments as String : null,
                   identity: settings.arguments is InterviewSessionIdentity
                     ? settings.arguments as InterviewSessionIdentity : null,
                 ),

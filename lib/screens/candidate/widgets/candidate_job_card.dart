@@ -143,11 +143,13 @@ class _CandidateJobCardState extends State<CandidateJobCard>
     ];
 
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: widget.job.hasApplied
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onTap: widget.onApply,
+        onTap: widget.job.hasApplied ? null : widget.onApply,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           transform: Matrix4.translationValues(0, _isHovered ? -2.0 : 0.0, 0),
@@ -280,7 +282,10 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                   ),
                                 ),
                                 if (!widget.isMobile)
-                                  _ApplyButton(onApply: widget.onApply),
+                                  _ApplyButton(
+                                    onApply: widget.onApply,
+                                    isApplied: widget.job.hasApplied,
+                                  ),
                               ],
                             ),
                             SizedBox(
@@ -321,7 +326,10 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                   ),
                                 ),
                                 if (widget.isMobile)
-                                  _ApplyButton(onApply: widget.onApply),
+                                  _ApplyButton(
+                                    onApply: widget.onApply,
+                                    isApplied: widget.job.hasApplied,
+                                  ),
                               ],
                             ),
                           ],
@@ -409,7 +417,8 @@ class _SkillChipState extends State<_SkillChip> {
 
 class _ApplyButton extends StatefulWidget {
   final VoidCallback onApply;
-  const _ApplyButton({required this.onApply});
+  final bool isApplied;
+  const _ApplyButton({required this.onApply, required this.isApplied});
 
   @override
   State<_ApplyButton> createState() => _ApplyButtonState();
@@ -421,50 +430,68 @@ class _ApplyButtonState extends State<_ApplyButton> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: widget.onApply,
-        child: AnimatedScale(
-          scale: _pressed ? 0.97 : 1.0,
-          duration: const Duration(milliseconds: 100),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+    return Semantics(
+      button: true,
+      enabled: !widget.isApplied,
+      child: MouseRegion(
+        cursor: widget.isApplied
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTapDown: widget.isApplied
+              ? null
+              : (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
+          onTap: widget.isApplied ? null : widget.onApply,
+          child: AnimatedScale(
+            scale: _pressed ? 0.97 : 1.0,
+            duration: const Duration(milliseconds: 100),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: widget.isApplied ? const Color(0xFFE2E8F0) : null,
+                gradient: widget.isApplied
+                    ? null
+                    : const LinearGradient(
+                        colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                boxShadow: widget.isApplied
+                    ? const []
+                    : _hovered
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF14B584).withValues(alpha: 0.4),
+                          blurRadius: 22,
+                          spreadRadius: -6,
+                          offset: Offset.zero,
+                        ),
+                      ]
+                    : [
+                        BoxShadow(
+                          color: const Color(
+                            0xFF14B584,
+                          ).withValues(alpha: 0.22),
+                          blurRadius: 14,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
               ),
-              boxShadow: _hovered
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFF14B584).withValues(alpha: 0.4),
-                        blurRadius: 22,
-                        spreadRadius: -6,
-                        offset: Offset.zero,
-                      ),
-                    ]
-                  : [
-                      BoxShadow(
-                        color: const Color(0xFF14B584).withValues(alpha: 0.22),
-                        blurRadius: 14,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-            ),
-            child: Text(
-              'Apply',
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
+              child: Text(
+                widget.isApplied ? 'Applied' : 'Apply',
+                style: GoogleFonts.inter(
+                  color: widget.isApplied
+                      ? const Color(0xFF64748B)
+                      : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
               ),
             ),
           ),

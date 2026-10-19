@@ -447,7 +447,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
         }
 
         return Scaffold(
-          backgroundColor: AppColors.backgroundBase,
+          backgroundColor: Colors.white,
           body: Stack(
             children: [
               const GreenGradientBackground(),
@@ -988,26 +988,6 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                       ),
                                       TextSpan(
                                         text: 'Terms of Service',
-                                        style: GoogleFonts.publicSans(
-                                          fontSize: 12,
-                                          color: _green,
-                                          fontWeight: FontWeight.w700,
-                                          decoration: TextDecoration.underline,
-                                        ),
-                                        recognizer: TapGestureRecognizer()
-                                          ..onTap = () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const TermsPrivacyScreen(),
-                                              ),
-                                            );
-                                          },
-                                      ),
-                                      const TextSpan(text: ' and '),
-                                      TextSpan(
-                                        text: 'Privacy Policy',
                                         style: GoogleFonts.publicSans(
                                           fontSize: 12,
                                           color: _green,

@@ -158,6 +158,9 @@ abstract class CameraAdapter extends ChangeNotifier {
   Widget buildPreview();
   Future<void> openCamera({String? deviceId});
 
+  /// Refresh device choices without opening, stopping, or replacing any stream.
+  Future<void> refreshCameras() async {}
+
   /// Verifies permission and a live audio track, then releases it. No recording.
   Future<void> testMicrophone();
   Future<EncodedCameraFrame?> encodeJpeg(CaptureLimits limits);
