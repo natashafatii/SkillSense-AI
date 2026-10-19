@@ -23,11 +23,13 @@ class CandidateInterviewLobbyScreen extends StatefulWidget {
   const CandidateInterviewLobbyScreen({
     super.key,
     this.identity,
+    this.interviewId,
     this.mediaAdapter,
     this.voiceBackend,
   });
 
   final InterviewSessionIdentity? identity;
+  final String? interviewId;
   final CameraAdapter? mediaAdapter;
   final VoiceLifecycleBackend? voiceBackend;
 
@@ -97,6 +99,8 @@ class _CandidateInterviewLobbyScreenState
           .where(
             (item) => _identity != null
                 ? item.id == _identity!.interviewId
+                : widget.interviewId != null
+                ? item.id == widget.interviewId
                 : item.status == 'SCHEDULED' || item.status == 'LIVE',
           )
           .toList();

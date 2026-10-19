@@ -1,27 +1,39 @@
 import '../../widgets/candidate_button_style.dart';
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../models/application.dart';
 import '../../models/job.dart';
+import '../../models/interview.dart';
+import '../../models/candidate_profile.dart';
 import '../../services/application_service.dart';
 import '../../services/job_service.dart';
 import '../../services/auth_service.dart';
-import '../../services/resume_manager.dart';
+import '../../services/resume_service.dart';
+import '../../services/interview_service.dart';
+import '../../services/profile_service.dart';
+import '../../services/session_scope.dart';
 import '../../widgets/candidate_side_nav.dart';
 
 class CandidateHomeScreen extends StatefulWidget {
   final Future<List<Application>> Function()? loadApplications;
   final Future<List<Job>> Function()? loadJobs;
   final Future<void> Function()? loadUser;
+  final Future<CandidateProfile?> Function()? loadProfile;
+  final Future<List<Interview>> Function()? loadInterviews;
+  final Future<List<Map<String, dynamic>>> Function()? loadResumes;
 
   const CandidateHomeScreen({
     super.key,
     this.loadApplications,
     this.loadJobs,
     this.loadUser,
+    this.loadProfile,
+    this.loadInterviews,
+    this.loadResumes,
   });
 
   @override
@@ -42,11 +54,43 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   bool _loadingJobs = true;
   bool _isLoading = true;
   bool _hasError = false;
+  List<Application> _allApplications = [];
+  List<Interview> _interviews = [];
+  List<Map<String, dynamic>> _resumes = [];
+  CandidateProfile? _profile;
+  String? _applicationsError,
+      _jobsError,
+      _interviewsError,
+      _profileError,
+      _resumesError;
+  Timer? _countdownTimer;
+  final int _account = SessionScope.generation;
+  bool get _current => mounted && _account == SessionScope.generation;
+
+  Interview? get _nextInterview {
+    final upcoming =
+        _interviews
+            .where(
+              (i) =>
+                  i.status.toUpperCase() == 'SCHEDULED' &&
+                  i.scheduledAt != null &&
+                  i.scheduledAt!.isAfter(DateTime.now()),
+            )
+            .toList()
+          ..sort((a, b) => a.scheduledAt!.compareTo(b.scheduledAt!));
+    return upcoming.firstOrNull;
+  }
+
+  int get _profileCompletion => _profile?.completionPercentage ?? 0;
 
   @override
   void initState() {
     super.initState();
+    SessionScope.invalidations.addListener(_clearAccountData);
     _initializeData();
+    _countdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (_current && _interviews.isNotEmpty) setState(() {});
+    });
   }
 
   Future<void> _initializeData() async {
@@ -56,46 +100,55 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
       // Ensure user is loaded first
       await _loadUser();
 
-      final cachedResumes = ResumeManager.getResumes();
-      final bool hasCache = cachedResumes.isNotEmpty;
-
-      if (hasCache) {
-        // If we have cached resumes, we can show the UI immediately
-        // while we refresh in the background
-        if (mounted) setState(() => _isLoading = false);
-        ResumeManager.loadFromApi().catchError((_) {});
-        _loadApplications();
-        _loadMatchedJobs();
-      } else {
-        // No cache: wait for everything to load before showing UI
-        await Future.wait([
-          ResumeManager.loadFromApi(),
-          _loadApplications(),
-          _loadMatchedJobs(),
-        ]);
-      }
+      if (!_current) return;
+      await Future.wait([
+        _loadApplications(),
+        _loadMatchedJobs(),
+        _loadProfile(),
+        _loadInterviews(),
+        _loadResumes(),
+      ]);
     } catch (e) {
-      if (mounted) setState(() => _hasError = true);
+      if (_current) setState(() => _hasError = true);
     } finally {
-      if (mounted && _isLoading) setState(() => _isLoading = false);
+      if (_current && _isLoading) setState(() => _isLoading = false);
     }
+  }
+
+  void _clearAccountData() {
+    if (!mounted) return;
+    setState(() {
+      _recentApplications = [];
+      _allApplications = [];
+      _matchedJobs = [];
+      _interviews = [];
+      _resumes = [];
+      _profile = null;
+      _isLoading = false;
+      _hasError = true;
+    });
   }
 
   Future<void> _loadApplications() async {
     try {
       final applications =
           await (widget.loadApplications?.call() ??
-              ApplicationService.listApplications(
-                pageSize: 3,
-              ).then((result) => result.results));
-      if (mounted) {
+              ApplicationService.listAllApplications());
+      if (_current) {
         setState(() {
-          _recentApplications = applications;
+          _allApplications = List.of(applications)
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          _recentApplications = _allApplications.take(3).toList();
+          _applicationsError = null;
           _loadingApplications = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingApplications = false);
+      if (_current)
+        setState(() {
+          _loadingApplications = false;
+          _applicationsError = 'Unable to load applications.';
+        });
     }
   }
 
@@ -103,18 +156,32 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     try {
       final jobs =
           await (widget.loadJobs?.call() ??
-              JobService.listJobs(
-                status: JobStatus.active,
-                pageSize: 3,
-              ).then((result) => result.results));
-      if (mounted) {
+              JobService.listAllJobs(status: JobStatus.active));
+      if (_current) {
         setState(() {
-          _matchedJobs = jobs;
+          _matchedJobs =
+              jobs
+                  .where(
+                    (job) =>
+                        job.isActive &&
+                        job.matchScore != null &&
+                        job.matchScore!.isFinite &&
+                        job.matchScore! > 0 &&
+                        job.matchScore! <= 100,
+                  )
+                  .toList()
+                ..sort((a, b) => b.matchScore!.compareTo(a.matchScore!));
+          _matchedJobs = _matchedJobs.take(3).toList();
+          _jobsError = null;
           _loadingJobs = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingJobs = false);
+      if (_current)
+        setState(() {
+          _loadingJobs = false;
+          _jobsError = 'Unable to load matched jobs.';
+        });
     }
   }
 
@@ -126,8 +193,80 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     }
   }
 
+  Future<void> _loadProfile() async {
+    try {
+      final profile =
+          await (widget.loadProfile?.call() ??
+              ProfileService.getCandidateProfile(
+                forceRefresh: true,
+                allowCachedOnError: false,
+              ));
+      if (_current)
+        setState(() {
+          _profile = profile;
+          _profileError = null;
+        });
+    } catch (_) {
+      if (_current)
+        setState(() => _profileError = 'Unable to load your profile.');
+    }
+  }
+
+  Future<void> _loadInterviews() async {
+    try {
+      final interviews =
+          await (widget.loadInterviews?.call() ?? InterviewService.listAll());
+      if (_current)
+        setState(() {
+          _interviews = interviews;
+          _interviewsError = null;
+        });
+    } catch (_) {
+      if (_current)
+        setState(
+          () => _interviewsError = 'Unable to load upcoming interviews.',
+        );
+    }
+  }
+
+  Future<void> _loadResumes() async {
+    try {
+      final resumes =
+          await (widget.loadResumes?.call() ?? ResumeService.listResumes());
+      if (_current)
+        setState(() {
+          _resumes = resumes;
+          _resumesError = null;
+        });
+    } catch (_) {
+      if (_current)
+        setState(() => _resumesError = 'Unable to load your resumes.');
+    }
+  }
+
+  Future<void> _openResumes() async {
+    await Navigator.of(context).pushNamed('/candidate/resumes');
+    if (_current) {
+      await Future.wait([_loadResumes(), _loadMatchedJobs()]);
+    }
+  }
+
+  Future<void> _openProfile() async {
+    await Navigator.of(context).pushNamed('/candidate/profile');
+    if (_current) await _loadProfile();
+  }
+
+  Widget _sectionError(String message) => Column(
+    children: [
+      Text(message),
+      TextButton(onPressed: _initializeData, child: const Text('Retry')),
+    ],
+  );
+
   @override
   void dispose() {
+    SessionScope.invalidations.removeListener(_clearAccountData);
+    _countdownTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -244,16 +383,13 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                                         ],
                                       ),
                                     )
-                                  : ValueListenableBuilder<
-                                      List<Map<String, dynamic>>
-                                    >(
-                                      valueListenable:
-                                          ResumeManager.resumesNotifier,
-                                      builder: (context, resumesList, child) {
+                                  : Builder(
+                                      builder: (context) {
                                         final bool hasUploadedResume =
-                                            resumesList.isNotEmpty;
+                                            _resumes.isNotEmpty;
                                         final activeResume =
-                                            ResumeManager.getActiveResume();
+                                            _resumes.firstOrNull ??
+                                            <String, dynamic>{};
 
                                         return SingleChildScrollView(
                                           physics:
@@ -444,7 +580,19 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     bool hasResume,
     Map<String, dynamic> activeResume,
   ) {
-    if (!hasResume) {
+    final interview = _nextInterview;
+    if (_interviewsError != null) {
+      return Container(
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cardBorder),
+        ),
+        child: _sectionError(_interviewsError!),
+      );
+    }
+    if (interview == null) {
       // ── STATE 1: EMPTY STATE (WELCOME SCREEN) ──
       return ValueListenableBuilder<Map<String, dynamic>?>(
         valueListenable: AuthService.currentUserNotifier,
@@ -468,9 +616,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             }
           }
 
-          final welcomeText = displayName.isNotEmpty
-              ? 'Welcome $displayName'
-              : 'Welcome';
+          final welcomeText = 'No upcoming interviews';
 
           return Container(
             constraints: BoxConstraints(minHeight: isMobile ? 0 : 360),
@@ -515,7 +661,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Upload a resume and complete your profile to start matching with roles.',
+                      displayName.isEmpty
+                          ? 'Scheduled interviews will appear here when a recruiter invites you.'
+                          : '$displayName, scheduled interviews will appear here when a recruiter invites you.',
                       style: GoogleFonts.inter(
                         color: textSecondary,
                         fontSize: 13.5,
@@ -523,79 +671,77 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                         height: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).pushNamed('/candidate/resumes');
-                          },
-                          style: CandidateButtonStyle.primary(
-                            ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0FB89B),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 12,
+                    if (!hasResume && _resumesError == null) ...[
+                      const SizedBox(height: 24),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: _openResumes,
+                            style: CandidateButtonStyle.primary(
+                              ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0FB89B),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                            ),
+                            icon: const Icon(
+                              Icons.add,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            label: Text(
+                              'Upload resume',
+                              style: GoogleFonts.inter(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                          icon: const Icon(
-                            Icons.add,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                          label: Text(
-                            'Upload resume',
-                            style: GoogleFonts.inter(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
+                          OutlinedButton(
+                          onPressed: _openProfile,
+                            style: CandidateButtonStyle.secondary(
+                              OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF334155),
+                                side: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                  width: 1.5,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        OutlinedButton(
-                          onPressed: () {
-                            Navigator.of(context).pushNamed('/candidate/profile');
-                          },
-                          style: CandidateButtonStyle.secondary(
-                            OutlinedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF334155),
-                              side: const BorderSide(
-                                color: Color(0xFFE2E8F0),
-                                width: 1.5,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 12,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                            child: Text(
+                              'Complete profile',
+                              style: GoogleFonts.inter(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: CandidateButtonStyle.secondaryText,
                               ),
                             ),
                           ),
-                          child: Text(
-                            'Complete profile',
-                            style: GoogleFonts.inter(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: CandidateButtonStyle.secondaryText,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
                 if (!isMobile) const SizedBox(height: 48),
                 Text(
-                  'Once you apply somewhere, your next-interview countdown will live right here.',
+                  'Browse jobs and track your applications while you wait for an invitation.',
                   style: GoogleFonts.inter(
                     color: const Color(0xFF94A3B8),
                     fontSize: 12,
@@ -610,17 +756,18 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     }
 
     // ── STATE 2: POPULATED STATE (NEXT INTERVIEW COUNTDOWN) ──
-    final filename = (activeResume['filename'] ?? 'Resume.pdf').toString();
-    final roleTag = ResumeManager.deriveRoleTag(filename);
-
-    String jobTitle = 'Senior Django Developer';
-    if (roleTag.contains('Frontend')) {
-      jobTitle = 'Senior Flutter Developer';
-    } else if (roleTag.contains('AI') || roleTag.contains('ML')) {
-      jobTitle = 'Senior ML Engineer';
-    } else if (roleTag.contains('Fullstack')) {
-      jobTitle = 'Senior Full Stack Developer';
-    }
+    final application = _allApplications
+        .where((app) => app.id == interview.applicationId)
+        .firstOrNull;
+    final jobTitle = application?.jobTitle.trim().isNotEmpty == true
+        ? application!.jobTitle
+        : 'Scheduled interview';
+    final company = application?.jobCompany.trim() ?? '';
+    final scheduled = interview.scheduledAt!.toLocal();
+    final remaining = scheduled.difference(DateTime.now());
+    final days = remaining.inDays.toString().padLeft(2, '0');
+    final hours = (remaining.inHours % 24).toString().padLeft(2, '0');
+    final minutes = (remaining.inMinutes % 60).toString().padLeft(2, '0');
 
     return Container(
       constraints: BoxConstraints(minHeight: isMobile ? 0 : 360),
@@ -670,7 +817,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
 
               // Subtitle
               Text(
-                'TechVerse Solutions · AI voice interview · 8 questions',
+                '${company.isEmpty ? '' : '$company · '}${scheduled.toString().substring(0, 16)}',
                 style: GoogleFonts.inter(
                   color: textSecondary,
                   fontSize: 13,
@@ -682,11 +829,11 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
               // Countdown timer boxes
               Row(
                 children: [
-                  Expanded(child: _buildCountdownBox('02', 'DAYS', isMobile)),
+                  Expanded(child: _buildCountdownBox(days, 'DAYS', isMobile)),
                   const SizedBox(width: 8),
-                  Expanded(child: _buildCountdownBox('14', 'HOURS', isMobile)),
+                  Expanded(child: _buildCountdownBox(hours, 'HOURS', isMobile)),
                   const SizedBox(width: 8),
-                  Expanded(child: _buildCountdownBox('37', 'MIN', isMobile)),
+                  Expanded(child: _buildCountdownBox(minutes, 'MIN', isMobile)),
                 ],
               ),
               const SizedBox(height: 24),
@@ -697,7 +844,10 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 runSpacing: 12,
                 children: [
                   ElevatedButton(
-                    onPressed: () => _showInterviewOptions(context),
+                    onPressed: () => Navigator.of(context).pushNamed(
+                      '/candidate/interview-lobby',
+                      arguments: interview.id,
+                    ),
                     style: CandidateButtonStyle.primary(
                       ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0FB89B),
@@ -741,7 +891,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Camera and mic verified 2 days ago — verify again on interview day.',
+                  'Check your camera and microphone before joining your interview.',
                   style: GoogleFonts.inter(
                     color: const Color(0xFF64748B),
                     fontSize: 12,
@@ -802,35 +952,14 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   ) {
     final double gaugeSize = isMobile ? 54 : 64;
 
-    // Compute score from active resume coverage (average of all sections)
-    double score = 0.0;
-    String scoreText = '0';
-    if (hasResume) {
-      final activeResume = ResumeManager.getActiveResume();
-      final coverage = activeResume['coverage'] as Map<String, dynamic>?;
-      if (coverage != null && coverage.isNotEmpty) {
-        final values = coverage.values
-            .map(
-              (v) => (v is num
-                  ? v.toDouble()
-                  : double.tryParse(v.toString()) ?? 0.0),
-            )
-            .toList();
-        final avg = values.fold(0.0, (a, b) => a + b) / values.length;
-        score = (avg / 100.0).clamp(0.0, 1.0);
-        scoreText = avg.round().toString();
-      } else {
-        score = 0.78;
-        scoreText = '78';
-      }
-    }
+    final unavailable = _profileError != null;
+    final score = unavailable ? 0.0 : _profileCompletion / 100;
+    final scoreText = unavailable ? '—' : '$_profileCompletion';
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () {
-          Navigator.of(context).pushNamed('/candidate/profile');
-        },
+        onTap: _openProfile,
         child: Container(
           constraints: const BoxConstraints(minHeight: 110),
           padding: EdgeInsets.all(isMobile ? 14 : 18),
@@ -853,7 +982,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       strokeWidth: 4.5,
                       backgroundColor: const Color(0xFFE2E8F0),
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        hasResume
+                        score > 0
                             ? const Color(0xFF0FB89B)
                             : const Color(0xFFE2E8F0),
                       ),
@@ -865,7 +994,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       Text(
                         scoreText,
                         style: GoogleFonts.spaceGrotesk(
-                          color: hasResume
+                          color: score > 0
                               ? const Color(0xFF0F172A)
                               : const Color(0xFF94A3B8),
                           fontSize: isMobile ? 14 : 16,
@@ -903,9 +1032,11 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      hasResume
-                          ? 'Add 2 projects with metrics to cross 85 and rank higher in matching.'
-                          : 'Add your resume and skills to get a match score.',
+                      unavailable
+                          ? 'Unable to load profile completion. Tap to view your profile.'
+                          : _profileCompletion == 100
+                          ? 'Your saved profile is complete.'
+                          : 'Complete your remaining profile details.',
                       style: GoogleFonts.inter(
                         color: textSecondary,
                         fontSize: 12,
@@ -980,6 +1111,8 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               )
+            else if (_applicationsError != null)
+              _sectionError(_applicationsError!)
             else if (_recentApplications.isEmpty)
               Center(
                 child: Padding(
@@ -1020,8 +1153,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                   for (int i = 0; i < _recentApplications.length; i++) ...[
                     _buildApplicationRow(
                       _recentApplications[i].jobTitle,
-                      _recentApplications[i].candidateEmail,
-                      _recentApplications[i].status.value,
+                      _recentApplications[i].jobCompany,
+                      _recentApplications[i].rawStatus ??
+                          _recentApplications[i].status.value,
                       _recentApplications[i].status ==
                           ApplicationStatus.interviewed,
                     ),
@@ -1106,6 +1240,21 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     bool hasResume,
     Map<String, dynamic> activeResume,
   ) {
+    final error = _jobsError ?? _resumesError;
+    if (error != null) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cardBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [const Text('Matched for you'), _sectionError(error)],
+        ),
+      );
+    }
     if (!hasResume) {
       // Empty state
       return Container(
@@ -1167,9 +1316,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).pushNamed('/candidate/resumes');
-                      },
+                      onPressed: _openResumes,
                       style: CandidateButtonStyle.primary(
                         ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0FB89B),
@@ -1241,7 +1388,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      'SBERT',
+                      'MATCHED',
                       style: GoogleFonts.inter(
                         color: const Color(0xFF0D9488),
                         fontSize: 10,
@@ -1252,9 +1399,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 ],
               ),
               InkWell(
-                onTap: () => Navigator.of(
-                  context,
-                ).pushNamed('/candidate/jobs'),
+                onTap: () => Navigator.of(context).pushNamed('/candidate/jobs'),
                 child: Text(
                   'Feed >',
                   style: GoogleFonts.inter(
@@ -1281,7 +1426,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'No active jobs available right now.',
+                  'No matched jobs yet. Browse the Job Feed for available roles.',
                   style: GoogleFonts.inter(color: textSecondary, fontSize: 13),
                 ),
               ),
@@ -1485,7 +1630,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
               } else if (index == 3) {
                 _showInterviewOptions(context);
               } else if (index == 4) {
-                Navigator.of(context).pushNamed('/candidate/resumes');
+                _openResumes();
               } else {
                 Navigator.of(context).pushNamed('/candidate/profile');
               }

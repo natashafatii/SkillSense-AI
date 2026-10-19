@@ -2238,6 +2238,8 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       const SizedBox(height: 16),
       _thresholdPanel(),
       const SizedBox(height: 16),
+      _readinessPanel(),
+      const SizedBox(height: 16),
       _actions(),
       const SizedBox(height: 2),
       Text(
@@ -2548,6 +2550,86 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     ];
   }
 
+  Widget _readinessPanel() {
+    final items = _checklist;
+    final completed = items.where((item) => item.$2).length;
+    return _panel(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _panelHeader(
+            'Ready to publish',
+            tag: '$completed of ${items.length}',
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: 6,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: _c.surface2,
+              border: Border.all(color: _c.border),
+              borderRadius: BorderRadius.circular(99),
+            ),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: completed / items.length),
+              duration: const Duration(milliseconds: 300),
+              builder: (context, value, child) => LinearProgressIndicator(
+                key: const Key('create-role-readiness-progress'),
+                value: value,
+                backgroundColor: Colors.transparent,
+                color: _c.success,
+                minHeight: 6,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < items.length; i += 2) ...[
+            if (i > 0) const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(child: _readinessItem(items[i])),
+                const SizedBox(width: 12),
+                Expanded(child: _readinessItem(items[i + 1])),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _readinessItem((String, bool) item) => Semantics(
+    label: item.$1,
+    checked: item.$2,
+    child: Row(
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: item.$2 ? _c.success : Colors.transparent,
+            border: Border.all(
+              color: item.$2 ? _c.success : _c.borderStrong,
+              width: 1.5,
+            ),
+          ),
+          child: item.$2
+              ? const Icon(Icons.check, size: 11, color: Colors.white)
+              : null,
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            item.$1,
+            style: _body(13, color: item.$2 ? _c.text2 : _c.text3),
+          ),
+        ),
+      ],
+    ),
+  );
+
   Widget _actions() => Row(
     children: [
       if (widget.initialJob == null) ...[
@@ -2837,7 +2919,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         jobType: _apiJobType,
         experienceLevel: _apiExperience,
         deadline: _deadline!,
-        screeningThreshold: _threshold,
+        // Match the displayed score and avoid slider floating-point precision
+        // exceeding the API's DecimalField limits.
+        screeningThreshold: _threshold.roundToDouble(),
         autoShortlistEnabled: _autoShortlist,
         screeningCriteria: {
           ...?widget.initialJob?.screeningCriteria,

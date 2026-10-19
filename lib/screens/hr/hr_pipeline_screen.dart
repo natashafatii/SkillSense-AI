@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter;
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/applicant_avatar_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/application.dart';
@@ -11,7 +12,6 @@ import '../../services/application_service.dart';
 import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
-import 'schedule_interview_screen.dart';
 import 'applicant_detail_preview.dart';
 
 /// Recruiter Kanban board scoped to one job and backed by its applications.
@@ -380,12 +380,10 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   }
 
   void _schedule(Application app) {
-    Navigator.push(
+    Navigator.pushNamed(
       context,
-      MaterialPageRoute(
-        builder: (_) =>
-            ScheduleInterviewScreen(jobId: app.job, applicationId: app.id),
-      ),
+      '/recruiter/schedule-interview',
+      arguments: {'jobId': app.job, 'applicationId': app.id},
     );
   }
 
@@ -563,11 +561,10 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
                       app.eligibleForInterview,
                 )
             ? null
-            : () => Navigator.push(
+            : () => Navigator.pushNamed(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ScheduleInterviewScreen(jobId: _jobId),
-                ),
+                '/recruiter/schedule-interview',
+                arguments: {'jobId': _jobId},
               ),
         icon: const Icon(Icons.add_circle_outline, size: 15),
         label: const Text('Schedule interview'),
@@ -1039,9 +1036,10 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
                   CircleAvatar(
                     radius: 18,
                     backgroundColor: const Color(0xFFE8EEFF),
-                    child: Text(
-                      initials,
-                      style: GoogleFonts.inter(
+                    child: ApplicantAvatarImage(
+                      imageUrl: app.candidateProfileImageUrl,
+                      initials: initials,
+                      initialsStyle: GoogleFonts.inter(
                         color: const Color(0xFF3F5BC9),
                         fontSize: 10,
                         fontWeight: FontWeight.w700,

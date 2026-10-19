@@ -1,5 +1,4 @@
 import 'dart:ui';
-import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/candidate_button_style.dart';
@@ -24,18 +23,12 @@ class CandidateJobFeedScreen extends StatefulWidget {
 }
 
 class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
-  String _selectedFilter = 'All jobs';
-  final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  Timer? _searchDebounce;
+  String _selectedFilter = 'All';
   CancelToken? _jobsCancelToken;
-  JobType? _jobType;
-  ExperienceLevel? _experienceLevel;
 
   List<Job> _jobs = [];
   bool _loading = true;
   String? _error;
-  int _page = 1;
   int _requestGeneration = 0;
   bool _hasAnyJobs = true;
   bool? _hasUploadedResume;
@@ -80,7 +73,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     }
   }
 
-  Future<void> _loadJobs({int page = 1}) async {
+  Future<void> _loadJobs() async {
     final generation = ++_requestGeneration;
     _jobsCancelToken?.cancel('A newer job search started.');
     final cancelToken = CancelToken();
@@ -90,33 +83,24 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       _error = null;
     });
     try {
-      final response =
-          await (widget.loadJobs?.call(page) ??
-              JobService.listJobs(
-                status: JobStatus.active,
-                titleContains: _searchController.text,
-                jobType: _selectedFilter == 'Remote'
-                    ? JobType.remote
-                    : _jobType,
-                experienceLevel: _experienceLevel,
-                locationContains: _selectedFilter == 'Lahore'
-                    ? 'Lahore'
-                    : _locationController.text,
-                page: page,
-                cancelToken: cancelToken,
-              ));
+      final jobs = <Job>[];
+      for (var page = 1; page <= 100; page++) {
+        final response =
+            await (widget.loadJobs?.call(page) ??
+                JobService.listJobs(
+                  status: JobStatus.active,
+                  page: page,
+                  cancelToken: cancelToken,
+                ));
+        if (!mounted || generation != _requestGeneration) return;
+        jobs.addAll(response.results);
+        if (!response.hasNext) break;
+        if (page == 100) throw StateError('Job pagination did not finish.');
+      }
       if (!mounted || generation != _requestGeneration) return;
       setState(() {
-        _jobs = response.results
-            .where((job) => job.isActive && job.id.isNotEmpty)
-            .toList();
-        _page = page;
-        if (page == 1 &&
-            _searchController.text.isEmpty &&
-            _selectedFilter == 'All jobs' &&
-            _locationController.text.isEmpty) {
-          _hasAnyJobs = _jobs.isNotEmpty;
-        }
+        _jobs = jobs.where((job) => job.isActive && job.id.isNotEmpty).toList();
+        _hasAnyJobs = _jobs.isNotEmpty;
       });
       _warnMissingScores();
     } catch (e) {
@@ -135,30 +119,41 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
 
   @override
   void dispose() {
-    _searchDebounce?.cancel();
     _jobsCancelToken?.cancel();
-    _searchController.dispose();
-    _locationController.dispose();
     super.dispose();
   }
 
   void _selectFilter(String chip) {
-    _searchDebounce?.cancel();
-    setState(() {
-      _selectedFilter = chip;
-      if (chip == 'Remote') _jobType = JobType.remote;
-      if (chip == 'Lahore') _locationController.text = 'Lahore';
-      if (chip == 'All jobs') {
-        _jobType = null;
-        _experienceLevel = null;
-        _locationController.clear();
-      }
-    });
-    _loadJobs();
+    if (_selectedFilter == chip) return;
+    setState(() => _selectedFilter = chip);
   }
 
   List<Job> _getProcessedJobs() {
-    final jobs = List<Job>.from(_jobs);
+    final jobs = _jobs
+        .where(
+          (job) => switch (_selectedFilter) {
+            'Remote' => job.jobType == JobType.remote,
+            'Lahore' => job.location.toLowerCase().contains('lahore'),
+            _ => true,
+          },
+        )
+        .toList();
+    if (_selectedFilter == 'Best match') {
+      double? score(Job job) {
+        final value = job.matchScore;
+        return value != null && value.isFinite && value >= 0 && value <= 100
+            ? value
+            : null;
+      }
+
+      jobs.sort((a, b) {
+        final aScore = score(a), bScore = score(b);
+        final order = aScore == null
+            ? (bScore == null ? 0 : 1)
+            : (bScore == null ? -1 : bScore.compareTo(aScore));
+        return order != 0 ? order : b.createdAt.compareTo(a.createdAt);
+      });
+    }
     if (_selectedFilter == 'Newest') {
       jobs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     }
@@ -246,8 +241,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                                       children: [
                                         Text('Could not load jobs: ${_error!}'),
                                         TextButton(
-                                          onPressed: () =>
-                                              _loadJobs(page: _page),
+                                          onPressed: () => _loadJobs(),
                                           style: CandidateButtonStyle.secondary(
                                             TextButton.styleFrom(),
                                           ),
@@ -364,7 +358,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
             children: [
               Text('Could not load jobs: ${_error!}'),
               TextButton(
-                onPressed: () => _loadJobs(page: _page),
+                onPressed: _loadJobs,
                 style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
                 child: const Text('Retry'),
               ),
@@ -496,9 +490,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   ),
                 ),
                 onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).pushNamed('/candidate/profile');
+                  Navigator.of(context).pushNamed('/candidate/profile');
                 },
                 child: Text(
                   'Complete my profile',
@@ -530,7 +522,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
 
   // ── FILTER CHIPS (Web) ──────────────────────────────────────────────────────
   Widget _buildFilterChipsWeb(Color cardBorder) {
-    final chips = ['Best match', 'Newest', 'Remote', 'Lahore'];
+    final chips = ['All', 'Best match', 'Newest', 'Remote', 'Lahore'];
 
     return SingleChildScrollView(
       key: const Key('job-feed-filter-scroll'),
@@ -538,15 +530,17 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: chips.map((chip) {
-          final isSelected =
-              _selectedFilter == chip ||
-              (_selectedFilter == 'All jobs' && chip == 'Best match');
+          final isSelected = _selectedFilter == chip;
           return Padding(
             padding: const EdgeInsets.only(left: 8),
-            child: _HoverableFilterChip(
-              chip: chip,
-              isSelected: isSelected,
-              onTap: () => _selectFilter(chip),
+            child: Semantics(
+              button: true,
+              selected: isSelected,
+              child: _HoverableFilterChip(
+                chip: chip,
+                isSelected: isSelected,
+                onTap: () => _selectFilter(chip),
+              ),
             ),
           );
         }).toList(),
@@ -556,23 +550,25 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
 
   // ── FILTER CHIPS (Mobile) ──────────────────────────────────────────────────
   Widget _buildFilterChipsMobile(Color cardBorder) {
-    final chips = ['Best match', 'Newest', 'Remote', 'Lahore'];
+    final chips = ['All', 'Best match', 'Newest', 'Remote', 'Lahore'];
 
     return SingleChildScrollView(
       key: const Key('job-feed-filter-scroll'),
       scrollDirection: Axis.horizontal,
       child: Row(
         children: chips.map((chip) {
-          final isSelected =
-              _selectedFilter == chip ||
-              (_selectedFilter == 'All jobs' && chip == 'Best match');
+          final isSelected = _selectedFilter == chip;
 
           return Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: _HoverableFilterChip(
-              chip: chip,
-              isSelected: isSelected,
-              onTap: () => _selectFilter(chip),
+            child: Semantics(
+              button: true,
+              selected: isSelected,
+              child: _HoverableFilterChip(
+                chip: chip,
+                isSelected: isSelected,
+                onTap: () => _selectFilter(chip),
+              ),
             ),
           );
         }).toList(),
@@ -580,10 +576,12 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     );
   }
 
-  void _openJobDetail(String title, String jobId) {
-    Navigator.of(context).pushNamed(
-      '/candidate/jobs/${Uri.encodeComponent(jobId)}',
-    );
+  Future<void> _openJobDetail(String title, String jobId) async {
+    if (_jobs.any((job) => job.id == jobId && job.hasApplied)) return;
+    await Navigator.of(
+      context,
+    ).pushNamed('/candidate/jobs/${Uri.encodeComponent(jobId)}');
+    if (mounted) await _loadJobs();
   }
 
   // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────

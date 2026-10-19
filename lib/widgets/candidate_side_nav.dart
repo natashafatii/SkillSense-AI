@@ -233,6 +233,17 @@ class _CandidateSideNavState extends State<CandidateSideNav>
   }
 
   // Destination definitions
+  static const Map<String, IconData> _subItemIcons = {
+    '/candidate/home': Icons.home_outlined,
+    '/candidate/jobs': Icons.explore_outlined,
+    '/candidate/applications': Icons.assignment_outlined,
+    '/candidate/job-detail': Icons.work_outline_rounded,
+    '/candidate/interview-lobby': Icons.calendar_today_outlined,
+    '/candidate/interviews': Icons.history_rounded,
+    '/candidate/feedback-report': Icons.chat_outlined,
+    '/candidate/resumes': Icons.file_upload_outlined,
+  };
+
   final List<Map<String, dynamic>> _destinations = [
     {
       'id': 'home',
@@ -933,6 +944,14 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                                 ),
                               ),
 
+                            Icon(
+                              _subItemIcons[subRoute],
+                              size: 18,
+                              color: isSubActive
+                                  ? const Color(0xFF0F172A)
+                                  : const Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 8),
                             Text(
                               subLabel,
                               style: GoogleFonts.inter(

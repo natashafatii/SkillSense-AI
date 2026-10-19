@@ -12,6 +12,7 @@ class CandidateProfile {
   final String portfolioUrl;
   final int? yearsExperience;
   final String headline; // max 150 chars (serializer-enforced)
+  final int? _savedCompletionPercentage;
 
   const CandidateProfile({
     required this.user,
@@ -21,11 +22,31 @@ class CandidateProfile {
     required this.portfolioUrl,
     this.yearsExperience,
     required this.headline,
-  });
+    int? savedCompletionPercentage,
+  }) : _savedCompletionPercentage = savedCompletionPercentage;
 
   /// Serializer-enforced max length for headline (model allows 255,
   /// but the DRF serializer constrains to 150).
   static const int headlineMaxLength = 150;
+
+  /// Uses completion calculated by the API from the saved database record.
+  /// Older API versions fall back to the same nine-field calculation.
+  int get completionPercentage {
+    if (_savedCompletionPercentage != null) return _savedCompletionPercentage;
+    final completed = [
+      user.firstName?.trim().isNotEmpty == true,
+      user.lastName?.trim().isNotEmpty == true,
+      user.email.trim().isNotEmpty,
+      phone.trim().isNotEmpty,
+      location.trim().isNotEmpty,
+      headline.trim().isNotEmpty,
+      linkedinUrl.trim().isNotEmpty,
+      portfolioUrl.trim().isNotEmpty,
+      yearsExperience != null && yearsExperience! >= 0,
+    ];
+    return (completed.where((value) => value).length / completed.length * 100)
+        .round();
+  }
 
   factory CandidateProfile.fromJson(Map<String, dynamic> json) {
     final user = UserSummary.fromJson(json['user'] as Map<String, dynamic>);
@@ -38,6 +59,11 @@ class CandidateProfile {
       portfolioUrl: json['portfolio_url'] as String? ?? '',
       yearsExperience: json['years_experience'] as int?,
       headline: json['headline'] as String? ?? '',
+      savedCompletionPercentage: switch (json['completion_percentage']) {
+        num value when value.isFinite && value >= 0 && value <= 100 =>
+          value.round(),
+        _ => null,
+      },
     );
   }
 
@@ -82,6 +108,7 @@ class CandidateProfile {
     portfolioUrl: portfolioUrl,
     yearsExperience: yearsExperience,
     headline: headline,
+    savedCompletionPercentage: _savedCompletionPercentage,
   );
 
   /// Returns a JSON map suitable for a PATCH request.

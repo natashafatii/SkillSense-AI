@@ -15,6 +15,7 @@ import '../../models/job.dart';
 import '../../models/application.dart';
 import '../../models/interview.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/applicant_avatar_image.dart';
 
 class CommandDeckScreen extends StatefulWidget {
   const CommandDeckScreen({super.key});
@@ -1600,14 +1601,13 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                             shape: BoxShape.circle,
                             color: theme.divider,
                           ),
-                          child: Center(
-                            child: Text(
-                              initials.isEmpty ? '?' : initials,
-                              style: GoogleFonts.spaceGrotesk(
-                                color: theme.textSecondary,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                              ),
+                          child: ApplicantAvatarImage(
+                            imageUrl: item.candidateProfileImageUrl,
+                            initials: initials.isEmpty ? '?' : initials,
+                            initialsStyle: GoogleFonts.spaceGrotesk(
+                              color: theme.textSecondary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),

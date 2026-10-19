@@ -46,11 +46,13 @@ class Application {
   final String candidateEmail;
   final String job;
   final String jobTitle;
+  final String jobCompany;
   final String? resumeId;
   final String? coverNote;
   final ApplicationStatus status;
   final String? rawStatus;
   final String? candidateName;
+  final String? candidateProfileImageUrl;
   final double? resumeScore;
   final double? technicalScore;
   final double? behavioralScore;
@@ -69,11 +71,13 @@ class Application {
     required this.candidateEmail,
     required this.job,
     required this.jobTitle,
+    this.jobCompany = '',
     this.resumeId,
     this.coverNote,
     required this.status,
     this.rawStatus,
     this.candidateName,
+    this.candidateProfileImageUrl,
     this.resumeScore,
     this.technicalScore,
     this.behavioralScore,
@@ -101,11 +105,15 @@ class Application {
       candidateEmail: json['candidate_email'] as String? ?? '',
       job: json['job'] as String? ?? '',
       jobTitle: json['job_title'] as String? ?? '',
+      jobCompany: json['job_company'] as String? ?? '',
       resumeId: json['resume_id'] as String?,
       coverNote: json['cover_note'] as String?,
       status: ApplicationStatus.fromString(rawStatus),
       rawStatus: rawStatus,
       candidateName: (json['candidate_name'] ?? json['name']) as String?,
+      candidateProfileImageUrl:
+          (json['candidate_profile_image_url'] ?? json['profile_image_url'])
+              as String?,
       resumeScore: numeric(
         json['resume_score'] ?? json['match_score'] ?? json['score'],
       ),
@@ -139,11 +147,13 @@ class Application {
       candidateEmail: candidateEmail,
       job: job,
       jobTitle: jobTitle,
+      jobCompany: jobCompany,
       resumeId: resumeId,
       coverNote: coverNote,
       status: ApplicationStatus.fromString(nextStatus),
       rawStatus: nextStatus,
       candidateName: candidateName,
+      candidateProfileImageUrl: candidateProfileImageUrl,
       resumeScore: resumeScore,
       technicalScore: technicalScore,
       behavioralScore: behavioralScore,

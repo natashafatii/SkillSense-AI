@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../services/media/interview_media_controller.dart';
 import '../services/media/interview_media_route_observer.dart';
+import 'camera_device_selector.dart';
 
 /// Device ownership follows the route and app lifecycle, including routes that
-/// cover this widget without disposing it. Resuming never silently reopens devices.
+/// cover this widget without disposing it. Device menus keep the preview alive.
+/// Resuming never silently reopens devices.
 class InterviewMediaPanel extends StatefulWidget {
   const InterviewMediaPanel({
     super.key,
@@ -263,54 +265,9 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
                 ],
                 if (media.cameraError != null)
                   _error(media.cameraError!.message, errorColor),
-                if (media.adapter.cameras.isNotEmpty) ...[
+                if (media.cameraReady || media.adapter.cameras.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey(media.adapter.selectedCameraId),
-                    initialValue:
-                        media.adapter.cameras.any(
-                          (d) => d.id == media.adapter.selectedCameraId,
-                        )
-                        ? media.adapter.selectedCameraId
-                        : null,
-                    isExpanded: true,
-                    style: TextStyle(
-                      color: ink,
-                      fontSize: 13,
-                      fontFamily: 'Inter',
-                    ),
-                    dropdownColor: surface,
-                    decoration: InputDecoration(
-                      labelText: 'Camera',
-                      floatingLabelBehavior: FloatingLabelBehavior.always,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 14,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: border),
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    items: [
-                      for (var i = 0; i < media.adapter.cameras.length; i++)
-                        DropdownMenuItem(
-                          value: media.adapter.cameras[i].id,
-                          child: Text(
-                            media.adapter.cameras[i].label.isEmpty
-                                ? 'Camera ${i + 1}'
-                                : media.adapter.cameras[i].label,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                    onChanged: enabled
-                        ? (id) => media.requestCamera(deviceId: id)
-                        : null,
-                  ),
+                  CameraDeviceSelector(media: media),
                 ],
                 const SizedBox(height: 12),
                 Semantics(

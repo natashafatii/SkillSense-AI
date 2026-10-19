@@ -108,6 +108,7 @@ class ProfileService {
   /// Retrieves the self-owned candidate profile for the authenticated candidate.
   static Future<CandidateProfile?> getCandidateProfile({
     bool forceRefresh = false,
+    bool allowCachedOnError = true,
   }) async {
     final epoch = SessionScope.generation;
     if (currentProfileNotifier.value != null && !forceRefresh) {
@@ -118,6 +119,7 @@ class ProfileService {
       try {
         final dio = await ApiClient.getInstance();
         final response = await dio.get('/candidates/profile/');
+        if (epoch != SessionScope.generation) return null;
         currentProfileNotifier.value = CandidateProfile.fromJson(
           response.data as Map<String, dynamic>,
         );
@@ -132,14 +134,17 @@ class ProfileService {
         }
         if (e.response?.statusCode == 404) {
           // No profile yet, return null
+          currentProfileNotifier.value = null;
           return null;
         }
         attempts++;
         if (attempts >= 2) {
+          if (!allowCachedOnError) throw ApiException.fromDioException(e);
           return currentProfileNotifier.value;
         }
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (_) {
+        if (!allowCachedOnError) rethrow;
         break;
       }
     }
