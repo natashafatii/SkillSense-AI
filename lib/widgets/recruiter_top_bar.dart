@@ -3,6 +3,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/profile_service.dart';
+import '../services/auth_service.dart';
+import 'candidate_avatar_image.dart';
+import 'candidate_mobile_search.dart';
 
 class AppNavState {
   static int unreadInterviews = 0;
@@ -64,14 +68,21 @@ class RecruiterTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final surface = dark ? const Color(0xFF0D1424) : Colors.white;
-    final field = dark ? const Color(0xFF0A1120) : const Color(0xFFF8FAFC);
-    final edge = dark ? const Color(0x243A4A70) : const Color(0xFFE2E8F0);
-    final text = dark ? const Color(0xFFE8EDF8) : const Color(0xFF0F172A);
-    final text2 = dark ? const Color(0xFFA3AFC8) : const Color(0xFF475569);
+    final mobile = MediaQuery.sizeOf(context).width < mobileBreakpoint;
+    final darkHeader = dark && !mobile;
+    final surface = darkHeader ? const Color(0xFF0D1424) : Colors.white;
+    final field = mobile
+        ? Colors.white
+        : darkHeader
+        ? const Color(0xFF0A1120)
+        : const Color(0xFFF8FAFC);
+    final edge = darkHeader ? const Color(0x243A4A70) : const Color(0xFFE2E8F0);
+    final text = darkHeader ? const Color(0xFFE8EDF8) : const Color(0xFF0F172A);
+    final text2 = darkHeader
+        ? const Color(0xFFA3AFC8)
+        : const Color(0xFF475569);
     final text3 = dark ? const Color(0xFF8593B0) : const Color(0xFF64748B);
     final accent = dark ? const Color(0xFF6C9BFF) : const Color(0xFF3E6FF0);
-    final mobile = MediaQuery.sizeOf(context).width < mobileBreakpoint;
     final showUnread = useExactUnread
         ? hasUnread
         : hasUnread ||
@@ -94,11 +105,11 @@ class RecruiterTopBar extends StatelessWidget {
           compact ? (mobileTitle ?? pageTitle) : pageTitle.toUpperCase(),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.spaceGrotesk(
+          style: (compact ? GoogleFonts.inter : GoogleFonts.spaceGrotesk)(
             color: text,
-            fontSize: compact ? 18 : 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: compact ? 0 : 1.2,
+            fontSize: compact ? 22 : 12,
+            fontWeight: compact ? FontWeight.w800 : FontWeight.w700,
+            letterSpacing: compact ? -0.5 : 1.2,
           ),
         );
         Widget breadcrumbText(int index) => Text(
@@ -127,6 +138,11 @@ class RecruiterTopBar extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: surface.withValues(alpha: .92),
+                gradient: compact
+                    ? const LinearGradient(
+                        colors: [Color(0xFFF7F8FF), Color(0xFFF0F8F7)],
+                      )
+                    : null,
                 border: Border(bottom: BorderSide(color: edge)),
               ),
               child: Row(
@@ -169,7 +185,7 @@ class RecruiterTopBar extends StatelessWidget {
                     )
                   else
                     Expanded(child: title),
-                  if (compact)
+                  if (compact && (candidate || onSearchTap != null))
                     _iconButton(
                       key: const Key('recruiter-top-search'),
                       icon: Icons.search_rounded,
@@ -177,9 +193,14 @@ class RecruiterTopBar extends StatelessWidget {
                       color: text2,
                       field: field,
                       edge: edge,
-                      onTap: onSearchTap,
+                      onTap:
+                          onSearchTap ??
+                          (candidate
+                              ? () => showCandidateMobileSearch(context)
+                              : null),
+                      prominent: true,
                     )
-                  else
+                  else if (!compact)
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       width: 300,
@@ -250,19 +271,80 @@ class RecruiterTopBar extends StatelessWidget {
                         ),
                       ),
                     ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: compact ? 8 : 12),
                   _iconButton(
                     key: const Key('recruiter-top-bell'),
                     icon: Icons.notifications_none_rounded,
                     label: 'Notifications',
                     color: bellActive ? accent : text2,
-                    field: bellActive ? accent.withValues(alpha: .10) : field,
+                    field: compact
+                        ? Colors.white
+                        : bellActive
+                        ? accent.withValues(alpha: .10)
+                        : field,
                     edge: edge,
                     hasUnread: showUnread,
                     onTap: onBellTap ?? openNotifications,
+                    prominent: compact,
                   ),
+                  if (compact) ...[
+                    const SizedBox(width: 8),
+                    if (candidate)
+                      Tooltip(
+                        message: 'User profile',
+                        child: InkWell(
+                          key: const Key('recruiter-top-profile'),
+                          onTap: openSettings,
+                          customBorder: const CircleBorder(),
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE2F9F3),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFFA7F3D0),
+                              ),
+                            ),
+                            child: ClipOval(
+                              child: ValueListenableBuilder(
+                                valueListenable:
+                                    ProfileService.currentProfileNotifier,
+                                builder: (context, profile, _) =>
+                                    CandidateAvatarImage(
+                                      profile: profile,
+                                      initialsStyle: GoogleFonts.spaceGrotesk(
+                                        color: const Color(0xFF047857),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Tooltip(
+                        message: 'User profile',
+                        child: InkWell(
+                          key: const Key('recruiter-top-profile'),
+                          onTap: openSettings,
+                          customBorder: const CircleBorder(),
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE0E9FF),
+                              shape: BoxShape.circle,
+                            ),
+                            child: ClipOval(child: _recruiterAvatar()),
+                          ),
+                        ),
+                      ),
+                  ],
                   if (showTrailingButton) ...[
-                    const SizedBox(width: 12),
+                    SizedBox(width: compact ? 8 : 12),
                     _iconButton(
                       key: const Key('recruiter-top-settings'),
                       icon: trailingIcon,
@@ -271,6 +353,7 @@ class RecruiterTopBar extends StatelessWidget {
                       field: field,
                       edge: edge,
                       onTap: onTrailingTap ?? openSettings,
+                      prominent: compact,
                     ),
                   ],
                 ],
@@ -282,6 +365,46 @@ class RecruiterTopBar extends StatelessWidget {
     );
   }
 
+  Widget _recruiterAvatar() => AnimatedBuilder(
+    animation: Listenable.merge([
+      AuthService.currentUserNotifier,
+      ProfileService.recruiterAvatarLoadedNotifier,
+      ProfileService.recruiterProfileImageInitialsNotifier,
+      ProfileService.recruiterProfileImageUrlNotifier,
+    ]),
+    builder: (context, _) {
+      final user = AuthService.currentUserData ?? const <String, dynamic>{};
+      final loaded = ProfileService.recruiterAvatarLoadedNotifier.value;
+      final initials = loaded
+          ? ProfileService.recruiterProfileImageInitialsNotifier.value
+          : ProfileService.recruiterProfileInitialsFrom(user);
+      final url = ProfileService.resolveRecruiterProfileImageUrl(
+        loaded
+            ? ProfileService.recruiterProfileImageUrlNotifier.value
+            : ProfileService.recruiterProfileImageUrlFrom(user),
+      );
+      Widget fallback() => Center(
+        child: Text(
+          initials,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: const Color(0xFF2563EB),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+      return url == null
+          ? fallback()
+          : Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) =>
+                  progress == null ? child : fallback(),
+              errorBuilder: (context, error, stackTrace) => fallback(),
+            );
+    },
+  );
+
   Widget _iconButton({
     required Key key,
     required IconData icon,
@@ -291,24 +414,34 @@ class RecruiterTopBar extends StatelessWidget {
     required Color edge,
     VoidCallback? onTap,
     bool hasUnread = false,
+    bool prominent = false,
   }) => Tooltip(
     message: label,
     child: InkWell(
       key: key,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(11),
+      borderRadius: BorderRadius.circular(prominent ? 12 : 11),
       child: Container(
-        width: 34,
-        height: 34,
+        width: prominent ? 38 : 34,
+        height: prominent ? 38 : 34,
         decoration: BoxDecoration(
           color: field,
           border: Border.all(color: edge),
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.circular(prominent ? 12 : 11),
+          boxShadow: prominent
+              ? const [
+                  BoxShadow(
+                    color: Color(0x080F172A),
+                    blurRadius: 8,
+                    offset: Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Icon(icon, size: 13, color: color),
+            Icon(icon, size: prominent ? 20 : 13, color: color),
             if (hasUnread)
               const Positioned(
                 top: 4,

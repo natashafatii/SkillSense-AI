@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -88,17 +90,19 @@ class _RankingsScreenState extends State<RankingsScreen> {
 
                       // Scrollable rankings content or centered empty state
                       Expanded(
-                        child: _cohort.isEmpty
-                            ? _buildEmptyState(isMobile)
-                            : SingleChildScrollView(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: isMobile ? 16 : 24,
-                                  vertical: isMobile ? 12 : 8,
+                        child: MobileEdgeShadowWrapper(
+                          child: _cohort.isEmpty
+                              ? _buildEmptyState(isMobile)
+                              : SingleChildScrollView(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isMobile ? 16 : 24,
+                                    vertical: isMobile ? 12 : 8,
+                                  ),
+                                  child: isMobile
+                                      ? _buildMobileLayout()
+                                      : _buildWebLayout(),
                                 ),
-                                child: isMobile
-                                    ? _buildMobileLayout()
-                                    : _buildWebLayout(),
-                              ),
+                        ),
                       ),
                     ],
                   ),
@@ -1234,9 +1238,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
                           child: GestureDetector(
                             onTap: () {
                               if (!isSelected) {
-                                Navigator.of(
-                                  context,
-                                ).pushNamed(item['route']);
+                                Navigator.of(context).pushNamed(item['route']);
                               }
                             },
                             child: Container(
@@ -1322,90 +1324,6 @@ class _RankingsScreenState extends State<RankingsScreen> {
   }
 
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() {
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          // Dashboard · Jobs · Pipeline · Schedule · Rankings(active) · Analytics
-          _buildMobileDockItem(
-            Icons.dashboard_rounded,
-            '/recruiter/command-deck',
-            false,
-          ),
-          _buildMobileDockItem(
-            Icons.grid_view_rounded,
-            '/recruiter/job-listings',
-            false,
-          ),
-          _buildMobileDockItem(
-            Icons.view_column_rounded,
-            '/recruiter/pipeline',
-            false,
-          ),
-          _buildMobileDockItem(
-            Icons.radio_button_checked_rounded,
-            '/recruiter/schedule-interview',
-            false,
-          ),
-          _buildMobileDockItem(
-            Icons.leaderboard_rounded,
-            '/recruiter/rankings',
-            true,
-          ), // active
-          _buildMobileDockItem(
-            Icons.diamond_rounded,
-            '/recruiter/analytics',
-            false,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileDockItem(IconData icon, String route, bool isActive) {
-    return GestureDetector(
-      onTap: () {
-        if (!isActive) {
-          Navigator.of(context).pushNamed(route);
-        }
-      },
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: isActive ? AppColors.dashboardBlue : Colors.transparent,
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: AppColors.dashboardBlue.withValues(alpha: 0.4),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : [],
-        ),
-        child: Icon(
-          icon,
-          color: isActive ? Colors.white : const Color(0xFF94A3B8),
-          size: 22,
-        ),
-      ),
-    );
-  }
+  Widget _buildMobileBottomDock() =>
+      const RecruiterMobileNav(currentRoute: '/recruiter/rankings');
 }

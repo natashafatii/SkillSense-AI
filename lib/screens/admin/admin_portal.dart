@@ -1,3 +1,4 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'aurora_tokens.dart';
@@ -390,9 +391,12 @@ class _AdminPortalState extends State<AdminPortal> {
           ),
         ),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(17, 19, 17, 25),
-            child: _page(true),
+          child: MobileEdgeShadowWrapper(
+            surfaceColor: t.bg,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(17, 19, 17, 25),
+              child: _page(true),
+            ),
           ),
         ),
       ],

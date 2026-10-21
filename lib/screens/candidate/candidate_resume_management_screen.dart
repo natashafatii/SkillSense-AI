@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
 import 'dart:async';
 import 'dart:io';
@@ -23,7 +25,6 @@ class CandidateResumeManagementScreen extends StatefulWidget {
 
 class _CandidateResumeManagementScreenState
     extends State<CandidateResumeManagementScreen> {
-  final int _activeNavIndex = 4; // Resumes tab is index 4
 
   // Right-panel list loading state
   bool _isLoadingList = true;
@@ -526,18 +527,20 @@ class _CandidateResumeManagementScreenState
 
                             // Main Scrollable Canvas
                             Expanded(
-                              child: SingleChildScrollView(
-                                physics: const BouncingScrollPhysics(),
-                                padding: EdgeInsets.only(
-                                  left: isMobile ? 16 : 22,
-                                  right: isMobile ? 16 : 22,
-                                  top: 20,
-                                  bottom: isMobile ? 100 : 32,
-                                ),
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) => isMobile
-                                      ? _buildMobileLayout(hasResumes)
-                                      : _buildWebLayout(hasResumes),
+                              child: MobileEdgeShadowWrapper(
+                                child: SingleChildScrollView(
+                                  physics: const BouncingScrollPhysics(),
+                                  padding: EdgeInsets.only(
+                                    left: isMobile ? 16 : 22,
+                                    right: isMobile ? 16 : 22,
+                                    top: 20,
+                                    bottom: isMobile ? 164 : 32,
+                                  ),
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) => isMobile
+                                        ? _buildMobileLayout(hasResumes)
+                                        : _buildWebLayout(hasResumes),
+                                  ),
                                 ),
                               ),
                             ),
@@ -1537,172 +1540,10 @@ class _CandidateResumeManagementScreenState
 
   // ── LEFT RAIL NAVIGATION (Web Navigation Sidebar) ─────────────────────────
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() {
-    final List<Map<String, dynamic>> dockItems = [
-      {'icon': Icons.home_rounded, 'route': '/candidate/home'},
-      {'icon': Icons.track_changes_rounded, 'route': '/candidate/applications'},
-      {'icon': Icons.grid_view_rounded, 'route': '/candidate/jobs'},
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'route': '/candidate/interviews',
-      },
-      {'icon': Icons.description_rounded, 'route': '/candidate/resumes'},
-      {'icon': Icons.adjust_rounded, 'route': '/candidate/profile'},
-    ];
+  Widget _buildMobileBottomDock() => const CandidateMobileNav(
+    currentRoute: '/candidate/resumes',
+  );
 
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(dockItems.length, (index) {
-          final isSelected = index == _activeNavIndex;
-          final item = dockItems[index];
-
-          return GestureDetector(
-            onTap: () {
-              if (index == 0) {
-                Navigator.of(context).pushNamed('/candidate/home');
-              } else if (index == 1) {
-                Navigator.of(
-                  context,
-                ).pushNamed('/candidate/applications');
-              } else if (index == 2) {
-                Navigator.of(context).pushNamed('/candidate/jobs');
-              } else if (index == 3) {
-                _showInterviewOptions(context);
-              } else if (index == 4) {
-                // Resumes
-              } else {
-                Navigator.of(
-                  context,
-                ).pushNamed('/candidate/profile');
-              }
-            },
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected
-                    ? AppColors.dashboardTeal
-                    : Colors.transparent,
-              ),
-              child: Icon(
-                item['icon'] as IconData,
-                color: isSelected
-                    ? const Color(0xFF0F172A)
-                    : const Color(0xFF94A3B8),
-                size: 20,
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  void _showInterviewOptions(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Interviews Section',
-          style: GoogleFonts.spaceGrotesk(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton(
-              style: CandidateButtonStyle.primary(
-                ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.dashboardTeal,
-                  foregroundColor: const Color(0xFF0F172A),
-                  minimumSize: const Size(double.infinity, 44),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(
-                  context,
-                ).pushNamed('/candidate/interviews');
-              },
-              child: Text(
-                'Interview History',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              style: CandidateButtonStyle.secondary(
-                ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E293B),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 44),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(
-                  context,
-                ).pushNamed('/candidate/interview-lobby');
-              },
-              child: Text(
-                'Interview Lobby',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              style: CandidateButtonStyle.secondary(
-                ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E293B),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 44),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(
-                  context,
-                ).pushNamed('/candidate/feedback-report');
-              },
-              child: Text(
-                'Feedback Report',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class GridPainter extends CustomPainter {

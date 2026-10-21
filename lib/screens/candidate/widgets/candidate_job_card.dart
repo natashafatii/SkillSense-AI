@@ -7,17 +7,17 @@ class CandidateJobCard extends StatefulWidget {
   final Job job;
   final bool isMobile;
   final bool isHot;
-  final bool? hasUploadedResume;
+  final bool hasUploadedResume;
   final VoidCallback onApply;
 
   const CandidateJobCard({
-    super.key,
+    Key? key,
     required this.job,
     required this.isMobile,
     required this.isHot,
-    this.hasUploadedResume,
+    required this.hasUploadedResume,
     required this.onApply,
-  });
+  }) : super(key: key);
 
   @override
   State<CandidateJobCard> createState() => _CandidateJobCardState();
@@ -82,28 +82,30 @@ class _CandidateJobCardState extends State<CandidateJobCard>
     return const Color(0xFFEF4444);
   }
 
+  // Generate a mock salary based on experience to match design
+  String _getSalaryStr() {
+    switch (widget.job.experienceLevel) {
+      case ExperienceLevel.senior:
+        return 'PKR 250–350k';
+      case ExperienceLevel.entry:
+        return 'PKR 120–180k';
+      case ExperienceLevel.mid:
+        return 'PKR 180–260k';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = widget.job.title;
+    final company = widget.job.recruiterCompany.isNotEmpty
+        ? widget.job.recruiterCompany
+        : 'Unknown Company';
     final location = widget.job.location;
     final skills = widget.job.skillsRequired;
-    final skillChips = _buildSkillChips(skills);
 
-    // Use actual score, or null if none
-    final rawScore = widget.job.matchScore ?? widget.job.averageScore;
-    final double? score =
-        rawScore != null &&
-            rawScore.isFinite &&
-            rawScore >= 0 &&
-            rawScore <= 100
-        ? rawScore
-        : null;
-    final salary = widget.job.salary.trim().isEmpty
-        ? 'Salary not specified'
-        : widget.job.salary;
-    final ringColor = score != null
-        ? _getRingColor(score)
-        : const Color(0xFF94A3B8);
+    // Fallback to 85 if no averageScore provided for the visual
+    final score = widget.job.averageScore ?? 85.0;
+    final ringColor = _getRingColor(score);
     final isHot = widget.isHot;
 
     // Day shadow
@@ -219,9 +221,8 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                               builder: (context, child) {
                                 return CustomPaint(
                                   painter: _RingPainter(
-                                    progress: score != null
-                                        ? (score / 100) * _ringAnimation.value
-                                        : 0.0,
+                                    progress:
+                                        (score / 100) * _ringAnimation.value,
                                     ringColor: ringColor,
                                     trackColor: const Color(
                                       0xFF26334D,
@@ -232,7 +233,7 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                             ),
                           ),
                           Text(
-                            score != null ? '${score.round()}' : '—',
+                            '${score.round()}',
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -269,7 +270,7 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '$location · ${widget.job.jobType.value} · $salary',
+                                        '$company · $location · ${_getSalaryStr()}',
                                         style: GoogleFonts.inter(
                                           color: const Color(0xFF64748B),
                                           fontSize: 10.5,
@@ -288,41 +289,25 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                   ),
                               ],
                             ),
-                            SizedBox(
-                              height: 12,
-                              child:
-                                  score == null &&
-                                      widget.hasUploadedResume == false
-                                  ? Text(
-                                      'Upload a resume to see your match score.',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.inter(
-                                        color: const Color(0xFF94A3B8),
-                                        fontSize: 9,
-                                      ),
-                                    )
-                                  : null,
-                            ),
+                            if (widget.job.averageScore == null &&
+                                !widget.hasUploadedResume)
+                              Text(
+                                'Upload a resume to see your match score.',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  color: const Color(0xFF94A3B8),
+                                  fontSize: 9,
+                                ),
+                              ),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Expanded(
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: Row(
-                                      children: [
-                                        for (
-                                          var index = 0;
-                                          index < skillChips.length;
-                                          index++
-                                        ) ...[
-                                          if (index > 0)
-                                            const SizedBox(width: 6),
-                                          skillChips[index],
-                                        ],
-                                      ],
-                                    ),
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    children: _buildSkillChips(skills),
                                   ),
                                 ),
                                 if (widget.isMobile)
@@ -357,17 +342,16 @@ class _CandidateJobCardState extends State<CandidateJobCard>
     if (remaining > 0) {
       widgets.add(
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: BoxDecoration(
             color: const Color(0xFFF1F5F9), // muted background
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
           ),
           child: Text(
             '+$remaining',
             style: GoogleFonts.inter(
               color: const Color(0xFF64748B),
-              fontSize: 9.5,
+              fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -396,7 +380,7 @@ class _SkillChipState extends State<_SkillChip> {
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
         decoration: BoxDecoration(
           color: _hovered ? const Color(0xFFE2E8F0) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(6),
@@ -406,7 +390,7 @@ class _SkillChipState extends State<_SkillChip> {
           widget.skill,
           style: GoogleFonts.inter(
             color: const Color(0xFF475569),
-            fontSize: 9.5,
+            fontSize: 10,
             fontWeight: FontWeight.w500,
           ),
         ),

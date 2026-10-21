@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter;
@@ -486,9 +488,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
             }).toList(),
     );
     if (!mounted || selected == null || selected.id == _jobId) return;
-    Navigator.of(context).pushNamed(
-      '/recruiter/jobs/${Uri.encodeComponent(selected.id)}/pipeline',
-    );
+    Navigator.of(
+      context,
+    ).pushNamed('/recruiter/jobs/${Uri.encodeComponent(selected.id)}/pipeline');
   }
 
   Widget _header(Job? job, bool compact) => Padding(
@@ -664,128 +666,132 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
 
   // ── EMPTY STATE ─────────────────────────────────────────────────────────────
   Widget _buildEmptyState(bool compact) => LayoutBuilder(
-    builder: (context, constraints) => SingleChildScrollView(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: constraints.maxHeight),
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 24,
-              bottom: compact ? 84 : 24,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Icon tile (64px web / 54px mobile)
-                Container(
-                  width: compact ? 54 : 64,
-                  height: compact ? 54 : 64,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(compact ? 17 : 20),
-                    border: Border.all(color: const Color(0xFFE3EAF4)),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.view_kanban_outlined,
-                      size: compact ? 20 : 24,
-                      color: const Color(0xFF8190A8),
+    builder: (context, constraints) => MobileEdgeShadowWrapper(
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 24,
+                bottom: compact ? 84 : 24,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Icon tile (64px web / 54px mobile)
+                  Container(
+                    width: compact ? 54 : 64,
+                    height: compact ? 54 : 64,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(compact ? 17 : 20),
+                      border: Border.all(color: const Color(0xFFE3EAF4)),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Heading
-                Text(
-                  compact ? 'No candidates yet' : 'No candidates in pipeline',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF17233B),
-                    fontSize: compact ? 15 : 18,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: compact ? -0.02 : -0.025,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Helper text
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: compact ? 280 : 380),
-                  child: Text(
-                    compact
-                        ? 'Create a role to track applicants across interview stages.'
-                        : 'Create a role or post a job listing to start receiving applicants and tracking them across interview stages.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF8190A8),
-                      fontSize: compact ? 11 : 12.5,
-                      height: 1.65,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Primary CTA — indigo gradient
-                Container(
-                  height: compact ? 38 : 40,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(11),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4D7BFA).withValues(alpha: 0.28),
-                        blurRadius: 14,
-                        spreadRadius: 1,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    key: const Key('pipeline-create-role-cta'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: compact ? 22 : 26,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                    ),
-                    onPressed: () => Navigator.of(
-                      context,
-                    ).pushNamed('/recruiter/create-role'),
-                    child: Text(
-                      'Create a role',
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                    child: Center(
+                      child: Icon(
+                        Icons.view_kanban_outlined,
+                        size: compact ? 20 : 24,
+                        color: const Color(0xFF8190A8),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 16),
 
-                if (!compact) ...[
-                  const SizedBox(height: 10),
+                  // Heading
                   Text(
-                    'Active job listings automatically populate the applicant pipeline',
+                    compact ? 'No candidates yet' : 'No candidates in pipeline',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF94A3B8),
-                      fontSize: 10.5,
+                      color: const Color(0xFF17233B),
+                      fontSize: compact ? 15 : 18,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: compact ? -0.02 : -0.025,
                     ),
                   ),
+                  const SizedBox(height: 8),
+
+                  // Helper text
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: compact ? 280 : 380),
+                    child: Text(
+                      compact
+                          ? 'Create a role to track applicants across interview stages.'
+                          : 'Create a role or post a job listing to start receiving applicants and tracking them across interview stages.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF8190A8),
+                        fontSize: compact ? 11 : 12.5,
+                        height: 1.65,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Primary CTA — indigo gradient
+                  Container(
+                    height: compact ? 38 : 40,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(11),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(
+                            0xFF4D7BFA,
+                          ).withValues(alpha: 0.28),
+                          blurRadius: 14,
+                          spreadRadius: 1,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      key: const Key('pipeline-create-role-cta'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: compact ? 22 : 26,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                      ),
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).pushNamed('/recruiter/create-role'),
+                      child: Text(
+                        'Create a role',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  if (!compact) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Active job listings automatically populate the applicant pipeline',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -797,27 +803,29 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   Widget _buildKanbanBoard(bool compact) => LayoutBuilder(
     builder: (context, constraints) {
       final width = ((constraints.maxWidth - 48 - 48) / 5).clamp(225.0, 300.0);
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.fromLTRB(
-          compact ? 16 : 24,
-          0,
-          compact ? 16 : 24,
-          compact ? 84 : 16,
-        ),
-        child: SizedBox(
-          height: constraints.maxHeight - (compact ? 84 : 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var index = 0; index < _stages.length; index++) ...[
-                SizedBox(
-                  width: width,
-                  child: _column(_stages[index], _stageColors[index]),
-                ),
-                if (index < _stages.length - 1) const SizedBox(width: 12),
+      return MobileEdgeShadowWrapper(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.fromLTRB(
+            compact ? 16 : 24,
+            0,
+            compact ? 16 : 24,
+            compact ? 84 : 16,
+          ),
+          child: SizedBox(
+            height: constraints.maxHeight - (compact ? 84 : 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var index = 0; index < _stages.length; index++) ...[
+                  SizedBox(
+                    width: width,
+                    child: _column(_stages[index], _stageColors[index]),
+                  ),
+                  if (index < _stages.length - 1) const SizedBox(width: 12),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       );
@@ -825,84 +833,11 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   );
 
   // ── MOBILE FLOATING BOTTOM DOCK ────────────────────────────────────────────
-  Widget _buildMobileBottomDock() {
-    const destinations = [
-      (Icons.dashboard_outlined, '/recruiter/command-deck', 'Dashboard'),
-      (Icons.grid_view_rounded, '/recruiter/job-listings', 'Jobs'),
-      (Icons.view_kanban_outlined, '/recruiter/pipeline', 'Pipeline'),
-      (
-        Icons.radio_button_checked,
-        '/recruiter/schedule-interview',
-        'Interviews',
-      ),
-      (Icons.leaderboard_outlined, '/recruiter/rankings', 'Rankings'),
-      (Icons.diamond_outlined, '/recruiter/analytics', 'Analytics'),
-    ];
-    return SafeArea(
-      top: false,
-      child: Container(
-        height: 64,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-        padding: const EdgeInsets.all(7),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.08),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            for (final destination in destinations)
-              Expanded(
-                child: Tooltip(
-                  message: destination.$3,
-                  child: InkWell(
-                    key: Key('pipeline-dock-${destination.$3.toLowerCase()}'),
-                    onTap: destination.$3 == 'Pipeline'
-                        ? null
-                        : () => Navigator.of(
-                            context,
-                          ).pushNamed(destination.$2),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      decoration: destination.$3 == 'Pipeline'
-                          ? BoxDecoration(
-                              color: const Color(0xFF4D7BFA),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(
-                                    0xFF4D7BFA,
-                                  ).withValues(alpha: 0.34),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            )
-                          : null,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        destination.$1,
-                        size: 20,
-                        color: destination.$3 == 'Pipeline'
-                            ? Colors.white
-                            : const Color(0xFF74829E),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildMobileBottomDock() => const RecruiterMobileNav(
+    currentRoute: '/recruiter/pipeline',
+    margin: EdgeInsets.fromLTRB(16, 0, 16, 18),
+    radius: 24,
+  );
 
   Widget _column(String stage, Color color) {
     final apps = _applications.where((app) => _columnFor(app) == stage).toList()

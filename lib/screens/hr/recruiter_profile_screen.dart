@@ -1,3 +1,4 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
@@ -2435,18 +2436,21 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                   ),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    controller: _mobileScroll,
-                    padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + safeBottom),
-                    child: _mobileTab == 0
-                        ? Column(
-                            children: [
-                              _mobileIdentity(c),
-                              const SizedBox(height: 14),
-                              _mobilePersonal(c),
-                            ],
-                          )
-                        : _mobileSettings(c),
+                  child: MobileEdgeShadowWrapper(
+                    surfaceColor: c.bg,
+                    child: SingleChildScrollView(
+                      controller: _mobileScroll,
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + safeBottom),
+                      child: _mobileTab == 0
+                          ? Column(
+                              children: [
+                                _mobileIdentity(c),
+                                const SizedBox(height: 14),
+                                _mobilePersonal(c),
+                              ],
+                            )
+                          : _mobileSettings(c),
+                    ),
                   ),
                 ),
                 Container(
@@ -2671,56 +2675,59 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                   profileReference: true,
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      narrow ? 16 : 32,
-                      0,
-                      narrow ? 16 : 32,
-                      0,
-                    ),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1240),
-                        child: Column(
-                          children: [
-                            _identity(c, narrow),
-                            if (compact)
-                              Column(
-                                children: [
-                                  _personal(c, narrow),
-                                  const SizedBox(height: 24),
-                                  _notificationsCard(c),
-                                  const SizedBox(height: 24),
-                                  _security(c),
-                                  const SizedBox(height: 24),
-                                  _account(c),
-                                ],
-                              )
-                            else
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      children: [_personal(c, false)],
+                  child: MobileEdgeShadowWrapper(
+                    surfaceColor: c.bg,
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        narrow ? 16 : 32,
+                        0,
+                        narrow ? 16 : 32,
+                        0,
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1240),
+                          child: Column(
+                            children: [
+                              _identity(c, narrow),
+                              if (compact)
+                                Column(
+                                  children: [
+                                    _personal(c, narrow),
+                                    const SizedBox(height: 24),
+                                    _notificationsCard(c),
+                                    const SizedBox(height: 24),
+                                    _security(c),
+                                    const SizedBox(height: 24),
+                                    _account(c),
+                                  ],
+                                )
+                              else
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        children: [_personal(c, false)],
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 24),
-                                  SizedBox(
-                                    width: 380,
-                                    child: Column(
-                                      children: [
-                                        _notificationsCard(c),
-                                        const SizedBox(height: 24),
-                                        _security(c),
-                                        const SizedBox(height: 24),
-                                        _account(c),
-                                      ],
+                                    const SizedBox(width: 24),
+                                    SizedBox(
+                                      width: 380,
+                                      child: Column(
+                                        children: [
+                                          _notificationsCard(c),
+                                          const SizedBox(height: 24),
+                                          _security(c),
+                                          const SizedBox(height: 24),
+                                          _account(c),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                          ],
+                                  ],
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

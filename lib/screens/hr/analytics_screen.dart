@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -27,7 +29,6 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-
   _AnalyticsOverview? _overview;
   bool _loading = true;
   String? _error;
@@ -71,7 +72,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   @override
   void dispose() {
-
     _emptyRefresh?.cancel();
     super.dispose();
   }
@@ -159,15 +159,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   breadcrumbSegments: ['Analytics'],
                 ),
                 Expanded(
-                  child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(color: _accent),
-                        )
-                      : _error != null
-                      ? _errorState()
-                      : _overview?.hasData == true
-                      ? _liveLayout(_overview!, mobile)
-                      : _emptyState(mobile),
+                  child: MobileEdgeShadowWrapper(
+                    child: _loading
+                        ? const Center(
+                            child: CircularProgressIndicator(color: _accent),
+                          )
+                        : _error != null
+                        ? _errorState()
+                        : _overview?.hasData == true
+                        ? _liveLayout(_overview!, mobile)
+                        : _emptyState(mobile),
+                  ),
                 ),
               ],
             ),
@@ -321,91 +323,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   );
 
   // ── MOBILE FLOATING BOTTOM DOCK ────────────────────────────────────────────
-  Widget _mobileDock() {
-    final destinations = [
-      (Icons.dashboard_outlined, '/recruiter/command-deck', 'Dashboard'),
-      (Icons.grid_view_rounded, '/recruiter/job-listings', 'Jobs'),
-      (Icons.view_kanban_outlined, '/recruiter/pipeline', 'Pipeline'),
-      (
-        Icons.radio_button_checked,
-        '/recruiter/schedule-interview',
-        'Interviews',
-      ),
-      (Icons.leaderboard_outlined, '/recruiter/rankings', 'Rankings'),
-      (Icons.diamond_outlined, '/recruiter/analytics', 'Analytics'),
-    ];
-    return SafeArea(
-      top: false,
-      child: Container(
-        height: 64,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-        padding: const EdgeInsets.all(7),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.08),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            for (final destination in destinations)
-              Expanded(
-                child: Tooltip(
-                  message: destination.$3,
-                  child: InkWell(
-                    key: Key('analytics-dock-${destination.$3.toLowerCase()}'),
-                    onTap: destination.$3 == 'Analytics'
-                        ? null
-                        : () => Navigator.of(
-                            context,
-                          ).pushNamed(destination.$2),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      decoration: destination.$3 == 'Analytics'
-                          ? BoxDecoration(
-                              color: const Color(0xFF4D7BFA),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(
-                                    0xFF4D7BFA,
-                                  ).withValues(alpha: 0.34),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            )
-                          : null,
-                      alignment: Alignment.center,
-                      child: destination.$3 == 'Analytics'
-                          ? const Text(
-                              '◈',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.white,
-                                height: 1.0,
-                              ),
-                            )
-                          : Icon(
-                              destination.$1,
-                              size: 19,
-                              color: const Color(0xFF74829E),
-                            ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _mobileDock() => const RecruiterMobileNav(
+    currentRoute: '/recruiter/analytics',
+    margin: EdgeInsets.fromLTRB(16, 0, 16, 18),
+    radius: 24,
+  );
 
   Widget _liveLayout(_AnalyticsOverview overview, bool mobile) =>
       SingleChildScrollView(

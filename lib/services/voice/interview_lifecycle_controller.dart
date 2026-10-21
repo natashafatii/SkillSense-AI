@@ -7,6 +7,7 @@ import '../media/interview_media_controller.dart';
 import '../interview_analysis_service.dart';
 import '../publisher/candidate_publisher_controller.dart';
 import '../session_scope.dart';
+import '../api_exception.dart';
 import 'retell_voice_client.dart';
 import 'retell_voice_client_factory.dart';
 import 'voice_lifecycle_backend.dart';
@@ -87,6 +88,7 @@ class InterviewLifecycleController extends ChangeNotifier {
       isCurrent &&
       !_finishWanted &&
       _snapshot?.audioEndedAt == null &&
+      !(_snapshot?.videoRequired == true && _snapshot?.videoSealed == true) &&
       _state != InterviewLifecycleState.completed;
   void _emit() {
     if (!_disposed) notifyListeners();
@@ -215,18 +217,23 @@ class InterviewLifecycleController extends ChangeNotifier {
       if (_state != InterviewLifecycleState.completed) {
         _state = _finishWanted
             ? InterviewLifecycleState.awaitingCompletion
-            : current.audioEndedAt != null
+            : current.audioEndedAt != null ||
+                  (current.videoRequired && current.videoSealed)
             ? InterviewLifecycleState.interrupted
             : InterviewLifecycleState.idle;
         _notice = _finishWanted
             ? 'A server-side finish is pending. Retry finish to reconcile remaining controls.'
             : current.audioEndedAt != null
             ? 'Backend audio has ended. Local media is stopped; finish explicitly to confirm completion.'
+            : current.videoRequired && current.videoSealed
+            ? 'The video session has ended and cannot be rejoined. Refresh status or contact your recruiter.'
             : current.credential == null
             ? 'Backend voice credentials are unavailable. No provider call has been joined.'
             : 'Session restored. Join voice explicitly; the camera and frame transport are separate.';
       }
-      if (!current.videoRequired || _finishWanted) _localStop();
+      if (!current.videoRequired || _finishWanted || current.videoSealed) {
+        _localStop();
+      }
       if (current.completed && !current.reportReady) _schedulePoll();
     } on VoiceContractUnavailable catch (error) {
       if (isCurrent) {
@@ -274,6 +281,10 @@ class InterviewLifecycleController extends ChangeNotifier {
       }
       _apply(result);
       if (!canUseMedia) {
+        if (_state == InterviewLifecycleState.joining) {
+          _localStop();
+          _state = InterviewLifecycleState.interrupted;
+        }
         _notice =
             'The backend reports an ended or finishing session; voice was not joined.';
         return;
@@ -322,6 +333,13 @@ class InterviewLifecycleController extends ChangeNotifier {
         _localStop();
         _state = InterviewLifecycleState.unavailable;
         _notice = error.message;
+      }
+    } on ApiException catch (error) {
+      if (isCurrent && epoch == _voiceEpoch) {
+        _localStop();
+        _state = InterviewLifecycleState.interrupted;
+        _notice = error.message;
+        if (error.statusCode == 409) await reconcile();
       }
     } catch (_) {
       if (isCurrent && epoch == _voiceEpoch) {

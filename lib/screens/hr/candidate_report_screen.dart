@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:flutter/services.dart';
@@ -176,7 +178,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
                     pageTitle: 'Candidate report',
                     breadcrumbSegments: reportBreadcrumb,
                   ),
-                  Expanded(child: body),
+                  Expanded(child: MobileEdgeShadowWrapper(child: body)),
                 ],
               ),
               Positioned(left: 0, right: 0, bottom: 0, child: _mobileDock()),
@@ -194,7 +196,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
             pageTitle: 'Candidate report',
             breadcrumbSegments: reportBreadcrumb,
           ),
-          Expanded(child: body),
+          Expanded(child: MobileEdgeShadowWrapper(child: body)),
         ],
       ),
     );
@@ -328,77 +330,8 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
 
   // ── Mobile dock ────────────────────────────────────────────────────────────
 
-  Widget _mobileDock() {
-    // Dashboard · Jobs · Pipeline (active) · Interviews · Rankings · Analytics
-    final items = <(IconData, String)>[
-      (Icons.dashboard_rounded, '/recruiter/command-deck'),
-      (Icons.grid_view_rounded, '/recruiter/job-listings'),
-      (Icons.view_column_rounded, '/recruiter/pipeline'),
-      (Icons.radio_button_checked_rounded, '/recruiter/schedule-interview'),
-      (Icons.leaderboard_rounded, '/recruiter/rankings'),
-      (Icons.diamond_rounded, '/recruiter/analytics'),
-    ];
-    // Pipeline is the contextual active item for the report screen
-    const activeIndex = 2;
-
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          for (var i = 0; i < items.length; i++)
-            GestureDetector(
-              onTap: () {
-                if (i != activeIndex) {
-                  Navigator.of(context).pushNamed(items[i].$2);
-                }
-              },
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: i == activeIndex
-                      ? const Color(0xFF4D7BFA)
-                      : Colors.transparent,
-                  boxShadow: i == activeIndex
-                      ? [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF4D7BFA,
-                            ).withValues(alpha: 0.30),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Icon(
-                  items[i].$1,
-                  size: 20,
-                  color: i == activeIndex
-                      ? Colors.white
-                      : const Color(0xFF94A3B8),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _mobileDock() =>
+      const RecruiterMobileNav(currentRoute: '/recruiter/candidate-report');
 
   // ── Error view (fetch failed with IDs present) ─────────────────────────────
 

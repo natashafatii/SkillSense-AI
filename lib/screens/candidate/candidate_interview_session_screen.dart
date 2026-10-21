@@ -84,6 +84,14 @@ class _CandidateInterviewSessionScreenState
     final media = _media;
     final publisher = _publisher;
     if (!lifecycle.canUseMedia || media.busy) return;
+    // Recheck terminal video/audio before acquiring devices for a retry.
+    await lifecycle.restore();
+    if (!mounted ||
+        !identical(lifecycle, _lifecycle) ||
+        !lifecycle.isCurrent ||
+        !lifecycle.canUseMedia) {
+      return;
+    }
     if (lifecycle.videoRequired && !media.cameraReady) {
       await media.requestCamera();
     }
@@ -103,7 +111,9 @@ class _CandidateInterviewSessionScreenState
   void _initializeControllers() {
     final immediate =
         allowImmediateInterviewTesting() && widget.startImmediately;
-    final analysis = immediate ? InterviewAnalysisService(contractConfirmed: true) : null;
+    final analysis = immediate
+        ? InterviewAnalysisService(contractConfirmed: true)
+        : null;
     _controller = InterviewSessionController(
       widget.identity,
       service: analysis,

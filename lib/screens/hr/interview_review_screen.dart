@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -208,15 +210,17 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                   breadcrumbSegments: ['Interviews', 'Interview review'],
                 ),
                 Expanded(
-                  child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(color: _accent),
-                        )
-                      : _error != null
-                      ? _errorState()
-                      : _reviews.isEmpty
-                      ? _emptyState(mobile)
-                      : _reviewLayout(mobile),
+                  child: MobileEdgeShadowWrapper(
+                    child: _loading
+                        ? const Center(
+                            child: CircularProgressIndicator(color: _accent),
+                          )
+                        : _error != null
+                        ? _errorState()
+                        : _reviews.isEmpty
+                        ? _emptyState(mobile)
+                        : _reviewLayout(mobile),
+                  ),
                 ),
               ],
             ),
@@ -337,81 +341,11 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
     ),
   );
 
-  Widget _mobileDock() {
-    const destinations = [
-      (Icons.dashboard_outlined, '/recruiter/command-deck', 'Dashboard'),
-      (Icons.grid_view_rounded, '/recruiter/job-listings', 'Jobs'),
-      (Icons.view_kanban_outlined, '/recruiter/pipeline', 'Pipeline'),
-      (
-        Icons.radio_button_checked,
-        '/recruiter/schedule-interview',
-        'Interviews',
-      ),
-      (Icons.leaderboard_outlined, '/recruiter/rankings', 'Rankings'),
-      (Icons.diamond_outlined, '/recruiter/analytics', 'Analytics'),
-    ];
-    return SafeArea(
-      top: false,
-      child: Container(
-        height: 64,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-        padding: const EdgeInsets.all(7),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: _text.withValues(alpha: .1),
-              blurRadius: 25,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            for (final destination in destinations)
-              Expanded(
-                child: Tooltip(
-                  message: destination.$3,
-                  child: InkWell(
-                    key: Key('review-dock-${destination.$3.toLowerCase()}'),
-                    onTap: destination.$3 == 'Interviews'
-                        ? null
-                        : () => Navigator.of(
-                            context,
-                          ).pushNamed(destination.$2),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      decoration: destination.$3 == 'Interviews'
-                          ? BoxDecoration(
-                              color: _accent,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: _accent.withValues(alpha: .34),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            )
-                          : null,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        destination.$1,
-                        size: 19,
-                        color: destination.$3 == 'Interviews'
-                            ? Colors.white
-                            : _text3,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _mobileDock() => const RecruiterMobileNav(
+    currentRoute: '/recruiter/interview-review',
+    margin: EdgeInsets.fromLTRB(16, 0, 16, 18),
+    radius: 24,
+  );
 
   Widget _reviewLayout(bool mobile) {
     final review = _selected!;

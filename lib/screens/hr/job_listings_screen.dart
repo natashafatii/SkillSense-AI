@@ -1,6 +1,9 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/notification_list_skeleton.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/job.dart';
@@ -320,11 +323,13 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                 _buildHeaderRow(isMobile),
                 _buildFilterChips(isMobile),
                 Expanded(
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _loadError != null
-                      ? Center(child: Text(_loadError!))
-                      : _buildListPanel(isMobile),
+                  child: MobileEdgeShadowWrapper(
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _loadError != null
+                        ? Center(child: Text(_loadError!))
+                        : _buildListPanel(isMobile),
+                  ),
                 ),
               ],
             ),
@@ -660,64 +665,17 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
     ),
   );
 
-  Widget _buildBottomDock() {
-    return Positioned(
-      bottom: 24,
-      left: 16,
-      right: 16,
-      child: Container(
-        height: 60,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _dockIcon(Icons.dashboard_outlined, '/recruiter/command-deck'),
-            _dockIcon(
-              Icons.menu_book_rounded,
-              '/recruiter/job-listings',
-              isActive: true,
-            ),
-            _dockIcon(Icons.view_column_outlined, '/recruiter/pipeline'),
-            _dockIcon(
-              Icons.calendar_month_outlined,
-              '/recruiter/schedule-interview',
-            ),
-            _dockIcon(Icons.analytics_outlined, '/recruiter/analytics'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _dockIcon(IconData icon, String route, {bool isActive = false}) {
-    return GestureDetector(
-      onTap: () {
-        if (!isActive) Navigator.of(context).pushNamed(route);
-      },
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF2563EB) : Colors.transparent,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          icon,
-          color: isActive ? Colors.white : const Color(0xFF64748B),
-          size: 24,
-        ),
-      ),
-    );
-  }
+  Widget _buildBottomDock() => const Positioned(
+    bottom: 0,
+    left: 16,
+    right: 16,
+    child: RecruiterMobileNav(
+      currentRoute: '/recruiter/job-listings',
+      margin: EdgeInsets.zero,
+      height: 60,
+      radius: 30,
+    ),
+  );
 }
 
 class RecruiterNotificationsScreen extends StatefulWidget {
@@ -1060,7 +1018,6 @@ class _RecruiterNotificationsScreenState
             ],
           ),
         ),
-        if (_busy && !_loaded) const LinearProgressIndicator(),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1080,72 +1037,70 @@ class _RecruiterNotificationsScreenState
             ),
           ),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: () => _fetch(),
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
-              children: [
-                if (!_loaded && _busy)
-                  for (var i = 0; i < 3; i++)
-                    const Card(
-                      child: ListTile(
-                        title: LinearProgressIndicator(),
-                        subtitle: SizedBox(height: 16),
+          child: MobileEdgeShadowWrapper(
+            child: RefreshIndicator(
+              onRefresh: () => _fetch(),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 30,
+                  vertical: 24,
+                ),
+                children: [
+                  if (!_loaded && _busy) const NotificationListSkeleton(),
+                  if (_loaded && _items.isEmpty && _error == null)
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.notifications_none_rounded,
+                            size: 24,
+                            color: Color(0xFF292929),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'You’re all caught up.',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF292929),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                if (_loaded && _items.isEmpty && _error == null)
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.notifications_none_rounded,
-                          size: 24,
-                          color: Color(0xFF292929),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'You’re all caught up.',
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF292929),
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
+                  if (_loaded && _items.isNotEmpty && _error == null) ...[
+                    _notificationGroup(
+                      'TODAY',
+                      _items.where((item) {
+                        final local = item.createdAt.toLocal();
+                        final today = DateTime.now();
+                        return local.year == today.year &&
+                            local.month == today.month &&
+                            local.day == today.day;
+                      }).toList(),
                     ),
-                  ),
-                if (_loaded && _items.isNotEmpty && _error == null) ...[
-                  _notificationGroup(
-                    'TODAY',
-                    _items.where((item) {
-                      final local = item.createdAt.toLocal();
-                      final today = DateTime.now();
-                      return local.year == today.year &&
-                          local.month == today.month &&
-                          local.day == today.day;
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  _notificationGroup(
-                    'EARLIER',
-                    _items.where((item) {
-                      final local = item.createdAt.toLocal();
-                      final today = DateTime.now();
-                      return local.year != today.year ||
-                          local.month != today.month ||
-                          local.day != today.day;
-                    }).toList(),
-                  ),
+                    const SizedBox(height: 16),
+                    _notificationGroup(
+                      'EARLIER',
+                      _items.where((item) {
+                        final local = item.createdAt.toLocal();
+                        final today = DateTime.now();
+                        return local.year != today.year ||
+                            local.month != today.month ||
+                            local.day != today.day;
+                      }).toList(),
+                    ),
+                  ],
+                  if (_hasNext)
+                    Center(
+                      child: TextButton(
+                        onPressed: _busy ? null : () => _fetch(more: true),
+                        child: const Text('Load more'),
+                      ),
+                    ),
                 ],
-                if (_hasNext)
-                  Center(
-                    child: TextButton(
-                      onPressed: _busy ? null : () => _fetch(more: true),
-                      child: const Text('Load more'),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
         ),

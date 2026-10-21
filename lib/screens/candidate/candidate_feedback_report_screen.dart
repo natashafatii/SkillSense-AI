@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -18,7 +20,6 @@ class CandidateFeedbackReportScreen extends StatefulWidget {
 class _CandidateFeedbackReportScreenState
     extends State<CandidateFeedbackReportScreen>
     with SingleTickerProviderStateMixin {
-  final int _activeNavIndex = 4; // Feedback is index 4
   late AnimationController _animController;
   late Animation<double> _scoreAnimation;
 
@@ -223,36 +224,38 @@ class _CandidateFeedbackReportScreenState
                               candidate: true,
                             ),
                             Expanded(
-                              child: _isLoading
-                                  ? const Center(
-                                      child: CircularProgressIndicator(
-                                        color: AppColors.dashboardTeal,
+                              child: MobileEdgeShadowWrapper(
+                                child: _isLoading
+                                    ? const Center(
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.dashboardTeal,
+                                        ),
+                                      )
+                                    : !_hasFeedback
+                                    ? _buildEmptyState(isMobile)
+                                    : SingleChildScrollView(
+                                        physics: const BouncingScrollPhysics(),
+                                        padding: EdgeInsets.only(
+                                          left: isMobile ? 16 : 24,
+                                          right: isMobile ? 16 : 24,
+                                          top: 16,
+                                          bottom: isMobile ? 164 : 32,
+                                        ),
+                                        child: isMobile
+                                            ? _buildMobileLayout(
+                                                textPrimary,
+                                                textSecondary,
+                                                cardBg,
+                                                cardBorder,
+                                              )
+                                            : _buildWebLayout(
+                                                textPrimary,
+                                                textSecondary,
+                                                cardBg,
+                                                cardBorder,
+                                              ),
                                       ),
-                                    )
-                                  : !_hasFeedback
-                                  ? _buildEmptyState(isMobile)
-                                  : SingleChildScrollView(
-                                      physics: const BouncingScrollPhysics(),
-                                      padding: EdgeInsets.only(
-                                        left: isMobile ? 16 : 24,
-                                        right: isMobile ? 16 : 24,
-                                        top: 16,
-                                        bottom: isMobile ? 100 : 32,
-                                      ),
-                                      child: isMobile
-                                          ? _buildMobileLayout(
-                                              textPrimary,
-                                              textSecondary,
-                                              cardBg,
-                                              cardBorder,
-                                            )
-                                          : _buildWebLayout(
-                                              textPrimary,
-                                              textSecondary,
-                                              cardBg,
-                                              cardBorder,
-                                            ),
-                                    ),
+                              ),
                             ),
                           ],
                         ),
@@ -1039,147 +1042,10 @@ class _CandidateFeedbackReportScreenState
 
   // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() {
-    final List<Map<String, dynamic>> dockItems = [
-      {'icon': Icons.home_rounded, 'route': '/candidate/home'},
-      {'icon': Icons.adjust_rounded, 'route': '/candidate/jobs'},
-      {'icon': Icons.layers_rounded, 'route': '/candidate/applications'},
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'route': '/candidate/interview-lobby',
-      },
-      {'icon': Icons.contrast_rounded, 'route': '/candidate/feedback-report'},
-    ];
-
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(dockItems.length, (index) {
-          final isSelected = index == _activeNavIndex;
-          final item = dockItems[index];
-          final bool hasBadge = index == 2 || index == 3;
-          final String badgeVal = index == 2 ? "3" : "1";
-
-          return GestureDetector(
-            onTap: () {
-              if (isSelected) return;
-              if (index == 0) {
-                Navigator.of(context).pushNamed('/candidate/home');
-              } else if (index == 1) {
-                Navigator.of(context).pushNamed('/candidate/jobs');
-              } else if (index == 2) {
-                Navigator.of(context).pushNamed('/candidate/applications');
-              } else if (index == 3) {
-                Navigator.of(context).pushNamed('/candidate/interview-lobby');
-              } else if (index == 4) {
-                Navigator.of(context).pushNamed('/candidate/feedback-report');
-              } else {
-                _navigateTo(item['route']);
-              }
-            },
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? AppColors.dashboardTeal
-                        : Colors.transparent,
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: AppColors.dashboardTeal.withValues(
-                                alpha: 0.3,
-                              ),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Child seam indicator inside mobile Interviews tab
-                      if (isSelected)
-                        Container(
-                          width: 2.5,
-                          height: 10,
-                          margin: const EdgeInsets.only(right: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(1),
-                          ),
-                        ),
-                      Icon(
-                        item['icon'],
-                        color: isSelected
-                            ? const Color(0xFF0F172A)
-                            : const Color(0xFF94A3B8),
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ),
-                if (hasBadge)
-                  Positioned(
-                    top: 2,
-                    right: 2,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.dashboardTeal,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: const Color(0xFF0F172A),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Text(
-                        badgeVal,
-                        style: const TextStyle(
-                          color: Color(0xFF0F172A),
-                          fontSize: 7.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
+  Widget _buildMobileBottomDock() =>
+      const CandidateMobileNav(currentRoute: '/candidate/feedback-report');
 
   // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-  void _navigateTo(String destination) {
-    Navigator.of(context).pushNamed(
-      destination == '/candidate/settings' ? '/candidate/profile' : destination,
-    );
-  }
 }
 
 class GridPainter extends CustomPainter {

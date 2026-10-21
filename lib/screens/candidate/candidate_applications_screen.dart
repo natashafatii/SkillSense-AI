@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
 import 'candidate_job_detail_screen.dart';
 import 'package:flutter/material.dart';
@@ -120,35 +122,38 @@ class _CandidateApplicationsScreenState
                         candidate: true,
                       ),
                       Expanded(
-                        child: _loading
-                            ? const Center(
-                                child: CircularProgressIndicator(
-                                  color: AppColors.dashboardTeal,
+                        child: MobileEdgeShadowWrapper(
+                          child: _loading
+                              ? const Center(
+                                  child: CircularProgressIndicator(
+                                    color: AppColors.dashboardTeal,
+                                  ),
+                                )
+                              : _error != null
+                              ? _buildErrorState()
+                              : _applications.isEmpty
+                              ? _buildEmptyState(!wide)
+                              : SingleChildScrollView(
+                                  padding: EdgeInsets.only(
+                                    left: wide ? 40 : 16,
+                                    right: wide ? 40 : 16,
+                                    top: 32,
+                                    bottom: wide ? 32 : 164,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildHeader(),
+                                      const SizedBox(height: 32),
+                                      if (_visibleApplications.isEmpty)
+                                        _buildNoFilteredApplications()
+                                      else
+                                        _buildGrid(wide),
+                                    ],
+                                  ),
                                 ),
-                              )
-                            : _error != null
-                            ? _buildErrorState()
-                            : _applications.isEmpty
-                            ? _buildEmptyState(!wide)
-                            : SingleChildScrollView(
-                                padding: EdgeInsets.only(
-                                  left: wide ? 40 : 16,
-                                  right: wide ? 40 : 16,
-                                  top: 32,
-                                  bottom: wide ? 32 : 100,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildHeader(),
-                                    const SizedBox(height: 32),
-                                    if (_visibleApplications.isEmpty)
-                                      _buildNoFilteredApplications()
-                                    else
-                                      _buildGrid(wide),
-                                  ],
-                                ),
-                              ),
+                        ),
                       ),
                     ],
                   ),
@@ -424,93 +429,8 @@ class _CandidateApplicationsScreenState
     );
   }
 
-  Widget _buildMobileBottomDock() {
-    final List<Map<String, dynamic>> dockItems = [
-      {'icon': Icons.home_rounded, 'route': '/candidate/home'},
-      {'icon': Icons.adjust_rounded, 'route': '/candidate/jobs'},
-      {'icon': Icons.grid_view_rounded, 'route': '/candidate/applications'},
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'route': '/candidate/interview-lobby',
-      }, // Intervew Hub
-      {
-        'icon': Icons.person_outline_rounded,
-        'route': '/candidate/profile',
-      }, // Profile
-    ];
-    final int activeNavIndex = 2; // Applications is index 2
-
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(dockItems.length, (index) {
-          final isSelected = index == activeNavIndex;
-          final item = dockItems[index];
-
-          return GestureDetector(
-            onTap: () {
-              if (index != activeNavIndex) {
-                Navigator.of(context).pushNamed(item['route']);
-              }
-            },
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? AppColors.dashboardTeal
-                        : Colors.transparent,
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: AppColors.dashboardTeal.withValues(
-                                alpha: 0.3,
-                              ),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        item['icon'],
-                        color: isSelected
-                            ? const Color(0xFF0F172A)
-                            : const Color(0xFF94A3B8),
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
+  Widget _buildMobileBottomDock() =>
+      const CandidateMobileNav(currentRoute: '/candidate/applications');
 }
 
 class ApplicationCard extends StatelessWidget {
