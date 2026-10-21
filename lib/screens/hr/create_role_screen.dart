@@ -1,3 +1,4 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -578,153 +579,155 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               ],
             ),
             Expanded(
-              child: SingleChildScrollView(
-                controller: _pageScroll,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _mobileCard('Role basics', 'What candidates see first.', [
-                      _field(
-                        key: _sectionKeys[0],
-                        id: 'title',
-                        label: 'Role title',
-                        controller: _title,
-                        hint: 'Senior Django Developer',
-                        focusNode: _fieldFocus[0],
-                      ),
-                      _locationField(),
-                      _segmentField(
-                        'Work type',
-                        const ['Remote', 'Hybrid', 'On-site'],
-                        _workType,
-                        (v) => setState(() => _workType = v),
-                      ),
-                      _segmentField(
-                        'Experience level',
-                        const ['Junior', 'Mid', 'Senior', 'Lead'],
-                        _experience,
-                        (v) => setState(() => _experience = v),
-                      ),
-                    ]),
-                    const SizedBox(height: 14),
-                    _mobileCard(
-                      'Pay and timeline',
-                      'Monthly salary in Pakistani rupees.',
-                      [
-                        KeyedSubtree(
-                          key: _sectionKeys[2],
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _salaryField(
-                                  'Minimum',
-                                  _salaryMin,
-                                  _fieldFocus[2],
-                                  '200,000',
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _salaryField(
-                                  'Maximum',
-                                  _salaryMax,
-                                  _salaryMaxFocus,
-                                  '300,000',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (_errors['salary'] != null)
-                          _errorText(_errors['salary']!),
-                        SizedBox(
-                          height: 40,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _ranges.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: 8),
-                            itemBuilder: (_, i) => _rangePill(_ranges[i]),
-                          ),
-                        ),
-                        _dateField(),
-                      ],
-                      gaps: const [16, 6, 18],
-                    ),
-                    const SizedBox(height: 14),
-                    _mobileCard(
-                      'Description and requirements',
-                      'Clear requirements make screening fairer.',
-                      [
+              child: MobileEdgeShadowWrapper(
+                child: SingleChildScrollView(
+                  controller: _pageScroll,
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _mobileCard('Role basics', 'What candidates see first.', [
                         _field(
-                          key: _sectionKeys[4],
-                          id: 'description',
-                          label: 'About the role',
-                          controller: _description,
-                          hint:
-                              'What will this person own, and who will they work with?',
-                          focusNode: _fieldFocus[4],
-                          minLines: 4,
-                          maxLines: 6,
+                          key: _sectionKeys[0],
+                          id: 'title',
+                          label: 'Role title',
+                          controller: _title,
+                          hint: 'Senior Django Developer',
+                          focusNode: _fieldFocus[0],
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _field(
-                              id: 'requirements',
-                              label: 'Must-have requirements',
-                              labelTrailing: 'One per line',
-                              controller: _requirements,
-                              hint:
-                                  '4+ years building production Django apps\nStrong SQL and query tuning',
-                              minLines: 4,
-                              maxLines: 6,
-                              maxLength: 500,
-                              hideCounter: true,
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
+                        _locationField(),
+                        _segmentField(
+                          'Work type',
+                          const ['Remote', 'Hybrid', 'On-site'],
+                          _workType,
+                          (v) => setState(() => _workType = v),
+                        ),
+                        _segmentField(
+                          'Experience level',
+                          const ['Junior', 'Mid', 'Senior', 'Lead'],
+                          _experience,
+                          (v) => setState(() => _experience = v),
+                        ),
+                      ]),
+                      const SizedBox(height: 14),
+                      _mobileCard(
+                        'Pay and timeline',
+                        'Monthly salary in Pakistani rupees.',
+                        [
+                          KeyedSubtree(
+                            key: _sectionKeys[2],
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(
-                                  child: Text(
-                                    'Missing a requirement flags the applicant.',
-                                    maxLines: 2,
-                                    style: _body(12.5, color: _c.text3),
+                                  child: _salaryField(
+                                    'Minimum',
+                                    _salaryMin,
+                                    _fieldFocus[2],
+                                    '200,000',
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '${_requirements.text.length} / 500',
-                                  style: _body(12.5, color: _c.text3),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _salaryField(
+                                    'Maximum',
+                                    _salaryMax,
+                                    _salaryMaxFocus,
+                                    '300,000',
+                                  ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    _mobileCard(
-                      'Skills',
-                      'Tap a ×1 to ×3 badge to set how much a skill matters.',
-                      [_skillsField()],
-                    ),
-                    const SizedBox(height: 14),
-                    _mobileCard(
-                      'AI interview',
-                      'How the interview agent splits its questions.',
-                      [_interviewMix()],
-                    ),
-                    const SizedBox(height: 14),
-                    _mobileCard(
-                      'Screening threshold',
-                      'Minimum match score to count as qualified.',
-                      [_mobileThreshold()],
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                          ),
+                          if (_errors['salary'] != null)
+                            _errorText(_errors['salary']!),
+                          SizedBox(
+                            height: 40,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _ranges.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (_, i) => _rangePill(_ranges[i]),
+                            ),
+                          ),
+                          _dateField(),
+                        ],
+                        gaps: const [16, 6, 18],
+                      ),
+                      const SizedBox(height: 14),
+                      _mobileCard(
+                        'Description and requirements',
+                        'Clear requirements make screening fairer.',
+                        [
+                          _field(
+                            key: _sectionKeys[4],
+                            id: 'description',
+                            label: 'About the role',
+                            controller: _description,
+                            hint:
+                                'What will this person own, and who will they work with?',
+                            focusNode: _fieldFocus[4],
+                            minLines: 4,
+                            maxLines: 6,
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _field(
+                                id: 'requirements',
+                                label: 'Must-have requirements',
+                                labelTrailing: 'One per line',
+                                controller: _requirements,
+                                hint:
+                                    '4+ years building production Django apps\nStrong SQL and query tuning',
+                                minLines: 4,
+                                maxLines: 6,
+                                maxLength: 500,
+                                hideCounter: true,
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Missing a requirement flags the applicant.',
+                                      maxLines: 2,
+                                      style: _body(12.5, color: _c.text3),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${_requirements.text.length} / 500',
+                                    style: _body(12.5, color: _c.text3),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      _mobileCard(
+                        'Skills',
+                        'Tap a ×1 to ×3 badge to set how much a skill matters.',
+                        [_skillsField()],
+                      ),
+                      const SizedBox(height: 14),
+                      _mobileCard(
+                        'AI interview',
+                        'How the interview agent splits its questions.',
+                        [_interviewMix()],
+                      ),
+                      const SizedBox(height: 14),
+                      _mobileCard(
+                        'Screening threshold',
+                        'Minimum match score to count as qualified.',
+                        [_mobileThreshold()],
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             ),

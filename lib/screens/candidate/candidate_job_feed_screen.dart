@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/candidate_mobile_nav.dart';
 import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -228,46 +230,51 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                               candidate: true,
                             ),
                             Expanded(
-                              child: _loading && _jobs.isEmpty
-                                  ? const Center(
-                                      child: CircularProgressIndicator(
-                                        color: AppColors.dashboardTeal,
-                                      ),
-                                    )
-                                  : _error != null && _jobs.isEmpty
-                                  ? Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Text('Could not load jobs: ${_error!}'),
-                                        TextButton(
-                                          onPressed: () => _loadJobs(),
-                                          style: CandidateButtonStyle.secondary(
-                                            TextButton.styleFrom(),
-                                          ),
-                                          child: const Text('Retry'),
+                              child: MobileEdgeShadowWrapper(
+                                child: _loading && _jobs.isEmpty
+                                    ? const Center(
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.dashboardTeal,
                                         ),
-                                      ],
-                                    )
-                                  : !_hasAnyJobs
-                                  ? _buildEmptyState(isMobile)
-                                  : SingleChildScrollView(
-                                      physics: const BouncingScrollPhysics(),
-                                      padding: EdgeInsets.only(
-                                        left: 22,
-                                        right: 22,
-                                        top: 16,
-                                        bottom: isMobile ? 100 : 32,
+                                      )
+                                    : _error != null && _jobs.isEmpty
+                                    ? Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Could not load jobs: ${_error!}',
+                                          ),
+                                          TextButton(
+                                            onPressed: () => _loadJobs(),
+                                            style:
+                                                CandidateButtonStyle.secondary(
+                                                  TextButton.styleFrom(),
+                                                ),
+                                            child: const Text('Retry'),
+                                          ),
+                                        ],
+                                      )
+                                    : !_hasAnyJobs
+                                    ? _buildEmptyState(isMobile)
+                                    : SingleChildScrollView(
+                                        physics: const BouncingScrollPhysics(),
+                                        padding: EdgeInsets.only(
+                                          left: 22,
+                                          right: 22,
+                                          top: 16,
+                                          bottom: isMobile ? 164 : 32,
+                                        ),
+                                        child: _buildContentCanvas(
+                                          isMobile,
+                                          processedJobs,
+                                          textPrimary,
+                                          textSecondary,
+                                          cardBg,
+                                          cardBorder,
+                                        ),
                                       ),
-                                      child: _buildContentCanvas(
-                                        isMobile,
-                                        processedJobs,
-                                        textPrimary,
-                                        textSecondary,
-                                        cardBg,
-                                        cardBorder,
-                                      ),
-                                    ),
+                              ),
                             ),
                           ],
                         ),
@@ -379,7 +386,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   job: job,
                   isMobile: isMobile,
                   isHot: idx == 0,
-                  hasUploadedResume: _hasUploadedResume,
+                  hasUploadedResume: _hasUploadedResume ?? false,
                   onApply: () => _openJobDetail(job.title, job.id),
                 );
               },
@@ -401,7 +408,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   job: job,
                   isMobile: isMobile,
                   isHot: idx == 0,
-                  hasUploadedResume: _hasUploadedResume,
+                  hasUploadedResume: _hasUploadedResume ?? false,
                   onApply: () => _openJobDetail(job.title, job.id),
                 );
               },
@@ -586,85 +593,8 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
 
   // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() {
-    final List<Map<String, dynamic>> dockItems = [
-      {'icon': Icons.home_rounded, 'route': '/candidate/home'},
-      {'icon': Icons.adjust_rounded, 'route': '/candidate/jobs'},
-      {'icon': Icons.grid_view_rounded, 'route': '/candidate/applications'},
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'route': '/candidate/interview-lobby',
-      },
-      {'icon': Icons.person_outline_rounded, 'route': '/candidate/profile'},
-    ];
-    final int activeNavIndex = 1; // Jobs is index 1
-
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(dockItems.length, (index) {
-          final isSelected = index == activeNavIndex;
-          final item = dockItems[index];
-
-          return GestureDetector(
-            onTap: () {
-              if (!isSelected) {
-                Navigator.of(context).pushNamed(item['route']);
-              }
-            },
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? AppColors.dashboardTeal
-                        : Colors.transparent,
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: AppColors.dashboardTeal.withValues(
-                                alpha: 0.3,
-                              ),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: Icon(
-                    item['icon'],
-                    color: isSelected
-                        ? const Color(0xFF0F172A)
-                        : const Color(0xFF94A3B8),
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
+  Widget _buildMobileBottomDock() =>
+      const CandidateMobileNav(currentRoute: '/candidate/jobs');
 
   // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
 }

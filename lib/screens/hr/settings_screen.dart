@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -212,17 +214,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 // Center area: Empty State or Live RD-10 layout
                 Expanded(
-                  child: _showEmptyState
-                      ? _buildEmptyState(isMobile: isMobile)
-                      : SingleChildScrollView(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 16 : 24,
-                            vertical: isMobile ? 12 : 16,
+                  child: MobileEdgeShadowWrapper(
+                    child: _showEmptyState
+                        ? _buildEmptyState(isMobile: isMobile)
+                        : SingleChildScrollView(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 16 : 24,
+                              vertical: isMobile ? 12 : 16,
+                            ),
+                            child: isMobile
+                                ? _buildMobileLayout()
+                                : _buildWebLayout(),
                           ),
-                          child: isMobile
-                              ? _buildMobileLayout()
-                              : _buildWebLayout(),
-                        ),
+                  ),
                 ),
               ],
             ),
@@ -1119,107 +1123,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── WEB TOP BAR (58px height, 1px bottom border --edge2) ───────────────────
   // ── MOBILE HEADER (Small logomark 26px + "Scoring" title) ───────────────────
   // ── MOBILE FLOATING BOTTOM DOCK (6 icons, Analytics active glowing indigo) ───
-  Widget _buildMobileBottomDock() {
-    final List<Map<String, dynamic>> dockItems = [
-      {
-        'icon': Icons.dashboard_rounded,
-        'route': '/recruiter/command-deck',
-        'label': 'Dashboard',
-      },
-      {
-        'icon': Icons.grid_view_rounded,
-        'route': '/recruiter/job-listings',
-        'label': 'Jobs',
-      },
-      {
-        'icon': Icons.view_column_rounded,
-        'route': '/recruiter/pipeline',
-        'label': 'Pipeline',
-      },
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'route': '/recruiter/schedule-interview',
-        'label': 'Interviews',
-      },
-      {
-        'icon': Icons.leaderboard_rounded,
-        'route': '/recruiter/rankings',
-        'label': 'Rankings',
-      },
-      {
-        'icon': Icons.diamond_rounded,
-        'route': '/recruiter/analytics',
-        'label': 'Analytics',
-      },
-    ];
-    // Scoring lives under Intelligence & Workspace, which maps to the Analytics dock entry (index 5)
-    const int activeNavIndex = 5;
-
-    return Container(
-      key: const Key('scoring-mobile-dock'),
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: _edge2, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(dockItems.length, (index) {
-          final isSelected = index == activeNavIndex;
-          final item = dockItems[index];
-
-          return GestureDetector(
-            onTap: () {
-              if (!isSelected) {
-                Navigator.of(
-                  context,
-                ).pushNamed(item['route'] as String);
-              }
-            },
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? const Color(0xFF4D7BFA)
-                        : Colors.transparent,
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: const Color(
-                                0xFF4D7BFA,
-                              ).withValues(alpha: 0.35),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: Icon(
-                    item['icon'] as IconData,
-                    color: isSelected ? Colors.white : const Color(0xFF94A3B8),
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
+  Widget _buildMobileBottomDock() => const RecruiterMobileNav(
+    currentRoute: '/recruiter/scoring-model',
+    key: Key('scoring-mobile-dock'),
+  );
 }

@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -527,102 +529,106 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                         breadcrumbSegments: ['Schedule interview'],
                       ),
                       Expanded(
-                        child: _loading
-                            ? _buildLoadingSkeleton(compact)
-                            : _error != null
-                            ? Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      _error!,
-                                      style: const TextStyle(
-                                        color: Color(0xFFDC354A),
+                        child: MobileEdgeShadowWrapper(
+                          child: _loading
+                              ? _buildLoadingSkeleton(compact)
+                              : _error != null
+                              ? Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _error!,
+                                        style: const TextStyle(
+                                          color: Color(0xFFDC354A),
+                                        ),
                                       ),
-                                    ),
-                                    TextButton(
-                                      onPressed: _loadJobs,
-                                      child: const Text('Retry'),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : _jobId == null && _jobs.length > 1
-                            ? _buildJobPicker(compact)
-                            : _showEmptyState
-                            ? _buildEmptyState(compact)
-                            : SingleChildScrollView(
-                                padding: EdgeInsets.all(compact ? 16 : 22),
-                                child: Center(
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 1240,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        if (_jobs.length > 1) ...[
-                                          Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: DropdownButton<String>(
-                                              value: _jobId,
-                                              items: [
-                                                for (final job in _jobs)
-                                                  DropdownMenuItem(
-                                                    value: job.id,
-                                                    child: Text(job.title),
-                                                  ),
-                                              ],
-                                              onChanged:
-                                                  _busyApplicationId == null
-                                                  ? _changeJob
-                                                  : null,
+                                      TextButton(
+                                        onPressed: _loadJobs,
+                                        child: const Text('Retry'),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : _jobId == null && _jobs.length > 1
+                              ? _buildJobPicker(compact)
+                              : _showEmptyState
+                              ? _buildEmptyState(compact)
+                              : SingleChildScrollView(
+                                  padding: EdgeInsets.all(compact ? 16 : 22),
+                                  child: Center(
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 1240,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          if (_jobs.length > 1) ...[
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: DropdownButton<String>(
+                                                value: _jobId,
+                                                items: [
+                                                  for (final job in _jobs)
+                                                    DropdownMenuItem(
+                                                      value: job.id,
+                                                      child: Text(job.title),
+                                                    ),
+                                                ],
+                                                onChanged:
+                                                    _busyApplicationId == null
+                                                    ? _changeJob
+                                                    : null,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 14),
-                                        ],
-                                        if (compact)
-                                          Column(
-                                            children: [
-                                              _weekPanel(),
-                                              const SizedBox(height: 14),
-                                              _awaitingPanel(),
-                                              const SizedBox(height: 14),
-                                              _invitationPanel(),
-                                            ],
-                                          )
-                                        else
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Expanded(
-                                                flex: 14,
-                                                child: Column(
-                                                  children: [
-                                                    _weekPanel(),
-                                                    const SizedBox(height: 14),
-                                                    _invitationPanel(),
-                                                  ],
+                                            const SizedBox(height: 14),
+                                          ],
+                                          if (compact)
+                                            Column(
+                                              children: [
+                                                _weekPanel(),
+                                                const SizedBox(height: 14),
+                                                _awaitingPanel(),
+                                                const SizedBox(height: 14),
+                                                _invitationPanel(),
+                                              ],
+                                            )
+                                          else
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Expanded(
+                                                  flex: 14,
+                                                  child: Column(
+                                                    children: [
+                                                      _weekPanel(),
+                                                      const SizedBox(
+                                                        height: 14,
+                                                      ),
+                                                      _invitationPanel(),
+                                                    ],
+                                                  ),
                                                 ),
-                                              ),
-                                              const SizedBox(width: 14),
-                                              Expanded(
-                                                flex: 10,
-                                                child: _awaitingPanel(),
-                                              ),
-                                            ],
-                                          ),
-                                        if (_interview != null) ...[
-                                          const SizedBox(height: 14),
-                                          _questionPanel(),
+                                                const SizedBox(width: 14),
+                                                Expanded(
+                                                  flex: 10,
+                                                  child: _awaitingPanel(),
+                                                ),
+                                              ],
+                                            ),
+                                          if (_interview != null) ...[
+                                            const SizedBox(height: 14),
+                                            _questionPanel(),
+                                          ],
                                         ],
-                                      ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
+                        ),
                       ),
                     ],
                   ),
@@ -757,85 +763,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     );
   }
 
-  Widget _buildMobileBottomDock() {
-    final List<Map<String, dynamic>> dockItems = [
-      {'icon': Icons.dashboard_rounded, 'route': '/recruiter/command-deck'},
-      {'icon': Icons.grid_view_rounded, 'route': '/recruiter/job-listings'},
-      {'icon': Icons.view_column_rounded, 'route': '/recruiter/pipeline'},
-      {
-        'icon': Icons.radio_button_checked_rounded,
-        'route': '/recruiter/schedule-interview',
-      },
-      {'icon': Icons.leaderboard_rounded, 'route': '/recruiter/rankings'},
-      {'icon': Icons.diamond_rounded, 'route': '/recruiter/analytics'},
-    ];
-    final int activeNavIndex = 0; // Dashboard is active
-
-    return Container(
-      key: const Key('schedule-mobile-dock'),
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(dockItems.length, (index) {
-          final isSelected = index == activeNavIndex;
-          final item = dockItems[index];
-
-          return GestureDetector(
-            onTap: () {
-              if (!isSelected) {
-                Navigator.of(context).pushNamed(item['route']);
-              }
-            },
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? const Color(0xFF4D7BFA)
-                        : Colors.transparent,
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: const Color(
-                                0xFF4D7BFA,
-                              ).withValues(alpha: 0.3),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: Icon(
-                    item['icon'],
-                    color: isSelected ? Colors.white : const Color(0xFF94A3B8),
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
+  Widget _buildMobileBottomDock() => const RecruiterMobileNav(
+    currentRoute: '/recruiter/schedule-interview',
+    key: Key('schedule-mobile-dock'),
+  );
 
   Widget _weekPanel() => _panel(
     child: Column(

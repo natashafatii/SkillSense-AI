@@ -1,3 +1,4 @@
+import '../widgets/mobile_edge_shadow_wrapper.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../widgets/recruiter_top_bar.dart';
@@ -169,93 +170,95 @@ class _ApplicationScreeningScreenState
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ),
-              if (app == null && _error == null)
-                const Center(child: CircularProgressIndicator()),
-              if (app != null) ...[
-                Text(
-                  app.jobTitle,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                Text(app.candidateName ?? app.candidateEmail),
-                const SizedBox(height: 16),
-                Text(
-                  'Application: ${(app.rawStatus ?? app.status.value).replaceAll('_', ' ')}',
-                ),
-                Text(
-                  'Processing: ${assessment?['status'] ?? 'Awaiting assessment'}',
-                ),
-                if (assessment != null)
-                  Text(
-                    'Assessment ${assessment['revision']} · policy ${assessment['policy_version']}',
-                  ),
-                if (app.resumeScore != null)
-                  Text(
-                    'Match: ${app.resumeScore!.toStringAsFixed(2)} / 100 · minimum ${assessment?['threshold']}',
-                  ),
-                if (reasons.isNotEmpty)
+          child: MobileEdgeShadowWrapper(
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                if (_error != null)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(reasons),
-                  ),
-                for (final row in criteria)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('${row['requirement']} — ${row['status']}'),
-                    subtitle: Text('${row['evidence']}'),
-                  ),
-                if ((assessment?['error_message'] ?? '').toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text('${assessment!['error_message']}'),
-                  ),
-                if (app.allowedActions.contains('shortlist') ||
-                    app.allowedActions.contains('reject'))
-                  TextField(
-                    controller: _reason,
-                    maxLines: 3,
-                    maxLength: 2000,
-                    decoration: const InputDecoration(
-                      labelText: 'Reason for rejection or screening override',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    for (final action in app.allowedActions)
-                      FilledButton(
-                        onPressed: _busy ? null : () => _act(action),
-                        child: Text(labels[action] ?? action),
-                      ),
-                  ],
-                ),
-                if (_busy)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: LinearProgressIndicator(),
-                  ),
-                if (app.eligibleForInterview)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 20),
+                    padding: const EdgeInsets.only(bottom: 16),
                     child: Text(
-                      'Shortlisted and available for interview scheduling.',
+                      _error!,
+                      style: const TextStyle(color: Colors.red),
                     ),
                   ),
+                if (app == null && _error == null)
+                  const Center(child: CircularProgressIndicator()),
+                if (app != null) ...[
+                  Text(
+                    app.jobTitle,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  Text(app.candidateName ?? app.candidateEmail),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Application: ${(app.rawStatus ?? app.status.value).replaceAll('_', ' ')}',
+                  ),
+                  Text(
+                    'Processing: ${assessment?['status'] ?? 'Awaiting assessment'}',
+                  ),
+                  if (assessment != null)
+                    Text(
+                      'Assessment ${assessment['revision']} · policy ${assessment['policy_version']}',
+                    ),
+                  if (app.resumeScore != null)
+                    Text(
+                      'Match: ${app.resumeScore!.toStringAsFixed(2)} / 100 · minimum ${assessment?['threshold']}',
+                    ),
+                  if (reasons.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(reasons),
+                    ),
+                  for (final row in criteria)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('${row['requirement']} — ${row['status']}'),
+                      subtitle: Text('${row['evidence']}'),
+                    ),
+                  if ((assessment?['error_message'] ?? '').toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text('${assessment!['error_message']}'),
+                    ),
+                  if (app.allowedActions.contains('shortlist') ||
+                      app.allowedActions.contains('reject'))
+                    TextField(
+                      controller: _reason,
+                      maxLines: 3,
+                      maxLength: 2000,
+                      decoration: const InputDecoration(
+                        labelText: 'Reason for rejection or screening override',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final action in app.allowedActions)
+                        FilledButton(
+                          onPressed: _busy ? null : () => _act(action),
+                          child: Text(labels[action] ?? action),
+                        ),
+                    ],
+                  ),
+                  if (_busy)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: LinearProgressIndicator(),
+                    ),
+                  if (app.eligibleForInterview)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 20),
+                      child: Text(
+                        'Shortlisted and available for interview scheduling.',
+                      ),
+                    ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

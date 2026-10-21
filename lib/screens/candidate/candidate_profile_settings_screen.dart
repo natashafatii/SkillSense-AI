@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
 import 'dart:async';
 
@@ -1107,19 +1109,22 @@ class _CandidateProfileSettingsScreenState
                       ),
                     ),
                     Expanded(
-                      child: SingleChildScrollView(
-                        controller: _mobileScroll,
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            16,
-                            16,
-                            16,
-                            84 + safeBottom,
-                          ),
-                          child: Column(
-                            children: _mobileTab == 0
-                                ? _mobileProfileCards(c)
-                                : _mobileSettingsCards(c, reducedMotion),
+                      child: MobileEdgeShadowWrapper(
+                        surfaceColor: c.bg,
+                        child: SingleChildScrollView(
+                          controller: _mobileScroll,
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              16,
+                              16,
+                              16,
+                              164 + safeBottom,
+                            ),
+                            child: Column(
+                              children: _mobileTab == 0
+                                  ? _mobileProfileCards(c)
+                                  : _mobileSettingsCards(c, reducedMotion),
+                            ),
                           ),
                         ),
                       ),
@@ -1790,57 +1795,10 @@ class _CandidateProfileSettingsScreenState
     ),
   );
 
-  Widget _mobileNav(_Colors c, double safeBottom) {
-    final items = <(String, IconData, String)>[
-      ('Home', Icons.home_outlined, '/candidate/home'),
-      ('Jobs', Icons.work_outline_rounded, '/candidate/jobs'),
-      ('Interviews', Icons.mic_none_rounded, '/candidate/interviews'),
-      ('Profile', Icons.person_outline_rounded, '/candidate/profile'),
-    ];
-    return Container(
-      key: const Key('candidate-profile-mobile-nav'),
-      padding: EdgeInsets.fromLTRB(8, 6, 8, 6 + safeBottom),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border(top: BorderSide(color: c.border)),
-      ),
-      child: Row(
-        children: [
-          for (final item in items)
-            Expanded(
-              child: InkWell(
-                onTap: item.$1 == 'Profile'
-                    ? null
-                    : () => Navigator.of(context).pushNamed(item.$3),
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        item.$2,
-                        size: 22,
-                        color: item.$1 == 'Profile' ? c.accent : c.text3,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.$1,
-                        style: _inter(
-                          11.5,
-                          item.$1 == 'Profile' ? c.accent : c.text3,
-                          weight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _mobileNav(_Colors c, double safeBottom) => const CandidateMobileNav(
+    key: Key('candidate-profile-mobile-nav'),
+    currentRoute: '/candidate/profile',
+  );
 
   Future<void> _openMobileSheet(_Detail detail, _Colors c) async {
     _editing = detail.key;

@@ -2,6 +2,16 @@
 
 SkillSense AI Flutter Frontend (Web & Native Mobile).
 
+For local interview video, use the VS Code **SkillSense web (interview origin)**
+launch configuration, or run
+`flutter run -d chrome --web-hostname=localhost --web-port=50893`.
+The backend's `INTERVIEW_ANALYSIS_WS_ALLOWED_ORIGINS` must contain the exact
+browser origin, including its port. A random Flutter debug port can pass HTTP
+CORS but fail the video-origin check. After changing the backend allowlist,
+restart the API and reload the lobby before retrying. An unconfirmed start stays
+disabled until the page is reloaded or the existing session is checked, to avoid
+creating a duplicate provider call. Do not use wildcard origins to fix this.
+
 Feature names and deployment configuration: [Interview analysis naming](../AI_Interview_Recruitment/docs/interview_analysis_naming.md).
 
 Interview Analysis setup, audit results, browser checklist, and remaining backend integration

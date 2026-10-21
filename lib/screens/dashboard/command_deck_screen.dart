@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -204,7 +206,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
-
   // Hover states for rows/cards
   int? _hoveredApplicantIndex;
   int? _hoveredInterviewIndex;
@@ -251,7 +252,6 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     _pulseAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-
 
     // Listen for focus changes to style the search field
     _searchFocusNode.addListener(() {
@@ -415,45 +415,54 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                               _buildTopBar(),
                               Expanded(
                                 child: Stack(
+                                  fit: isMobile
+                                      ? StackFit.expand
+                                      : StackFit.loose,
                                   children: [
                                     // Main scroll content
-                                    SingleChildScrollView(
-                                      physics: const BouncingScrollPhysics(),
-                                      padding: EdgeInsets.only(
-                                        left: isMobile ? 16 : 24,
-                                        right: isMobile ? 16 : 24,
-                                        top: 16,
-                                        bottom: isMobile
-                                            ? 100
-                                            : 32, // extra bottom pad on mobile for dock
-                                      ),
-                                      child: _loadingDashboard
-                                          ? const Center(
-                                              child:
-                                                  CircularProgressIndicator(),
-                                            )
-                                          : _dashboardError != null && !_hasData
-                                          ? Center(
-                                              child: Column(
-                                                children: [
-                                                  const Text(
-                                                    'Could not load Command Deck.',
-                                                  ),
-                                                  TextButton(
-                                                    onPressed:
-                                                        _refreshDashboard,
-                                                    child: const Text('Retry'),
-                                                  ),
-                                                ],
+                                    MobileEdgeShadowWrapper(
+                                      surfaceColor: currentTheme.bg,
+                                      child: SingleChildScrollView(
+                                        physics: const BouncingScrollPhysics(),
+                                        padding: EdgeInsets.only(
+                                          left: isMobile ? 16 : 24,
+                                          right: isMobile ? 16 : 24,
+                                          top: 16,
+                                          bottom: isMobile
+                                              ? 100
+                                              : 32, // extra bottom pad on mobile for dock
+                                        ),
+                                        child: _loadingDashboard
+                                            ? const Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              )
+                                            : _dashboardError != null &&
+                                                  !_hasData
+                                            ? Center(
+                                                child: Column(
+                                                  children: [
+                                                    const Text(
+                                                      'Could not load Command Deck.',
+                                                    ),
+                                                    TextButton(
+                                                      onPressed:
+                                                          _refreshDashboard,
+                                                      child: const Text(
+                                                        'Retry',
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              )
+                                            : isMobile
+                                            ? _buildMobileVerticalStack(
+                                                currentTheme,
+                                              )
+                                            : _buildWebDashboardLayout(
+                                                currentTheme,
                                               ),
-                                            )
-                                          : isMobile
-                                          ? _buildMobileVerticalStack(
-                                              currentTheme,
-                                            )
-                                          : _buildWebDashboardLayout(
-                                              currentTheme,
-                                            ),
+                                      ),
                                     ),
 
                                     // Floating Autocomplete Search Dropdown
@@ -480,11 +489,17 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                       ],
                     ),
                   ),
-                  // Bottom Dock (Mobile Only)
-                  if (isMobile) _buildBottomDock(context, currentTheme),
                 ],
               ),
             ),
+            // Float above the continuous page background, without a footer band.
+            if (isMobile)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildBottomDock(context, currentTheme),
+              ),
           ],
         ),
       ),
@@ -783,9 +798,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                     AppNavState.unreadInterviews = 0;
                                   });
                                 }
-                                Navigator.of(
-                                  context,
-                                ).pushNamed(item['route']);
+                                Navigator.of(context).pushNamed(item['route']);
                               }
                             },
                             child: AnimatedContainer(
@@ -932,131 +945,16 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   }
 
   // ── BOTTOM DOCK NAVIGATION (Mobile Dark Theme) ─────────────────────────────
-  Widget _buildBottomDock(BuildContext context, DeckTheme theme) {
-    final List<Map<String, dynamic>> navItems = [
-      {
-        'icon': Icons.dashboard_rounded,
-        'label': 'Dashboard',
-        'route': '/dashboard',
-      },
-      {'icon': Icons.menu_book_rounded, 'label': 'Jobs', 'route': '/pipeline'},
-      {
-        'icon': Icons.calendar_month_rounded,
-        'label': 'Interviews',
-        'route': '/schedule',
-      },
-      {
-        'icon': Icons.emoji_events_outlined,
-        'label': 'Rankings',
-        'route': '/rankings',
-      },
-      {
-        'icon': Icons.analytics_outlined,
-        'label': 'Analytics',
-        'route': '/analytics',
-      },
-    ];
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 14,
-        right: 14,
-        bottom: MediaQuery.of(context).padding.bottom + 14,
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: theme.cardBg,
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: theme.border, width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(navItems.length, (index) {
-            final isSelected = _activeNavIndex == index;
-            final item = navItems[index];
-            final bool hasBadge =
-                index == 2 && AppNavState.unreadInterviews > 0;
-
-            return GestureDetector(
-              onTap: () {
-                if (index != _activeNavIndex) {
-                  if (index == 2) {
-                    setState(() {
-                      AppNavState.unreadInterviews = 0;
-                    });
-                  }
-                  Navigator.of(context).pushNamed(item['route']);
-                }
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: isSelected
-                      ? AppColors.dashboardBlue
-                      : Colors.transparent,
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: AppColors.dashboardBlue.withValues(
-                              alpha: 0.3,
-                            ),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Icon(
-                          item['icon'],
-                          color: isSelected
-                              ? Colors.white
-                              : theme.textSecondary,
-                          size: 20,
-                        ),
-                        if (hasBadge)
-                          Positioned(
-                            top: -3,
-                            right: -3,
-                            child: Container(
-                              width: 7,
-                              height: 7,
-                              decoration: const BoxDecoration(
-                                color: AppColors.dashboardRed,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (isSelected) ...[const SizedBox(height: 4)],
-                  ],
-                ),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
+  Widget _buildBottomDock(BuildContext context, DeckTheme theme) =>
+      RecruiterMobileNav(
+        currentRoute: '/recruiter/command-deck',
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        height: 60,
+        backgroundColor: theme.cardBg,
+        borderColor: theme.border,
+        foregroundColor: theme.textSecondary,
+        accentColor: AppColors.dashboardBlue,
+      );
 
   // ── TOP BAR (Collapsed on Mobile) ──────────────────────────────────────────
   Widget _buildTopBar() => RecruiterTopBar(
@@ -1144,9 +1042,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                           _isSearchDropdownOpen = false;
                           _searchController.clear();
                         });
-                        Navigator.of(
-                          context,
-                        ).pushNamed(item['route']!);
+                        Navigator.of(context).pushNamed(item['route']!);
                       },
                     );
                   },
@@ -1451,8 +1347,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 onExit: (_) => setState(() => _hoveredAllApplicants = false),
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
-                  onTap: () =>
-                      Navigator.of(context).pushNamed('/pipeline'),
+                  onTap: () => Navigator.of(context).pushNamed('/pipeline'),
                   child: SizedBox(
                     width: 68,
                     child: Text(
@@ -2014,8 +1909,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           onExit: (_) => setState(() => _hoveredManageRoles = false),
           cursor: SystemMouseCursors.click,
           child: GestureDetector(
-            onTap: () =>
-                Navigator.of(context).pushNamed('/create-role'),
+            onTap: () => Navigator.of(context).pushNamed('/create-role'),
             child: Text(
               AppConstants.deckManage,
               style: GoogleFonts.inter(
@@ -2054,8 +1948,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                       0.78, // ~78% viewport width so next peeks
                   margin: const EdgeInsets.only(right: 12, bottom: 8),
                   child: GestureDetector(
-                    onTap: () =>
-                        Navigator.pushNamed(context, '/pipeline'),
+                    onTap: () => Navigator.pushNamed(context, '/pipeline'),
                     child: _buildGlassCard(
                       theme: theme,
                       padding: const EdgeInsets.all(16),
@@ -2144,8 +2037,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     onExit: (_) => setState(() => _hoveredRoleIndex = null),
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
-                      onTap: () =>
-                          Navigator.pushNamed(context, '/pipeline'),
+                      onTap: () => Navigator.pushNamed(context, '/pipeline'),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         transform: isHovered
@@ -2365,8 +2257,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             actionLabel: 'Post a job',
             isActive: true,
             isMobile: isMobile,
-            onTap: () =>
-                Navigator.of(context).pushNamed('/create-role'),
+            onTap: () => Navigator.of(context).pushNamed('/create-role'),
           ),
           Divider(color: theme.border, height: 1),
           _buildChecklistRow(
@@ -2377,8 +2268,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             actionLabel: 'Configure',
             isActive: false,
             isMobile: isMobile,
-            onTap: () =>
-                Navigator.of(context).pushNamed('/settings'),
+            onTap: () => Navigator.of(context).pushNamed('/settings'),
           ),
         ],
       ),

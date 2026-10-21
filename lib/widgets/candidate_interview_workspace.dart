@@ -1,3 +1,4 @@
+import 'mobile_edge_shadow_wrapper.dart';
 import 'package:flutter/material.dart';
 import '../models/interview_analysis_contract.dart';
 import '../services/media/interview_media_controller.dart';
@@ -86,21 +87,23 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final mobile = constraints.maxWidth < 760;
-                    return SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(
-                        mobile ? 18 : 36,
-                        mobile ? 24 : 32,
-                        mobile ? 18 : 36,
-                        28,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1260),
-                          child: !lifecycle.isCurrent
-                              ? _signedOut()
-                              : _wrapping
-                              ? _completion(mobile)
-                              : _room(mobile),
+                    return MobileEdgeShadowWrapper(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          mobile ? 18 : 36,
+                          mobile ? 24 : 32,
+                          mobile ? 18 : 36,
+                          28,
+                        ),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1260),
+                            child: !lifecycle.isCurrent
+                                ? _signedOut()
+                                : _wrapping
+                                ? _completion(mobile)
+                                : _room(mobile),
+                          ),
                         ),
                       ),
                     );
@@ -589,7 +592,9 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   interrupted
-                      ? 'Your session has not been ended. Join again when you’re ready.'
+                      ? lifecycle.canUseMedia
+                            ? 'The connection was interrupted. Join again to retry.'
+                            : 'This session can no longer be joined. Refresh status or contact your recruiter.'
                       : unavailable
                       ? 'We couldn’t connect your audio. Check your microphone and try joining again.'
                       : videoIssue

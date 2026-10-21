@@ -1,3 +1,4 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import 'package:flutter/material.dart';
 import '../../models/interview_analysis_contract.dart';
 import '../../services/media/interview_media_route_observer.dart';
@@ -17,9 +18,11 @@ class RecruiterObservationScreen extends StatelessWidget {
         children: [
           const RecruiterTopBar(pageTitle: 'Behavioral report'),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: RecruiterObservationView(target: target),
+            child: MobileEdgeShadowWrapper(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: RecruiterObservationView(target: target),
+              ),
             ),
           ),
         ],

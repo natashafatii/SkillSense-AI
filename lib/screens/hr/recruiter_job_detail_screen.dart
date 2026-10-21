@@ -1,3 +1,5 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -958,9 +960,8 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
           ),
           const SizedBox(height: 12),
           OutlinedButton(
-            onPressed: () => Navigator.of(
-              context,
-            ).pushNamed('/recruiter/job-listings'),
+            onPressed: () =>
+                Navigator.of(context).pushNamed('/recruiter/job-listings'),
             child: const Text('Back to Job Listings'),
           ),
           if (status != 404 && status != 403)
@@ -1002,9 +1003,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.of(context).canPop()
               ? Navigator.of(context).pop()
-              : Navigator.of(
-                  context,
-                ).pushNamed('/recruiter/job-listings'),
+              : Navigator.of(context).pushNamed('/recruiter/job-listings'),
         ),
         const SizedBox(width: 4),
         Expanded(
@@ -1027,35 +1026,10 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     ),
   );
 
-  Widget _mobileDock() => Container(
-    height: 64,
-    margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      boxShadow: [
-        BoxShadow(color: Colors.black.withValues(alpha: .09), blurRadius: 18),
-      ],
-    ),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        for (final (icon, route) in <(IconData, String)>[
-          (Icons.dashboard_outlined, '/recruiter/command-deck'),
-          (Icons.menu_book_rounded, '/recruiter/job-listings'),
-          (Icons.view_column_outlined, '/recruiter/pipeline'),
-          (Icons.calendar_month_outlined, '/recruiter/schedule-interview'),
-          (Icons.analytics_outlined, '/recruiter/analytics'),
-        ])
-          IconButton(
-            icon: Icon(
-              icon,
-              color: route == '/recruiter/job-listings' ? _blue : _muted,
-            ),
-            onPressed: () => Navigator.of(context).pushNamed(route),
-          ),
-      ],
-    ),
+  Widget _mobileDock() => const RecruiterMobileNav(
+    currentRoute: '/recruiter/job-detail',
+    margin: EdgeInsets.fromLTRB(16, 0, 16, 12),
+    radius: 28,
   );
 
   @override
@@ -1075,75 +1049,77 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                   trailingIcon: Icons.settings_outlined,
                 ),
           Expanded(
-            child: _loading
-                ? _skeleton()
-                : _error != null
-                ? _emptyState()
-                : job == null
-                ? _emptyState()
-                : SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      mobile ? 16 : 28,
-                      26,
-                      mobile ? 16 : 28,
-                      24,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _header(job, mobile),
-                        if (mobile) ...[
-                          _overview(job),
-                          const SizedBox(height: 14),
-                          _skills(job),
-                          const SizedBox(height: 14),
-                          _applicants(job),
-                          const SizedBox(height: 14),
-                          _threshold(job),
-                          const SizedBox(height: 14),
-                          _interviewMix(job),
-                          const SizedBox(height: 14),
-                          _timeline(job),
-                          const SizedBox(height: 14),
-                          _candidates(),
-                          const SizedBox(height: 20),
-                        ] else
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    _overview(job),
-                                    const SizedBox(height: 16),
-                                    _skills(job),
-                                    const SizedBox(height: 16),
-                                    _applicants(job),
-                                    const SizedBox(height: 16),
-                                    _threshold(job),
-                                    const SizedBox(height: 16),
-                                    _interviewMix(job),
-                                  ],
+            child: MobileEdgeShadowWrapper(
+              child: _loading
+                  ? _skeleton()
+                  : _error != null
+                  ? _emptyState()
+                  : job == null
+                  ? _emptyState()
+                  : SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        mobile ? 16 : 28,
+                        26,
+                        mobile ? 16 : 28,
+                        24,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _header(job, mobile),
+                          if (mobile) ...[
+                            _overview(job),
+                            const SizedBox(height: 14),
+                            _skills(job),
+                            const SizedBox(height: 14),
+                            _applicants(job),
+                            const SizedBox(height: 14),
+                            _threshold(job),
+                            const SizedBox(height: 14),
+                            _interviewMix(job),
+                            const SizedBox(height: 14),
+                            _timeline(job),
+                            const SizedBox(height: 14),
+                            _candidates(),
+                            const SizedBox(height: 20),
+                          ] else
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    children: [
+                                      _overview(job),
+                                      const SizedBox(height: 16),
+                                      _skills(job),
+                                      const SizedBox(height: 16),
+                                      _applicants(job),
+                                      const SizedBox(height: 16),
+                                      _threshold(job),
+                                      const SizedBox(height: 16),
+                                      _interviewMix(job),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 18),
-                              SizedBox(
-                                width: 380,
-                                child: Column(
-                                  children: [
-                                    _timeline(job),
-                                    const SizedBox(height: 16),
-                                    _candidates(),
-                                    const SizedBox(height: 16),
-                                    _actionsPanel(job),
-                                  ],
+                                const SizedBox(width: 18),
+                                SizedBox(
+                                  width: 380,
+                                  child: Column(
+                                    children: [
+                                      _timeline(job),
+                                      const SizedBox(height: 16),
+                                      _candidates(),
+                                      const SizedBox(height: 16),
+                                      _actionsPanel(job),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                      ],
+                              ],
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
+            ),
           ),
           if (mobile &&
               job != null &&

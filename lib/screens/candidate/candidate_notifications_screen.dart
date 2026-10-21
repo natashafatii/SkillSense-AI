@@ -1,6 +1,9 @@
+import '../../widgets/mobile_edge_shadow_wrapper.dart';
+import '../../widgets/candidate_mobile_nav.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/notification_list_skeleton.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/candidate_side_nav.dart';
@@ -219,20 +222,22 @@ class _CandidateNotificationsScreenState
 
                             // Scrollable Content
                             Expanded(
-                              child: SingleChildScrollView(
-                                physics: const BouncingScrollPhysics(),
-                                padding: EdgeInsets.only(
-                                  left: isMobile ? 16 : 28,
-                                  right: isMobile ? 16 : 28,
-                                  top: 24,
-                                  bottom: isMobile ? 100 : 40,
-                                ),
-                                child: _buildBody(
-                                  isMobile,
-                                  textPrimary,
-                                  textSecondary,
-                                  cardBg,
-                                  cardBorder,
+                              child: MobileEdgeShadowWrapper(
+                                child: SingleChildScrollView(
+                                  physics: const BouncingScrollPhysics(),
+                                  padding: EdgeInsets.only(
+                                    left: isMobile ? 16 : 28,
+                                    right: isMobile ? 16 : 28,
+                                    top: 24,
+                                    bottom: isMobile ? 164 : 40,
+                                  ),
+                                  child: _buildBody(
+                                    isMobile,
+                                    textPrimary,
+                                    textSecondary,
+                                    cardBg,
+                                    cardBorder,
+                                  ),
                                 ),
                               ),
                             ),
@@ -320,14 +325,7 @@ class _CandidateNotificationsScreenState
         ),
         const SizedBox(height: 24),
 
-        if (_loading && !_loaded)
-          for (var i = 0; i < 3; i++)
-            const Card(
-              child: ListTile(
-                title: LinearProgressIndicator(),
-                subtitle: SizedBox(height: 20),
-              ),
-            ),
+        if (_loading && !_loaded) NotificationListSkeleton(isMobile: isMobile),
         if (_error != null)
           Row(
             children: [
@@ -660,64 +658,9 @@ class _CandidateNotificationsScreenState
   }
 
   // ── MOBILE BOTTOM DOCK ───────────────────────────────────────────────────────
-  Widget _buildMobileBottomDock() {
-    final List<Map<String, dynamic>> dockItems = [
-      {'icon': Icons.home_rounded, 'index': 0},
-      {'icon': Icons.track_changes_rounded, 'index': 1},
-      {'icon': Icons.grid_view_rounded, 'index': 2},
-      {'icon': Icons.radio_button_checked_rounded, 'index': 3},
-      {'icon': Icons.description_rounded, 'index': 4},
-      {'icon': Icons.adjust_rounded, 'index': 5},
-    ];
-
-    return Container(
-      height: 64,
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: dockItems.map((item) {
-          return GestureDetector(
-            onTap: () {
-              switch (item['index'] as int) {
-                case 0:
-                  Navigator.of(context).pushNamed('/candidate/home');
-                case 1:
-                  Navigator.of(context).pushNamed('/candidate/applications');
-                case 2:
-                  Navigator.of(context).pushNamed('/candidate/jobs');
-                case 4:
-                  Navigator.of(context).pushNamed('/candidate/resumes');
-                case 5:
-                  Navigator.of(context).pushNamed('/candidate/profile');
-              }
-            },
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: const BoxDecoration(shape: BoxShape.circle),
-              child: Icon(
-                item['icon'] as IconData,
-                color: const Color(0xFF94A3B8),
-                size: 20,
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
+  Widget _buildMobileBottomDock() => const CandidateMobileNav(
+    currentRoute: '/candidate/notifications',
+  );
 }
 
 // ── GRID PAINTER ─────────────────────────────────────────────────────────────
