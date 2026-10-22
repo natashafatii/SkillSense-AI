@@ -2,7 +2,9 @@ import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/question_preparation_panel.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/application.dart';
@@ -18,6 +20,7 @@ import '../../services/job_service.dart';
 class ScheduleInterviewScreen extends StatefulWidget {
   final String? jobId;
   final String? applicationId;
+  final Dio? questionClient;
   final Future<List<Job>> Function()? loadJobs;
   final Future<List<Application>> Function(String jobId)? loadForJob;
   final Future<Application> Function(String applicationId)? loadApplication;
@@ -29,6 +32,7 @@ class ScheduleInterviewScreen extends StatefulWidget {
     super.key,
     this.jobId,
     this.applicationId,
+    this.questionClient,
     this.loadJobs,
     this.loadForJob,
     this.loadApplication,
@@ -79,6 +83,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   bool _questionsWorking = false;
   String? _questionError;
   String? _questionNotice;
+  String? _approvedQuestionApplication;
+  String? _approvedQuestionSet;
+  int? _approvedQuestionRevision;
 
   @override
   void initState() {
@@ -237,7 +244,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         _awaiting = shortlisted;
         _booked = booked;
         if (!shortlisted.any((app) => app.id == _applicationId)) {
-          _applicationId = null;
+          _applicationId = shortlisted.length == 1
+              ? shortlisted.single.id
+              : null;
         }
         _loading = false;
       });
@@ -349,10 +358,17 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     });
     try {
       final interview =
+          // Approval remains a server-enforced gate; these are the reviewed revision.
           await (widget.sendInvite?.call(app.id, slot) ??
               InterviewService.schedule(
                 applicationId: app.id,
                 scheduledAt: slot,
+                questionSetId: _approvedQuestionApplication == app.id
+                    ? _approvedQuestionSet
+                    : null,
+                expectedRevision: _approvedQuestionApplication == app.id
+                    ? _approvedQuestionRevision
+                    : null,
               ));
       if (!mounted || app.job != _jobId) return;
       setState(() {
@@ -406,50 +422,12 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       setState(() {
         _questions = questions;
         _questionNotice = questions.isEmpty
-            ? 'Generated questions are pending.'
-            : 'Review the generated questions before approval.';
+            ? 'No scheduled questions are available.'
+            : 'These questions are frozen for the scheduled interview.';
       });
     } catch (error) {
       if (mounted) {
         setState(() => _questionError = 'Could not load questions: $error');
-      }
-    } finally {
-      if (mounted) setState(() => _questionsWorking = false);
-    }
-  }
-
-  Future<void> _saveQuestions({required bool approve}) async {
-    final id = _interview?.id;
-    if (id == null || _questions.isEmpty) return;
-    final edited = _questions
-        .map(
-          (question) => InterviewQuestion(
-            id: question.id,
-            text: _questionTexts[question.id]!.text.trim(),
-            isApproved: approve || question.isApproved,
-          ),
-        )
-        .toList();
-    if (edited.any((question) => question.text.isEmpty)) {
-      setState(() => _questionError = 'Question text cannot be empty.');
-      return;
-    }
-    setState(() {
-      _questionsWorking = true;
-      _questionError = null;
-    });
-    try {
-      final confirmed = await InterviewService.saveQuestions(id, edited);
-      if (!mounted || _interview?.id != id) return;
-      setState(() {
-        _questions = confirmed;
-        _questionNotice = approve
-            ? 'Questions approved by the server.'
-            : 'Question edits saved by the server.';
-      });
-    } catch (error) {
-      if (mounted) {
-        setState(() => _questionError = 'Question update failed: $error');
       }
     } finally {
       if (mounted) setState(() => _questionsWorking = false);
@@ -620,6 +598,26 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                                                 ),
                                               ],
                                             ),
+                                          if (_applicationId != null &&
+                                              widget.sendInvite == null) ...[
+                                            const SizedBox(height: 14),
+                                            QuestionPreparationPanel(
+                                              key: ValueKey(_applicationId),
+                                              applicationId: _applicationId!,
+                                              client: widget.questionClient,
+                                              onApprovalChanged:
+                                                  (setId, revision) {
+                                                    _approvedQuestionApplication =
+                                                        setId == null
+                                                        ? null
+                                                        : _applicationId;
+                                                    _approvedQuestionSet =
+                                                        setId;
+                                                    _approvedQuestionRevision =
+                                                        revision;
+                                                  },
+                                            ),
+                                          ],
                                           if (_interview != null) ...[
                                             const SizedBox(height: 14),
                                             _questionPanel(),
@@ -807,7 +805,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
           runSpacing: 6,
           children: [
             _configChip('Retell · voice EN-F2'),
-            _configChip('8 questions'),
+            _configChip('Recruiter-reviewed questions'),
             _configChip('Proctoring on'),
             _configChip('Recording on'),
           ],
@@ -934,6 +932,16 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     ),
   );
 
+  void _selectForReview(Application app) {
+    if (_applicationId == app.id) return;
+    setState(() {
+      _applicationId = app.id;
+      _approvedQuestionApplication = null;
+      _approvedQuestionSet = null;
+      _approvedQuestionRevision = null;
+    });
+  }
+
   Widget _candidateRow(Application app) {
     final selected = _applicationId == app.id;
     final busy = _busyApplicationId == app.id;
@@ -941,9 +949,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     final date = app.updatedAt ?? app.createdAt;
     final error = _rowErrors[app.id];
     return InkWell(
-      onTap: _busyApplicationId == null
-          ? () => setState(() => _applicationId = app.id)
-          : null,
+      onTap: _busyApplicationId == null ? () => _selectForReview(app) : null,
       child: Container(
         color: selected ? const Color(0xFFF7F9FF) : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
@@ -1021,6 +1027,17 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                         ),
                 ),
               ],
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: _busyApplicationId == null
+                    ? () => _selectForReview(app)
+                    : null,
+                child: Text(
+                  selected ? 'Reviewing questions' : 'Review questions',
+                ),
+              ),
             ),
             if (error != null) ...[
               const SizedBox(height: 7),
@@ -1143,7 +1160,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading('Generated questions'),
+        _heading('Scheduled interview questions'),
+        Text('Preparation: ${_interview!.questionPreparationMode}'),
+        if (_interview!.questionFallbackReason.isNotEmpty)
+          Text('Reason: ${_interview!.questionFallbackReason}'),
         const SizedBox(height: 7),
         Text(
           'Interview ID: ${_interview!.id}',
@@ -1162,28 +1182,12 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         for (final question in _questions)
           TextField(
             controller: _questionTexts[question.id],
+            readOnly: true,
             maxLines: 2,
             decoration: InputDecoration(
               labelText:
-                  'Question ${question.id}${question.isApproved ? ' · approved' : ' · pending approval'}',
+                  'Question ${question.id} · ${question.source}${question.isApproved ? ' · approved' : ' · pending approval'}',
             ),
-          ),
-        if (_questions.isNotEmpty)
-          Row(
-            children: [
-              TextButton(
-                onPressed: _questionsWorking
-                    ? null
-                    : () => _saveQuestions(approve: false),
-                child: const Text('Save edits'),
-              ),
-              FilledButton(
-                onPressed: _questionsWorking
-                    ? null
-                    : () => _saveQuestions(approve: true),
-                child: const Text('Approve questions'),
-              ),
-            ],
           ),
       ],
     ),

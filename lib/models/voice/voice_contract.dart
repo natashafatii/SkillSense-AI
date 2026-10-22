@@ -128,6 +128,9 @@ class VoiceSessionSnapshot {
         'report_ready': analysis['report_ready'],
         'analysis_status': analysis['analysis_state'],
         'retell_session_id': voice['retell_session_id'],
+        'conversation_outcome': (voice['conversation'] is Map)
+            ? (voice['conversation'] as Map)['outcome']
+            : null,
       },
       interviewId: interviewId,
       sessionId: sessionId,
@@ -147,6 +150,7 @@ class VoiceSessionSnapshot {
       reportReady = source.reportReady,
       analysisStatus = source.analysisStatus,
       callId = source.callId,
+      conversationOutcome = source.conversationOutcome,
       credential = value {
     if (callId != value.callId || audioEndedAt != null || finishRequested) {
       throw const FormatException(
@@ -164,6 +168,8 @@ class VoiceSessionSnapshot {
        videoSealed = voiceBool(json, 'video_sealed'),
        finishRequested = voiceBool(json, 'finish_requested'),
        interviewStatus = requireJsonString(json, 'interview_status'),
+       conversationOutcome =
+           json['conversation_outcome'] as String? ?? 'UNVERIFIED',
        audioEndedAt = voiceDate(json, 'audio_ended_at'),
        reportReady = voiceBool(json, 'report_ready'),
        analysisStatus = json['analysis_status'] == null
@@ -201,6 +207,7 @@ class VoiceSessionSnapshot {
   final int revision;
   final bool videoRequired, videoSealed, reportReady, finishRequested;
   final String interviewStatus;
+  final String conversationOutcome;
   final DateTime? audioEndedAt;
   final AnalysisState? analysisStatus;
   final String? callId;

@@ -294,9 +294,8 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
 
   // The recruiter workspace has a light navigation shell. Keep the form and
   // its overlays in the same palette regardless of the OS appearance setting.
-  CreateRoleTokens get _c => _isMobile
-      ? CreateRoleTokens.mobileLight
-      : CreateRoleTokens.light;
+  CreateRoleTokens get _c =>
+      _isMobile ? CreateRoleTokens.mobileLight : CreateRoleTokens.light;
   bool get _isMobile => MediaQuery.sizeOf(context).width < 900;
 
   @override
@@ -894,8 +893,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                 key: const Key('create-role-threshold'),
                 min: 40,
                 max: 90,
+                divisions: 50,
                 value: _threshold,
-                onChanged: (v) => setState(() => _threshold = v),
+                onChanged: (v) =>
+                    setState(() => _threshold = v.roundToDouble()),
               ),
             ),
           ],
@@ -2490,8 +2491,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   key: const Key('create-role-threshold'),
                   min: 40,
                   max: 90,
+                  divisions: 50,
                   value: _threshold,
-                  onChanged: (value) => setState(() => _threshold = value),
+                  onChanged: (value) =>
+                      setState(() => _threshold = value.roundToDouble()),
                 ),
               ),
             ],
@@ -2924,7 +2927,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         deadline: _deadline!,
         // Match the displayed score and avoid slider floating-point precision
         // exceeding the API's DecimalField limits.
-        screeningThreshold: _threshold.roundToDouble(),
+        // Match the whole-number threshold displayed to the recruiter, including
+        // older drafts that may contain continuous-slider decimal values.
+        screeningThreshold: _threshold.roundToDouble().roundToDouble(),
         autoShortlistEnabled: _autoShortlist,
         screeningCriteria: {
           ...?widget.initialJob?.screeningCriteria,

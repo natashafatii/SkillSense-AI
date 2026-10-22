@@ -696,7 +696,9 @@ class _CandidateInterviewLobbyScreenState
             ),
             const SizedBox(height: 8),
             Text(
-              'Development test: start now instead of waiting for the scheduled time.',
+              _interview?.questionPreparationMode == 'DEMO_TEMPLATE'
+                  ? 'Demo interview: this session uses generic test questions.'
+                  : 'Development test: approved interview questions are reused. Legacy test interviews without approved questions use generic demo templates.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(color: textSecondary, fontSize: 12),
             ),

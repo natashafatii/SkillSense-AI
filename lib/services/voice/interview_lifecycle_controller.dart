@@ -158,9 +158,9 @@ class InterviewLifecycleController extends ChangeNotifier {
     if (result.completed) {
       _localStop();
       _state = InterviewLifecycleState.completed;
-      _notice = result.reportReady
-          ? 'Interview completion is confirmed. Report availability is confirmed separately.'
-          : 'Interview completion is confirmed. The report is still processing or unavailable.';
+      _notice = result.conversationOutcome == 'COMPLETED'
+          ? 'The interview is complete. Report availability is confirmed separately.'
+          : 'The call ended. Your available answers are retained; full question completion is not confirmed.';
       if (result.reportReady) _pollTimer?.cancel();
     }
   }

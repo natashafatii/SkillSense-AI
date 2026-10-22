@@ -3011,14 +3011,14 @@ class _AdminPortalState extends State<AdminPortal> {
   }
 
   static final modelVersions = <String, String>{
-    'Resume parsing': 'Gemini 2.5 Flash-Lite',
-    'Question generation': 'Gemini 2.5 Flash',
+    'Resume parsing': 'Gemini 3.5 Flash-Lite',
+    'Question generation': 'Gemini 3.5 Flash-Lite',
     'Semantic matching': 'SBERT · all-MiniLM-L6-v2',
     'Behavioral observation': 'MediaPipe + YOLOv8-nano + FER',
   };
   static final modelCodes = <String, String>{
-    'Resume parsing': 'gemini-2.5-flash-lite',
-    'Question generation': 'gemini-2.5-flash',
+    'Resume parsing': 'gemini-3.5-flash-lite',
+    'Question generation': 'gemini-3.5-flash-lite',
     'Semantic matching': 'all-MiniLM-L6-v2',
     'Behavioral observation': 'mp-yolo-fer-v1',
   };
@@ -3037,7 +3037,7 @@ class _AdminPortalState extends State<AdminPortal> {
     final t = context.aurora;
     final old = modelCodes[name]!;
     final alt = const {
-      'Resume parsing': 'gemini-2.5-flash',
+      'Resume parsing': 'gemini-3.5-flash-lite',
       'Question generation': 'gemini-2.5-pro',
       'Semantic matching': 'all-mpnet-base-v2',
       'Behavioral observation': 'mp-yolo-fer-v2',
