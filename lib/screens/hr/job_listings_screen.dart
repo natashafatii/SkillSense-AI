@@ -243,7 +243,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
         _JobAction.delete,
         _JobAction.view,
       ],
-      JobStatus.closed => const [_JobAction.view],
+      JobStatus.closed || JobStatus.unknown => const [_JobAction.view],
     };
     return PopupMenuButton<_JobAction>(
       key: Key('job-actions-${job.id}'),

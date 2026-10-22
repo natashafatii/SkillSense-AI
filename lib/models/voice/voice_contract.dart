@@ -124,6 +124,7 @@ class VoiceSessionSnapshot {
         'finish_requested':
             voice['audio_ended_at'] != null || voice['status'] == 'DONE',
         'interview_status': voice['status'],
+        'workflow_state': voice['workflow_state'],
         'audio_ended_at': voice['audio_ended_at'],
         'report_ready': analysis['report_ready'],
         'analysis_status': analysis['analysis_state'],
@@ -139,25 +140,29 @@ class VoiceSessionSnapshot {
 
   VoiceSessionSnapshot.withCredential(
     VoiceSessionSnapshot source,
-    RetellCredential value,
+    RetellCredential? value,
   ) : identity = source.identity,
       revision = source.revision,
       videoRequired = source.videoRequired,
       videoSealed = source.videoSealed,
       finishRequested = source.finishRequested,
       interviewStatus = source.interviewStatus,
+      workflowState = source.workflowState,
       audioEndedAt = source.audioEndedAt,
       reportReady = source.reportReady,
       analysisStatus = source.analysisStatus,
       callId = source.callId,
       conversationOutcome = source.conversationOutcome,
       credential = value {
-    if (callId != value.callId || audioEndedAt != null || finishRequested) {
+    if (value != null &&
+        (callId != value.callId || audioEndedAt != null || finishRequested)) {
       throw const FormatException(
         'Provider credentials do not match an active session.',
       );
     }
   }
+  VoiceSessionSnapshot.withoutCredential(VoiceSessionSnapshot source)
+    : this.withCredential(source, null);
   VoiceSessionSnapshot.fromJson(
     JsonObject json, {
     required String interviewId,
@@ -168,6 +173,7 @@ class VoiceSessionSnapshot {
        videoSealed = voiceBool(json, 'video_sealed'),
        finishRequested = voiceBool(json, 'finish_requested'),
        interviewStatus = requireJsonString(json, 'interview_status'),
+       workflowState = json['workflow_state']?.toString() ?? 'UNKNOWN',
        conversationOutcome =
            json['conversation_outcome'] as String? ?? 'UNVERIFIED',
        audioEndedAt = voiceDate(json, 'audio_ended_at'),
@@ -206,7 +212,7 @@ class VoiceSessionSnapshot {
   final InterviewSessionIdentity identity;
   final int revision;
   final bool videoRequired, videoSealed, reportReady, finishRequested;
-  final String interviewStatus;
+  final String interviewStatus, workflowState;
   final String conversationOutcome;
   final DateTime? audioEndedAt;
   final AnalysisState? analysisStatus;
@@ -226,23 +232,10 @@ class CandidateInterviewData {
   CandidateInterviewData.fromJson(
     JsonObject json, {
     required String interviewId,
-  }) : interview = Interview.fromJson(json),
-       questions = _questions(json) {
+  }) : interview = CandidateInterview.fromJson(json) {
     if (interview.id != requireInterviewIdentity(interviewId)) {
       throw const FormatException('Interview identity mismatch.');
     }
   }
-  final Interview interview;
-  final List<InterviewQuestion> questions;
-  static List<InterviewQuestion> _questions(JsonObject json) {
-    final rows = json['questions'];
-    if (rows is! List) {
-      throw const FormatException('Missing interview question data.');
-    }
-    return List.unmodifiable(
-      rows
-          .map((row) => InterviewQuestion.fromJson(requireJsonObject(row)))
-          .where((q) => q.isApproved),
-    );
-  }
+  final CandidateInterview interview;
 }

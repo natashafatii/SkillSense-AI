@@ -1,11 +1,18 @@
+import 'api_contract.dart';
+import 'screening_assessment.dart';
+
 /// Application status enum matching Django [Application.Status].
 enum ApplicationStatus {
   applied('APPLIED'),
   screened('SHORTLISTED'),
   underReview('UNDER_REVIEW'),
   rejected('REJECTED'),
+  scheduled('SCHEDULED'),
+  inProgress('IN_PROGRESS'),
+  interviewFailed('INTERVIEW_FAILED'),
   interviewed('INTERVIEWED'),
-  decision('DECISION');
+  decision('DECISION'),
+  unknown('UNKNOWN');
 
   final String value;
   const ApplicationStatus(this.value);
@@ -16,28 +23,32 @@ enum ApplicationStatus {
       'SCREENED' || 'SHORTLISTED' => ApplicationStatus.screened,
       'SCREENING' || 'UNDER_REVIEW' => ApplicationStatus.underReview,
       'REJECTED' => ApplicationStatus.rejected,
+      'SCHEDULED' => ApplicationStatus.scheduled,
+      'IN_PROGRESS' => ApplicationStatus.inProgress,
+      'INTERVIEW_FAILED' => ApplicationStatus.interviewFailed,
       'INTERVIEWED' => ApplicationStatus.interviewed,
       'DECIDED' || 'DECISION' => ApplicationStatus.decision,
-      _ => throw FormatException('Unknown application status: $val'),
+      _ => ApplicationStatus.unknown,
     };
   }
 
-  /// Returns the single next valid status in the forward-only lifecycle.
-  ///
-  /// Returns null if already in terminal state ('DECISION').
-  ApplicationStatus? get nextStatus => switch (this) {
-    ApplicationStatus.applied => ApplicationStatus.screened,
-    ApplicationStatus.screened => ApplicationStatus.interviewed,
-    ApplicationStatus.interviewed => ApplicationStatus.decision,
-    ApplicationStatus.decision || ApplicationStatus.rejected => null,
-    ApplicationStatus.underReview => ApplicationStatus.screened,
-  };
+  /// Lifecycle stages are applied by server commands, never inferred locally.
+  ApplicationStatus? get nextStatus => null;
 }
 
 /// Job Application model — mirrors Django's [ApplicationDetailSerializer]
 /// and [ApplicationListSerializer].
 class Application {
   final int version;
+  final List<Map<String, dynamic>> history;
+  ScreeningAssessment? get screening =>
+      assessment == null ? null : ScreeningAssessment.fromJson(assessment!);
+  bool get canPrepareQuestions =>
+      version > 0 &&
+      eligibleForInterview &&
+      status == ApplicationStatus.screened &&
+      screening?.status == 'SUCCEEDED';
+  ApplicationVersion get applicationVersion => ApplicationVersion(version);
   final Map<String, dynamic>? assessment;
   final List<String> allowedActions;
   final bool eligibleForInterview;
@@ -63,6 +74,7 @@ class Application {
 
   const Application({
     this.version = 1,
+    this.history = const [],
     this.assessment,
     this.allowedActions = const [],
     this.eligibleForInterview = false,
@@ -88,12 +100,14 @@ class Application {
   });
 
   factory Application.fromJson(Map<String, dynamic> json) {
-    final rawStatus = json['status'] as String;
+    final rawStatus = json['status']?.toString() ?? 'UNKNOWN';
     final scores = json['scores'] is Map ? json['scores'] as Map : const {};
-    double? numeric(dynamic value) =>
-        value is num ? value.toDouble() : double.tryParse('$value');
+    double? numeric(dynamic value) => ApiValue.number(value);
     return Application(
-      version: (json['version'] as num?)?.toInt() ?? 1,
+      history: (json['history'] as List? ?? [])
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList(),
+      version: json['version'] == null ? 0 : ApiValue.integer(json['version']),
       assessment: json['assessment'] is Map
           ? Map<String, dynamic>.from(json['assessment'] as Map)
           : null,
@@ -115,7 +129,9 @@ class Application {
           (json['candidate_profile_image_url'] ?? json['profile_image_url'])
               as String?,
       resumeScore: numeric(
-        json['resume_score'] ?? json['match_score'] ?? json['score'],
+        json.containsKey('match_score')
+            ? json['match_score']
+            : json['resume_score'],
       ),
       technicalScore: numeric(json['technical_score'] ?? scores['technical']),
       behavioralScore: numeric(
@@ -125,9 +141,9 @@ class Application {
         json['communication_score'] ?? scores['communication'],
       ),
       outcome: json['outcome'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: ApiValue.instant(json['created_at'])!,
       updatedAt: json['updated_at'] != null
-          ? DateTime.tryParse(json['updated_at'] as String)
+          ? ApiValue.instant(json['updated_at'])
           : null,
     );
   }
@@ -138,6 +154,7 @@ class Application {
     return Application(
       version: (result['version'] as num?)?.toInt() ?? version,
       assessment: assessment,
+      history: history,
       allowedActions:
           (result['allowed_actions'] as List?)?.cast<String>() ??
           allowedActions,
@@ -161,7 +178,7 @@ class Application {
       outcome: outcome,
       createdAt: createdAt,
       updatedAt: result['updated_at'] is String
-          ? DateTime.tryParse(result['updated_at'] as String) ?? updatedAt
+          ? ApiValue.instant(result['updated_at']) ?? updatedAt
           : updatedAt,
     );
   }

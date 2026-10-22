@@ -15,6 +15,8 @@ import '../../services/application_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/interview_service.dart';
 import '../../services/job_service.dart';
+import '../../services/session_scope.dart';
+import 'recruitment_review_screen.dart';
 
 /// Recruiter scheduling console for shortlisted applications.
 class ScheduleInterviewScreen extends StatefulWidget {
@@ -25,7 +27,12 @@ class ScheduleInterviewScreen extends StatefulWidget {
   final Future<List<Application>> Function(String jobId)? loadForJob;
   final Future<Application> Function(String applicationId)? loadApplication;
   final Future<List<Interview>> Function(String jobId)? loadBooked;
-  final Future<Interview> Function(String applicationId, DateTime scheduledAt)?
+  final Future<Interview> Function(
+    String applicationId,
+    DateTime scheduledAt,
+    String questionSetId,
+    int expectedRevision,
+  )?
   sendInvite;
 
   const ScheduleInterviewScreen({
@@ -73,6 +80,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   bool _loading = true;
   bool _hasAnyShortlisted = false;
   int _request = 0;
+  final _session = SessionScope.generation;
+  final Set<String> _scheduleReviewRequired = {};
+  int _questionReload = 0;
   late DateTime _monday;
   late int _selectedDay;
   DateTime? _selectedSlot;
@@ -94,7 +104,28 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     _applicationId = widget.applicationId;
     _monday = _weekStart(DateTime.now());
     _selectedDay = _initialDay();
+    SessionScope.invalidations.addListener(_clearSession);
     _loadJobs();
+  }
+
+  void _clearSession() {
+    _request++;
+    if (!mounted) return;
+    setState(() {
+      _jobs = [];
+      _awaiting = [];
+      _booked = null;
+      _questions = [];
+      _interview = null;
+      _applicationId = null;
+      _approvedQuestionApplication = null;
+      _approvedQuestionSet = null;
+      _approvedQuestionRevision = null;
+      _error = 'Account session changed. Reopen scheduling.';
+    });
+    for (final controller in _questionTexts.values) {
+      controller.clear();
+    }
   }
 
   @override
@@ -110,6 +141,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
 
   @override
   void dispose() {
+    SessionScope.invalidations.removeListener(_clearSession);
     for (final controller in _questionTexts.values) {
       controller.dispose();
     }
@@ -197,7 +229,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     try {
       final results = await Future.wait<Object>([
         widget.loadForJob?.call(jobId) ??
-            ApplicationService.listAllForJob(jobId, status: 'SHORTLISTED'),
+            ApplicationService.listAllForJob(jobId, eligibleForInterview: true),
         widget.loadBooked?.call(jobId) ??
             InterviewService.listForJob(jobId, status: 'SCHEDULED'),
       ]);
@@ -261,7 +293,11 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   }
 
   bool _isShortlisted(Application app) =>
-      (app.rawStatus ?? app.status.value).toUpperCase() == 'SHORTLISTED';
+      const {
+        'SHORTLISTED',
+        'SCREENED',
+      }.contains((app.rawStatus ?? app.status.value).toUpperCase()) &&
+      app.eligibleForInterview;
 
   String _friendlyLoadError(Object error) {
     if (error is ApiException) {
@@ -295,6 +331,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     setState(() {
       _jobId = id;
       _applicationId = null;
+      _approvedQuestionApplication = null;
+      _approvedQuestionSet = null;
+      _approvedQuestionRevision = null;
       _selectedSlot = null;
       _rowErrors.clear();
       _interview = null;
@@ -340,7 +379,25 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   String _slotLabel(DateTime date) =>
       '${_time(date)} ${_days[date.weekday - 1]}';
 
+  bool _canSchedule(Application app) =>
+      _isShortlisted(app) &&
+      !_scheduleReviewRequired.contains(app.id) &&
+      _approvedQuestionApplication == app.id &&
+      _approvedQuestionSet != null &&
+      _approvedQuestionRevision != null;
+
   Future<void> _sendInvite(Application app) async {
+    if (_busyApplicationId != null || _session != SessionScope.generation) {
+      return;
+    }
+    if (!_canSchedule(app)) {
+      setState(
+        () => _rowErrors[app.id] =
+            'Review and approve the current question revision before scheduling.',
+      );
+      return;
+    }
+    final setId = _approvedQuestionSet!, revision = _approvedQuestionRevision!;
     final slot = _selectedSlot;
     if (slot == null || !slot.isAfter(DateTime.now())) {
       setState(() => _rowErrors[app.id] = 'Choose an available future slot.');
@@ -359,18 +416,18 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     try {
       final interview =
           // Approval remains a server-enforced gate; these are the reviewed revision.
-          await (widget.sendInvite?.call(app.id, slot) ??
+          await (widget.sendInvite?.call(app.id, slot, setId, revision) ??
               InterviewService.schedule(
                 applicationId: app.id,
                 scheduledAt: slot,
-                questionSetId: _approvedQuestionApplication == app.id
-                    ? _approvedQuestionSet
-                    : null,
-                expectedRevision: _approvedQuestionApplication == app.id
-                    ? _approvedQuestionRevision
-                    : null,
+                questionSetId: setId,
+                expectedRevision: revision,
               ));
-      if (!mounted || app.job != _jobId) return;
+      if (!mounted ||
+          app.job != _jobId ||
+          _session != SessionScope.generation) {
+        return;
+      }
       setState(() {
         _interview = interview;
         _scheduledIds.add(app.id);
@@ -386,6 +443,21 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     } catch (error) {
       if (!mounted) return;
       if (await _handleUnauthorized(error)) return;
+      if (error is ApiException && error.requiresStateRefresh) {
+        _scheduleReviewRequired.add(app.id);
+        _approvedQuestionApplication = null;
+        _approvedQuestionSet = null;
+        _approvedQuestionRevision = null;
+        _questionReload++;
+        try {
+          await (widget.loadApplication?.call(app.id) ??
+              ApplicationService.getApplication(app.id));
+          await _loadAwaiting();
+        } catch (_) {
+          /* Keep submission blocked until refreshed and reviewed. */
+        }
+      }
+      if (!mounted) return;
       setState(() {
         _rowErrors[app.id] = switch (error) {
           ApiException(statusCode: 403) =>
@@ -598,24 +670,32 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                                                 ),
                                               ],
                                             ),
-                                          if (_applicationId != null &&
-                                              widget.sendInvite == null) ...[
+                                          if (_applicationId != null) ...[
                                             const SizedBox(height: 14),
                                             QuestionPreparationPanel(
-                                              key: ValueKey(_applicationId),
+                                              key: ValueKey(
+                                                '$_applicationId-$_questionReload',
+                                              ),
+                                              application: _awaiting
+                                                  .where(
+                                                    (app) =>
+                                                        app.id ==
+                                                        _applicationId,
+                                                  )
+                                                  .firstOrNull,
                                               applicationId: _applicationId!,
                                               client: widget.questionClient,
-                                              onApprovalChanged:
-                                                  (setId, revision) {
-                                                    _approvedQuestionApplication =
-                                                        setId == null
-                                                        ? null
-                                                        : _applicationId;
-                                                    _approvedQuestionSet =
-                                                        setId;
-                                                    _approvedQuestionRevision =
-                                                        revision;
-                                                  },
+                                              onApprovalChanged: (setId, revision) {
+                                                setState(() {
+                                                  _approvedQuestionApplication =
+                                                      setId == null
+                                                      ? null
+                                                      : _applicationId;
+                                                  _approvedQuestionSet = setId;
+                                                  _approvedQuestionRevision =
+                                                      revision;
+                                                });
+                                              },
                                             ),
                                           ],
                                           if (_interview != null) ...[
@@ -714,14 +794,18 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 ],
               ),
               child: ElevatedButton(
-                style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  padding: EdgeInsets.symmetric(horizontal: compact ? 22 : 26),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(11),
+                style: RecruiterButtonStyle.primary(
+                  ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 22 : 26,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(11),
+                    ),
                   ),
-                )),
+                ),
                 onPressed: () {
                   final jobId = _jobId;
                   Navigator.of(context).pushNamed(
@@ -999,18 +1083,23 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 ),
                 const SizedBox(width: 6),
                 FilledButton(
-                  onPressed: _selectedSlot != null && _busyApplicationId == null
+                  onPressed:
+                      _selectedSlot != null &&
+                          _busyApplicationId == null &&
+                          _canSchedule(app)
                       ? () => _sendInvite(app)
                       : null,
-                  style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
-                    minimumSize: const Size(75, 31),
-                    padding: const EdgeInsets.symmetric(horizontal: 9),
-                    backgroundColor: _blue,
-                    textStyle: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                  style: RecruiterButtonStyle.primary(
+                    FilledButton.styleFrom(
+                      minimumSize: const Size(75, 31),
+                      padding: const EdgeInsets.symmetric(horizontal: 9),
+                      backgroundColor: _blue,
+                      textStyle: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  )),
+                  ),
                   child: busy
                       ? const SizedBox(
                           width: 14,
@@ -1039,6 +1128,16 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 ),
               ),
             ),
+            if (_scheduleReviewRequired.contains(app.id))
+              TextButton(
+                onPressed: _busyApplicationId == null
+                    ? () =>
+                          setState(() => _scheduleReviewRequired.remove(app.id))
+                    : null,
+                child: const Text(
+                  'I reviewed the refreshed application and questions',
+                ),
+              ),
             if (error != null) ...[
               const SizedBox(height: 7),
               Text(
@@ -1132,12 +1231,18 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 onPressed:
                     _applicationId != null &&
                         _selectedSlot != null &&
-                        _busyApplicationId == null
+                        _busyApplicationId == null &&
+                        _awaiting.any(
+                          (app) =>
+                              app.id == _applicationId && _canSchedule(app),
+                        )
                     ? () => _sendInvite(
                         _awaiting.firstWhere((app) => app.id == _applicationId),
                       )
                     : null,
-                style: RecruiterButtonStyle.primary(FilledButton.styleFrom(backgroundColor: _blue)),
+                style: RecruiterButtonStyle.primary(
+                  FilledButton.styleFrom(backgroundColor: _blue),
+                ),
                 child: _busyApplicationId != null
                     ? const SizedBox(
                         width: 16,
@@ -1161,6 +1266,26 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _heading('Scheduled interview questions'),
+        TextButton(
+          onPressed: () async {
+            final interview = _interview!;
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => RecruitmentReviewScreen(
+                  applicationId: interview.applicationId,
+                  interviewId: interview.id,
+                ),
+              ),
+            );
+            if (mounted) _refreshQuestions();
+          },
+          child: const Text(
+            'Review evidence, reschedule or schedule another attempt',
+          ),
+        ),
+        Text(
+          'Workflow: ${_interview!.workflowState} · ${_interview!.scheduledAt?.toLocal()} ${DateTime.now().timeZoneName}',
+        ),
         Text('Preparation: ${_interview!.questionPreparationMode}'),
         if (_interview!.questionFallbackReason.isNotEmpty)
           Text('Reason: ${_interview!.questionFallbackReason}'),
@@ -1177,7 +1302,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
           ),
         TextButton(
           onPressed: _questionsWorking ? null : _refreshQuestions,
-          child: const Text('Refresh generated questions'),
+          child: const Text('Refresh frozen questions'),
         ),
         for (final question in _questions)
           TextField(

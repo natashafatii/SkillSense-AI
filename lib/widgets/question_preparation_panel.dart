@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../services/api_client.dart';
+import '../models/question_set.dart';
+import '../models/api_contract.dart';
+import '../services/foreground_poller.dart';
+import '../services/session_scope.dart';
+import '../models/application.dart';
+import '../services/application_service.dart';
+import '../services/api_exception.dart';
+import '../services/question_preparation_service.dart';
 
 /// Review the actual application draft before scheduling; no sample questions.
 class QuestionPreparationPanel extends StatefulWidget {
@@ -9,9 +17,11 @@ class QuestionPreparationPanel extends StatefulWidget {
     required this.applicationId,
     required this.onApprovalChanged,
     this.client,
+    this.application,
   });
   final String applicationId;
   final Dio? client;
+  final Application? application;
   final void Function(String? setId, int? revision) onApprovalChanged;
   @override
   State<QuestionPreparationPanel> createState() =>
@@ -23,26 +33,89 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
   bool _busy = false;
   bool _stale = false;
   String? _error;
+  Map<String, dynamic>? _unsavedAdd;
+  String _unsavedOperation = 'add';
+  Application? _application;
+  DateTime? _retryAt;
+  bool _reviewRequired = false;
+  int _resourceEpoch = 0;
+  late final ForegroundPoller<Map<String, dynamic>> _poller;
+  final int _session = SessionScope.generation;
+
+  Future<Map<String, dynamic>> _read([CancelToken? token]) async {
+    final dio = widget.client ?? await ApiClient.getInstance();
+    final response = await dio.get(
+      '/applications/${widget.applicationId}/question-set/',
+      cancelToken: token,
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  @override
+  void dispose() {
+    _poller.dispose();
+    SessionScope.invalidations.removeListener(_clearSession);
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
+    _poller = ForegroundPoller(
+      read: _read,
+      isVisible: () => mounted && ModalRoute.of(context)?.isCurrent != false,
+      isPending: (data) =>
+          isPendingWorkflowState(data['generation_status']?.toString() ?? ''),
+      onData: (data) {
+        if (mounted && _session == SessionScope.generation) _accept(data);
+      },
+      onStopped: (error) {
+        if (mounted &&
+            isPendingWorkflowState(
+              _data?['generation_status']?.toString() ?? '',
+            )) {
+          setState(() => _error = 'Still processing. Refresh to check again.');
+        }
+      },
+    );
+    _application = widget.application;
+    SessionScope.invalidations.addListener(_clearSession);
     _refresh();
   }
 
   Future<void> _refresh() async {
+    final resourceEpoch = _resourceEpoch;
+    _poller.stop();
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final dio = widget.client ?? await ApiClient.getInstance();
-      final result = await dio.get(
-        '/applications/${widget.applicationId}/question-set/',
-      );
-      if (!mounted) return;
-      _accept(Map<String, dynamic>.from(result.data as Map));
+      final data = await _read();
+      if (!mounted ||
+          _session != SessionScope.generation ||
+          resourceEpoch != _resourceEpoch) {
+        return;
+      }
+      _accept(data);
+      if (data['generation_status'] == 'NOT_REQUESTED') {
+        final application = await ApplicationService.getApplication(
+          widget.applicationId,
+          client: widget.client,
+        );
+        if (mounted &&
+            _session == SessionScope.generation &&
+            resourceEpoch == _resourceEpoch) {
+          setState(() => _application = application);
+        }
+      }
+      if (isPendingWorkflowState(data['generation_status']?.toString() ?? '')) {
+        _poller.start();
+      }
     } catch (_) {
-      if (mounted) {
+      if (mounted &&
+          _session == SessionScope.generation &&
+          resourceEpoch == _resourceEpoch) {
         widget.onApprovalChanged(null, null);
         setState(() {
           _stale = true;
@@ -50,21 +123,24 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
         });
       }
     } finally {
-      if (mounted) {
+      if (mounted && resourceEpoch == _resourceEpoch) {
         setState(() => _busy = false);
       }
     }
   }
 
   void _accept(Map<String, dynamic> value) {
+    final parsed = QuestionSet.fromJson(value);
     setState(() {
       _data = value;
       _stale = false;
+      _retryAt = parsed.nextAttemptAt ?? _retryAt;
     });
-    final approved = value['approved_at'] != null && value['frozen_at'] == null;
+    final approved =
+        parsed.schedulable && !_reviewRequired && _unsavedAdd == null;
     widget.onApprovalChanged(
       approved ? value['id'] as String? : null,
-      approved ? value['revision'] as int? : null,
+      approved ? parsed.revision?.value : null,
     );
   }
 
@@ -72,68 +148,241 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
     String operation, [
     Map<String, dynamic> fields = const {},
   ]) async {
+    final resourceEpoch = _resourceEpoch;
     final current = _data;
-    if (current == null || current['id'] == null) return;
+    if (_busy || (_retryAt != null && DateTime.now().isBefore(_retryAt!))) {
+      return;
+    }
+    if (current == null ||
+        current['id'] == null ||
+        _reviewRequired ||
+        _session != SessionScope.generation) {
+      return;
+    }
+    _poller.stop();
+    widget.onApprovalChanged(null, null);
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final dio = widget.client ?? await ApiClient.getInstance();
-      final result = await dio.patch(
-        '/question-sets/${current['id']}/',
-        data: {
-          'operation': operation,
-          'expected_revision': current['revision'],
-          ...fields,
-        },
-      );
-      if (mounted) {
-        _accept(Map<String, dynamic>.from(result.data as Map));
+      final result = await QuestionPreparationService(
+        client: widget.client,
+      ).command(QuestionSet.fromJson(current), operation, fields);
+      if (mounted &&
+          _session == SessionScope.generation &&
+          resourceEpoch == _resourceEpoch) {
+        _unsavedAdd = null;
+        _accept(result.toJson());
+        if (isPendingWorkflowState(result.generationStatus)) _poller.start();
       }
     } catch (error) {
-      if (mounted) {
+      if (mounted &&
+          resourceEpoch == _resourceEpoch &&
+          _session == SessionScope.generation) {
         widget.onApprovalChanged(null, null);
         setState(() {
           _stale = true;
-          _error = error is DioException && error.response?.statusCode == 409
+          _reviewRequired = true;
+          if (error is ApiException && error.statusCode == 429) {
+            _retryAt = DateTime.now().add(
+              error.retryAfter ?? const Duration(seconds: 15),
+            );
+          }
+          _error = error is ApiException && error.statusCode == 409
               ? 'This question set changed. Refresh the draft before making more changes.'
               : 'The change could not be saved. Refresh the draft before retrying.';
         });
+        await _refresh();
+        if (mounted && resourceEpoch == _resourceEpoch) {
+          setState(
+            () => _error = error is ApiException
+                ? error.message
+                : 'The change was not confirmed. Review current state before retrying.',
+          );
+        }
       }
     } finally {
-      if (mounted) {
+      if (mounted && resourceEpoch == _resourceEpoch) {
         setState(() => _busy = false);
       }
     }
   }
 
   Future<void> _addQuestion() async {
+    final resourceEpoch = _resourceEpoch;
     final fields = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => const _AddQuestionDialog(),
     );
-    if (!mounted || fields == null || _busy || _stale) return;
+    if (!mounted ||
+        resourceEpoch != _resourceEpoch ||
+        fields == null ||
+        _busy ||
+        _stale) {
+      return;
+    }
+    _unsavedAdd = Map<String, dynamic>.from(fields);
+    _unsavedOperation = 'add';
     await _command('add', fields);
+  }
+
+  Future<void> _editQuestion(Map<String, dynamic> question) async {
+    if (!const {
+      'TECHNICAL',
+      'BEHAVIORAL',
+      'SITUATIONAL',
+    }.contains(question['category'])) {
+      setState(
+        () => _error =
+            'This question category is not supported by this editor. Refresh or contact your administrator.',
+      );
+      return;
+    }
+    final resourceEpoch = _resourceEpoch;
+    final fields = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _AddQuestionDialog(initial: question),
+    );
+    if (!mounted ||
+        resourceEpoch != _resourceEpoch ||
+        fields == null ||
+        _busy ||
+        _stale ||
+        _reviewRequired) {
+      return;
+    }
+    _unsavedAdd = {'id': question['id'], ...fields};
+    _unsavedOperation = 'edit';
+    await _command('edit', _unsavedAdd!);
+  }
+
+  Future<void> _move(String id, int offset) async {
+    final ids = (_data!['questions'] as List)
+        .map((q) => (q as Map)['id'] as String)
+        .toList();
+    final index = ids.indexOf(id), target = ids.indexOf(id) + offset;
+    if (index < 0 || target < 0 || target >= ids.length) return;
+    ids.removeAt(index);
+    ids.insert(target, id);
+    await _command('reorder', {'ids': ids});
+  }
+
+  Future<void> _regenerate() async {
+    final resourceEpoch = _resourceEpoch;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Regenerate this unapproved draft?'),
+        content: const Text(
+          'Unedited generated and template questions will be archived. Manual questions and recruiter-edited wording are preserved. Review and approve the resulting revision again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Regenerate draft'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true &&
+        mounted &&
+        resourceEpoch == _resourceEpoch &&
+        !_busy &&
+        !_reviewRequired) {
+      await _command('regenerate');
+    }
+  }
+
+  Future<void> _prepare() async {
+    final app = _application;
+    if (app == null || !app.canPrepareQuestions || _busy || _reviewRequired) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await QuestionPreparationService(client: widget.client).prepare(app);
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      _reviewRequired = true;
+      await _refresh();
+      if (mounted) {
+        setState(
+          () => _error =
+              'Preparation was not confirmed. Review refreshed application state before retrying.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _clearSession() {
+    _resourceEpoch++;
+    _poller.stop();
+    if (mounted) {
+      setState(() {
+        _data = null;
+        _application = null;
+        _unsavedAdd = null;
+        _stale = true;
+      });
+    }
+    widget.onApprovalChanged(null, null);
+  }
+
+  @override
+  void didUpdateWidget(covariant QuestionPreparationPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.applicationId != widget.applicationId) {
+      _resourceEpoch++;
+      _poller.stop();
+      _data = null;
+      _application = widget.application;
+      _unsavedAdd = null;
+      _reviewRequired = false;
+      widget.onApprovalChanged(null, null);
+      _refresh();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = _data?['generation_status']?.toString() ?? 'LOADING';
     final approved = _data?['approved_at'] != null;
-    final frozen = _data?['frozen_at'] != null;
+    final frozen =
+        _data?['frozen_at'] != null ||
+        _data?['legacy'] == true ||
+        state == 'LEGACY';
     final questions = (_data?['questions'] as List?) ?? const [];
     final label = switch (state) {
       'FALLBACK' => 'Template fallback — tailored generation was unavailable.',
       'READY' => 'Questions ready for recruiter review.',
       'QUEUED' => 'Question generation is queued.',
       'GENERATING' => 'Tailored questions are being generated.',
-      'FAILED' => 'Question generation failed. Retry is available.',
+      'FAILED' =>
+        'Question generation failed. Review the error and retry timing.',
+      'LEGACY' =>
+        'Historical imported questions — read-only and unavailable for new scheduling.',
       'NOT_REQUESTED' => 'No draft has been requested for this application.',
-      _ => 'Loading question preparation…',
+      'LOADING' => 'Loading question preparation…',
+      _ => 'Question preparation state unavailable. Refresh to check again.',
     };
-    final editable = !frozen && ['READY', 'FALLBACK', 'LEGACY'].contains(state);
-    final canChange = editable && !_busy && !_stale;
+    final editable =
+        !frozen &&
+        _data?['legacy'] != true &&
+        ['READY', 'FALLBACK'].contains(state);
+    final canChange =
+        editable &&
+        !_busy &&
+        !_stale &&
+        !_reviewRequired &&
+        (_retryAt == null || !DateTime.now().isBefore(_retryAt!));
     const ink = Color(0xFF17233B);
     const muted = Color(0xFF64748B);
     const teal = Color(0xFF087F72);
@@ -290,6 +539,67 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                     ),
                   ),
                 ),
+              if (_unsavedAdd != null)
+                Text('Unsaved question: ${_unsavedAdd!['text'] ?? ''}'),
+              if (_reviewRequired)
+                TextButton(
+                  onPressed: _busy || _stale
+                      ? null
+                      : () {
+                          setState(() => _reviewRequired = false);
+                          _accept(_data!);
+                        },
+                  child: const Text('I reviewed the refreshed draft'),
+                ),
+              if (_unsavedAdd != null && canChange)
+                TextButton(
+                  onPressed: () => _command(_unsavedOperation, _unsavedAdd!),
+                  child: const Text('Submit preserved question'),
+                ),
+              if (_unsavedAdd != null && !_busy)
+                TextButton(
+                  onPressed: () async {
+                    final edited = await showDialog<Map<String, dynamic>>(
+                      context: context,
+                      builder: (_) => _AddQuestionDialog(initial: _unsavedAdd),
+                    );
+                    if (edited != null && mounted) {
+                      setState(
+                        () => _unsavedAdd = {
+                          if (_unsavedAdd!['id'] != null)
+                            'id': _unsavedAdd!['id'],
+                          ...edited,
+                        },
+                      );
+                    }
+                  },
+                  child: const Text('Edit preserved wording'),
+                ),
+              if (_unsavedAdd != null && !_busy)
+                TextButton(
+                  onPressed: () {
+                    setState(() => _unsavedAdd = null);
+                    if (_data != null) _accept(_data!);
+                  },
+                  child: const Text('Discard preserved changes'),
+                ),
+              if (_unsavedAdd != null &&
+                  _unsavedOperation == 'edit' &&
+                  canChange &&
+                  !questions.any((q) => (q as Map)['id'] == _unsavedAdd!['id']))
+                TextButton(
+                  onPressed: () => _command('add', {
+                    'text': _unsavedAdd!['text'],
+                    'category': _unsavedAdd!['category'],
+                  }),
+                  child: const Text('Add preserved wording as a new question'),
+                ),
+              if (_data?['error_code'] != null && _data!['error_code'] != '')
+                Text('Generation error: ${_data!['error_code']}'),
+              if (_data?['next_attempt_at'] != null)
+                Text(
+                  'Next generation attempt: ${ApiValue.instant(_data!['next_attempt_at'])?.toLocal()}',
+                ),
               if (_error != null)
                 Container(
                   width: double.infinity,
@@ -353,6 +663,12 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                 spacing: 10,
                 runSpacing: 10,
                 children: [
+                  if (state == 'NOT_REQUESTED' &&
+                      _application?.canPrepareQuestions == true)
+                    FilledButton(
+                      onPressed: _busy || _reviewRequired ? null : _prepare,
+                      child: const Text('Prepare questions'),
+                    ),
                   TextButton.icon(
                     onPressed: _busy ? null : _refresh,
                     icon: const Icon(Icons.refresh, size: 17),
@@ -360,17 +676,28 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                   ),
                   if (!approved &&
                       !frozen &&
-                      ['READY', 'FALLBACK'].contains(state))
+                      ['READY', 'FALLBACK', 'FAILED'].contains(state))
                     TextButton.icon(
-                      onPressed: canChange
-                          ? () => _command('regenerate')
+                      onPressed:
+                          !_busy &&
+                              !_stale &&
+                              !_reviewRequired &&
+                              _data?['legacy'] != true &&
+                              (_retryAt == null ||
+                                  !DateTime.now().isBefore(_retryAt!))
+                          ? _regenerate
                           : null,
                       icon: const Icon(Icons.auto_awesome_outlined, size: 17),
                       label: const Text('Regenerate unapproved draft'),
                     ),
                   if (!approved && !frozen && state == 'FAILED')
                     OutlinedButton(
-                      onPressed: _busy || _stale
+                      onPressed:
+                          _busy ||
+                              _stale ||
+                              _reviewRequired ||
+                              (_retryAt != null &&
+                                  DateTime.now().isBefore(_retryAt!))
                           ? null
                           : () => _command('retry'),
                       child: const Text('Retry generation'),
@@ -379,7 +706,10 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                       !frozen &&
                       ['READY', 'FALLBACK'].contains(state))
                     FilledButton.icon(
-                      onPressed: canChange && questions.isNotEmpty
+                      onPressed:
+                          canChange &&
+                              questions.isNotEmpty &&
+                              _unsavedAdd == null
                           ? () => _command('approve')
                           : null,
                       style: FilledButton.styleFrom(
@@ -493,6 +823,31 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
           ),
           if (!frozen) ...[
             const SizedBox(width: 6),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Edit question $number',
+                  onPressed: canChange ? () => _editQuestion(question) : null,
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Move question $number up',
+                  onPressed: canChange && number > 1
+                      ? () => _move(question['id'] as String, -1)
+                      : null,
+                  icon: const Icon(Icons.arrow_upward),
+                ),
+                IconButton(
+                  tooltip: 'Move question $number down',
+                  onPressed:
+                      canChange && number < (_data!['questions'] as List).length
+                      ? () => _move(question['id'] as String, 1)
+                      : null,
+                  icon: const Icon(Icons.arrow_downward),
+                ),
+              ],
+            ),
             IconButton(
               tooltip: 'Remove question $number',
               onPressed: canChange
@@ -512,7 +867,8 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
 }
 
 class _AddQuestionDialog extends StatefulWidget {
-  const _AddQuestionDialog();
+  const _AddQuestionDialog({this.initial});
+  final Map<String, dynamic>? initial;
   @override
   State<_AddQuestionDialog> createState() => _AddQuestionDialogState();
 }
@@ -521,6 +877,13 @@ class _AddQuestionDialogState extends State<_AddQuestionDialog> {
   final _form = GlobalKey<FormState>();
   final _text = TextEditingController();
   String _category = 'TECHNICAL';
+  @override
+  void initState() {
+    super.initState();
+    _text.text = widget.initial?['text']?.toString() ?? '';
+    _category = widget.initial?['category']?.toString() ?? 'TECHNICAL';
+  }
+
   @override
   void dispose() {
     _text.dispose();
@@ -540,7 +903,9 @@ class _AddQuestionDialogState extends State<_AddQuestionDialog> {
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      title: const Text('Add your own question'),
+      title: Text(
+        widget.initial == null ? 'Add your own question' : 'Edit question',
+      ),
       content: SizedBox(
         width: 480,
         child: SingleChildScrollView(
@@ -615,7 +980,9 @@ class _AddQuestionDialogState extends State<_AddQuestionDialog> {
               });
             }
           },
-          child: const Text('Add question'),
+          child: Text(
+            widget.initial == null ? 'Add question' : 'Save question',
+          ),
         ),
       ],
     ),

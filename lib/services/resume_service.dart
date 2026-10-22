@@ -18,6 +18,7 @@ class ResumeService {
   ResumeService._();
 
   /// In-memory cache of the active parsed resume detail (for CD-04 / CD-10 reuse).
+  static bool listAllowsStorage = false;
   static ResumeDetail? _cachedDetail;
   static String? _cachedDetailId;
   static String? _cachedDefaultResumeId;
@@ -32,6 +33,7 @@ class ResumeService {
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.get('/candidates/resumes/');
+      listAllowsStorage = responseAllowsStorage(response);
       if (response.data is List) {
         return (response.data as List)
             .map((e) => Map<String, dynamic>.from(e as Map))
@@ -101,7 +103,8 @@ class ResumeService {
       if (epoch != SessionScope.generation) {
         throw StateError('Session changed.');
       }
-      if (detail.isFailed || (detail.isParsed && detail.skills != null)) {
+      if (responseAllowsStorage(response) &&
+          (detail.isFailed || (detail.isParsed && detail.skills != null))) {
         _cachedDetail = detail;
         _cachedDetailId = resumeId;
       }
@@ -256,8 +259,14 @@ class ResumeService {
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.get('/profile/coverage/');
-      _cachedProfileCoverage = Map<String, dynamic>.from(response.data as Map);
-      return _cachedProfileCoverage!;
+      if (epoch != SessionScope.generation) {
+        throw StateError('Session changed.');
+      }
+      final coverage = Map<String, dynamic>.from(response.data as Map);
+      _cachedProfileCoverage = responseAllowsStorage(response)
+          ? coverage
+          : null;
+      return coverage;
     } on DioException catch (e) {
       if (epoch == SessionScope.generation &&
           e.type != DioExceptionType.cancel &&
@@ -272,6 +281,7 @@ class ResumeService {
 
   /// Clear all in-memory caches (call on sign-out).
   static void clearCache() {
+    listAllowsStorage = false;
     _cachedProfileCoverage = null;
     _cachedDetail = null;
     _cachedDetailId = null;

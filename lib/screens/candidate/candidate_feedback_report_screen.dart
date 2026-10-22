@@ -210,6 +210,7 @@ class _CandidateFeedbackReportScreenState
 
   Widget _entry(CandidateFeedback row) {
     final title = switch (row.state) {
+      FeedbackState.unknown => 'Feedback state unavailable',
       FeedbackState.pending => 'Feedback is being prepared',
       FeedbackState.unreleased => 'Awaiting recruiter release',
       FeedbackState.unavailable => 'Feedback unavailable',
@@ -253,6 +254,8 @@ class _CandidateFeedbackReportScreenState
                   'Please contact your recruiter if this status continues.',
                 FeedbackState.retracted =>
                   'Previously released content is no longer available. Your recruiter may release a revised report.',
+                FeedbackState.unknown =>
+                  'Refresh to check feedback availability.',
                 FeedbackState.released => 'Report content is unavailable.',
               }, style: const TextStyle(color: _muted)),
           ],

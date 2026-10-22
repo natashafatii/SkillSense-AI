@@ -1,14 +1,24 @@
+import 'package:http_parser/http_parser.dart' show parseHttpDate;
 import 'package:dio/dio.dart';
 
 /// Structured API exception containing HTTP status code, user-friendly message,
 /// and optional field-level validation errors.
 class ApiException implements Exception {
   final int? statusCode;
+  final Object? validationBody;
+  final Duration? retryAfter;
+  bool get requiresReview => statusCode == 409;
+  bool get accessUnavailable => statusCode == 403 || statusCode == 404;
+  bool get requiresStateRefresh =>
+      requiresReview || statusCode == null || statusCode == 503;
+
   final String message;
   final Map<String, dynamic>? fieldErrors;
 
   const ApiException({
     this.statusCode,
+    this.validationBody,
+    this.retryAfter,
     required this.message,
     this.fieldErrors,
   });
@@ -20,7 +30,8 @@ class ApiException implements Exception {
         e.type == DioExceptionType.sendTimeout) {
       return const ApiException(
         statusCode: null,
-        message: 'Connection timed out. Please check your internet connection '
+        message:
+            'Connection timed out. Please check your internet connection '
             'and verify the backend server is reachable.',
       );
     }
@@ -28,7 +39,8 @@ class ApiException implements Exception {
     if (e.type == DioExceptionType.connectionError) {
       return const ApiException(
         statusCode: null,
-        message: 'Failed to connect to backend server. Ensure the server is running.',
+        message:
+            'Failed to connect to backend server. Ensure the server is running.',
       );
     }
 
@@ -43,53 +55,50 @@ class ApiException implements Exception {
     if (response == null) {
       return ApiException(
         statusCode: null,
-        message: 'An unexpected network error occurred: ${e.message}',
+        message: 'The request could not be confirmed. Refresh before retrying.',
       );
     }
 
     final statusCode = response.statusCode;
     final data = response.data;
-
-    if (data is Map<String, dynamic>) {
-      // 1. Single 'detail' message
-      if (data.containsKey('detail')) {
-        return ApiException(
-          statusCode: statusCode,
-          message: data['detail'].toString(),
-        );
-      }
-
-      // 2. Field-level validation errors (e.g. {"company_name": ["Required."]})
-      final Map<String, dynamic> fieldErrors = {};
-      String? firstErrorMessage;
-
-      data.forEach((key, value) {
-        if (value is List && value.isNotEmpty) {
-          fieldErrors[key] = value.map((v) => v.toString()).toList();
-          firstErrorMessage ??= '$key: ${value.first}';
-        } else {
-          fieldErrors[key] = value.toString();
-          firstErrorMessage ??= '$key: $value';
+    final retryHeader = response.headers.value('retry-after');
+    Duration? retryAfter;
+    if (retryHeader != null) {
+      final seconds = int.tryParse(retryHeader);
+      if (seconds != null) {
+        retryAfter = Duration(seconds: seconds < 0 ? 0 : seconds);
+      } else {
+        try {
+          final delay = parseHttpDate(
+            retryHeader,
+          ).difference(DateTime.now().toUtc());
+          retryAfter = delay.isNegative ? Duration.zero : delay;
+        } on FormatException {
+          /* Invalid server hint: use bounded backoff. */
         }
-      });
-
-      return ApiException(
-        statusCode: statusCode,
-        message: firstErrorMessage ?? 'Validation failed.',
-        fieldErrors: fieldErrors.isNotEmpty ? fieldErrors : null,
-      );
+      }
+    }
+    String describe(Object? value) {
+      if (value is Map) {
+        return value.entries
+            .map((e) => '${e.key}: ${describe(e.value)}')
+            .join('\n');
+      }
+      if (value is List) return value.map(describe).join('\n');
+      return value?.toString() ?? '';
     }
 
-    if (data is String && data.isNotEmpty) {
-      return ApiException(
-        statusCode: statusCode,
-        message: data,
-      );
-    }
-
+    final message = describe(
+      data is Map && data.containsKey('detail') ? data['detail'] : data,
+    );
     return ApiException(
       statusCode: statusCode,
-      message: 'Server error occurred (HTTP $statusCode).',
+      validationBody: data,
+      retryAfter: retryAfter,
+      fieldErrors: data is Map ? Map<String, dynamic>.from(data) : null,
+      message: message.isNotEmpty
+          ? message
+          : 'Request failed (HTTP $statusCode).',
     );
   }
 

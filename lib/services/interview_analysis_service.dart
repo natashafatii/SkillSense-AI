@@ -4,7 +4,7 @@ import 'api_client.dart';
 import 'api_exception.dart';
 
 /// Uses the existing Clerk SDK token supplier/interceptor; no token cache or
-/// independent refresh mechanism. Enable only after B1 confirms the schemas.
+/// independent refresh mechanism. Uses the reviewed G01–G14 contract.
 class InterviewAnalysisService {
   final bool contractConfirmed;
   final Future<Dio> Function() _client;
@@ -12,6 +12,7 @@ class InterviewAnalysisService {
   InterviewAnalysisService({
     this.contractConfirmed = const bool.fromEnvironment(
       'INTERVIEW_ANALYSIS_CONTRACT_CONFIRMED',
+      defaultValue: true,
     ),
     Future<Dio> Function()? client,
   }) : _client = client ?? ApiClient.getInstance;

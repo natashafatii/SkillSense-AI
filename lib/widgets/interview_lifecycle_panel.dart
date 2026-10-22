@@ -92,7 +92,7 @@ class _InterviewLifecyclePanelState extends State<InterviewLifecyclePanel>
               if (flow.dataError != null) Text(flow.dataError!),
               if (flow.interview != null)
                 Text(
-                  'Approved backend questions: ${flow.interview!.questions.length}. Question order is controlled by the live interview, not a client timer.',
+                  'Question readiness: ${flow.interview!.interview.questionReadiness.state}. Interview status: ${flow.interview!.interview.workflowState}.',
                 ),
               if (flow.finishRequested)
                 Text(
@@ -104,13 +104,16 @@ class _InterviewLifecyclePanelState extends State<InterviewLifecyclePanel>
                 ),
               Text(
                 completed
-                    ? 'Interview: completion confirmed by backend'
-                    : 'Interview: completion not confirmed',
+                    ? 'Call: ended; evaluation readiness is separate'
+                    : 'Call: end not yet confirmed',
               ),
               Text(
                 flow.snapshot?.reportReady == true
-                    ? 'Report: availability confirmed by backend'
-                    : 'Report: processing or unavailable; no readiness is assumed',
+                    ? 'Behavioral report: available separately'
+                    : 'Behavioral report: processing or unavailable',
+              ),
+              Text(
+                'Evidence processing: ${flow.snapshot?.workflowState ?? 'UNKNOWN'}',
               ),
               const SizedBox(height: 8),
               Wrap(

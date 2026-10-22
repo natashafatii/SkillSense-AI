@@ -1,8 +1,8 @@
+import '../application_screening_screen.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
-import 'candidate_job_detail_screen.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -452,13 +452,21 @@ class ApplicationCard extends StatelessWidget {
     } else if (application.status == ApplicationStatus.screened) {
       subtext = 'Shortlisted for interview scheduling';
       companyName = 'Application';
+    } else if (application.status == ApplicationStatus.scheduled) {
+      subtext = 'Interview scheduled — open your lobby for joining time';
+    } else if (application.status == ApplicationStatus.inProgress) {
+      subtext = 'Interview in progress';
+    } else if (application.status == ApplicationStatus.interviewFailed) {
+      subtext = 'Interview requires recruiter follow-up';
     } else if (application.status == ApplicationStatus.interviewed) {
-      subtext = 'Interview Wed 13:00';
+      subtext = 'Interview completed';
       companyName = 'Application';
     } else if (application.status == ApplicationStatus.underReview) {
       subtext = 'Recruiter review required';
     } else if (application.status == ApplicationStatus.rejected) {
       subtext = 'Application not selected';
+    } else if (application.status == ApplicationStatus.unknown) {
+      subtext = 'Refresh to check application status';
     } else {
       subtext = 'Decision recorded';
       companyName = 'Application';
@@ -468,7 +476,8 @@ class ApplicationCard extends StatelessWidget {
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => CandidateJobDetailScreen(jobId: application.job),
+            builder: (_) =>
+                ApplicationScreeningScreen(applicationId: application.id),
           ),
         );
         onChanged?.call();
@@ -582,6 +591,11 @@ class ApplicationCard extends StatelessWidget {
 
   Color _getStatusColor(ApplicationStatus status) {
     switch (status) {
+      case ApplicationStatus.scheduled:
+      case ApplicationStatus.inProgress:
+      case ApplicationStatus.interviewFailed:
+      case ApplicationStatus.unknown:
+        return const Color(0xFF64748B);
       case ApplicationStatus.applied:
         return const Color(0xFFFBBF24); // Yellow
       case ApplicationStatus.rejected:
@@ -598,6 +612,14 @@ class ApplicationCard extends StatelessWidget {
 
   String _getStatusBadgeText(ApplicationStatus status) {
     switch (status) {
+      case ApplicationStatus.scheduled:
+        return 'SCHEDULED';
+      case ApplicationStatus.inProgress:
+        return 'IN PROGRESS';
+      case ApplicationStatus.interviewFailed:
+        return 'INTERVIEW FOLLOW-UP';
+      case ApplicationStatus.unknown:
+        return 'STATUS UNAVAILABLE';
       case ApplicationStatus.applied:
         return 'APPLIED';
       case ApplicationStatus.screened:
@@ -675,12 +697,16 @@ class _ProgressBar extends StatelessWidget {
 
   int _getStatusIndex(ApplicationStatus s) {
     switch (s) {
+      case ApplicationStatus.unknown:
       case ApplicationStatus.applied:
         return 0;
       case ApplicationStatus.underReview:
       case ApplicationStatus.rejected:
       case ApplicationStatus.screened:
         return 1;
+      case ApplicationStatus.scheduled:
+      case ApplicationStatus.inProgress:
+      case ApplicationStatus.interviewFailed:
       case ApplicationStatus.interviewed:
         return 2;
       case ApplicationStatus.decision:

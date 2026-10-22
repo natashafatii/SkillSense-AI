@@ -1,5 +1,8 @@
+import 'api_contract.dart';
+
 /// Candidate-safe feedback-v1 projection. Never parse recruiter evaluations here.
 enum FeedbackState {
+  unknown,
   pending,
   failed,
   unavailable,
@@ -59,6 +62,7 @@ class FeedbackFinding {
 
 class CandidateFeedbackReport {
   final String id, summary;
+  FeedbackRevision get feedbackRevision => FeedbackRevision(revision);
   final int revision, assessedQuestions, totalQuestions;
   final DateTime releasedAt;
   final double? performance;
@@ -131,7 +135,10 @@ class CandidateFeedback {
   CandidateFeedback.fromJson(Map<String, dynamic> data)
     : interviewId = _text(data['interview']),
       applicationId = _text(data['application']),
-      state = FeedbackState.values.byName(_text(data['state']).toLowerCase()),
+      state = FeedbackState.values.firstWhere(
+        (state) => state.name == data['state']?.toString().toLowerCase(),
+        orElse: () => FeedbackState.unknown,
+      ),
       report = data['state'] == 'RELEASED'
           ? CandidateFeedbackReport.fromJson(_object(data['report']))
           : null;

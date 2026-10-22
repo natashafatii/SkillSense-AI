@@ -57,7 +57,7 @@ class CandidateProfile {
       location: json['location'] as String? ?? '',
       linkedinUrl: json['linkedin_url'] as String? ?? '',
       portfolioUrl: json['portfolio_url'] as String? ?? '',
-      yearsExperience: json['years_experience'] as int?,
+      yearsExperience: (json['years_experience'] as num?)?.toInt(),
       headline: json['headline'] as String? ?? '',
       savedCompletionPercentage: switch (json['completion_percentage']) {
         num value when value.isFinite && value >= 0 && value <= 100 =>
