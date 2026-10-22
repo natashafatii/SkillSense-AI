@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
@@ -253,11 +254,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 Container(
                   height: mobile ? 38 : 40,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: RecruiterButtonStyle.blue,
                     borderRadius: BorderRadius.circular(11),
                     boxShadow: [
                       BoxShadow(
@@ -270,7 +267,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   ),
                   child: ElevatedButton(
                     key: const Key('analytics-job-listings'),
-                    style: ElevatedButton.styleFrom(
+                    style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
                       padding: EdgeInsets.symmetric(
@@ -279,7 +276,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(11),
                       ),
-                    ),
+                    )),
                     onPressed: () => Navigator.of(
                       context,
                     ).pushNamed('/recruiter/job-listings'),

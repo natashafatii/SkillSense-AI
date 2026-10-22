@@ -216,13 +216,13 @@ class _CandidateOnboardingFlowWebState
           _WebJobMatchRow(
             title: 'Senior Django Developer',
             matchScore: 91,
-            color: AppColors.candidatePrimary,
+            color: CandidateButtonStyle.deepTeal,
           ),
           const SizedBox(height: 24),
           _WebJobMatchRow(
             title: 'Frontend Engineer',
             matchScore: 62,
-            color: AppColors.candidatePrimary.withValues(alpha: 0.55),
+            color: CandidateButtonStyle.deepTeal,
           ),
         ],
       ),
@@ -252,7 +252,7 @@ class _CandidateOnboardingFlowWebState
                 width: 28,
                 height: 28,
                 decoration: const BoxDecoration(
-                  color: AppColors.candidatePrimary,
+                  color: CandidateButtonStyle.deepTeal,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -302,7 +302,7 @@ class _CandidateOnboardingFlowWebState
             children: [
               const Icon(
                 Icons.school_outlined,
-                color: AppColors.candidatePrimary,
+                color: CandidateButtonStyle.deepTeal,
                 size: 20,
               ),
               const SizedBox(width: 10),
@@ -347,7 +347,7 @@ class _CandidateOnboardingFlowWebState
                 width: 10,
                 height: 10,
                 decoration: const BoxDecoration(
-                  color: AppColors.candidatePrimary,
+                  color: CandidateButtonStyle.deepTeal,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -383,7 +383,7 @@ class _CandidateOnboardingFlowWebState
                   width: 6,
                   height: h,
                   decoration: BoxDecoration(
-                    color: AppColors.candidatePrimary,
+                    color: CandidateButtonStyle.deepTeal,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -559,7 +559,7 @@ class _CandidateOnboardingFlowWebState
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
                                 colors: [
-                                  AppColors.candidatePrimary.withValues(
+                                  CandidateButtonStyle.deepTeal.withValues(
                                     alpha: 0.12,
                                   ),
                                   Colors.transparent,
@@ -593,7 +593,7 @@ class _CandidateOnboardingFlowWebState
                     ),
                   ),
                   // Right: light green tint background
-                  Expanded(child: Container(color: const Color(0xFFF2FBF5))),
+                  Expanded(child: Container(color: const Color(0xFFF5FAF9))),
                 ],
               ),
 
@@ -785,9 +785,7 @@ class _CandidateOnboardingFlowWebState
                                               borderRadius:
                                                   BorderRadius.circular(20),
                                               border: Border.all(
-                                                color: AppColors
-                                                    .candidatePrimary
-                                                    .withValues(alpha: 0.5),
+                                                color: CandidateButtonStyle.deepTeal,
                                               ),
                                               color: Colors.transparent,
                                             ),
@@ -797,7 +795,7 @@ class _CandidateOnboardingFlowWebState
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w500,
                                                 color:
-                                                    AppColors.candidatePrimary,
+                                                    CandidateButtonStyle.deepTeal,
                                               ),
                                             ),
                                           ),
@@ -809,13 +807,13 @@ class _CandidateOnboardingFlowWebState
                                             height: 72,
                                             decoration: BoxDecoration(
                                               color:
-                                                  AppColors.candidateLightGreen,
+                                                  CandidateButtonStyle.paleTeal,
                                               borderRadius:
                                                   BorderRadius.circular(20),
                                             ),
                                             child: Icon(
                                               _pageIcon(),
-                                              color: AppColors.candidatePrimary,
+                                              color: CandidateButtonStyle.deepTeal,
                                               size: 34,
                                             ),
                                           ),
@@ -873,8 +871,7 @@ class _CandidateOnboardingFlowWebState
                                                   height: 8,
                                                   decoration: BoxDecoration(
                                                     color: _currentPage == i
-                                                        ? AppColors
-                                                              .candidatePrimary
+                                                        ? CandidateButtonStyle.deepTeal
                                                         : AppColors
                                                               .candidateDotInactive,
                                                     borderRadius:
@@ -896,7 +893,7 @@ class _CandidateOnboardingFlowWebState
                                               onPressed: _nextPage,
                                               style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
                                                 backgroundColor:
-                                                    AppColors.candidatePrimary,
+                                                    CandidateButtonStyle.deepTeal,
                                                 foregroundColor: Colors.white,
                                                 elevation: 0,
                                                 shape: RoundedRectangleBorder(
@@ -978,11 +975,11 @@ class _CandidateBulletPoint extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: isActive
-                ? AppColors.candidatePrimary
+                ? CandidateButtonStyle.deepTeal
                 : Colors.white.withValues(alpha: 0.08),
             border: Border.all(
               color: isActive
-                  ? AppColors.candidatePrimary
+                  ? CandidateButtonStyle.deepTeal
                   : Colors.white.withValues(alpha: 0.2),
               width: 1.5,
             ),
@@ -1075,7 +1072,7 @@ class _CandidateSkillTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.candidateLightGreen,
+        color: CandidateButtonStyle.paleTeal,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -1083,7 +1080,7 @@ class _CandidateSkillTag extends StatelessWidget {
         style: GoogleFonts.inter(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: AppColors.candidatePrimary,
+          color: CandidateButtonStyle.deepTeal,
         ),
       ),
     );
@@ -1119,7 +1116,7 @@ class _WebScoreRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.candidatePrimary.withValues(alpha: 0.1),
+                color: CandidateButtonStyle.deepTeal.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -1127,7 +1124,7 @@ class _WebScoreRow extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.candidatePrimary,
+                  color: CandidateButtonStyle.deepTeal,
                 ),
               ),
             ),
@@ -1146,7 +1143,7 @@ class _WebScoreRow extends StatelessWidget {
                 flex: (fraction * 100).round(),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: AppColors.candidatePrimary,
+                    color: CandidateButtonStyle.deepTeal,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -1188,7 +1185,7 @@ class _CandidatePrivacyRow extends StatelessWidget {
             width: 28,
             height: 28,
             decoration: const BoxDecoration(
-              color: AppColors.candidatePrimary,
+              color: CandidateButtonStyle.deepTeal,
               shape: BoxShape.circle,
             ),
             child: const Icon(

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 // lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -664,7 +665,7 @@ class _LoginScreenState extends State<LoginScreen>
                               const SizedBox(height: 20),
 
                               // ── Continue with Google ───────────────────────
-                              GestureDetector(
+                              PointerGestureDetector(
                                 onTap: _isLoading ? null : _googleSignIn,
                                 child: Container(
                                   height: 56,
@@ -700,7 +701,7 @@ class _LoginScreenState extends State<LoginScreen>
                               const SizedBox(height: 14),
 
                               // ── Continue with Facebook ─────────────────────
-                              GestureDetector(
+                              PointerGestureDetector(
                                 onTap: () =>
                                     _snack(AppConstants.continueWithFacebook),
                                 child: Container(
@@ -748,7 +749,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                   ),
                                   const SizedBox(width: 6),
-                                  GestureDetector(
+                                  PointerGestureDetector(
                                     onTap: () {
                                       Navigator.pushNamed(
                                         context,

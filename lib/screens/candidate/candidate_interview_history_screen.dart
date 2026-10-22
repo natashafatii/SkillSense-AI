@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
@@ -348,11 +349,7 @@ class _CandidateInterviewHistoryScreenState
             Container(
               height: 40,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: CandidateButtonStyle.primaryGradient,
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
@@ -513,7 +510,7 @@ class _CandidateInterviewHistoryScreenState
   ) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(
+      child: PointerGestureDetector(
         onTap: _navigateToFeedback,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -603,7 +600,7 @@ class _CandidateInterviewHistoryScreenState
   ) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(
+      child: PointerGestureDetector(
         onTap: _navigateToFeedback,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -756,7 +753,7 @@ class _CandidateInterviewHistoryScreenState
                       onExit: (_) =>
                           setState(() => _hoveredTrendBarIndex = null),
                       cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
+                      child: PointerGestureDetector(
                         onTap: _navigateToFeedback,
                         child: Tooltip(
                           message: '${bar['role']}: $score% on ${bar['label']}',

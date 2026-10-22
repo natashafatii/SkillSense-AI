@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_constants.dart';
@@ -55,7 +57,7 @@ class _HrOnboardingFlowState extends State<HrOnboardingFlow> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(_totalPages, (index) {
-              return GestureDetector(
+              return PointerGestureDetector(
                 onTap: () {
                   _pageController.animateToPage(
                     index,
@@ -76,7 +78,7 @@ class _HrOnboardingFlowState extends State<HrOnboardingFlow> {
             height: 56,
             child: ElevatedButton(
               onPressed: _nextPage,
-              style: ElevatedButton.styleFrom(
+              style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                 backgroundColor: AppColors.hrPrimary,
                 foregroundColor: AppColors.white,
                 elevation: 10,
@@ -84,7 +86,7 @@ class _HrOnboardingFlowState extends State<HrOnboardingFlow> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28),
                 ),
-              ),
+              )),
               child: Text(
                 _currentPage == 3
                     ? AppConstants.hrCreateAccount

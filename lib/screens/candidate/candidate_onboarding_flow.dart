@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/candidate_button_style.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -72,7 +73,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(5, (index) {
-              return GestureDetector(
+              return PointerGestureDetector(
                 onTap: () {
                   _pageController.animateToPage(
                     index,
@@ -94,10 +95,10 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
             child: ElevatedButton(
               onPressed: _nextPage,
               style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                backgroundColor: AppColors.candidatePrimary,
+                backgroundColor: CandidateButtonStyle.deepTeal,
                 foregroundColor: AppColors.white,
                 elevation: 10,
-                shadowColor: AppColors.candidatePrimary.withValues(alpha: 0.3),
+                shadowColor: CandidateButtonStyle.deepTeal.withValues(alpha: 0.3),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28),
                 ),
@@ -205,13 +206,13 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                                   const _JobMatchRow(
                                     title: 'Senior Django Developer',
                                     matchScore: 91,
-                                    color: AppColors.candidatePrimary,
+                                    color: CandidateButtonStyle.deepTeal,
                                   ),
                                   const SizedBox(height: 24),
                                   _JobMatchRow(
                                     title: 'Frontend Engineer',
                                     matchScore: 62,
-                                    color: AppColors.candidatePrimary.withValues(alpha: 0.6),
+                                    color: CandidateButtonStyle.deepTeal,
                                   ),
                                 ],
                               ),
@@ -271,7 +272,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                                         width: 28,
                                         height: 28,
                                         decoration: const BoxDecoration(
-                                          color: AppColors.candidatePrimary,
+                                          color: CandidateButtonStyle.deepTeal,
                                           shape: BoxShape.circle,
                                         ),
                                         child: const Icon(
@@ -320,7 +321,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Icon(Icons.school_outlined, color: AppColors.candidatePrimary, size: 22),
+                                      const Icon(Icons.school_outlined, color: CandidateButtonStyle.deepTeal, size: 22),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
@@ -393,7 +394,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                                         width: 10,
                                         height: 10,
                                         decoration: const BoxDecoration(
-                                          color: AppColors.candidatePrimary,
+                                          color: CandidateButtonStyle.deepTeal,
                                           shape: BoxShape.circle,
                                         ),
                                       ),
@@ -431,7 +432,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                                           width: 6,
                                           height: h,
                                           decoration: BoxDecoration(
-                                            color: AppColors.candidatePrimary,
+                                            color: CandidateButtonStyle.deepTeal,
                                             borderRadius: BorderRadius.circular(4),
                                           ),
                                         ),
@@ -614,7 +615,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: AppColors.candidatePrimary.withValues(alpha: 0.6),
+                  color: CandidateButtonStyle.deepTeal,
                 ),
                 color: Colors.transparent,
               ),
@@ -623,7 +624,7 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                 style: GoogleFonts.publicSans(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.candidatePrimary,
+                  color: CandidateButtonStyle.deepTeal,
                 ),
               ),
             ),
@@ -648,10 +649,10 @@ class _CandidateOnboardingFlowState extends State<CandidateOnboardingFlow> {
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: AppColors.candidateLightGreen,
+                  color: CandidateButtonStyle.paleTeal,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(icon, color: AppColors.candidatePrimary, size: 36),
+                child: Icon(icon, color: CandidateButtonStyle.deepTeal, size: 36),
               ),
             ),
             const SizedBox(height: 32),
@@ -683,7 +684,7 @@ class _InteractiveDot extends StatelessWidget {
       width: isActive ? 24 : 8,
       height: 8,
       decoration: BoxDecoration(
-        color: isActive ? AppColors.candidatePrimary : AppColors.candidateDotInactive,
+        color: isActive ? CandidateButtonStyle.deepTeal : AppColors.candidateDotInactive,
         borderRadius: BorderRadius.circular(4),
       ),
     );
@@ -760,7 +761,7 @@ class _SkillTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.candidateLightGreen,
+        color: CandidateButtonStyle.paleTeal,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -768,7 +769,7 @@ class _SkillTag extends StatelessWidget {
         style: GoogleFonts.publicSans(
           fontSize: 14,
           fontWeight: FontWeight.w700,
-          color: AppColors.candidatePrimary,
+          color: CandidateButtonStyle.deepTeal,
         ),
       ),
     );
@@ -805,7 +806,7 @@ class _ScoreRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.candidatePrimary.withValues(alpha: 0.1),
+                color: CandidateButtonStyle.deepTeal.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -813,7 +814,7 @@ class _ScoreRow extends StatelessWidget {
                 style: GoogleFonts.publicSans(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.candidatePrimary,
+                  color: CandidateButtonStyle.deepTeal,
                 ),
               ),
             ),
@@ -832,7 +833,7 @@ class _ScoreRow extends StatelessWidget {
                 flex: (fraction * 100).round(),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: AppColors.candidatePrimary,
+                    color: CandidateButtonStyle.deepTeal,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -876,7 +877,7 @@ class _PrivacyRow extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: const BoxDecoration(
-              color: AppColors.candidatePrimary,
+              color: CandidateButtonStyle.deepTeal,
               shape: BoxShape.circle,
             ),
             child: const Icon(

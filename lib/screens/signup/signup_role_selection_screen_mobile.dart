@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
@@ -185,6 +186,7 @@ class SignupRoleSelectionScreenMobile extends StatelessWidget {
                               icon: Icons.track_changes_rounded,
                               iconBackground: AppColors.mobileIconBgCandidate,
                               iconColor: AppColors.mobileIconCandidate,
+                              selectedBorderColor: AppColors.webRoleCandidate,
                               selected: selectedRole == 'job_seeker',
                               cardColor: card,
                               textColor: text,
@@ -248,29 +250,13 @@ class SignupRoleSelectionScreenMobile extends StatelessWidget {
                           height: 56,
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              gradient: selectedRole == null
-                                  ? null
-                                  : const LinearGradient(
-                                      colors: [
-                                        AppColors.mobileButtonGradientStart,
-                                        AppColors.mobileButtonGradientEnd,
-                                      ],
-                                    ),
                               color: selectedRole == null
                                   ? AppColors.primary.withValues(alpha: .4)
-                                  : null,
+                                  : PreAuthButtonStyle.roleColor(selectedRole),
                               borderRadius: BorderRadius.circular(28),
                               boxShadow: selectedRole == null
                                   ? null
-                                  : [
-                                      BoxShadow(
-                                        color: AppColors
-                                            .mobileButtonGradientStart
-                                            .withValues(alpha: .24),
-                                        blurRadius: 18,
-                                        offset: const Offset(0, 7),
-                                      ),
-                                    ],
+                                  : PreAuthButtonStyle.roleGlow(selectedRole),
                             ),
                             child: Material(
                               color: Colors.transparent,
@@ -311,7 +297,7 @@ class SignupRoleSelectionScreenMobile extends StatelessWidget {
                                 TextSpan(
                                   text: 'Log in',
                                   style: const TextStyle(
-                                    color: AppColors.mobileButtonGradientStart,
+                                    color: PreAuthButtonStyle.blue,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -346,6 +332,7 @@ class _RoleCard extends StatelessWidget {
     required this.secondaryColor,
     required this.edgeColor,
     required this.onTap,
+    this.selectedBorderColor = AppColors.mobileIconHr,
   });
 
   final String title;
@@ -357,6 +344,7 @@ class _RoleCard extends StatelessWidget {
       textColor,
       secondaryColor,
       edgeColor;
+  final Color selectedBorderColor;
   final bool selected;
   final VoidCallback onTap;
 
@@ -379,7 +367,7 @@ class _RoleCard extends StatelessWidget {
               : cardColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? AppColors.mobileIconHr : edgeColor,
+            color: selected ? selectedBorderColor : edgeColor,
             width: 1,
           ),
         ),
@@ -430,7 +418,7 @@ class _RoleCard extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? AppColors.mobileIconHr : edgeColor,
+                  color: selected ? selectedBorderColor : edgeColor,
                   width: selected ? 6 : 1.5,
                 ),
               ),

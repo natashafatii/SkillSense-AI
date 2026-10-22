@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -345,7 +346,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
         return Stack(
           children: [
             Positioned.fill(
-              child: GestureDetector(
+              child: PointerGestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: _closeDesktopPicker,
                 child: const ColoredBox(color: Colors.transparent),

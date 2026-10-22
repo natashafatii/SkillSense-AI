@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -145,7 +146,7 @@ class _AppTooltipState extends State<AppTooltip> {
   Widget build(BuildContext context) {
     if (widget.message.isEmpty) return widget.child;
 
-    return GestureDetector(
+    return PointerGestureDetector(
       onLongPress: _onLongPress,
       onTap: _removeTooltip,
       child: MouseRegion(

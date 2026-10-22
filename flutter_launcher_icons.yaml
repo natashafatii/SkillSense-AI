@@ -1,0 +1,16 @@
+# Generated platform resources are managed by flutter_launcher_icons.
+# Run through the Dart workflow: dart run tooling/generate_branding.dart
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/images/logo.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/images/logo-foreground.png
+  adaptive_icon_foreground_inset: 0
+  remove_alpha_ios: true
+  background_color_ios: "#FFFFFF"
+  web:
+    generate: true
+    image_path: assets/images/logo.png
+    background_color: "#FFFFFF"
+    theme_color: "#2563EB"

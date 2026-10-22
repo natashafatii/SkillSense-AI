@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:dio/dio.dart';
@@ -803,12 +804,12 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
           : danger
           ? const Color(0xFFD64545)
           : _ink,
-      backgroundColor: primary ? _blue : Colors.white,
+      backgroundColor: primary ? RecruiterButtonStyle.blue : Colors.white,
       side: BorderSide(
         color: danger
             ? const Color(0xFFF3C8C8)
             : primary
-            ? _blue
+            ? RecruiterButtonStyle.blue
             : _edge,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),

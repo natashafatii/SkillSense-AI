@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -405,7 +406,7 @@ class LoginScreenWeb extends StatelessWidget {
                                             obscureText: obscurePassword,
                                             suffixIcon: MouseRegion(
                                               cursor: SystemMouseCursors.click,
-                                              child: GestureDetector(
+                                              child: PointerGestureDetector(
                                                 onTap: onObscureToggle,
                                                 child: Center(
                                                   widthFactor: 1.0,
@@ -471,7 +472,7 @@ class LoginScreenWeb extends StatelessWidget {
                                               MouseRegion(
                                                 cursor:
                                                     SystemMouseCursors.click,
-                                                child: GestureDetector(
+                                                child: PointerGestureDetector(
                                                   onTap: onForgotPassword,
                                                   child: Text(
                                                     AppConstants
@@ -560,7 +561,7 @@ class LoginScreenWeb extends StatelessWidget {
                                           Center(
                                             child: MouseRegion(
                                               cursor: SystemMouseCursors.click,
-                                              child: GestureDetector(
+                                              child: PointerGestureDetector(
                                                 onTap: onCreateAccount,
                                                 child: RichText(
                                                   text: TextSpan(

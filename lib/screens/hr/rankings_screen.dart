@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
@@ -122,9 +124,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
                   width: 320,
                   height: 52,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF4F46E5), Color(0xFF3B82F6)],
-                    ),
+                    color: RecruiterButtonStyle.blue,
                     borderRadius: BorderRadius.circular(26),
                     boxShadow: [
                       BoxShadow(
@@ -279,11 +279,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
                     Container(
                       height: compact ? 38 : 40,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        color: RecruiterButtonStyle.blue,
                         borderRadius: BorderRadius.circular(11),
                         boxShadow: [
                           BoxShadow(
@@ -298,14 +294,14 @@ class _RankingsScreenState extends State<RankingsScreen> {
                       ),
                       child: ElevatedButton(
                         key: const Key('rankings-go-to-pipeline'),
-                        style: ElevatedButton.styleFrom(
+                        style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
                           padding: const EdgeInsets.symmetric(horizontal: 26),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(11),
                           ),
-                        ),
+                        )),
                         onPressed: () {
                           Navigator.of(context).pushNamed(
                             '/recruiter/pipeline',
@@ -1172,7 +1168,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
           const SizedBox(height: 20),
           MouseRegion(
             cursor: SystemMouseCursors.click,
-            child: GestureDetector(
+            child: PointerGestureDetector(
               onTap: () {
                 Navigator.of(context).pushNamed('/dashboard');
               },
@@ -1235,7 +1231,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
                         ),
                         child: MouseRegion(
                           cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
+                          child: PointerGestureDetector(
                             onTap: () {
                               if (!isSelected) {
                                 Navigator.of(context).pushNamed(item['route']);

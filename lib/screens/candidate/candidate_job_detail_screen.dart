@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
@@ -777,7 +778,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       children: [
         Row(
           children: [
-            GestureDetector(
+            PointerGestureDetector(
               onTap: () => _showCompanyTooltip(context),
               child: Container(
                 width: 48,
@@ -812,7 +813,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       letterSpacing: -0.025,
                     ),
                   ),
-                  GestureDetector(
+                  PointerGestureDetector(
                     onTap: () => _showCompanyTooltip(context),
                     child: Text(
                       _job == null
@@ -1478,7 +1479,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               return Tooltip(
                 message: 'Found in your parsed resume.',
                 preferBelow: false,
-                child: GestureDetector(
+                child: PointerGestureDetector(
                   onTap: () {
                     if (isMobile) {
                       _showChipToast('Matched skill: $m found in resume');
@@ -1523,7 +1524,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               return Tooltip(
                 message: 'Not found in your resume.',
                 preferBelow: false,
-                child: GestureDetector(
+                child: PointerGestureDetector(
                   onTap: () {
                     if (isMobile) {
                       _showChipToast(

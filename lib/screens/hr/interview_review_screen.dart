@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
@@ -282,9 +283,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
           const SizedBox(height: 16),
           DecoratedBox(
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
-              ),
+              color: RecruiterButtonStyle.blue,
               borderRadius: BorderRadius.circular(11),
               boxShadow: [
                 BoxShadow(

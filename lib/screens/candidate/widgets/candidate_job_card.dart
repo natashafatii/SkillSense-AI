@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/candidate_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -150,7 +152,7 @@ class _CandidateJobCardState extends State<CandidateJobCard>
           : SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
+      child: PointerGestureDetector(
         onTap: widget.job.hasApplied ? null : widget.onApply,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
@@ -423,7 +425,7 @@ class _ApplyButtonState extends State<_ApplyButton> {
             : SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
+        child: PointerGestureDetector(
           onTapDown: widget.isApplied
               ? null
               : (_) => setState(() => _pressed = true),
@@ -441,11 +443,7 @@ class _ApplyButtonState extends State<_ApplyButton> {
                 color: widget.isApplied ? const Color(0xFFE2E8F0) : null,
                 gradient: widget.isApplied
                     ? null
-                    : const LinearGradient(
-                        colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                    : CandidateButtonStyle.primaryGradient,
                 boxShadow: widget.isApplied
                     ? const []
                     : _hovered

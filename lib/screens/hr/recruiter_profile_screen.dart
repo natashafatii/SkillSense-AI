@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import 'dart:async';
 
@@ -122,6 +124,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
   String? _loadError;
   String? _editError;
   bool _saving = false;
+  int _profileRevision = 0;
   _PhoneCountry _phoneCountry = _phoneCountries.first;
   bool _signingOut = false;
   String? _mobileToast;
@@ -148,13 +151,14 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
+    final revision = _profileRevision;
     setState(() {
       _loading = true;
       _loadError = null;
     });
     try {
       final profile = await ProfileService.getRecruiterSettings();
-      if (!mounted) return;
+      if (!mounted || revision != _profileRevision) return;
       setState(() {
         _applyProfile(profile);
         _loading = false;
@@ -738,18 +742,12 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       });
       if (!mounted) return;
       setState(() {
-        _values[key] = response[apiField]?.toString() ?? _values[key]!;
+        _profileRevision++;
+        _values[key] = response[apiField]?.toString() ?? value;
         if (key == 'name') {
-          final user = response['user'];
-          if (user is Map &&
-              (user.containsKey('first_name') ||
-                  user.containsKey('last_name'))) {
-            _firstName = user['first_name']?.toString() ?? '';
-            _lastName = user['last_name']?.toString() ?? '';
-          } else {
-            _firstName = '';
-            _lastName = '';
-          }
+          final nameParts = _values[key]!.trim().split(RegExp(r'\s+'));
+          _firstName = nameParts.first;
+          _lastName = nameParts.skip(1).join(' ');
         }
         _editing = null;
       });
@@ -839,7 +837,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       onPressed: action,
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        backgroundColor: primary ? c.accent : c.surface,
+        backgroundColor: primary ? RecruiterButtonStyle.blue : c.surface,
         foregroundColor: primary
             ? Colors.white
             : danger
@@ -847,7 +845,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
             : c.text,
         side: BorderSide(
           color: primary
-              ? c.accent
+              ? RecruiterButtonStyle.blue
               : danger
               ? c.error.withValues(alpha: .4)
               : c.strong,
@@ -1157,12 +1155,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     decoration: primary
         ? BoxDecoration(
             borderRadius: BorderRadius.circular(height == 50 ? 14 : 12),
-            gradient: LinearGradient(
-              colors: [
-                c.accent,
-                c.dark ? const Color(0xFF4678ED) : const Color(0xFF2D58DD),
-              ],
-            ),
+            color: RecruiterButtonStyle.blue,
           )
         : null,
     child: OutlinedButton(
@@ -1176,7 +1169,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
             : c.text,
         side: BorderSide(
           color: primary
-              ? c.accent
+              ? RecruiterButtonStyle.blue
               : danger
               ? c.error.withValues(alpha: .4)
               : c.strong,
@@ -2737,7 +2730,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
             ),
             if (_setupOpen) ...[
               Positioned.fill(
-                child: GestureDetector(
+                child: PointerGestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => setState(() => _setupOpen = false),
                   child: const SizedBox.expand(),

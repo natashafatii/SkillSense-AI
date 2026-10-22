@@ -219,6 +219,10 @@ class RecruiterTopBar extends StatelessWidget {
                         controller: searchController,
                         focusNode: searchFocusNode,
                         readOnly: searchController == null,
+                        mouseCursor:
+                            searchController == null && onSearchTap != null
+                            ? SystemMouseCursors.click
+                            : null,
                         onTap: onSearchTap,
                         style: GoogleFonts.inter(
                           color: text,

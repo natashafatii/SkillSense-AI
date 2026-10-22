@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -512,7 +514,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             hintText:
                                                 'Create a password (min 8 characters)',
                                             obscureText: obscurePassword,
-                                            suffixIcon: GestureDetector(
+                                            suffixIcon: PointerGestureDetector(
                                               onTap: onObscureToggle,
                                               child: Icon(
                                                 obscurePassword
@@ -558,7 +560,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             focusNode: confirmFocus,
                                             hintText: 'Re-enter your password',
                                             obscureText: obscureConfirm,
-                                            suffixIcon: GestureDetector(
+                                            suffixIcon: PointerGestureDetector(
                                               onTap: onObscureConfirmToggle,
                                               child: Icon(
                                                 obscureConfirm
@@ -580,7 +582,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               onPressed: isLoading
                                                   ? null
                                                   : onRegister,
-                                              style: ElevatedButton.styleFrom(
+                                              style: PreAuthButtonStyle.active(ElevatedButton.styleFrom(
                                                 backgroundColor:
                                                     AppColors.candidatePrimary,
                                                 foregroundColor: Colors.white,
@@ -592,7 +594,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                   borderRadius:
                                                       BorderRadius.circular(25),
                                                 ),
-                                              ),
+                                              )),
                                               child: isLoading
                                                   ? const SizedBox(
                                                       width: 20,
@@ -637,8 +639,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                     text:
                                                         'Terms and Privacy Policy',
                                                     style: GoogleFonts.inter(
-                                                      color: AppColors
-                                                          .webRoleCandidate,
+                                                      color: PreAuthButtonStyle.blue,
                                                       fontWeight:
                                                           FontWeight.w600,
                                                       decoration: TextDecoration
@@ -667,7 +668,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                           Center(
                                             child: MouseRegion(
                                               cursor: SystemMouseCursors.click,
-                                              child: GestureDetector(
+                                              child: PointerGestureDetector(
                                                 onTap: onLoginTap,
                                                 child: RichText(
                                                   text: TextSpan(
@@ -686,8 +687,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                         text: AppConstants
                                                             .loginLinkText,
                                                         style: GoogleFonts.inter(
-                                                          color: AppColors
-                                                              .candidatePrimary,
+                                                          color: PreAuthButtonStyle.blue,
                                                           fontWeight:
                                                               FontWeight.w600,
                                                         ),

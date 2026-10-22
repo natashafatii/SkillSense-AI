@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
@@ -309,11 +310,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               height: isMobile ? 38 : 40,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: RecruiterButtonStyle.blue,
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
@@ -325,14 +322,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
+                style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
                   padding: EdgeInsets.symmetric(horizontal: isMobile ? 22 : 26),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(11),
                   ),
-                ),
+                )),
                 onPressed: () {
                   setState(() {
                     _reviewingWeights = true;

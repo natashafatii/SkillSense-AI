@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -245,14 +247,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                   '/signup/role',
                                 );
                               },
-                              style: ElevatedButton.styleFrom(
+                              style: PreAuthButtonStyle.active(ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.webRoleHr,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
-                              ),
+                              )),
                               icon: const SizedBox.shrink(),
                               label: Text(
                                 'Create an account',
@@ -268,7 +270,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           // ── Already have an account? ─────────────────────
                           MouseRegion(
                             cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
+                            child: PointerGestureDetector(
                               onTap: () {
                               Navigator.pushNamed(
                                 context,
@@ -290,7 +292,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                     style: GoogleFonts.inter(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: AppColors.webRoleHr,
+                                      color: PreAuthButtonStyle.blue,
                                     ),
                                   ),
                                 ],

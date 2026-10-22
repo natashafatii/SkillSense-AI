@@ -336,11 +336,7 @@ class _CandidateFeedbackReportScreenState
             Container(
               height: 40,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: CandidateButtonStyle.primaryGradient,
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(

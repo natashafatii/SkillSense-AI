@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import 'dart:ui';
@@ -310,7 +311,7 @@ class _CandidateNotificationsScreenState
               ],
             ),
             if (unread > 0)
-              GestureDetector(
+              PointerGestureDetector(
                 onTap: _markAllRead,
                 child: Text(
                   'Mark all read',
@@ -484,7 +485,7 @@ class _CandidateNotificationsScreenState
     required Color textPrimary,
     required Color textSecondary,
   }) {
-    return GestureDetector(
+    return PointerGestureDetector(
       onTap: () => _markRead(notif.id),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

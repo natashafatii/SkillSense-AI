@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
@@ -570,13 +571,13 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
               ),
         icon: const Icon(Icons.add_circle_outline, size: 15),
         label: const Text('Schedule interview'),
-        style: FilledButton.styleFrom(
+        style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
           backgroundColor: const Color(0xFF3B5AF1),
           textStyle: GoogleFonts.inter(
             fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
-        ),
+        )),
       ),
     ],
   );
@@ -736,11 +737,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
                   Container(
                     height: compact ? 38 : 40,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      color: RecruiterButtonStyle.blue,
                       borderRadius: BorderRadius.circular(11),
                       boxShadow: [
                         BoxShadow(
@@ -755,7 +752,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
                     ),
                     child: ElevatedButton(
                       key: const Key('pipeline-create-role-cta'),
-                      style: ElevatedButton.styleFrom(
+                      style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
                         padding: EdgeInsets.symmetric(
@@ -764,7 +761,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(11),
                         ),
-                      ),
+                      )),
                       onPressed: () => Navigator.of(
                         context,
                       ).pushNamed('/recruiter/create-role'),
@@ -1082,9 +1079,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
         alignment: Alignment.centerRight,
         child: FilledButton(
           onPressed: app.eligibleForInterview ? () => _schedule(app) : null,
-          style: FilledButton.styleFrom(
+          style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
             backgroundColor: const Color(0xFF3B5AF1),
-          ),
+          )),
           child: const Text('Interview'),
         ),
       );

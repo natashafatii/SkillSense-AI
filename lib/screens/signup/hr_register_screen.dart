@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -445,7 +447,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                       // Top row: back + badge
                       Row(
                         children: [
-                          GestureDetector(
+                          PointerGestureDetector(
                             onTap: () => Navigator.pop(context),
                             child: Container(
                               width: 42,
@@ -842,7 +844,8 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                             Container(
                               height: 56,
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
+                                color: _isLoading ? null : PreAuthButtonStyle.blue,
+                                    gradient: _isLoading ? const LinearGradient(
                                   colors: [
                                     Color(0xFF6B9FFF),
                                     _blue,
@@ -850,11 +853,11 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                   ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
-                                ),
+                                ) : null,
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: _blue.withValues(alpha: 0.45),
+                                    color: _isLoading ? _blue.withValues(alpha: 0.45) : PreAuthButtonStyle.blue.withValues(alpha: .24),
                                     blurRadius: 18,
                                     offset: const Offset(0, 7),
                                   ),
@@ -910,7 +913,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                     text: 'Terms of Service',
                                     style: GoogleFonts.publicSans(
                                       fontSize: 12,
-                                      color: _blue,
+                                      color: PreAuthButtonStyle.blue,
                                       fontWeight: FontWeight.w700,
                                       decoration: TextDecoration.underline,
                                     ),
@@ -942,7 +945,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                     color: const Color(0xFF757575),
                                   ),
                                 ),
-                                GestureDetector(
+                                PointerGestureDetector(
                                   onTap: () => Navigator.pushReplacementNamed(
                                     context,
                                     '/login',
@@ -953,7 +956,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                     style: GoogleFonts.publicSans(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
-                                      color: _blue,
+                                      color: PreAuthButtonStyle.blue,
                                     ),
                                   ),
                                 ),

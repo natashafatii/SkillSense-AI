@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
@@ -703,11 +704,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
             Container(
               height: compact ? 38 : 40,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF4D7BFA), Color(0xFF2E4FE0)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: RecruiterButtonStyle.blue,
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
@@ -719,14 +716,14 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 ],
               ),
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
+                style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
                   padding: EdgeInsets.symmetric(horizontal: compact ? 22 : 26),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(11),
                   ),
-                ),
+                )),
                 onPressed: () {
                   final jobId = _jobId;
                   Navigator.of(context).pushNamed(
@@ -999,7 +996,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                   onPressed: _selectedSlot != null && _busyApplicationId == null
                       ? () => _sendInvite(app)
                       : null,
-                  style: FilledButton.styleFrom(
+                  style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
                     minimumSize: const Size(75, 31),
                     padding: const EdgeInsets.symmetric(horizontal: 9),
                     backgroundColor: _blue,
@@ -1007,7 +1004,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                     ),
-                  ),
+                  )),
                   child: busy
                       ? const SizedBox(
                           width: 14,
@@ -1123,7 +1120,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                         _awaiting.firstWhere((app) => app.id == _applicationId),
                       )
                     : null,
-                style: FilledButton.styleFrom(backgroundColor: _blue),
+                style: RecruiterButtonStyle.primary(FilledButton.styleFrom(backgroundColor: _blue)),
                 child: _busyApplicationId != null
                     ? const SizedBox(
                         width: 16,

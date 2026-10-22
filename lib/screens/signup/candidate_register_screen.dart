@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -10,8 +11,9 @@ import 'candidate_register_screen_web.dart';
 import 'email_verification_screen.dart';
 import 'terms_privacy_screen.dart';
 import '../../widgets/country_code_phone_field.dart';
+import '../../widgets/candidate_button_style.dart';
 
-const _green = Color(0xFF34C759);
+const _green = CandidateButtonStyle.deepTeal;
 
 class CandidateRegisterScreen extends StatefulWidget {
   const CandidateRegisterScreen({super.key});
@@ -314,11 +316,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF81E291), _green],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: _green,
             borderRadius: BorderRadius.circular(11),
             boxShadow: [
               BoxShadow(
@@ -339,7 +337,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
               style: GoogleFonts.publicSans(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: const Color(0xFF1A3C25),
+                color: _green,
               ),
             ),
             const SizedBox(height: 3),
@@ -464,7 +462,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                           // Top row: back + badge
                           Row(
                             children: [
-                              GestureDetector(
+                              PointerGestureDetector(
                                 onTap: () => Navigator.pop(context),
                                 child: Container(
                                   width: 42,
@@ -473,7 +471,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                     color: Colors.white.withValues(alpha: 0.85),
                                     borderRadius: BorderRadius.circular(13),
                                     border: Border.all(
-                                      color: const Color(0xFFA8D5B5),
+                                      color: _green.withValues(alpha: .35),
                                     ),
                                     boxShadow: [
                                       BoxShadow(
@@ -488,7 +486,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                   child: const Icon(
                                     Icons.arrow_back_ios_new_rounded,
                                     size: 17,
-                                    color: Color(0xFF1A3C25),
+                                    color: _green,
                                   ),
                                 ),
                               ),
@@ -534,7 +532,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                             style: GoogleFonts.publicSans(
                               fontSize: 30,
                               fontWeight: FontWeight.w800,
-                              color: const Color(0xFF1A3C25),
+                              color: _green,
                               letterSpacing: -0.5,
                               height: 1.1,
                             ),
@@ -544,7 +542,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                             'Fill in the details below to get started',
                             style: GoogleFonts.publicSans(
                               fontSize: 14,
-                              color: const Color(0xFF3A6B4A),
+                              color: _green,
                             ),
                           ),
                           const SizedBox(height: 26),
@@ -921,19 +919,21 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                 Container(
                                   height: 56,
                                   decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
+                                    gradient: _isLoading ? const LinearGradient(
                                       colors: [
                                         Color(0xFF81E291),
-                                        _green,
+                                        Color(0xFF34C759),
                                         Color(0xFF248C3D),
                                       ],
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
-                                    ),
+                                    ) : CandidateButtonStyle.primaryGradient,
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: _green.withValues(alpha: 0.45),
+                                        color: _isLoading
+                                            ? const Color(0xFF34C759).withValues(alpha: .45)
+                                            : CandidateButtonStyle.teal.withValues(alpha: .24),
                                         blurRadius: 18,
                                         offset: const Offset(0, 7),
                                       ),
@@ -990,7 +990,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                         text: 'Terms of Service',
                                         style: GoogleFonts.publicSans(
                                           fontSize: 12,
-                                          color: _green,
+                                          color: CandidateButtonStyle.deepTeal,
                                           fontWeight: FontWeight.w700,
                                           decoration: TextDecoration.underline,
                                         ),
@@ -1023,7 +1023,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                         color: const Color(0xFF757575),
                                       ),
                                     ),
-                                    GestureDetector(
+                                    PointerGestureDetector(
                                       onTap: () =>
                                           Navigator.pushReplacementNamed(
                                             context,
@@ -1035,7 +1035,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                         style: GoogleFonts.publicSans(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w700,
-                                          color: _green,
+                                          color: CandidateButtonStyle.deepTeal,
                                         ),
                                       ),
                                     ),

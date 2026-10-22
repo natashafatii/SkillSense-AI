@@ -467,11 +467,7 @@ class _CandidateInterviewLobbyScreenState
             Container(
               height: 40,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: CandidateButtonStyle.primaryGradient,
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
@@ -679,14 +675,14 @@ class _CandidateInterviewLobbyScreenState
               onPressed: !_starting && !_startUncertain && !_media.busy
                   ? () => _startVideoInterview(immediately: true)
                   : null,
-              style: FilledButton.styleFrom(
+              style: CandidateButtonStyle.primaryColors(FilledButton.styleFrom(
                 backgroundColor: AppColors.dashboardTeal,
                 foregroundColor: const Color(0xFF0F172A),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 16,
                 ),
-              ),
+              )),
               icon: _starting
                   ? const SizedBox(
                       width: 18,

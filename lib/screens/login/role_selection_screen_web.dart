@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -27,11 +29,7 @@ class RoleSelectionScreenWeb extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isRecruiter = selectedRole == 'recruiter';
     final bool isJobSeeker = selectedRole == 'job_seeker';
-    final Color ctaColor = isRecruiter
-        ? AppColors.webRoleHr
-        : (isJobSeeker
-            ? AppColors.webRoleCandidate
-            : AppColors.primary.withValues(alpha: 0.4));
+    final Color ctaColor = selectedRole != null ? PreAuthButtonStyle.roleColor(selectedRole) : AppColors.primary.withValues(alpha: 0.4);
     final String ctaText = isRecruiter
         ? 'Continue as recruiter'
         : (isJobSeeker ? 'Continue as candidate' : 'Continue');
@@ -471,7 +469,7 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                 ),
                                               ),
                                               const SizedBox(height: 20),
-                                              GestureDetector(
+                                              PointerGestureDetector(
                                                 onTap: onSignUpTap,
                                                 child: Center(
                                                   child: RichText(
@@ -487,7 +485,7 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                         TextSpan(
                                                           text: AppConstants.signUp,
                                                           style: GoogleFonts.inter(
-                                                            color: AppColors.webRoleHr,
+                                                            color: PreAuthButtonStyle.blue,
                                                             fontWeight: FontWeight.w600,
                                                           ),
                                                         ),
@@ -584,7 +582,7 @@ class _WebRoleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return PointerGestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(

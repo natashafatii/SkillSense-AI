@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -31,11 +33,7 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
     final bool isRecruiter = selectedRole == 'recruiter';
     final bool isJobSeeker = selectedRole == 'job_seeker';
 
-    final Color ctaColor = isRecruiter
-        ? AppColors.webRoleHr
-        : (isJobSeeker
-            ? AppColors.webRoleCandidate
-            : AppColors.primary.withValues(alpha: 0.4));
+    final Color ctaColor = selectedRole != null ? PreAuthButtonStyle.roleColor(selectedRole) : AppColors.primary.withValues(alpha: 0.4);
 
     final String ctaText = isRecruiter
         ? AppConstants.continueAsRecruiter
@@ -437,6 +435,7 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                                   curve: Curves.easeOut,
                                                   decoration: BoxDecoration(
                                                     color: ctaColor,
+                                                    boxShadow: selectedRole != null ? PreAuthButtonStyle.roleGlow(selectedRole) : null,
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                       28,
@@ -475,7 +474,7 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                               // Already have an account?
                                               MouseRegion(
                                                 cursor: SystemMouseCursors.click,
-                                                child: GestureDetector(
+                                                child: PointerGestureDetector(
                                                   onTap: onLoginTap,
                                                 child: RichText(
                                                   text: TextSpan(
@@ -494,7 +493,7 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                                             .loginLinkText,
                                                         style: GoogleFonts.inter(
                                                           color:
-                                                              AppColors.webRoleHr,
+                                                              PreAuthButtonStyle.blue,
                                                           fontWeight:
                                                               FontWeight.w600,
                                                         ),
@@ -551,7 +550,7 @@ class _SignupRoleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(
+      child: PointerGestureDetector(
         onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
@@ -561,7 +560,11 @@ class _SignupRoleCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         decoration: BoxDecoration(
           // Filled with role colour when selected, white when not
-          color: isSelected ? roleColor : Colors.white,
+          color: isSelected
+              ? (roleColor == AppColors.webRoleHr
+                    ? PreAuthButtonStyle.blue
+                    : roleColor)
+              : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? roleColor : AppColors.webCardBorderUnselected,

@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -322,11 +324,11 @@ class WelcomeScreenWeb extends StatelessWidget {
                                       duration: const Duration(milliseconds: 250),
                                       curve: Curves.easeOut,
                                       decoration: BoxDecoration(
-                                        color: AppColors.webRoleHr,
+                                        color: PreAuthButtonStyle.blue,
                                         borderRadius: BorderRadius.circular(26), // Pill shape
                                         boxShadow: [
                                           BoxShadow(
-                                            color: AppColors.webRoleHr.withValues(alpha: 0.30),
+                                            color: PreAuthButtonStyle.blue.withValues(alpha: 0.30),
                                             blurRadius: 18,
                                             offset: const Offset(0, 6),
                                           ),
@@ -370,7 +372,7 @@ class WelcomeScreenWeb extends StatelessWidget {
                                   Center(
                                     child: MouseRegion(
                                       cursor: SystemMouseCursors.click,
-                                      child: GestureDetector(
+                                      child: PointerGestureDetector(
                                         onTap: () {
                                         Navigator.pushNamed(
                                           context,
@@ -390,7 +392,7 @@ class WelcomeScreenWeb extends StatelessWidget {
                                             TextSpan(
                                               text: AppConstants.welcomeWebLoginLink.trim(),
                                               style: GoogleFonts.inter(
-                                                color: AppColors.webRoleHr,
+                                                color: PreAuthButtonStyle.blue,
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),

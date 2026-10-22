@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
@@ -386,9 +388,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
 
   Widget _buildNewRoleButton() => DecoratedBox(
     decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        colors: [Color(0xFF2563EB), Color(0xFF4F46E5)],
-      ),
+      color: RecruiterButtonStyle.blue,
       borderRadius: BorderRadius.circular(8),
     ),
     child: TextButton(
@@ -432,7 +432,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
 
   Widget _buildChip(String label, JobStatus status) {
     final isActive = _activeFilter == status;
-    return GestureDetector(
+    return PointerGestureDetector(
       onTap: () => setState(() => _activeFilter = status),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

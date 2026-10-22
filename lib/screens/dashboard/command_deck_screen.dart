@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
@@ -723,7 +725,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           // Logo
           MouseRegion(
             cursor: SystemMouseCursors.click,
-            child: GestureDetector(
+            child: PointerGestureDetector(
               onTap: () {
                 if (_activeNavIndex != 0) {
                   Navigator.of(context).pushNamed('/dashboard');
@@ -789,7 +791,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                         ),
                         child: MouseRegion(
                           cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
+                          child: PointerGestureDetector(
                             onTap: () {
                               if (index != _activeNavIndex) {
                                 // Clear interviews badge on selection
@@ -1119,16 +1121,14 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF4F46E5), Color(0xFF3B82F6)],
-                ),
+                color: RecruiterButtonStyle.blue,
               ),
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
+                style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
+                )),
                 onPressed: () {
                   Navigator.of(context).pushNamed('/create-role');
                 },
@@ -1208,16 +1208,14 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4F46E5), Color(0xFF3B82F6)],
-                  ),
+                  color: RecruiterButtonStyle.blue,
                 ),
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
+                  style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
+                  )),
                   onPressed: () {
                     Navigator.of(context).pushNamed('/create-role');
                   },
@@ -1346,7 +1344,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 onEnter: (_) => setState(() => _hoveredAllApplicants = true),
                 onExit: (_) => setState(() => _hoveredAllApplicants = false),
                 cursor: SystemMouseCursors.click,
-                child: GestureDetector(
+                child: PointerGestureDetector(
                   onTap: () => Navigator.of(context).pushNamed('/pipeline'),
                   child: SizedBox(
                     width: 68,
@@ -1460,7 +1458,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 onEnter: (_) => setState(() => _hoveredApplicantIndex = index),
                 onExit: (_) => setState(() => _hoveredApplicantIndex = null),
                 cursor: SystemMouseCursors.click,
-                child: GestureDetector(
+                child: PointerGestureDetector(
                   onTap: () {
                     Navigator.of(context).pushNamed('/report');
                   },
@@ -1759,7 +1757,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              GestureDetector(
+              PointerGestureDetector(
                 onTap: () {
                   Navigator.of(context).pushNamed('/schedule');
                 },
@@ -1786,7 +1784,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 onEnter: (_) => setState(() => _hoveredInterviewIndex = index),
                 onExit: (_) => setState(() => _hoveredInterviewIndex = null),
                 cursor: SystemMouseCursors.click,
-                child: GestureDetector(
+                child: PointerGestureDetector(
                   onTap: () {
                     // Navigate to appropriate screen depending on live/upcoming
                     if (slot['live'] == true) {
@@ -1908,7 +1906,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           onEnter: (_) => setState(() => _hoveredManageRoles = true),
           onExit: (_) => setState(() => _hoveredManageRoles = false),
           cursor: SystemMouseCursors.click,
-          child: GestureDetector(
+          child: PointerGestureDetector(
             onTap: () => Navigator.of(context).pushNamed('/create-role'),
             child: Text(
               AppConstants.deckManage,
@@ -1947,7 +1945,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                       MediaQuery.of(context).size.width *
                       0.78, // ~78% viewport width so next peeks
                   margin: const EdgeInsets.only(right: 12, bottom: 8),
-                  child: GestureDetector(
+                  child: PointerGestureDetector(
                     onTap: () => Navigator.pushNamed(context, '/pipeline'),
                     child: _buildGlassCard(
                       theme: theme,
@@ -2036,7 +2034,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                     onEnter: (_) => setState(() => _hoveredRoleIndex = index),
                     onExit: (_) => setState(() => _hoveredRoleIndex = null),
                     cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
+                    child: PointerGestureDetector(
                       onTap: () => Navigator.pushNamed(context, '/pipeline'),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
@@ -2362,7 +2360,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           const SizedBox(width: 16),
           if (isActive)
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
+              style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
                 elevation: 0,
@@ -2373,7 +2371,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-              ),
+              )),
               onPressed: onTap,
               child: Text(
                 actionLabel,

@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -428,7 +430,7 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                             ) {
                                               final bool isActive =
                                                   index == _currentPage;
-                                              return GestureDetector(
+                                              return PointerGestureDetector(
                                                 onTap: () => setState(
                                                   () => _currentPage = index,
                                                 ),
@@ -465,7 +467,7 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                             height: 48,
                                             child: ElevatedButton(
                                               onPressed: _nextPage,
-                                              style: ElevatedButton.styleFrom(
+                                              style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
                                                 backgroundColor:
                                                     AppColors.webRoleHr,
                                                 foregroundColor: Colors.white,
@@ -474,7 +476,7 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                                   borderRadius:
                                                       BorderRadius.circular(24),
                                                 ),
-                                              ),
+                                              )),
                                               child: Text(
                                                 _currentPage == 3
                                                     ? AppConstants

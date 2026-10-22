@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
@@ -67,10 +68,12 @@ class _Detail {
 
 const _details = [
   _Detail('headline', 'Headline', 'e.g. Backend developer'),
-  _Detail('location', 'Location and experience', 'e.g. Lahore, 3 years'),
+  _Detail('location', 'Location', 'e.g. Lahore'),
+  _Detail('years_experience', 'Years of Experience', 'e.g. 3'),
   _Detail('phone', 'Phone', '+92 300 1234567'),
-  _Detail('linkedin', 'LinkedIn', 'linkedin.com/in/yourname'),
-  _Detail('portfolio', 'Portfolio', 'yourname.com'),
+  _Detail('linkedin_url', 'LinkedIn', 'linkedin.com/in/yourname'),
+  _Detail('portfolio_url', 'Portfolio', 'yourname.com'),
+  _Detail('github', 'GitHub', 'github.com/yourname'),
 ];
 
 class _CandidateProfileSettingsScreenState
@@ -113,14 +116,11 @@ class _CandidateProfileSettingsScreenState
       setState(() {
         _profile = profile;
         _values['headline'] = profile.headline;
-        _values['location'] = [
-          if (profile.location.trim().isNotEmpty) profile.location.trim(),
-          if (profile.yearsExperience != null)
-            '${profile.yearsExperience} years',
-        ].join(', ');
+        _values['location'] = profile.location;
+        _values['years_experience'] = profile.yearsExperience?.toString() ?? '';
         _values['phone'] = profile.phone;
-        _values['linkedin'] = profile.linkedinUrl;
-        _values['portfolio'] = profile.portfolioUrl;
+        _values['linkedin_url'] = profile.linkedinUrl;
+        _values['portfolio_url'] = profile.portfolioUrl;
       });
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -439,6 +439,10 @@ class _CandidateProfileSettingsScreenState
               ),
               FilledButton(
                 onPressed: busy ? null : save,
+                style: CandidateButtonStyle.primaryColors(
+                  FilledButton(onPressed: null, child: const SizedBox())
+                      .defaultStyleOf(dialogContext),
+                ),
                 child: const Text('Save photo'),
               ),
             ],
@@ -521,36 +525,39 @@ class _CandidateProfileSettingsScreenState
     final key = _editing;
     if (key == null) return;
     final value = _editor.text.trim();
-    setState(() {
-      _values[key] = value;
-      _editing = null;
-    });
-    _showToast('Saved');
-    if (widget.loadProfile != null) return;
-
-    final patch = <String, dynamic>{};
-    switch (key) {
-      case 'headline':
-        patch['headline'] = value;
-      case 'phone':
-        patch['phone'] = value;
-      case 'linkedin':
-        patch['linkedin_url'] = value;
-      case 'portfolio':
-        patch['portfolio_url'] = value;
-      case 'location':
-        final match = RegExp(
-          r'^(.*?),\s*(\d+)\s*years?$',
-          caseSensitive: false,
-        ).firstMatch(value);
-        patch['location'] = match?.group(1)?.trim() ?? value;
-        if (match != null) {
-          patch['years_experience'] = int.parse(match.group(2)!);
-        }
+    final years = key == 'years_experience' ? int.tryParse(value) : null;
+    if (key == 'years_experience' &&
+        value.isNotEmpty &&
+        (years == null || years < 0)) {
+      _showToast('Enter a whole number of years, zero or greater.');
+      return;
     }
+    final savedValue = key == 'years_experience' && years != null
+        ? years.toString()
+        : value;
+    if (key == 'github') {
+      // The current profile API has no GitHub field. Keep this session-only.
+      setState(() {
+        _values[key] = value;
+        _editing = null;
+      });
+      _showToast('GitHub updated for this session only.');
+      return;
+    }
+    final patch = <String, dynamic>{
+      key: key == 'years_experience' ? years : value,
+    };
     try {
-      final updated = await ProfileService.updateCandidateProfile(patch);
-      if (mounted) setState(() => _profile = updated);
+      final updated = widget.loadProfile != null
+          ? null
+          : await ProfileService.updateCandidateProfile(patch);
+      if (!mounted) return;
+      setState(() {
+        if (updated != null) _profile = updated;
+        _values[key] = savedValue;
+        _editing = null;
+      });
+      _showToast('Saved');
     } catch (_) {
       if (mounted) _showToast('Could not sync this change. Please try again.');
     }
@@ -909,11 +916,12 @@ class _CandidateProfileSettingsScreenState
   int get _filled =>
       _values.values.where((value) => value.trim().isNotEmpty).length;
   int get _strength =>
-      ((_filled / 5) * 40 + (_sections.reduce((a, b) => a + b) / 4) * .6)
+      ((_filled / _details.length) * 40 +
+              (_sections.reduce((a, b) => a + b) / 4) * .6)
           .round();
   String get _strengthHelper => _strength == 100
       ? 'Your profile is complete.'
-      : _filled < 5
+      : _filled < _details.length
       ? 'Finish your details, then add a resume and skills.'
       : 'Add your resume and skills to get a match score.';
 
@@ -1413,7 +1421,11 @@ class _CandidateProfileSettingsScreenState
     c,
     Column(
       children: [
-        _mobileHeading('Personal details', c, count: '$_filled of 5'),
+        _mobileHeading(
+          'Personal details',
+          c,
+          count: '$_filled of ${_details.length}',
+        ),
         for (final detail in _details) _mobileDetailRow(detail, c),
       ],
     ),
@@ -1693,7 +1705,7 @@ class _CandidateProfileSettingsScreenState
         Semantics(
           label: title,
           toggled: _notifications[index],
-          child: GestureDetector(
+          child: PointerGestureDetector(
             onTap: () =>
                 setState(() => _notifications[index] = !_notifications[index]),
             child: AnimatedContainer(
@@ -1881,8 +1893,10 @@ class _CandidateProfileSettingsScreenState
                         focusNode: _editFocus,
                         keyboardType: detail.key == 'phone'
                             ? TextInputType.phone
-                            : (detail.key == 'linkedin' ||
-                                  detail.key == 'portfolio')
+                            : detail.key == 'years_experience'
+                            ? TextInputType.number
+                            : (detail.key.endsWith('_url') ||
+                                  detail.key == 'github')
                             ? TextInputType.url
                             : TextInputType.text,
                         textInputAction: TextInputAction.done,
@@ -2197,9 +2211,8 @@ class _CandidateProfileSettingsScreenState
               Expanded(
                 child: Column(
                   children: [
-                    _detailRow(_details[0], c),
-                    _detailRow(_details[2], c),
-                    _detailRow(_details[4], c),
+                    for (var i = 0; i < _details.length; i += 2)
+                      _detailRow(_details[i], c),
                   ],
                 ),
               ),
@@ -2207,8 +2220,8 @@ class _CandidateProfileSettingsScreenState
               Expanded(
                 child: Column(
                   children: [
-                    _detailRow(_details[1], c),
-                    _detailRow(_details[3], c),
+                    for (var i = 1; i < _details.length; i += 2)
+                      _detailRow(_details[i], c),
                   ],
                 ),
               ),
@@ -2230,7 +2243,7 @@ class _CandidateProfileSettingsScreenState
                 _sectionHeading(
                   'Personal details',
                   c,
-                  count: '$_filled of 5 added',
+                  count: '$_filled of ${_details.length} added',
                 ),
                 const SizedBox(height: 18),
                 detailRows,
@@ -2328,6 +2341,7 @@ class _CandidateProfileSettingsScreenState
     final value = _values[detail.key] ?? '';
     final editing = _editing == detail.key;
     return Container(
+      key: ValueKey('personal-detail-${detail.key}'),
       width: double.infinity,
       padding: const EdgeInsets.only(top: 14, bottom: 16),
       decoration: BoxDecoration(
@@ -2368,6 +2382,13 @@ class _CandidateProfileSettingsScreenState
                 child: TextField(
                   controller: _editor,
                   focusNode: _editFocus,
+                  keyboardType: detail.key == 'years_experience'
+                      ? TextInputType.number
+                      : detail.key == 'phone'
+                      ? TextInputType.phone
+                      : detail.key.endsWith('_url') || detail.key == 'github'
+                      ? TextInputType.url
+                      : TextInputType.text,
                   onSubmitted: (_) => _saveEdit(),
                   style: _inter(14.5, c.text),
                   decoration: InputDecoration(
@@ -2585,7 +2606,7 @@ class _CandidateProfileSettingsScreenState
         Semantics(
           label: title,
           toggled: _notifications[index],
-          child: GestureDetector(
+          child: PointerGestureDetector(
             onTap: () =>
                 setState(() => _notifications[index] = !_notifications[index]),
             child: AnimatedContainer(
@@ -2703,7 +2724,7 @@ class _CandidateProfileSettingsScreenState
     bool compact = false,
   }) {
     final active = CandidateProfileSettingsScreen.currentTheme == mode;
-    return GestureDetector(
+    return PointerGestureDetector(
       onTap: () =>
           setState(() => CandidateProfileSettingsScreen.currentTheme = mode),
       child: Container(

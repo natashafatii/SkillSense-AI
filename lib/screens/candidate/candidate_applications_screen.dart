@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
@@ -238,7 +239,7 @@ class _CandidateApplicationsScreenState
     Color textColor,
   ) {
     final isSelected = _filter == value;
-    return GestureDetector(
+    return PointerGestureDetector(
       onTap: () => setState(() => _filter = value),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -359,11 +360,7 @@ class _CandidateApplicationsScreenState
             Container(
               height: 40,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: CandidateButtonStyle.primaryGradient,
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(

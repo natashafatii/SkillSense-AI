@@ -1,4 +1,5 @@
 import 'mobile_edge_shadow_wrapper.dart';
+import 'candidate_button_style.dart';
 import 'package:flutter/material.dart';
 import '../models/interview_analysis_contract.dart';
 import '../services/media/interview_media_controller.dart';
@@ -50,18 +51,20 @@ class CandidateInterviewWorkspace extends StatelessWidget {
         brightness: Brightness.light,
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: _teal,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(0, 46),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          textStyle: const TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
+        style: CandidateButtonStyle.primaryColors(
+          FilledButton.styleFrom(
+            backgroundColor: _teal,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(0, 46),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            textStyle: const TextStyle(
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
           ),
         ),
       ),

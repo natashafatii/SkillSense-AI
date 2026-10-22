@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -816,13 +818,13 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               onPressed: _saving
                   ? null
                   : () => _saveRole(publish: widget.initialJob == null),
-              style: FilledButton.styleFrom(
+              style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
                 backgroundColor: _c.accent,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-              ),
+              )),
               child: Text(
                 _saving
                     ? 'Saving…'
@@ -1001,13 +1003,13 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                             Navigator.of(sheetContext).pop();
                             _saveRole(publish: widget.initialJob == null);
                           },
-                    style: FilledButton.styleFrom(
+                    style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
                       backgroundColor: _c.accent,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
-                    ),
+                    )),
                     child: Text(
                       widget.initialJob == null
                           ? 'Publish role'
@@ -2666,9 +2668,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           height: 48,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF2F57CC), Color(0xFF4F7BFF)],
-              ),
+              color: RecruiterButtonStyle.blue,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
@@ -3299,7 +3299,7 @@ class _CalendarPopoverState extends State<_CalendarPopover>
       children: [
         // Dismiss barrier
         Positioned.fill(
-          child: GestureDetector(
+          child: PointerGestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: widget.onDismiss,
           ),
@@ -3526,7 +3526,7 @@ class _DayCell extends StatelessWidget {
         : tokens.text;
 
     return Expanded(
-      child: GestureDetector(
+      child: PointerGestureDetector(
         onTap: isPast ? null : () => onTap(d),
         child: Container(
           height: 38,

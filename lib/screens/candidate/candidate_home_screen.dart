@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
@@ -963,7 +964,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(
+      child: PointerGestureDetector(
         onTap: _openProfile,
         child: Container(
           constraints: const BoxConstraints(minHeight: 110),

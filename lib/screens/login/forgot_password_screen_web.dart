@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
@@ -232,7 +233,7 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
 
                                           // Back link
                                           Center(
-                                            child: GestureDetector(
+                                            child: PointerGestureDetector(
                                               onTap: widget.onBack,
                                               child: RichText(
                                                 text: TextSpan(

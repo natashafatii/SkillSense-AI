@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
@@ -656,7 +657,7 @@ class _CandidateResumeManagementScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Drag & drop dropzone box
-                GestureDetector(
+                PointerGestureDetector(
                   onTap: _triggerBrowseFiles,
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
@@ -747,11 +748,7 @@ class _CandidateResumeManagementScreenState
                             height: 32,
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
+                              gradient: CandidateButtonStyle.primaryGradient,
                               borderRadius: BorderRadius.circular(11),
                               boxShadow: const [
                                 BoxShadow(
@@ -1114,11 +1111,7 @@ class _CandidateResumeManagementScreenState
                           height: 32,
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF14B584), Color(0xFF0A8A76)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            gradient: CandidateButtonStyle.primaryGradient,
                             borderRadius: BorderRadius.circular(11),
                             boxShadow:
                                 (_parseCompleted ||

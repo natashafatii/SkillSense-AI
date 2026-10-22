@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -246,11 +248,12 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                               duration: const Duration(milliseconds: 250),
                               curve: Curves.easeOut,
                               decoration: BoxDecoration(
-                                color: selectedRole == 'recruiter'
-                                    ? AppColors.webRoleHr
-                                    : selectedRole == 'job_seeker'
-                                    ? AppColors.webRoleCandidate
+                                color: selectedRole != null
+                                    ? PreAuthButtonStyle.roleColor(selectedRole)
                                     : AppColors.primary.withValues(alpha: 0.4),
+                                boxShadow: selectedRole != null
+                                    ? PreAuthButtonStyle.roleGlow(selectedRole)
+                                    : null,
                                 borderRadius: BorderRadius.circular(28),
                               ),
                               child: Material(
@@ -278,7 +281,7 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          GestureDetector(
+                          PointerGestureDetector(
                             onTap: onSignUpTap,
                             child: RichText(
                               text: TextSpan(
@@ -303,7 +306,7 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                                             : AppConstants.signUp),
                                     style: GoogleFonts.inter(
                                       color:
-                                          AppColors.mobileButtonGradientStart,
+                                          PreAuthButtonStyle.blue,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -356,10 +359,10 @@ class _MobileRoleCard extends StatelessWidget {
         ? AppColors.mobileIconHr
         : AppColors.mobileIconCandidate;
     final Color borderColor = isSelected
-        ? AppColors.mobileIconHr
+        ? (isHr ? AppColors.mobileIconHr : AppColors.webRoleCandidate)
         : AppColors.webCardBorderUnselected;
 
-    return GestureDetector(
+    return PointerGestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
@@ -431,7 +434,7 @@ class _MobileRoleCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: isSelected
-                      ? AppColors.mobileIconHr
+                      ? (isHr ? AppColors.mobileIconHr : AppColors.webRoleCandidate)
                       : AppColors.webCardBorderUnselected,
                   width: isSelected ? 6 : 1.5,
                 ),

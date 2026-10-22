@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -347,42 +348,51 @@ class _CandidateSideNavState extends State<CandidateSideNav>
               ),
             ],
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: 14),
+          // Lay out each state at its final width while the rail animates.
+          // Otherwise expanded rows briefly receive the collapsed constraints.
+          child: ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.topLeft,
+              minWidth: targetWidth - 1, // Account for the right border.
+              maxWidth: targetWidth - 1,
+              child: Column(
+                children: [
+                  const SizedBox(height: 14),
 
-              // ── HEADER ──────────────────────────────────────────────────────
-              _buildHeader(tealAccent),
+                  // ── HEADER ──────────────────────────────────────────────────────
+                  _buildHeader(tealAccent),
 
-              const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-              const SizedBox(height: 8),
+                  const SizedBox(height: 8),
 
-              // ── DESTINATIONS LIST ──────────────────────────────────────────
-              Expanded(
-                child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(
-                    context,
-                  ).copyWith(scrollbars: false),
-                  child: ListView(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: _isExpanded ? 10 : 10,
+                  // ── DESTINATIONS LIST ──────────────────────────────────────────
+                  Expanded(
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(
+                        context,
+                      ).copyWith(scrollbars: false),
+                      child: ListView(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: _isExpanded ? 10 : 10,
+                        ),
+                        physics: const BouncingScrollPhysics(),
+                        children: [
+                          // Work Destinations (Index 0 to 3)
+                          for (int i = 0; i < 5; i++)
+                            _buildDestinationTile(i, tealAccent),
+                        ],
+                      ),
                     ),
-                    physics: const BouncingScrollPhysics(),
-                    children: [
-                      // Work Destinations (Index 0 to 3)
-                      for (int i = 0; i < 5; i++)
-                        _buildDestinationTile(i, tealAccent),
-                    ],
                   ),
-                ),
+
+                  // ── FOOTER (Collapsed & Expanded States) ─────────────────────
+                  _buildFooter(),
+
+                  const SizedBox(height: 12),
+                ],
               ),
-
-              // ── FOOTER (Collapsed & Expanded States) ─────────────────────
-              _buildFooter(),
-
-              const SizedBox(height: 12),
-            ],
+            ),
           ),
         ),
       ),
@@ -406,7 +416,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
               position: TooltipPosition.bottom,
               child: MouseRegion(
                 cursor: SystemMouseCursors.click,
-                child: GestureDetector(
+                child: PointerGestureDetector(
                   onTap: _toggleExpanded,
                   child: Container(
                     width: 24,
@@ -496,7 +506,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                   offset: 12.0,
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
+                    child: PointerGestureDetector(
                       key: const Key('candidate-collapsed-profile'),
                       behavior: HitTestBehavior.opaque,
                       onTap: () => _handleNavigation('/candidate/profile', -1),
@@ -597,7 +607,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
           // User Card Row
           MouseRegion(
             cursor: SystemMouseCursors.click,
-            child: GestureDetector(
+            child: PointerGestureDetector(
               key: const Key('candidate-expanded-profile'),
               behavior: HitTestBehavior.opaque,
               onTap: () => _handleNavigation('/candidate/profile', -1),
@@ -724,7 +734,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
             onEnter: (_) => _onTileMouseEnter(index),
             onExit: (_) => _onTileMouseExit(index),
             cursor: SystemMouseCursors.click,
-            child: GestureDetector(
+            child: PointerGestureDetector(
               onTap: () {
                 _expandDestination(index);
                 _handleNavigation(primaryRoute, index);
@@ -833,7 +843,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
           // Destination Header Line
           MouseRegion(
             cursor: SystemMouseCursors.click,
-            child: GestureDetector(
+            child: PointerGestureDetector(
               onTap: () {
                 setState(() {
                   final bool willOpen = !isAccordionOpen;
@@ -916,7 +926,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
                   return MouseRegion(
                     cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
+                    child: PointerGestureDetector(
                       onTap: () => _handleNavigation(subRoute, index),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 2),
@@ -952,16 +962,20 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                                   : const Color(0xFF64748B),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              subLabel,
-                              style: GoogleFonts.inter(
-                                color: isSubActive
-                                    ? const Color(0xFF0F172A)
-                                    : const Color(0xFF64748B),
-                                fontSize: 12.5,
-                                fontWeight: isSubActive
-                                    ? FontWeight.bold
-                                    : FontWeight.w500,
+                            Flexible(
+                              child: Text(
+                                subLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  color: isSubActive
+                                      ? const Color(0xFF0F172A)
+                                      : const Color(0xFF64748B),
+                                  fontSize: 12.5,
+                                  fontWeight: isSubActive
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],

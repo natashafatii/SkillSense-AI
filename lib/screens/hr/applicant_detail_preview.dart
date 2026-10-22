@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -314,9 +315,9 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                   ),
                   FilledButton(
                     onPressed: _busy ? null : () => _act(widget.onShortlist),
-                    style: FilledButton.styleFrom(
+                    style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF3B5AF1),
-                    ),
+                    )),
                     child: const Text('Shortlist'),
                   ),
                 ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
+import 'candidate_button_style.dart';
 
 /// A reusable green gradient background for candidate/job seeker screens.
 class GreenGradientBackground extends StatelessWidget {
@@ -18,8 +19,14 @@ class GreenGradientBackground extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              const Color(0xFFC8F0D0), // Light vibrant green
-              const Color(0xFFE8F5E9).withValues(alpha: 0.5),
+              Color.alphaBlend(
+                CandidateButtonStyle.deepTeal.withValues(alpha: .14),
+                Colors.white,
+              ),
+              Color.alphaBlend(
+                CandidateButtonStyle.deepTeal.withValues(alpha: .04),
+                Colors.white,
+              ).withValues(alpha: .5),
               AppColors.backgroundBase.withValues(alpha: 0.0),
             ],
             stops: const [0.0, 0.4, 1.0],

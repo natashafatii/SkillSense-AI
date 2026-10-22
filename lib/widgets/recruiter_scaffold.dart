@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'recruiter_side_nav.dart';
+import 'recruiter_button_style.dart';
 
 /// Keeps one navigation surface around every recruiter route.
 class RecruiterScaffold extends StatelessWidget {
@@ -18,10 +19,11 @@ class RecruiterScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.sizeOf(context).width < 900;
+    final themedBody = RecruiterButtonTheme(child: body);
     if (isMobile) {
       return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
-        body: SafeArea(bottom: false, child: body),
+        body: SafeArea(bottom: false, child: themedBody),
       );
     }
     return Scaffold(
@@ -38,7 +40,7 @@ class RecruiterScaffold extends StatelessWidget {
             Expanded(
               child: ClipRect(
                 key: const Key('recruiter-main-canvas'),
-                child: body,
+                child: themedBody,
               ),
             ),
           ],

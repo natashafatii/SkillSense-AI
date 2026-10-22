@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
@@ -323,7 +324,7 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
 
                                           // Ignore link
                                           Center(
-                                            child: GestureDetector(
+                                            child: PointerGestureDetector(
                                               onTap: widget.onIgnore,
                                               child: RichText(
                                                 textAlign: TextAlign.center,
@@ -415,7 +416,7 @@ class _PasswordField extends StatelessWidget {
             width: 1.5,
           ),
         ),
-        suffixIcon: GestureDetector(
+        suffixIcon: PointerGestureDetector(
           onTap: onToggle,
           child: Center(
             widthFactor: 1.0,
