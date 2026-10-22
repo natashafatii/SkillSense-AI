@@ -85,6 +85,7 @@ class ProfileService {
   // ══════════════════════════════════════════════════════════════════════════
   // Candidate Profile Endpoints (`/api/candidates/profile/`)
   // ══════════════════════════════════════════════════════════════════════════
+  static bool _candidateCacheAllowed = false;
   static final ValueNotifier<CandidateProfile?> currentProfileNotifier =
       ValueNotifier(null);
 
@@ -99,6 +100,7 @@ class ProfileService {
   }
 
   static void clearCache() {
+    _candidateCacheAllowed = false;
     currentProfileNotifier.value = null;
     recruiterProfileImageUrlNotifier.value = null;
     recruiterProfileImageInitialsNotifier.value = '?';
@@ -111,7 +113,9 @@ class ProfileService {
     bool allowCachedOnError = true,
   }) async {
     final epoch = SessionScope.generation;
-    if (currentProfileNotifier.value != null && !forceRefresh) {
+    if (_candidateCacheAllowed &&
+        currentProfileNotifier.value != null &&
+        !forceRefresh) {
       return currentProfileNotifier.value!;
     }
     int attempts = 0;
@@ -120,6 +124,7 @@ class ProfileService {
         final dio = await ApiClient.getInstance();
         final response = await dio.get('/candidates/profile/');
         if (epoch != SessionScope.generation) return null;
+        _candidateCacheAllowed = responseAllowsStorage(response);
         currentProfileNotifier.value = CandidateProfile.fromJson(
           response.data as Map<String, dynamic>,
         );
@@ -140,7 +145,7 @@ class ProfileService {
         attempts++;
         if (attempts >= 2) {
           if (!allowCachedOnError) throw ApiException.fromDioException(e);
-          return currentProfileNotifier.value;
+          return _candidateCacheAllowed ? currentProfileNotifier.value : null;
         }
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (_) {
@@ -148,7 +153,7 @@ class ProfileService {
         break;
       }
     }
-    return currentProfileNotifier.value;
+    return _candidateCacheAllowed ? currentProfileNotifier.value : null;
   }
 
   /// Partially updates the self-owned candidate profile.
@@ -158,6 +163,7 @@ class ProfileService {
     try {
       final dio = await ApiClient.getInstance();
       final response = await dio.patch('/candidates/profile/', data: patchData);
+      _candidateCacheAllowed = responseAllowsStorage(response);
       currentProfileNotifier.value = CandidateProfile.fromJson(
         response.data as Map<String, dynamic>,
       );

@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
 import '../models/application.dart';
+import '../models/application_summary.dart';
 import '../models/paginated_response.dart';
 import 'api_client.dart';
+import 'auth_service.dart';
 import 'api_exception.dart';
 
 /// Job application submission and lifecycle management service.
@@ -12,10 +13,17 @@ class ApplicationService {
   ApplicationService._();
 
   /// The API scopes this list to the authenticated user's applications.
-  static Future<List<Application>> listAllApplications({Dio? client}) async {
+  static Future<List<Application>> listAllApplications({
+    String? jobId,
+    Dio? client,
+  }) async {
     final applications = <Application>[];
     for (var page = 1; page <= 100; page++) {
-      final result = await listApplications(page: page, client: client);
+      final result = await listApplications(
+        jobId: jobId,
+        page: page,
+        client: client,
+      );
       applications.addAll(result.results);
       if (!result.hasNext) return applications;
     }
@@ -25,12 +33,14 @@ class ApplicationService {
   /// Loads every shortlisted application for the recruiter, across pages.
   static Future<List<Application>> listAllByStatus(
     String status, {
+    required String jobId,
     Dio? client,
   }) async {
     final applications = <Application>[];
     for (var page = 1; page <= 100; page++) {
       final result = await listApplications(
         status: status,
+        jobId: jobId,
         page: page,
         client: client,
       );
@@ -71,12 +81,39 @@ class ApplicationService {
     bool consent = false,
     Dio? client,
   }) async {
+    if (!app.allowedActions.contains(action)) {
+      throw StateError(
+        'This action is not currently allowed. Refresh the application.',
+      );
+    }
+    if (const {'shortlist', 'reject'}.contains(action) &&
+        reason.trim().isEmpty) {
+      throw ArgumentError('Enter a review reason.');
+    }
+    if (resumeId != null && (action != 'retry-screening' || !consent)) {
+      throw ArgumentError(
+        'Resume replacement requires retry and processing consent.',
+      );
+    }
+    if (reason.length > 2000) {
+      throw ArgumentError('Reason exceeds 2,000 characters.');
+    }
+    if (app.status == ApplicationStatus.unknown ||
+        app.version < 1 ||
+        !const {
+          'shortlist',
+          'reject',
+          'retry-screening',
+          'rescreen',
+        }.contains(action)) {
+      throw StateError('Refresh and review the application before submitting.');
+    }
     try {
       final dio = client ?? await ApiClient.getInstance();
       final response = await dio.post(
         '/applications/${app.id}/$action/',
         data: {
-          'expected_version': app.version,
+          'expected_version': app.applicationVersion.value,
           if (action == 'shortlist' || action == 'reject') 'reason': reason,
           if (resumeId != null) 'resume_id': resumeId,
           if (resumeId != null) 'consent_given': consent,
@@ -90,50 +127,16 @@ class ApplicationService {
     }
   }
 
-  /// Shortlists an applied candidate without a request body.
   static Future<Application> shortlistApplication(
     Application app, {
-    String reason = 'Selected for shortlist from applicant detail.',
+    required String reason,
     Dio? client,
-  }) async {
-    try {
-      final dio = client ?? await ApiClient.getInstance();
-      final response = await dio.post(
-        '/applications/${app.id}/shortlist/',
-        data: {'expected_version': app.version, 'reason': reason},
-      );
-      final result = Map<String, dynamic>.from(response.data as Map);
-      if (result['status']?.toString().toUpperCase() != 'SHORTLISTED') {
-        throw const FormatException(
-          'Shortlist response did not confirm the new status.',
-        );
-      }
-      return app.withShortlistResult(result);
-    } on DioException catch (error) {
-      throw ApiException.fromDioException(error);
-    }
-  }
-
+  }) => screeningAction(app, 'shortlist', reason: reason, client: client);
   static Future<Application> rejectApplication(
     Application app, {
+    required String reason,
     Dio? client,
-  }) async {
-    try {
-      final dio = client ?? await ApiClient.getInstance();
-      final response = await dio.post(
-        '/applications/${app.id}/reject/',
-        data: {
-          'expected_version': app.version,
-          'reason': 'Rejected from applicant detail.',
-        },
-      );
-      return Application.fromJson(
-        Map<String, dynamic>.from(response.data as Map),
-      );
-    } on DioException catch (error) {
-      throw ApiException.fromDioException(error);
-    }
-  }
+  }) => screeningAction(app, 'reject', reason: reason, client: client);
 
   static const maxResumeBytes = 5 * 1024 * 1024;
 
@@ -290,7 +293,7 @@ class ApplicationService {
 
       final response = await dio.post(
         '/applications/',
-        data: FormData.fromMap(dataMap),
+        data: resumeId != null ? dataMap : FormData.fromMap(dataMap),
       );
       return Application.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
@@ -302,16 +305,32 @@ class ApplicationService {
     String? jobId,
     String? status,
     bool? eligibleForInterview,
+    String? processingStatus,
+    String? eligibility,
+    double? minMatchScore,
+    String? ordering,
+    String? role,
     int page = 1,
     int? pageSize,
     Dio? client,
   }) async {
+    if ((role ?? AuthService.getUserRole()) == 'RECRUITER' &&
+        (jobId == null || jobId.trim().isEmpty)) {
+      throw ArgumentError('A recruiter job filter is required.');
+    }
+    if (page < 1 || (pageSize != null && (pageSize < 1 || pageSize > 100))) {
+      throw ArgumentError('Invalid application page size or page.');
+    }
     try {
       final dio = client ?? await ApiClient.getInstance();
       final response = await dio.get(
         '/applications/',
         queryParameters: {
           'page': page,
+          if (processingStatus != null) 'processing_status': processingStatus,
+          if (eligibility != null) 'eligibility': eligibility,
+          if (minMatchScore != null) 'min_match_score': minMatchScore,
+          if (ordering != null) 'ordering': ordering,
           if (eligibleForInterview != null)
             'eligible_for_interview': eligibleForInterview.toString(),
           if (pageSize != null) 'page_size': pageSize,
@@ -324,50 +343,45 @@ class ApplicationService {
         Application.fromJson,
       );
     } on DioException catch (e) {
-      debugPrint(
-        'GET /applications/ failed (HTTP ${e.response?.statusCode}): ${e.response?.data}',
-      );
       throw ApiException.fromDioException(e);
     }
   }
 
-  static Future<Application> getApplication(String id) async {
-    try {
-      final dio = await ApiClient.getInstance();
-      final response = await dio.get('/applications/$id/');
-      return Application.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      throw ApiException.fromDioException(e);
-    }
-  }
-
-  static Future<Application> advanceApplication({
-    required String applicationId,
-    required ApplicationStatus nextStatus,
+  static Future<ApplicationSummary> summary({
+    String? jobId,
+    String? role,
+    Dio? client,
   }) async {
+    if ((role ?? AuthService.getUserRole()) == 'RECRUITER' &&
+        (jobId == null || jobId.isEmpty)) {
+      throw ArgumentError('A recruiter job filter is required.');
+    }
     try {
-      final dio = await ApiClient.getInstance();
-      final response = await dio.patch(
-        '/applications/$applicationId/advance/',
-        data: {'status': nextStatus.value},
+      final dio = client ?? await ApiClient.getInstance();
+      return ApplicationSummary.fromJson(
+        Map<String, dynamic>.from(
+          (await dio.get(
+                '/applications/summary/',
+                queryParameters: {if (jobId != null) 'job': jobId},
+              )).data
+              as Map,
+        ),
       );
-      return Application.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      throw ApiException.fromDioException(e);
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
     }
   }
 
-  /// Advances an application to an API status used by the recruiter pipeline.
-  static Future<Application> advanceToStatus({
-    required String applicationId,
-    required String status,
+  static Future<Application> getApplication(
+    String id, {
+    CancelToken? cancelToken,
     Dio? client,
   }) async {
     try {
       final dio = client ?? await ApiClient.getInstance();
-      final response = await dio.patch(
-        '/applications/$applicationId/advance/',
-        data: {'status': status},
+      final response = await dio.get(
+        '/applications/$id/',
+        cancelToken: cancelToken,
       );
       return Application.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {

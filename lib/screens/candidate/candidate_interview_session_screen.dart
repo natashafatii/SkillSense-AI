@@ -149,10 +149,12 @@ class _CandidateInterviewSessionScreenState
         mounted && identical(lifecycle, _lifecycle) && lifecycle.isCurrent;
     await lifecycle.restore();
     if (!current() || !lifecycle.canUseMedia) return;
-    await media.requestCamera();
-    if (!current() || !media.cameraReady) return;
+    if (lifecycle.videoRequired) await media.requestCamera();
+    if (!current() || (lifecycle.videoRequired && !media.cameraReady)) return;
     await lifecycle.joinVoice();
-    if (current() && lifecycle.state == InterviewLifecycleState.live) {
+    if (current() &&
+        lifecycle.state == InterviewLifecycleState.live &&
+        lifecycle.videoRequired) {
       publisher.start();
     }
   }

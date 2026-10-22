@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import '../models/interview.dart';
 import 'api_client.dart';
+import 'auth_service.dart';
+import 'application_service.dart';
 import 'api_exception.dart';
 
 /// Phase 7 interview routes. Payload names follow the review's endpoint
@@ -31,7 +33,10 @@ class InterviewService {
         }
         interviews.addAll(
           rows.map(
-            (row) => Interview.fromJson(Map<String, dynamic>.from(row as Map)),
+            (row) => Interview.forRole(
+              Map<String, dynamic>.from(row as Map),
+              AuthService.getUserRole(),
+            ),
           ),
         );
         if (next == null || next == '') return interviews;
@@ -74,7 +79,10 @@ class InterviewService {
         }
         interviews.addAll(
           rows.map(
-            (row) => Interview.fromJson(Map<String, dynamic>.from(row as Map)),
+            (row) => Interview.forRole(
+              Map<String, dynamic>.from(row as Map),
+              AuthService.getUserRole(),
+            ),
           ),
         );
         if (next == null || next == '') return interviews;
@@ -92,10 +100,16 @@ class InterviewService {
     int? expectedRevision,
     Dio? client,
   }) async {
-    if (applicationId.isEmpty || !scheduledAt.isAfter(DateTime.now())) {
+    if (applicationId.isEmpty ||
+        !scheduledAt.isAfter(DateTime.now()) ||
+        questionSetId == null ||
+        questionSetId.isEmpty ||
+        expectedRevision == null ||
+        expectedRevision < 1) {
       throw const ApiException(
         statusCode: 400,
-        message: 'Choose a shortlisted application and a future time.',
+        message:
+            'Choose an eligible application, approved question-set revision and future time.',
       );
     }
     try {
@@ -109,7 +123,7 @@ class InterviewService {
           'expected_revision': expectedRevision,
         },
       );
-      final interview = Interview.fromJson(
+      final interview = RecruiterInterview.fromJson(
         response.data as Map<String, dynamic>,
       );
       if (interview.applicationId.isNotEmpty &&
@@ -118,9 +132,32 @@ class InterviewService {
           'Interview response references another application.',
         );
       }
-      return interview;
+      // Always confirm both resources after the scheduling mutation.
+      await ApplicationService.getApplication(applicationId, client: dio);
+      return getInterview(interview.id, client: dio, role: 'RECRUITER');
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
+    }
+  }
+
+  static Future<Interview> getInterview(
+    String id, {
+    Dio? client,
+    String? role,
+  }) async {
+    try {
+      final dio = client ?? await ApiClient.getInstance();
+      final response = await dio.get('/interviews/$id/');
+      final result = Interview.forRole(
+        Map<String, dynamic>.from(response.data as Map),
+        role ?? AuthService.getUserRole(),
+      );
+      if (result.id != id) {
+        throw const FormatException('Interview identity mismatch.');
+      }
+      return result;
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
     }
   }
 
@@ -128,6 +165,9 @@ class InterviewService {
     String interviewId, {
     Dio? client,
   }) async {
+    if (AuthService.getUserRole() == 'CANDIDATE') {
+      throw StateError('Question banks are recruiter-only.');
+    }
     if (interviewId.isEmpty) throw ArgumentError('Interview ID is required.');
     try {
       final dio = client ?? await ApiClient.getInstance();
@@ -150,41 +190,5 @@ class InterviewService {
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
     }
-  }
-
-  static Future<List<InterviewQuestion>> saveQuestions(
-    String interviewId,
-    List<InterviewQuestion> questions, {
-    Dio? client,
-  }) async {
-    if (interviewId.isEmpty || questions.isEmpty) {
-      throw const ApiException(
-        statusCode: 400,
-        message: 'Interview and questions are required.',
-      );
-    }
-    final dio = client ?? await ApiClient.getInstance();
-    try {
-      await dio.patch(
-        '/interviews/$interviewId/questions/',
-        data: {'questions': questions.map((q) => q.toJson()).toList()},
-      );
-    } on DioException catch (e) {
-      throw ApiException.fromDioException(e);
-    }
-    final confirmed = await getQuestions(interviewId, client: dio);
-    for (final expected in questions) {
-      if (!confirmed.any(
-        (q) =>
-            q.id == expected.id &&
-            q.text == expected.text &&
-            q.isApproved == expected.isApproved,
-      )) {
-        throw const FormatException(
-          'Question changes were not confirmed by the server.',
-        );
-      }
-    }
-    return confirmed;
   }
 }

@@ -58,11 +58,15 @@ class InterviewLifecycleController extends ChangeNotifier {
       _joining = false,
       _finishWanted = false;
   bool _audioStopConfirmed = false,
+      _needsSync = false,
       _finishIntentConfirmed = false,
       _videoSealConfirmed = false,
       _agentTalking = false;
   int _voiceEpoch = 0, _polls = 0;
   Timer? _pollTimer;
+  CancelToken? _pollRequest;
+  int _pollGeneration = 0;
+  DateTime? _pollDeadline, _retryPollAt;
   final Map<Timer, void Function()> _deadlines = {};
   Future<void>? _finishFlight, _restoreFlight, _readFlight;
   VoiceSessionSnapshot? _snapshot;
@@ -144,7 +148,7 @@ class InterviewLifecycleController extends ChangeNotifier {
     if (_snapshot != null && result.videoRequired != _snapshot!.videoRequired) {
       throw const FormatException('Immutable session mode changed.');
     }
-    _snapshot = result;
+    _snapshot = VoiceSessionSnapshot.withoutCredential(result);
     _finishWanted |= result.finishRequested || result.completed;
     _finishIntentConfirmed |= result.finishRequested;
     _audioStopConfirmed |= result.audioEndedAt != null;
@@ -158,10 +162,9 @@ class InterviewLifecycleController extends ChangeNotifier {
     if (result.completed) {
       _localStop();
       _state = InterviewLifecycleState.completed;
-      _notice = result.conversationOutcome == 'COMPLETED'
-          ? 'The interview is complete. Report availability is confirmed separately.'
-          : 'The call ended. Your available answers are retained; full question completion is not confirmed.';
-      if (result.reportReady) _pollTimer?.cancel();
+      _notice =
+          'The call ended. Evidence processing: ${result.workflowState}. Evaluation readiness is confirmed separately.';
+      if (_processingTerminal(result.workflowState)) _pollTimer?.cancel();
     }
   }
 
@@ -176,10 +179,14 @@ class InterviewLifecycleController extends ChangeNotifier {
       _localStop();
     }
     _paused = false;
+    _pollDeadline = null;
+    _polls = 0;
+    _pollGeneration++;
+    _pollRequest?.cancel('Status refresh replaced polling.');
+    _pollTimer?.cancel();
     _state = InterviewLifecycleState.loading;
     _emit();
-    // Existing candidate-authorized retrieve includes questions. The separate
-    // /questions/ action is recruiter-only in this checkout and is not used.
+    // Candidate retrieve contains public lifecycle/readiness only.
     try {
       final result = await backend
           .interview(identity.interviewId, cancelToken: _requests)
@@ -210,9 +217,8 @@ class InterviewLifecycleController extends ChangeNotifier {
       final current = _snapshot!;
       if (current.completed) {
         _state = InterviewLifecycleState.completed;
-        _notice = current.reportReady
-            ? 'Interview completion is confirmed. Report availability is confirmed separately.'
-            : 'Interview completion is confirmed. The report is still processing or unavailable.';
+        _notice =
+            'The call ended. Evidence processing: ${current.workflowState}.';
       }
       if (_state != InterviewLifecycleState.completed) {
         _state = _finishWanted
@@ -234,7 +240,9 @@ class InterviewLifecycleController extends ChangeNotifier {
       if (!current.videoRequired || _finishWanted || current.videoSealed) {
         _localStop();
       }
-      if (current.completed && !current.reportReady) _schedulePoll();
+      if (current.completed && !_processingTerminal(current.workflowState)) {
+        _schedulePoll();
+      }
     } on VoiceContractUnavailable catch (error) {
       if (isCurrent) {
         _state = InterviewLifecycleState.unavailable;
@@ -252,6 +260,12 @@ class InterviewLifecycleController extends ChangeNotifier {
 
   Future<void> joinVoice() async {
     if (!isCurrent || _joining || !canUseMedia || media.busy) return;
+    if (_interview?.interview.canJoinAt(DateTime.now()) != true) {
+      _notice =
+          'Joining is not currently available. Refresh readiness and check the scheduled time.';
+      _emit();
+      return;
+    }
     if (!voice.supported) {
       _state = InterviewLifecycleState.unavailable;
       _notice =
@@ -266,6 +280,15 @@ class InterviewLifecycleController extends ChangeNotifier {
     _notice = 'Checking backend session and provider credentials…';
     _emit();
     try {
+      if (_needsSync) {
+        final synced = await backend
+            .syncInterview(identity.interviewId, cancelToken: _requests)
+            .bounded(this);
+        if (!isCurrent || epoch != _voiceEpoch) return;
+        _apply(synced);
+        _needsSync = false;
+        if (!canUseMedia) return;
+      }
       var result = await backend
           .read(
             identity.interviewId,
@@ -295,6 +318,7 @@ class InterviewLifecycleController extends ChangeNotifier {
         );
       }
       if (result.credential == null) {
+        _needsSync = true;
         result = await backend
             .join(
               identity,
@@ -303,6 +327,7 @@ class InterviewLifecycleController extends ChangeNotifier {
             )
             .bounded(this);
         if (!isCurrent || epoch != _voiceEpoch) return;
+        _needsSync = false;
         _apply(result);
         if (!canUseMedia) return;
       }
@@ -339,7 +364,11 @@ class InterviewLifecycleController extends ChangeNotifier {
         _localStop();
         _state = InterviewLifecycleState.interrupted;
         _notice = error.message;
-        if (error.statusCode == 409) await reconcile();
+        if (error.statusCode == 409 ||
+            error.statusCode == 503 ||
+            error.statusCode == null) {
+          await reconcile();
+        }
       }
     } catch (_) {
       if (isCurrent && epoch == _voiceEpoch) {
@@ -361,6 +390,7 @@ class InterviewLifecycleController extends ChangeNotifier {
         _state = InterviewLifecycleState.live;
         _notice =
             'Voice provider connected. Camera and frame transport remain independent.';
+        _schedulePoll();
       case RetellVoiceEvent.audioReady:
         _notice =
             'Provider audio is available. Use Enable audio if browser playback is blocked.';
@@ -461,6 +491,7 @@ class InterviewLifecycleController extends ChangeNotifier {
     _finishWanted = true;
     _paused = false;
     _polls = 0;
+    _pollDeadline = null;
     _pollTimer?.cancel();
     _localStop();
     _state = InterviewLifecycleState.finishing;
@@ -552,34 +583,95 @@ class InterviewLifecycleController extends ChangeNotifier {
     _pollTimer?.cancel();
     if (!isCurrent ||
         _paused ||
-        (_snapshot?.completed == true && _snapshot?.reportReady == true)) {
+        (_snapshot?.completed == true &&
+            _processingTerminal(_snapshot!.workflowState))) {
       return;
     }
-    if (_polls >= maxPolls) {
+    _pollDeadline ??= DateTime.now().add(const Duration(minutes: 2));
+    if (_polls >= maxPolls || !DateTime.now().isBefore(_pollDeadline!)) {
       _notice = _snapshot?.completed == true
-          ? 'Interview completion is confirmed; report availability is still unconfirmed. Refresh status later.'
+          ? 'The call ended; evidence processing is not yet confirmed. Refresh status later.'
           : 'Completion is still unconfirmed. Retry status or finish; the report is not assumed ready.';
       return;
     }
-    _pollTimer = Timer(pollInterval, () {
+    var delay = Duration(
+      milliseconds: (pollInterval.inMilliseconds * (1 << _polls.clamp(0, 3)))
+          .clamp(1, 15000),
+    );
+    final retry = _retryPollAt?.difference(DateTime.now());
+    if (retry != null && retry > delay) delay = retry;
+    final remaining = _pollDeadline!.difference(DateTime.now());
+    if (delay > remaining) delay = remaining;
+    _pollTimer = Timer(delay, () {
+      if (!DateTime.now().isBefore(_pollDeadline!)) {
+        _notice =
+            'Status polling paused after two minutes. Refresh status to check again.';
+        _emit();
+        return;
+      }
       _polls++;
       unawaited(_poll());
     });
   }
 
+  bool _processingTerminal(String state) => const {
+    'EVALUATED',
+    'INTERRUPTED',
+    'EVALUATION_FAILED',
+    'FAILED',
+    'INSUFFICIENT_EVIDENCE',
+    'LEGACY_UNVERIFIED',
+    'COMPLETED',
+  }.contains(state);
+
   Future<void> _poll() async {
     if (!isCurrent || _paused) return;
+    final generation = _pollGeneration;
+    final token = _pollRequest = CancelToken();
     try {
       final result = await backend
           .read(
             identity.interviewId,
             sessionId: identity.sessionId,
-            cancelToken: _requests,
+            cancelToken: token,
           )
           .bounded(this);
-      if (!isCurrent || _paused) return;
+      if (!isCurrent ||
+          _paused ||
+          generation != _pollGeneration ||
+          token.isCancelled) {
+        return;
+      }
       _apply(result);
+    } on ApiException catch (error) {
+      if (!isCurrent ||
+          _paused ||
+          generation != _pollGeneration ||
+          token.isCancelled) {
+        return;
+      }
+      if (error.retryAfter != null) {
+        _retryPollAt = DateTime.now().add(error.retryAfter!);
+      }
+      if (error.accessUnavailable || error.statusCode == 401) {
+        _localStop();
+        _snapshot = null;
+        _interview = null;
+        _state = InterviewLifecycleState.unavailable;
+        _notice = 'Session access is unavailable. Local media stopped.';
+        _emit();
+        return;
+      }
+      if (isCurrent) {
+        _notice = 'Status temporarily unavailable. ${error.message}';
+      }
     } catch (_) {
+      if (!isCurrent ||
+          _paused ||
+          generation != _pollGeneration ||
+          token.isCancelled) {
+        return;
+      }
       if (isCurrent) {
         _notice =
             'Completion status is temporarily unavailable. No successful completion is assumed.';
@@ -608,6 +700,8 @@ class InterviewLifecycleController extends ChangeNotifier {
   void pauseLocal({bool notify = true}) {
     if (_disposed) return;
     _paused = true;
+    _pollGeneration++;
+    _pollRequest?.cancel('Local media paused.');
     _pollTimer?.cancel();
     _localStop();
     if (!_finishWanted && _snapshot?.completed != true) {
@@ -620,6 +714,8 @@ class InterviewLifecycleController extends ChangeNotifier {
 
   void _logout() {
     _invalid = true;
+    _pollGeneration++;
+    _pollRequest?.cancel('Account changed.');
     _cancelDeadlines();
     _requests.cancel('Account changed.');
     _pollTimer?.cancel();
@@ -639,6 +735,8 @@ class InterviewLifecycleController extends ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _pollGeneration++;
+    _pollRequest?.cancel('Flow disposed.');
     _cancelDeadlines();
     SessionScope.invalidations.removeListener(_logout);
     _requests.cancel('Flow disposed.');

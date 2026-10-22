@@ -1,3 +1,4 @@
+import '../application_screening_screen.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
@@ -13,6 +14,7 @@ import '../../models/job.dart';
 import '../../models/resume_detail.dart';
 import '../../services/application_service.dart';
 import '../../services/api_exception.dart';
+import '../../services/session_scope.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import 'applicant_detail_preview.dart';
@@ -45,11 +47,15 @@ class HrPipelineScreen extends StatefulWidget {
   State<HrPipelineScreen> createState() => _HrPipelineScreenState();
 }
 
-class _HrPipelineScreenState extends State<HrPipelineScreen> {
+class _HrPipelineScreenState extends State<HrPipelineScreen>
+    with WidgetsBindingObserver {
   static const _stages = [
     'APPLIED',
     'UNDER_REVIEW',
     'SHORTLISTED',
+    'SCHEDULED',
+    'IN_PROGRESS',
+    'INTERVIEW_FAILED',
     'INTERVIEWED',
     'DECIDED',
   ];
@@ -57,6 +63,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
     Color(0xFF64748B),
     Color(0xFF4F83FF),
     Color(0xFF22CDB1),
+    Color(0xFF4268F0),
+    Color(0xFF087F72),
+    Color(0xFFE85D5B),
     Color(0xFF7C6CF2),
     Color(0xFF10B981),
   ];
@@ -66,7 +75,6 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   final Map<String, List<Application>> _cache = {};
   final Map<String, Future<List<Application>>> _inFlight = {};
   final Set<String> _expanded = {};
-  final Set<String> _shortlisting = {};
   final Map<String, FocusNode> _viewFocusNodes = {};
   final GlobalKey _jobSwitcherKey = GlobalKey();
   String? _jobId;
@@ -75,13 +83,37 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   bool _switcherLoading = false;
   int _selection = 0;
   Timer? _refreshTimer;
+  final _session = SessionScope.generation;
+  int _foregroundPolls = 0;
+  void _clearPrivateState() {
+    _refreshTimer?.cancel();
+    _cache.clear();
+    _inFlight.clear();
+    if (mounted) {
+      setState(() {
+        _applications = [];
+        _jobs = [];
+      });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _refreshTimer?.cancel();
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    SessionScope.invalidations.addListener(_clearPrivateState);
     _jobId = widget.jobId;
     _loadJobs();
     _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (++_foregroundPolls > 8 || _session != SessionScope.generation) {
+        _refreshTimer?.cancel();
+        return;
+      }
       if (mounted &&
           ModalRoute.of(context)?.isCurrent == true &&
           !_loading &&
@@ -95,6 +127,8 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    SessionScope.invalidations.removeListener(_clearPrivateState);
     for (final node in _viewFocusNodes.values) {
       node.dispose();
     }
@@ -123,7 +157,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
       final jobs = List<Job>.from(
         await (widget.loadJobs?.call() ?? JobService.listAllJobs()),
       );
-      if (!mounted) return;
+      if (!mounted || _session != SessionScope.generation) return;
       final requestedId = _jobId;
       if (requestedId != null && !jobs.any((job) => job.id == requestedId)) {
         jobs.add(await JobService.getJob(requestedId));
@@ -183,7 +217,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
             ApplicationService.listAllForJob(id),
       );
       final applications = ApplicationService.forJob(await future, id);
-      _cache[id] = applications;
+      if (_session != SessionScope.generation) return;
+      // Keep only the current visible job; workflow reads may be no-store.
+      _cache.clear();
       if (!mounted || selection != _selection || id != _jobId) return;
       setState(() {
         _applications = applications;
@@ -275,112 +311,24 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
         ),
       );
     }
-    if (mounted) _viewFocusNodes[app.id]?.requestFocus();
-  }
-
-  Future<bool> _shortlist(Application app) async {
-    if (!_shortlisting.add(app.id)) return false;
-    setState(() {});
-    try {
-      final updated =
-          await (widget.shortlistApplication?.call(app) ??
-              ApplicationService.shortlistApplication(app));
-      if (!mounted) return false;
-      final cached = _cache[app.job];
-      if (cached != null) {
-        _cache[app.job] = [
-          for (final existing in cached)
-            existing.id == app.id ? updated : existing,
-        ];
-      }
-      if (_jobId == app.job) {
-        setState(() {
-          _applications = [
-            for (final existing in _applications)
-              existing.id == app.id ? updated : existing,
-          ];
-        });
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Candidate shortlisted.')));
-      return true;
-    } catch (error) {
-      if (!mounted) return false;
-      final status = error is ApiException ? error.statusCode : null;
-      if (status == 401) {
-        try {
-          await AuthService.signOut();
-        } catch (_) {
-          // Redirect even if the session was already ended.
-        }
-        if (mounted) {
-          Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
-        }
-        return false;
-      }
-      final message = switch (status) {
-        400 => 'Cannot shortlist from current stage.',
-        403 => "You're not authorized.",
-        _ => 'Could not shortlist. Please retry.',
-      };
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
-      return false;
-    } finally {
-      _shortlisting.remove(app.id);
-      if (mounted) setState(() {});
+    if (mounted) {
+      _viewFocusNodes[app.id]?.requestFocus();
+      if (_jobId == app.job) await _selectJob(app.job, refresh: true);
     }
   }
 
-  Future<bool> _reject(Application app) async {
-    if (!_shortlisting.add(app.id)) return false;
-    setState(() {});
-    try {
-      final updated =
-          await (widget.rejectApplication?.call(app) ??
-              ApplicationService.rejectApplication(app));
-      if (!mounted) return false;
-      _cache[app.job] = [
-        for (final existing in (_cache[app.job] ?? _applications))
-          existing.id == app.id ? updated : existing,
-      ];
-      if (_jobId == app.job) {
-        setState(() {
-          _applications = [
-            for (final existing in _applications)
-              existing.id == app.id ? updated : existing,
-          ];
-        });
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Candidate rejected.')));
-      return true;
-    } catch (error) {
-      if (!mounted) return false;
-      if (error is ApiException && error.statusCode == 401) {
-        try {
-          await AuthService.signOut();
-        } catch (_) {}
-        if (mounted) {
-          Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
-        }
-        return false;
-      }
-      final message = error is ApiException
-          ? error.message
-          : 'Could not reject. Please retry.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
-      return false;
-    } finally {
-      _shortlisting.remove(app.id);
-      if (mounted) setState(() {});
-    }
+  Future<bool> _reviewScreening(Application app) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ApplicationScreeningScreen(applicationId: app.id),
+      ),
+    );
+    if (mounted && _jobId != null) await _selectJob(_jobId!, refresh: true);
+    return false;
   }
+
+  Future<bool> _shortlist(Application app) => _reviewScreening(app);
+  Future<bool> _reject(Application app) => _reviewScreening(app);
 
   void _schedule(Application app) {
     Navigator.pushNamed(
@@ -571,13 +519,15 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
               ),
         icon: const Icon(Icons.add_circle_outline, size: 15),
         label: const Text('Schedule interview'),
-        style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF3B5AF1),
-          textStyle: GoogleFonts.inter(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
+        style: RecruiterButtonStyle.primary(
+          FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF3B5AF1),
+            textStyle: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        )),
+        ),
       ),
     ],
   );
@@ -752,16 +702,18 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
                     ),
                     child: ElevatedButton(
                       key: const Key('pipeline-create-role-cta'),
-                      style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: compact ? 22 : 26,
+                      style: RecruiterButtonStyle.primary(
+                        ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: compact ? 22 : 26,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(11),
+                          ),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                      )),
+                      ),
                       onPressed: () => Navigator.of(
                         context,
                       ).pushNamed('/recruiter/create-role'),
@@ -939,7 +891,8 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
     final name = _candidateName(app);
     final initials = _initials(name);
     final scored = stage == 'INTERVIEWED';
-    final date = scored ? (app.updatedAt ?? app.createdAt) : app.createdAt;
+    final date = (scored ? (app.updatedAt ?? app.createdAt) : app.createdAt)
+        .toLocal();
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(20),
@@ -1065,12 +1018,11 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
       );
     }
     if (stage == 'UNDER_REVIEW') {
-      final busy = _shortlisting.contains(app.id);
       return Align(
         alignment: Alignment.centerRight,
         child: OutlinedButton(
-          onPressed: busy ? null : () => _shortlist(app),
-          child: Text(busy ? 'Shortlisting…' : 'Shortlist'),
+          onPressed: () => _shortlist(app),
+          child: const Text('Review screening'),
         ),
       );
     }
@@ -1079,31 +1031,24 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
         alignment: Alignment.centerRight,
         child: FilledButton(
           onPressed: app.eligibleForInterview ? () => _schedule(app) : null,
-          style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF3B5AF1),
-          )),
+          style: RecruiterButtonStyle.primary(
+            FilledButton.styleFrom(backgroundColor: const Color(0xFF3B5AF1)),
+          ),
           child: const Text('Interview'),
         ),
       );
     }
-    if (stage == 'INTERVIEWED') {
-      final scores = <String>[
-        if (app.technicalScore != null) 'T ${app.technicalScore!.round()}',
-        if (app.behavioralScore != null) 'B ${app.behavioralScore!.round()}',
-        if (app.communicationScore != null)
-          'C ${app.communicationScore!.round()}',
-      ];
-      return Row(
-        children: [
-          Expanded(
-            child: Wrap(
-              spacing: 3,
-              runSpacing: 3,
-              children: [for (final score in scores) _scoreChip(score)],
-            ),
-          ),
-          _badge('INTERVIEWED', const Color(0xFF0F9876)),
-        ],
+    if (stage == 'INTERVIEWED' ||
+        stage == 'DECISION' ||
+        stage == 'INTERVIEW_FAILED' ||
+        stage == 'IN_PROGRESS' ||
+        stage == 'SCHEDULED') {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: OutlinedButton(
+          onPressed: () => _reviewScreening(app),
+          child: const Text('Evidence and decisions'),
+        ),
       );
     }
     final outcome = app.outcome?.toUpperCase();
@@ -1120,21 +1065,6 @@ class _HrPipelineScreenState extends State<HrPipelineScreen> {
       ),
     );
   }
-
-  Widget _scoreChip(String score) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF2F5FB),
-      borderRadius: BorderRadius.circular(4),
-    ),
-    child: Text(
-      score,
-      style: GoogleFonts.jetBrainsMono(
-        fontSize: 8,
-        color: const Color(0xFF64748B),
-      ),
-    ),
-  );
 
   Widget _badge(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),

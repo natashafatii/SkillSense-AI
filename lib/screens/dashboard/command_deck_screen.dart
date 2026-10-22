@@ -20,6 +20,7 @@ import '../../models/application.dart';
 import '../../models/interview.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/applicant_avatar_image.dart';
+import '../application_screening_screen.dart';
 
 class CommandDeckScreen extends StatefulWidget {
   const CommandDeckScreen({super.key});
@@ -1124,11 +1125,13 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 color: RecruiterButtonStyle.blue,
               ),
               child: ElevatedButton(
-                style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                )),
+                style: RecruiterButtonStyle.primary(
+                  ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
                 onPressed: () {
                   Navigator.of(context).pushNamed('/create-role');
                 },
@@ -1211,11 +1214,13 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   color: RecruiterButtonStyle.blue,
                 ),
                 child: ElevatedButton(
-                  style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  )),
+                  style: RecruiterButtonStyle.primary(
+                    ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
                   onPressed: () {
                     Navigator.of(context).pushNamed('/create-role');
                   },
@@ -1329,8 +1334,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   // Top Applicants list card
   Widget _buildTopApplicantsCard(DeckTheme theme, bool isMobile) {
-    final applicants = [..._applications]
-      ..sort((a, b) => (b.resumeScore ?? -1).compareTo(a.resumeScore ?? -1));
+    final applicants = [..._applications];
     final ranked = applicants.take(5).toList();
 
     return _buildGlassCard(
@@ -1369,7 +1373,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 children: [
                   Expanded(
                     child: Text(
-                      AppConstants.deckTopApplicants,
+                      'Recent applicants',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.spaceGrotesk(
@@ -1391,7 +1395,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                         color: AppColors.dashboardBlue.withValues(alpha: 0.08),
                       ),
                       child: Text(
-                        AppConstants.deckSbertRanked,
+                        'Screening evidence',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.jetBrainsMono(
@@ -1444,15 +1448,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   : score >= 55
                   ? AppColors.dashboardAmber
                   : AppColors.dashboardRed;
-              final badge = score == null
-                  ? 'UNSCORED'
-                  : score >= 85
-                  ? 'STRONG YES'
-                  : score >= 70
-                  ? 'YES'
-                  : score >= 55
-                  ? 'MAYBE'
-                  : 'NO';
+              final badge = item.screening?.outcome ?? 'UNAVAILABLE';
 
               return MouseRegion(
                 onEnter: (_) => setState(() => _hoveredApplicantIndex = index),
@@ -1460,7 +1456,12 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                 cursor: SystemMouseCursors.click,
                 child: PointerGestureDetector(
                   onTap: () {
-                    Navigator.of(context).pushNamed('/report');
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ApplicationScreeningScreen(applicationId: item.id),
+                      ),
+                    );
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
@@ -2360,18 +2361,20 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           const SizedBox(width: 16),
           if (isActive)
             ElevatedButton(
-              style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+              style: RecruiterButtonStyle.primary(
+                ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B82F6),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              )),
+              ),
               onPressed: onTap,
               child: Text(
                 actionLabel,

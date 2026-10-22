@@ -1,3 +1,5 @@
+import 'api_contract.dart';
+
 /// Generic wrapper for DRF paginated responses.
 ///
 /// Shape:
@@ -29,9 +31,12 @@ class PaginatedResponse<T> {
     Map<String, dynamic> json,
     T Function(Map<String, dynamic>) fromJsonT,
   ) {
-    final rawResults = json['results'] as List<dynamic>? ?? [];
+    final rawResults = json['results'];
+    if (rawResults is! List || json['count'] == null) {
+      throw const FormatException('Expected a paginated list envelope.');
+    }
     return PaginatedResponse<T>(
-      count: json['count'] as int? ?? 0,
+      count: ApiValue.integer(json['count']),
       next: json['next'] as String?,
       previous: json['previous'] as String?,
       results: rawResults
@@ -41,5 +46,6 @@ class PaginatedResponse<T> {
   }
 
   @override
-  String toString() => 'PaginatedResponse(count=$count, results=${results.length})';
+  String toString() =>
+      'PaginatedResponse(count=$count, results=${results.length})';
 }

@@ -31,7 +31,13 @@ class JobService {
             (row) => JobSkill.fromJson(Map<String, dynamic>.from(row as Map)),
           )
           .toList();
-      if (generation == SessionScope.generation) _skillsCache[id] = skills;
+      if (generation != SessionScope.generation) {
+        throw StateError('Session changed.');
+      }
+      if (generation == SessionScope.generation &&
+          responseAllowsStorage(response)) {
+        _skillsCache[id] = skills;
+      }
       return skills;
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);

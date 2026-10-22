@@ -11,19 +11,30 @@ import 'session_scope.dart';
 class ResumeManager {
   static List<Map<String, dynamic>>? _cachedResumes;
   static String? _cachedUserId;
+  static String? _storedKey;
 
   static final ValueNotifier<List<Map<String, dynamic>>> resumesNotifier =
       ValueNotifier<List<Map<String, dynamic>>>([]);
 
   static String? _getStorageKey() {
     final uid = AuthService.currentUserId;
-    if (uid != null && uid.isNotEmpty) {
-      return 'skillsense_candidate_resumes_$uid';
+    if (uid != null &&
+        uid.isNotEmpty &&
+        AuthService.getUserRole() == 'CANDIDATE') {
+      return 'skillsense_resumes_${AuthService.getUserRole()}_$uid';
     }
     return null;
   }
 
   static void clearCache() {
+    final key = _storedKey;
+    if (key != null && kIsWeb) {
+      try {
+        browser_storage.remove(key);
+      } catch (_) {}
+    }
+    _storedKey = null;
+
     _cachedResumes = null;
     _cachedUserId = null;
     resumesNotifier.value = [];
@@ -214,6 +225,7 @@ class ResumeManager {
 
   static void _load() {
     final key = _getStorageKey();
+    _storedKey = key;
     if (key == null) {
       _cachedResumes = [];
       resumesNotifier.value = [];
@@ -360,8 +372,13 @@ class ResumeManager {
       resumesNotifier.value = List.from(_cachedResumes!);
     }
     final key = _getStorageKey();
+    _storedKey = key;
     if (key == null || !kIsWeb || _cachedResumes == null) return;
     try {
+      if (!ResumeService.listAllowsStorage) {
+        browser_storage.remove(key);
+        return;
+      }
       browser_storage.write(key, jsonEncode(_cachedResumes));
     } catch (_) {}
   }

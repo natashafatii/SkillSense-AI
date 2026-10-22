@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/env_config.dart';
 import 'api_client.dart';
+import 'api_exception.dart';
 import 'auth_service_interface.dart';
 import 'profile_service.dart';
 import 'resume_manager.dart';
@@ -520,6 +521,11 @@ class AuthService {
           !['CANDIDATE', 'RECRUITER', 'ADMIN'].contains(data['role'])) {
         throw StateError('Unable to verify your account.');
       }
+      if (_verifiedRole != null &&
+          (_verifiedUserId != userId || _verifiedRole != data['role'])) {
+        _invalidate();
+        return _fetchIdentity();
+      }
       _verifiedUserId = userId;
       _verifiedRole = data['role'] as String;
       await saveUserSession(data);
@@ -630,42 +636,6 @@ class AuthService {
     await _preferenceWrites;
   }
 
-  static Exception handleDioException(DioException e) {
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.sendTimeout) {
-      return Exception(
-        'Connection timed out. Please check your internet connection '
-        'and verify the backend is running.',
-      );
-    } else if (e.type == DioExceptionType.connectionError) {
-      return Exception(
-        'Failed to connect to the backend. '
-        'Ensure the Django server is running.',
-      );
-    } else if (e.response != null) {
-      return _parseResponseError(e.response!);
-    } else {
-      return Exception('An unexpected error occurred: ${e.message}');
-    }
-  }
-
-  /// Extracts the first human-readable error message from a non-2xx response.
-  static Exception _parseResponseError(Response<dynamic> response) {
-    String message = 'An unknown error occurred.';
-    final data = response.data;
-    if (data != null && data is Map<String, dynamic>) {
-      if (data.containsKey('detail')) {
-        message = data['detail'].toString();
-      } else if (data.values.isNotEmpty) {
-        final firstValue = data.values.first;
-        if (firstValue is List && firstValue.isNotEmpty) {
-          message = firstValue.first.toString();
-        } else {
-          message = firstValue.toString();
-        }
-      }
-    }
-    return Exception(message);
-  }
+  static Exception handleDioException(DioException e) =>
+      ApiException.fromDioException(e);
 }

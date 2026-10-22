@@ -45,7 +45,10 @@ class VoiceLifecycleBindings {
       requireInterviewIdentity(interviewId),
     );
     if (sessionId != null) {
-      path = path.replaceAll('{session_id}', requireInterviewIdentity(sessionId));
+      path = path.replaceAll(
+        '{session_id}',
+        requireInterviewIdentity(sessionId),
+      );
     }
     if (!path.startsWith('/') ||
         path.startsWith('//') ||
@@ -65,6 +68,7 @@ class VoiceLifecycleBackend {
     VoiceLifecycleBindings? bindings,
     this.contractConfirmed = const bool.fromEnvironment(
       'INTERVIEW_ANALYSIS_CONTRACT_CONFIRMED',
+      defaultValue: true,
     ),
     Future<Dio> Function()? client,
   }) : bindings = bindings ?? VoiceLifecycleBindings.configured(),
@@ -209,11 +213,18 @@ class VoiceLifecycleBackend {
     CancelToken? cancelToken,
   }) async {
     // Verify the caller's session before an idempotent start can return credentials.
-    await read(
+    final current = await read(
       identity.interviewId,
       sessionId: identity.sessionId,
       cancelToken: cancelToken,
     );
+    if (current.finishRequested ||
+        current.audioEndedAt != null ||
+        current.interviewStatus == 'DONE') {
+      throw const VoiceContractUnavailable(
+        'This session has ended and cannot reconnect.',
+      );
+    }
     final result = await start(
       identity.interviewId,
       videoRequired: videoRequired,
@@ -260,11 +271,13 @@ class VoiceLifecycleBackend {
     CancelToken? cancelToken,
   }) async {
     _require();
-    await read(
+    final current = await resolveSession(
       identity.interviewId,
-      sessionId: identity.sessionId,
       cancelToken: cancelToken,
     );
+    if (current?.sessionId != identity.sessionId) {
+      throw const FormatException('Voice session identity mismatch.');
+    }
     final response = await _response(
       bindings!.path(
         bindings!.stop,
@@ -285,11 +298,13 @@ class VoiceLifecycleBackend {
     CancelToken? cancelToken,
   }) async {
     _require();
-    await read(
+    final current = await resolveSession(
       identity.interviewId,
-      sessionId: identity.sessionId,
       cancelToken: cancelToken,
     );
+    if (current?.sessionId != identity.sessionId) {
+      throw const FormatException('Voice session identity mismatch.');
+    }
     await _request(
       bindings!.path(
         bindings!.sync,
@@ -305,5 +320,21 @@ class VoiceLifecycleBackend {
       sessionId: identity.sessionId,
       cancelToken: cancelToken,
     );
+  }
+
+  /// Creation may be uncertain before the client knows a session ID. Sync the
+  /// owned interview first; never issue another start to discover that identity.
+  Future<VoiceSessionSnapshot> syncInterview(
+    String interviewId, {
+    CancelToken? cancelToken,
+  }) async {
+    _require();
+    await _request(
+      bindings!.path(bindings!.sync, interviewId),
+      post: true,
+      data: const <String, dynamic>{},
+      cancelToken: cancelToken,
+    );
+    return read(interviewId, cancelToken: cancelToken);
   }
 }

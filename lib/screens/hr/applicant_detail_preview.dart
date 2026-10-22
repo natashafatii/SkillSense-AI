@@ -1,3 +1,4 @@
+import '../application_screening_screen.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -46,7 +47,7 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
   String? _error;
   bool _loading = true;
   bool _resumeUnavailable = false;
-  bool _busy = false;
+  final bool _busy = false;
 
   @override
   void initState() {
@@ -99,17 +100,15 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
     }
   }
 
-  Future<void> _act(Future<bool> Function(Application) action) async {
+  Future<void> _openScreening() async {
     final app = _application;
-    if (app == null || _busy) return;
-    setState(() => _busy = true);
-    final succeeded = await action(app);
-    if (!mounted) return;
-    if (succeeded) {
-      Navigator.of(context).pop();
-    } else {
-      setState(() => _busy = false);
-    }
+    if (app == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ApplicationScreeningScreen(applicationId: app.id),
+      ),
+    );
+    if (mounted) _load();
   }
 
   String _initials(String name) => name
@@ -304,9 +303,15 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
               runSpacing: 10,
               alignment: WrapAlignment.end,
               children: [
+                OutlinedButton(
+                  onPressed: _loading ? null : _openScreening,
+                  child: const Text('Review screening evidence'),
+                ),
                 if (actionAllowed) ...[
                   OutlinedButton(
-                    onPressed: _busy ? null : () => _act(widget.onReject),
+                    onPressed: _busy || !app.allowedActions.contains('reject')
+                        ? null
+                        : _openScreening,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFE85D5B),
                       side: const BorderSide(color: Color(0x66E85D5B)),
@@ -314,10 +319,15 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                     child: const Text('Reject'),
                   ),
                   FilledButton(
-                    onPressed: _busy ? null : () => _act(widget.onShortlist),
-                    style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B5AF1),
-                    )),
+                    onPressed:
+                        _busy || !app.allowedActions.contains('shortlist')
+                        ? null
+                        : _openScreening,
+                    style: RecruiterButtonStyle.primary(
+                      FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF3B5AF1),
+                      ),
+                    ),
                     child: const Text('Shortlist'),
                   ),
                 ],

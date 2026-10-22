@@ -1,16 +1,24 @@
 import '../widgets/mobile_edge_shadow_wrapper.dart';
-import 'dart:async';
+import 'package:dio/dio.dart';
+import '../models/api_contract.dart';
+import '../services/api_exception.dart';
+import '../services/foreground_poller.dart';
 import 'package:flutter/material.dart';
+import 'hr/recruitment_review_screen.dart';
 import '../widgets/recruiter_top_bar.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/application.dart';
 import '../services/application_service.dart';
 import '../services/resume_service.dart';
 import '../services/session_scope.dart';
+import '../services/auth_service.dart';
+import '../widgets/question_preparation_panel.dart';
+import 'hr/schedule_interview_screen.dart';
 
 /// Application-owned progress and screening actions, shared by both roles.
 class ApplicationScreeningScreen extends StatefulWidget {
   final String applicationId;
+  final String Function()? roleProvider;
   final Future<Application> Function(String id)? loadApplication;
   final Future<Application> Function(
     Application app,
@@ -22,6 +30,7 @@ class ApplicationScreeningScreen extends StatefulWidget {
     super.key,
     required this.applicationId,
     this.loadApplication,
+    this.roleProvider,
     this.performAction,
   });
   @override
@@ -34,26 +43,74 @@ class _ApplicationScreeningScreenState
   Application? _app;
   String? _error;
   bool _busy = false;
-  Timer? _timer;
+  String get _role => widget.roleProvider?.call() ?? AuthService.getUserRole();
+  bool get _recruiter => _role == 'RECRUITER';
+  late final ForegroundPoller<Application> _poller;
+  bool _reviewRequired = false;
+  bool _fresh = false;
+  String? _replacementResumeId;
   final _reason = TextEditingController();
   final _session = SessionScope.generation;
-  int _polls = 0;
+  Future<Application> _read(CancelToken token) =>
+      widget.loadApplication?.call(widget.applicationId) ??
+      ApplicationService.getApplication(
+        widget.applicationId,
+        cancelToken: token,
+      );
+  void _accept(Application app) {
+    if (!mounted || _session != SessionScope.generation) return;
+    setState(() {
+      _app = app;
+      _error = null;
+      _fresh = true;
+    });
+  }
 
   @override
   void initState() {
     super.initState();
+    _poller = ForegroundPoller(
+      read: _read,
+      isVisible: () => mounted && ModalRoute.of(context)?.isCurrent != false,
+      isPending: (app) =>
+          isPendingWorkflowState(app.assessment?['status']?.toString() ?? ''),
+      onData: _accept,
+      onStopped: (_) {
+        if (mounted &&
+            isPendingWorkflowState(
+              _app?.assessment?['status']?.toString() ?? '',
+            )) {
+          setState(() => _error = 'Still processing. Refresh to check again.');
+        }
+      },
+    );
+    SessionScope.invalidations.addListener(_clearSession);
     _load();
+  }
+
+  void _clearSession() {
+    _poller.stop();
+    _reason.clear();
+    _replacementResumeId = null;
+    if (mounted) {
+      setState(() {
+        _app = null;
+        _fresh = false;
+        _error = 'Account session changed. Reopen the application.';
+      });
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _poller.dispose();
+    SessionScope.invalidations.removeListener(_clearSession);
     _reason.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
-    _timer?.cancel();
+    _poller.stop();
     try {
       final app =
           await (widget.loadApplication?.call(widget.applicationId) ??
@@ -63,30 +120,66 @@ class _ApplicationScreeningScreenState
         _app = app;
         _error = null;
       });
-      final stage = app.assessment?['status'];
-      if (stage != null && stage != 'SUCCEEDED' && stage != 'FAILED') {
-        _polls++;
-        _timer = Timer(Duration(seconds: _polls < 10 ? 2 : 10), _load);
+      _fresh = true;
+      if (isPendingWorkflowState(app.assessment?['status']?.toString() ?? '')) {
+        _poller.start();
       }
     } catch (error) {
       if (mounted && _session == SessionScope.generation) {
-        setState(() => _error = '$error');
+        setState(() {
+          _error = '$error';
+          _fresh = false;
+          if (error is ApiException && error.accessUnavailable) _app = null;
+        });
       }
     }
   }
 
   Future<void> _act(String action) async {
     final app = _app;
-    if (app == null || _busy) return;
+    if (app == null ||
+        _busy ||
+        _reviewRequired ||
+        _session != SessionScope.generation) {
+      return;
+    }
+    if (!app.allowedActions.contains(action) ||
+        !const {
+          'shortlist',
+          'reject',
+          'retry-screening',
+          'rescreen',
+        }.contains(action)) {
+      return;
+    }
+    if (const {'shortlist', 'reject'}.contains(action) &&
+        _reason.text.trim().isEmpty) {
+      setState(
+        () => _error = 'Enter a reason describing your evidence review.',
+      );
+      return;
+    }
+    if (!_recruiter && action != 'retry-screening') return;
+    if (action == 'retry-screening' &&
+        (app.screening?.recoveryAction == 'WAIT' ||
+            (!_recruiter &&
+                app.screening?.recoveryAction == 'CONTACT_SUPPORT'))) {
+      setState(
+        () => _error = 'Follow the server recovery guidance before retrying.',
+      );
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
-    _timer?.cancel();
+    _poller.stop();
     try {
-      String? resumeId;
+      String? resumeId = _replacementResumeId;
       if (action == 'retry-screening' &&
-          app.assessment?['recovery_action'] == 'REPLACE_RESUME') {
+          app.assessment?['recovery_action'] == 'REPLACE_RESUME' &&
+          !_recruiter &&
+          _replacementResumeId == null) {
         final consent = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -122,7 +215,14 @@ class _ApplicationScreeningScreenState
           fileBytes: file.bytes!,
           fileName: file.name,
         );
-        resumeId = uploaded['id'].toString();
+        if (!mounted || _session != SessionScope.generation) return;
+        resumeId = uploaded['id'] as String?;
+        _replacementResumeId = resumeId;
+        if (resumeId == null || resumeId.isEmpty) {
+          throw const FormatException(
+            'Upload did not return a resume identity.',
+          );
+        }
       }
       final updated =
           await (widget.performAction?.call(app, action, _reason.text.trim()) ??
@@ -137,10 +237,14 @@ class _ApplicationScreeningScreenState
       setState(() {
         _app = updated;
         _reason.clear();
+        _replacementResumeId = null;
       });
       await _load();
     } catch (error) {
-      // Refresh stale versions before the next action without losing the actionable error.
+      if (error is ApiException && error.requiresStateRefresh) {
+        _reviewRequired = true;
+      }
+      // Preserve the reason while refreshing; explicit review gates resubmission.
       await _load();
       if (mounted) setState(() => _error = '$error');
     } finally {
@@ -152,6 +256,7 @@ class _ApplicationScreeningScreenState
   Widget build(BuildContext context) {
     final app = _app;
     final assessment = app?.assessment;
+    final evidence = app?.screening;
     final criteria = assessment?['criteria_results'] as List? ?? const [];
     final reasons = (assessment?['reasons'] as List? ?? const [])
         .join(', ')
@@ -163,10 +268,12 @@ class _ApplicationScreeningScreenState
       'rescreen': 'Rescreen with current policy',
     };
     return Scaffold(
-      appBar: const PreferredSize(
-        preferredSize: Size.fromHeight(58),
-        child: RecruiterTopBar(pageTitle: 'Application screening'),
-      ),
+      appBar: _recruiter
+          ? const PreferredSize(
+              preferredSize: Size.fromHeight(58),
+              child: RecruiterTopBar(pageTitle: 'Application screening'),
+            )
+          : AppBar(title: const Text('Application screening')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
@@ -174,6 +281,17 @@ class _ApplicationScreeningScreenState
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
+                TextButton(
+                  onPressed: _busy ? null : _load,
+                  child: const Text('Refresh application'),
+                ),
+                if (_reviewRequired)
+                  TextButton(
+                    onPressed: _busy || !_fresh
+                        ? null
+                        : () => setState(() => _reviewRequired = false),
+                    child: const Text('I reviewed the refreshed application'),
+                  ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
@@ -201,28 +319,52 @@ class _ApplicationScreeningScreenState
                     Text(
                       'Assessment ${assessment['revision']} · policy ${assessment['policy_version']}',
                     ),
+                  Text(
+                    'Eligibility: ${evidence?.eligibility ?? 'UNKNOWN'}${evidence?.eligibility == 'UNKNOWN' ? ' — requires review' : ''}',
+                  ),
+                  Text(
+                    'Policy recommendation: ${evidence?.outcome ?? 'Unavailable'}',
+                  ),
+                  Text(
+                    'Interview eligibility: ${app.eligibleForInterview ? 'Eligible stage, no existing interview' : 'Not currently eligible'}',
+                  ),
+                  Text('Recovery: ${evidence?.recoveryAction ?? 'WAIT'}'),
+                  Text('Threshold: ${evidence?.threshold ?? 'Unavailable'}'),
+                  if (app.resumeScore == null)
+                    const Text('Screening match: Unavailable'),
+                  if (_replacementResumeId != null)
+                    Text('Selected replacement resume: $_replacementResumeId'),
                   if (app.resumeScore != null)
                     Text(
-                      'Match: ${app.resumeScore!.toStringAsFixed(2)} / 100 · minimum ${assessment?['threshold']}',
+                      'Screening match: ${app.resumeScore!.toStringAsFixed(2)} / 100 · threshold ${evidence?.threshold ?? 'Unavailable'}',
                     ),
+                  Text(
+                    'Matched skills: ${evidence?.matchedSkills.join(', ') ?? 'Unavailable'}',
+                  ),
+                  Text(
+                    'Missing skills: ${evidence?.missingSkills.join(', ') ?? 'Unavailable'}',
+                  ),
                   if (reasons.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Text(reasons),
                     ),
-                  for (final row in criteria)
+                  for (final row in criteria.whereType<Map>())
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text('${row['requirement']} — ${row['status']}'),
                       subtitle: Text('${row['evidence']}'),
                     ),
-                  if ((assessment?['error_message'] ?? '').toString().isNotEmpty)
+                  if ((assessment?['error_message'] ?? '')
+                      .toString()
+                      .isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Text('${assessment!['error_message']}'),
                     ),
-                  if (app.allowedActions.contains('shortlist') ||
-                      app.allowedActions.contains('reject'))
+                  if (_recruiter &&
+                      (app.allowedActions.contains('shortlist') ||
+                          app.allowedActions.contains('reject')))
                     TextField(
                       controller: _reason,
                       maxLines: 3,
@@ -237,9 +379,27 @@ class _ApplicationScreeningScreenState
                     spacing: 12,
                     runSpacing: 12,
                     children: [
-                      for (final action in app.allowedActions)
+                      for (final action in app.allowedActions.where(
+                        (action) =>
+                            labels.containsKey(action) &&
+                            (_recruiter || action == 'retry-screening'),
+                      ))
                         FilledButton(
-                          onPressed: _busy ? null : () => _act(action),
+                          onPressed:
+                              _busy ||
+                                  _reviewRequired ||
+                                  !_fresh ||
+                                  app.status == ApplicationStatus.unknown ||
+                                  (action == 'retry-screening' &&
+                                      ((evidence?.recoveryAction == 'WAIT' ||
+                                              (!_recruiter &&
+                                                  evidence?.recoveryAction ==
+                                                      'CONTACT_SUPPORT')) ||
+                                          (_recruiter &&
+                                              evidence?.recoveryAction ==
+                                                  'REPLACE_RESUME')))
+                              ? null
+                              : () => _act(action),
                           child: Text(labels[action] ?? action),
                         ),
                     ],
@@ -248,6 +408,58 @@ class _ApplicationScreeningScreenState
                     const Padding(
                       padding: EdgeInsets.all(16),
                       child: LinearProgressIndicator(),
+                    ),
+                  if (_recruiter && app.history.isNotEmpty) ...[
+                    const Text('Screening history'),
+                    for (final event in app.history)
+                      ListTile(
+                        title: Text(
+                          '${event['source'] ?? 'Unknown source'} · ${event['from_status']} → ${event['to_status']}',
+                        ),
+                        subtitle: Text('${event['reason'] ?? ''}'),
+                      ),
+                  ],
+                  if (_recruiter)
+                    OutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => RecruitmentReviewScreen(
+                                    applicationId: app.id,
+                                  ),
+                                ),
+                              );
+                              if (mounted) _load();
+                            },
+                      child: const Text(
+                        'Review interview evidence, scores and decisions',
+                      ),
+                    ),
+                  if (_recruiter && app.status == ApplicationStatus.screened)
+                    QuestionPreparationPanel(
+                      key: ValueKey('preparation-${app.id}'),
+                      applicationId: app.id,
+                      application: app,
+                      onApprovalChanged: (_, _) {},
+                    ),
+                  if (_recruiter && app.eligibleForInterview)
+                    FilledButton(
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ScheduleInterviewScreen(
+                                    jobId: app.job,
+                                    applicationId: app.id,
+                                  ),
+                                ),
+                              );
+                              if (mounted) _load();
+                            },
+                      child: const Text('Review questions and schedule'),
                     ),
                   if (app.eligibleForInterview)
                     const Padding(

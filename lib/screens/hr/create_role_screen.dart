@@ -287,7 +287,19 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   DateTime? _deadline;
   int _highlighted = -1;
   double _threshold = 66;
+  bool _thresholdEdited = false;
+  String get _thresholdLabel =>
+      widget.initialJob != null &&
+          !_thresholdEdited &&
+          _threshold != _threshold.roundToDouble()
+      ? _threshold.toStringAsFixed(2)
+      : _threshold.round().toString();
   bool _autoShortlist = true;
+  final _minimumExperience = TextEditingController(text: '0');
+  String _nonPassPolicy = 'REVIEW';
+  final _educationLevels = TextEditingController();
+  final _certifications = TextEditingController();
+  bool _manualReviewRequired = false;
   bool _saving = false;
   String? _savedJobId;
   double _scrollOffset = 0;
@@ -361,8 +373,17 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       _salaryMin.text = salaryParts[0].group(0)!;
       _salaryMax.text = salaryParts[1].group(0)!;
     }
-    _threshold = job.screeningThreshold.clamp(40, 90);
+    _threshold = job.screeningThreshold.clamp(0, 100);
     _autoShortlist = job.autoShortlistEnabled;
+    _minimumExperience.text =
+        '${job.screeningCriteria['minimum_experience_years'] ?? 0}';
+    _nonPassPolicy = job.nonPassPolicy;
+    _educationLevels.text =
+        (job.screeningCriteria['education_levels'] as List? ?? []).join(', ');
+    _certifications.text =
+        (job.screeningCriteria['certifications'] as List? ?? []).join(', ');
+    _manualReviewRequired =
+        job.screeningCriteria['manual_review_required'] == true;
     final weights = job.screeningCriteria['skill_weights'];
     final names = job.skillsRequired.isNotEmpty
         ? job.skillsRequired
@@ -400,6 +421,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       _description,
       _requirements,
       _skillSearch,
+      _minimumExperience,
+      _educationLevels,
+      _certifications,
     ]) {
       controller.dispose();
     }
@@ -609,6 +633,8 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                           _experience,
                           (v) => setState(() => _experience = v),
                         ),
+                        const SizedBox(height: 14),
+                        _screeningPolicyFields(),
                       ]),
                       const SizedBox(height: 14),
                       _mobileCard(
@@ -817,13 +843,15 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               onPressed: _saving
                   ? null
                   : () => _saveRole(publish: widget.initialJob == null),
-              style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
-                backgroundColor: _c.accent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+              style: RecruiterButtonStyle.primary(
+                FilledButton.styleFrom(
+                  backgroundColor: _c.accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
-              )),
+              ),
               child: Text(
                 _saving
                     ? 'Saving…'
@@ -847,7 +875,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         textBaseline: TextBaseline.alphabetic,
         children: [
           Text(
-            '${_threshold.round()}',
+            _thresholdLabel,
             key: const Key('create-role-threshold-value'),
             style: _heading(
               36,
@@ -891,12 +919,14 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               ),
               child: Slider(
                 key: const Key('create-role-threshold'),
-                min: 40,
-                max: 90,
-                divisions: 50,
+                min: 0,
+                max: 100,
+                divisions: 100,
                 value: _threshold,
-                onChanged: (v) =>
-                    setState(() => _threshold = v.roundToDouble()),
+                onChanged: (v) => setState(() {
+                  _thresholdEdited = true;
+                  _threshold = v.roundToDouble();
+                }),
               ),
             ),
           ],
@@ -905,9 +935,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       const SizedBox(height: 8),
       Row(
         children: [
-          Text('40 Open', style: _body(12.5, color: _c.text3)),
+          Text('0 Open', style: _body(12.5, color: _c.text3)),
           const Spacer(),
-          Text('90 Strict', style: _body(12.5, color: _c.text3)),
+          Text('100 Strict', style: _body(12.5, color: _c.text3)),
         ],
       ),
       const SizedBox(height: 18),
@@ -925,7 +955,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                 ),
                 Text(
                   _autoShortlist
-                      ? 'Applicants scoring ${_threshold.round()}+ who meet every requirement are shortlisted.'
+                      ? 'Applicants scoring $_thresholdLabel+ who meet every requirement are shortlisted.'
                       : 'Off. You review every applicant yourself.',
                   style: _body(13, color: _c.text3),
                 ),
@@ -1004,13 +1034,15 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                             Navigator.of(sheetContext).pop();
                             _saveRole(publish: widget.initialJob == null);
                           },
-                    style: RecruiterButtonStyle.primary(FilledButton.styleFrom(
-                      backgroundColor: _c.accent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                    style: RecruiterButtonStyle.primary(
+                      FilledButton.styleFrom(
+                        backgroundColor: _c.accent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                    )),
+                    ),
                     child: Text(
                       widget.initialJob == null
                           ? 'Publish role'
@@ -1177,6 +1209,8 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               ),
               compact,
             ),
+            const SizedBox(height: 14),
+            _screeningPolicyFields(),
           ],
         ),
         _section(
@@ -2445,7 +2479,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           textBaseline: TextBaseline.alphabetic,
           children: [
             Text(
-              _threshold.round().toString(),
+              _thresholdLabel,
               key: const Key('create-role-threshold-value'),
               style: _heading(
                 34,
@@ -2489,12 +2523,14 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                 ),
                 child: Slider(
                   key: const Key('create-role-threshold'),
-                  min: 40,
-                  max: 90,
-                  divisions: 50,
+                  min: 0,
+                  max: 100,
+                  divisions: 100,
                   value: _threshold,
-                  onChanged: (value) =>
-                      setState(() => _threshold = value.roundToDouble()),
+                  onChanged: (value) => setState(() {
+                    _thresholdEdited = true;
+                    _threshold = value.roundToDouble();
+                  }),
                 ),
               ),
             ],
@@ -2523,7 +2559,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   ),
                   Text(
                     _autoShortlist
-                        ? 'Applicants scoring ${_threshold.round()}+ who meet every requirement are shortlisted.'
+                        ? 'Applicants scoring $_thresholdLabel+ who meet every requirement are shortlisted.'
                         : 'Off. You review every applicant manually.',
                     style: _body(12.5, color: _c.text3),
                   ),
@@ -2727,6 +2763,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       final restoredLocation = data['location']?.toString();
       final restoredWorkType = data['workType']?.toString();
       final restoredExperience = data['experience']?.toString();
+      _minimumExperience.text = data['minimumExperience']?.toString() ?? '0';
+      _educationLevels.text = data['educationLevels']?.toString() ?? '';
+      _certifications.text = data['certifications']?.toString() ?? '';
+      _manualReviewRequired = data['manualReviewRequired'] == true;
+      _nonPassPolicy = data['nonPassPolicy']?.toString() ?? 'REVIEW';
       final restoredDeadline = DateTime.tryParse(
         data['deadline']?.toString() ?? '',
       );
@@ -2769,7 +2810,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           ? restoredDeadline
           : null;
       _threshold = restoredThreshold != null && restoredThreshold.isFinite
-          ? restoredThreshold.clamp(40, 90)
+          ? restoredThreshold.clamp(0, 100)
           : 66;
       _autoShortlist = data['autoShortlist'] == true;
       _skills
@@ -2807,6 +2848,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         ],
         'threshold': _threshold,
         'autoShortlist': _autoShortlist,
+        'minimumExperience': _minimumExperience.text,
+        'educationLevels': _educationLevels.text,
+        'certifications': _certifications.text,
+        'manualReviewRequired': _manualReviewRequired,
+        'nonPassPolicy': _nonPassPolicy,
         'mix': _mix,
       }),
     );
@@ -2897,8 +2943,77 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     _ => ExperienceLevel.mid,
   };
 
+  Widget _screeningPolicyFields() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      TextField(
+        key: const Key('minimum-experience'),
+        controller: _minimumExperience,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(
+          labelText: 'Minimum verified experience (years)',
+          helperText:
+              '0 means no minimum experience requirement. Unknown evidence requires review.',
+          helperMaxLines: 3,
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _educationLevels,
+        decoration: const InputDecoration(
+          labelText: 'Required education levels (comma separated)',
+        ),
+      ),
+      TextField(
+        controller: _certifications,
+        decoration: const InputDecoration(
+          labelText: 'Required certifications (comma separated)',
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Require manual qualification review'),
+        value: _manualReviewRequired,
+        onChanged: (value) => setState(() => _manualReviewRequired = value),
+      ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        isExpanded: true,
+        initialValue: const {'REVIEW', 'REJECT'}.contains(_nonPassPolicy)
+            ? _nonPassPolicy
+            : 'REVIEW',
+        decoration: const InputDecoration(
+          labelText: 'Non-passing policy recommendation',
+        ),
+        items: const [
+          DropdownMenuItem(value: 'REVIEW', child: Text('Recruiter review')),
+          DropdownMenuItem(
+            value: 'REJECT',
+            child: Text('Recommend rejection for recruiter review'),
+          ),
+        ],
+        onChanged: (value) {
+          if (value != null) setState(() => _nonPassPolicy = value);
+        },
+      ),
+      const SizedBox(height: 8),
+      const Text(
+        'Policy changes affect new or explicitly rescreened assessments. Existing assessment evidence and decisions keep their saved policy.',
+      ),
+    ],
+  );
+
   Future<void> _saveRole({required bool publish}) async {
     if (_saving) return;
+    final minimumExperience = double.tryParse(_minimumExperience.text);
+    if (minimumExperience == null ||
+        !minimumExperience.isFinite ||
+        minimumExperience < 0 ||
+        minimumExperience > 80) {
+      _toast('Enter minimum experience from 0 to 80 years.');
+      return;
+    }
     if (publish || widget.initialJob != null) {
       _validatePublish();
       if (_errors.isNotEmpty) {
@@ -2925,28 +3040,27 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         jobType: _apiJobType,
         experienceLevel: _apiExperience,
         deadline: _deadline!,
-        // Match the displayed score and avoid slider floating-point precision
-        // exceeding the API's DecimalField limits.
-        // Match the whole-number threshold displayed to the recruiter, including
-        // older drafts that may contain continuous-slider decimal values.
-        screeningThreshold: _threshold.roundToDouble().roundToDouble(),
+        // Preserve an existing policy threshold unless the recruiter changes it.
+        // Newly chosen slider values use the displayed whole-number threshold.
+        screeningThreshold: widget.initialJob != null && !_thresholdEdited
+            ? widget.initialJob!.screeningThreshold
+            : _threshold.roundToDouble(),
         autoShortlistEnabled: _autoShortlist,
+        nonPassPolicy: _nonPassPolicy,
         screeningCriteria: {
           ...?widget.initialJob?.screeningCriteria,
-          'minimum_experience_years': switch (_experience) {
-            'Junior' => 1.0,
-            'Senior' || 'Lead' => 5.0,
-            _ => 3.0,
-          },
-          'education_levels':
-              widget.initialJob?.screeningCriteria['education_levels'] ??
-              <String>[],
-          'certifications':
-              widget.initialJob?.screeningCriteria['certifications'] ??
-              <String>[],
-          'manual_review_required':
-              widget.initialJob?.screeningCriteria['manual_review_required'] ??
-              false,
+          'minimum_experience_years': minimumExperience,
+          'education_levels': _educationLevels.text
+              .split(',')
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toList(),
+          'certifications': _certifications.text
+              .split(',')
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toList(),
+          'manual_review_required': _manualReviewRequired,
           'question_mix': {
             for (var i = 0; i < _mix.length; i++)
               _mixNames[i].toLowerCase(): _mix[i],

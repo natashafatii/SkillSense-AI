@@ -42,7 +42,7 @@ const recruiterSections = <RecruiterSection>[
   ]),
   RecruiterSection('INTELLIGENCE & WORKSPACE', Icons.diamond_outlined, [
     RecruiterDestination('Analytics', '/recruiter/analytics'),
-    RecruiterDestination('Scoring model', '/recruiter/scoring-model'),
+    RecruiterDestination('Score provenance', '/recruiter/scoring-model'),
   ]),
 ];
 

@@ -686,8 +686,12 @@ class CandidateInterviewWorkspace extends StatelessWidget {
 
   Widget _completion(bool mobile) {
     final pending = !_completed;
+    final workflow =
+        lifecycle.snapshot?.workflowState ??
+        lifecycle.interview?.interview.workflowState ??
+        'UNKNOWN';
     final outcome = lifecycle.snapshot?.conversationOutcome ?? 'UNVERIFIED';
-    final complete = !pending && outcome == 'COMPLETED';
+    final complete = !pending && workflow == 'EVALUATED';
     final early = !pending && outcome == 'ENDED_EARLY';
     final reportState = lifecycle.snapshot?.analysisStatus;
     final failedReport = reportState == AnalysisState.failed;
@@ -726,7 +730,7 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                     pending
                         ? 'CONFIRMING SESSION'
                         : complete
-                        ? 'INTERVIEW COMPLETE'
+                        ? 'EVIDENCE PROCESSED'
                         : 'SESSION ENDED',
                   ),
                 ),
@@ -735,7 +739,7 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                   pending
                       ? 'Wrapping things up.'
                       : complete
-                      ? 'You’re all done.'
+                      ? 'Your interview evidence is ready for review.'
                       : early
                       ? 'Your interview ended early.'
                       : 'Your interview session ended.',
@@ -748,7 +752,7 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                       ? 'We’re confirming that your interview has ended. Your camera and audio have been stopped on this device.'
                       : complete
                       ? 'Thank you for sharing your experience.\nYou can take a breath and get back to your day.'
-                      : 'Your available answers have been retained. Completion of every question has not been confirmed. Contact your recruiter to arrange a continuation if needed.',
+                      : 'The call has ended. Transcript and evaluation processing are confirmed separately. Your recruiter can review the available evidence and arrange another attempt if needed.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: _muted,
@@ -779,8 +783,11 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                         padding: EdgeInsets.symmetric(vertical: 16),
                         child: Divider(height: 1, color: _line),
                       ),
+                      Text(
+                        'Interview status: ${workflow.replaceAll('_', ' ')}',
+                      ),
                       _completionStep(
-                        'Session summary',
+                        'Behavioral processing',
                         failedReport
                             ? 'Unavailable'
                             : lifecycle.snapshot?.reportReady == true

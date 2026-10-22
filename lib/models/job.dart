@@ -14,7 +14,7 @@ class JobSkill {
 
   factory JobSkill.fromJson(Map<String, dynamic> json) {
     return JobSkill(
-      id: json['id'] as int,
+      id: (json['id'] as num).toInt(),
       job: json['job'] as String,
       skillName: json['skill_name'] as String,
       isRequired: json['is_required'] as bool? ?? true,
@@ -33,7 +33,8 @@ class JobSkill {
 enum JobStatus {
   draft('DRAFT'),
   active('ACTIVE'),
-  closed('CLOSED');
+  closed('CLOSED'),
+  unknown('UNKNOWN');
 
   final String value;
   const JobStatus(this.value);
@@ -41,7 +42,7 @@ enum JobStatus {
   static JobStatus fromString(String val) {
     return JobStatus.values.firstWhere(
       (e) => e.value == val.toUpperCase(),
-      orElse: () => JobStatus.draft,
+      orElse: () => JobStatus.unknown,
     );
   }
 }
@@ -176,7 +177,7 @@ class Job {
       experienceLevel: ExperienceLevel.fromString(
         json['experience_level'] as String? ?? 'MID',
       ),
-      status: JobStatus.fromString(json['status'] as String? ?? 'DRAFT'),
+      status: JobStatus.fromString(json['status'] as String? ?? 'UNKNOWN'),
       deadline: json['deadline'] != null
           ? DateTime.tryParse(json['deadline'] as String)
           : null,

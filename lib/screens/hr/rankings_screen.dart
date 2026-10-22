@@ -1,1325 +1,206 @@
-import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
-import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
-import '../../widgets/mobile_edge_shadow_wrapper.dart';
-import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
+import '../../models/job.dart';
+import '../../models/paginated_response.dart';
+import '../../models/recruitment_evidence.dart';
+import '../../services/job_service.dart';
+import '../../services/recruitment_workflow_service.dart';
+import '../../services/session_scope.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../constants/app_colors.dart';
-import '../dashboard/command_deck_screen.dart' show GridPainter;
+import '../../widgets/recruiter_mobile_nav.dart';
+import 'recruitment_review_screen.dart';
 
 class RankingsScreen extends StatefulWidget {
   const RankingsScreen({super.key, this.jobId});
-
   final String? jobId;
-
   @override
   State<RankingsScreen> createState() => _RankingsScreenState();
 }
 
 class _RankingsScreenState extends State<RankingsScreen> {
-  // Selected filter on mobile
-  String _selectedFilter = 'All';
+  List<Job> jobs = const [];
+  PaginatedResponse<RankingRow>? ranking;
+  String? jobId, error;
+  int page = 1, epoch = 0;
+  bool loading = true;
+  final generation = SessionScope.generation;
+  @override
+  void initState() {
+    super.initState();
+    jobId = widget.jobId;
+    loadJobs();
+    SessionScope.invalidations.addListener(clear);
+  }
 
-  // Cohort is populated from the API once interviews are complete.
-  // It starts empty — the empty state renders until real ranked data arrives.
-  final List<Map<String, dynamic>> _cohort = [];
+  void clear() {
+    ++epoch;
+    if (mounted) {
+      setState(() {
+        jobs = [];
+        ranking = null;
+        error = 'Session changed.';
+        loading = false;
+      });
+    }
+  }
 
-  bool _showCompareModal = false;
+  Future<void> loadJobs() async {
+    try {
+      final result = await JobService.listAllJobs();
+      if (!mounted || generation != SessionScope.generation) return;
+      setState(() {
+        jobs = result;
+        jobId = jobs.any((j) => j.id == jobId) ? jobId : jobs.firstOrNull?.id;
+        loading = false;
+      });
+      if (jobId != null) await load();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          loading = false;
+          error = '$e';
+        });
+      }
+    }
+  }
 
-  int get _selectedCount => _cohort.where((c) => c['selected'] == true).length;
+  Future<void> load() async {
+    final current = ++epoch;
+    setState(() {
+      loading = true;
+      error = null;
+      ranking = null;
+    });
+    try {
+      final result = await RecruitmentWorkflowService().ranking(jobId!, page);
+      if (mounted &&
+          current == epoch &&
+          generation == SessionScope.generation) {
+        setState(() {
+          ranking = result;
+          loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted && current == epoch) {
+        setState(() {
+          error = '$e';
+          loading = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
+    ++epoch;
+    SessionScope.invalidations.removeListener(clear);
     super.dispose();
   }
 
-  void _toggleSelect(int index) {
-    setState(() {
-      _cohort[index]['selected'] = !_cohort[index]['selected'];
-    });
-  }
-
-  List<Map<String, dynamic>> _getFilteredCohort() {
-    if (_selectedFilter == 'All') return _cohort;
-    return _cohort
-        .where((c) => c['badge'].toLowerCase() == _selectedFilter.toLowerCase())
-        .toList();
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 900;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Stack(
-        children: [
-          // ── BASE GRADIENT ──────────────────────────────────────────────────
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
-                ),
-              ),
-            ),
-          ),
-
-          // ── GRID PATTERN OVERLAY (Web Only) ─────────────────────────────────
-          if (!isMobile)
-            Positioned.fill(child: CustomPaint(painter: GridPainter())),
-
-          // ── MAIN WORKSPACE CONTENT ──────────────────────────────────────────
-          SafeArea(
-            bottom: false,
-            child: Row(
-              children: [
-                // 1. LEFT RAIL (Web Only)
-
-                // 2. MAIN WORKSPACE
-                Expanded(
-                  child: Column(
-                    children: [
-                      const RecruiterTopBar(
-                        pageTitle: 'Rankings',
-                        breadcrumbSegments: ['Rankings'],
-                      ),
-
-                      // Scrollable rankings content or centered empty state
-                      Expanded(
-                        child: MobileEdgeShadowWrapper(
-                          child: _cohort.isEmpty
-                              ? _buildEmptyState(isMobile)
-                              : SingleChildScrollView(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: isMobile ? 16 : 24,
-                                    vertical: isMobile ? 12 : 8,
-                                  ),
-                                  child: isMobile
-                                      ? _buildMobileLayout()
-                                      : _buildWebLayout(),
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── PERSISTENT COMPARE BUTTON (Web & Mobile) ────────────────────────
-          if (_cohort.isNotEmpty && _selectedCount >= 2)
-            Positioned(
-              bottom: isMobile ? 96 : 32, // clear bottom docks
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  width: 320,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: RecruiterButtonStyle.blue,
-                    borderRadius: BorderRadius.circular(26),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(26),
-                      onTap: () {
-                        setState(() {
-                          _showCompareModal = true;
-                        });
-                      },
-                      child: Center(
-                        child: Text(
-                          'Compare selected ($_selectedCount)',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // ── MOBILE FLOATING BOTTOM DOCK ────────────────────────────────────
-          if (isMobile)
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: _buildMobileBottomDock(),
-            ),
-
-          // ── COMPARISON REPORT MODAL OVERLAY ────────────────────────────────
-          if (_showCompareModal) _buildCompareOverlay(),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB LAYOUT ─────────────────────────────────────────────────────────────
-  Widget _buildWebLayout() {
-    if (_cohort.isEmpty) return _buildEmptyState(false);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Scaffold(
+    bottomNavigationBar: MediaQuery.sizeOf(context).width < 900
+        ? const RecruiterMobileNav(currentRoute: '/recruiter/rankings')
+        : null,
+    backgroundColor: const Color(0xfff5f7fc),
+    body: Column(
       children: [
-        _buildHeaderArea(),
-        _buildPodiumLayout(),
-        const SizedBox(height: 24),
-        _buildCohortTableCard(isMobile: false),
-        const SizedBox(height: 100),
-      ],
-    );
-  }
-
-  // ── MOBILE LAYOUT (Single List + Filter Chips, No Podium) ──────────────────
-  Widget _buildMobileLayout() {
-    if (_cohort.isEmpty) return _buildEmptyState(true);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Filter Chips Row
-        _buildMobileFilterChips(),
-        const SizedBox(height: 16),
-
-        // Scrollable ranked candidates list card
-        _buildCohortTableCard(isMobile: true),
-        const SizedBox(height: 160), // Space for floating comparison bar + dock
-      ],
-    );
-  }
-
-  // ── EMPTY STATE ─────────────────────────────────────────────────────────────
-  Widget _buildEmptyState(bool compact) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 24,
-                  right: 24,
-                  top: 24,
-                  bottom: compact ? 84 : 24,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon tile
-                    Container(
-                      width: compact ? 54 : 64,
-                      height: compact ? 54 : 64,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(compact ? 17 : 20),
-                        border: Border.all(color: const Color(0xFFE3EAF4)),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.leaderboard_outlined,
-                          size: compact ? 20 : 24,
-                          color: const Color(0xFF8190A8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Heading
-                    Text(
-                      compact
-                          ? 'No one ranked yet'
-                          : 'No candidates ranked yet',
-                      style: GoogleFonts.inter(
-                        color: const Color(0xFF17233B),
-                        fontSize: compact ? 15 : 18,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: compact ? -0.02 : -0.025,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    // Helper text
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: compact ? 280 : 380,
-                      ),
-                      child: Text(
-                        compact
-                            ? 'Top scorers appear after interviews finish.'
-                            : 'Rankings fill in as candidates complete their interviews — your top scorers per role show up here as a podium.',
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF8190A8),
-                          fontSize: compact ? 11 : 12.5,
-                          height: 1.65,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    // Primary CTA — indigo gradient
-                    Container(
-                      height: compact ? 38 : 40,
-                      decoration: BoxDecoration(
-                        color: RecruiterButtonStyle.blue,
-                        borderRadius: BorderRadius.circular(11),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF4D7BFA,
-                            ).withValues(alpha: 0.28),
-                            blurRadius: 14,
-                            spreadRadius: 1,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        key: const Key('rankings-go-to-pipeline'),
-                        style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(horizontal: 26),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(11),
-                          ),
-                        )),
-                        onPressed: () {
-                          Navigator.of(context).pushNamed(
-                            '/recruiter/pipeline',
-                            arguments: widget.jobId,
-                          );
-                        },
-                        child: Text(
-                          'Go to pipeline',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (!compact) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        'Needs at least one completed interview',
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF94A3B8),
-                          fontSize: 10.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ── MOBILE FILTER CHIPS ────────────────────────────────────────────────────
-  Widget _buildMobileFilterChips() {
-    final filters = ['All', 'Strong Yes', 'Yes', 'Maybe'];
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, idx) {
-          final filter = filters[idx];
-          final isSelected = _selectedFilter == filter;
-
-          return ChoiceChip(
-            label: Text(
-              filter,
-              style: GoogleFonts.inter(
-                color: isSelected ? Colors.white : const Color(0xFF64748B),
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            selected: isSelected,
-            onSelected: (val) {
-              setState(() {
-                _selectedFilter = filter;
-              });
-            },
-            selectedColor: AppColors.dashboardBlue,
-            backgroundColor: Colors.white,
-            side: BorderSide(
-              color: isSelected
-                  ? AppColors.dashboardBlue
-                  : const Color(0xFFE2E8F0),
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ── WEB HEADER AREA ────────────────────────────────────────────────────────
-  Widget _buildHeaderArea() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        const RecruiterTopBar(pageTitle: 'Scores and rankings'),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(24),
             children: [
               Text(
-                'Rankings — Senior Django Developer',
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                ),
+                'Server ranking',
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Interviewed cohort · XGBoost v2.3 · $_selectedCount selected for comparison',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                ),
+              const Text(
+                'Order and scores are supplied by the server. Incomplete evidence is unavailable for final ranking. Behavioral observations are separate.',
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB PODIUM GRID ────────────────────────────────────────────────────────
-  Widget _buildPodiumLayout() {
-    // 2nd place on left, 1st place in middle (taller), 3rd place on right
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // 2nd Place
-          Expanded(
-            child: _buildPodiumTile(_cohort[1], height: 160, isHot: false),
-          ),
-          const SizedBox(width: 16),
-          // 1st Place (taller, glowing orb card)
-          Expanded(
-            child: _buildPodiumTile(_cohort[0], height: 190, isHot: true),
-          ),
-          const SizedBox(width: 16),
-          // 3rd Place
-          Expanded(
-            child: _buildPodiumTile(_cohort[2], height: 140, isHot: false),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPodiumTile(
-    Map<String, dynamic> candidate, {
-    required double height,
-    required bool isHot,
-  }) {
-    final int rank = candidate['rank'];
-    final String name = candidate['name'];
-    final String driver = candidate['driver'];
-    final double t = candidate['t'];
-    final double b = candidate['b'];
-    final double c = candidate['c'];
-    final int score = candidate['score'];
-    final int index = _cohort.indexOf(candidate);
-
-    return Container(
-      constraints: BoxConstraints(minHeight: height),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isHot ? AppColors.dashboardTeal : const Color(0xFFE2E8F0),
-          width: isHot ? 2 : 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-          if (isHot)
-            BoxShadow(
-              color: AppColors.dashboardTeal.withValues(alpha: 0.08),
-              blurRadius: 24,
-              spreadRadius: 2,
-            ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Large Monospace Rank Numeral
-              Text(
-                '#$rank',
-                style: GoogleFonts.jetBrainsMono(
-                  color: isHot
-                      ? AppColors.dashboardTeal
-                      : const Color(0xFF94A3B8),
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+              DropdownButtonFormField<String>(
+                key: ValueKey(jobId),
+                initialValue: jobId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Recruiter job (required)',
                 ),
-              ),
-
-              // Compare Checkbox
-              Checkbox(
-                value: candidate['selected'],
-                activeColor: AppColors.dashboardBlue,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                onChanged: (val) => _toggleSelect(index),
-              ),
-            ],
-          ),
-
-          // Name and SHAP Driver line
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                'Strongest driver: $driver',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-
-          // Stats & score ring row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'T $t · B $b · C $c',
-                style: GoogleFonts.jetBrainsMono(
-                  color: const Color(0xFF94A3B8),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-
-              // Score Ring (36px diameter)
-              SizedBox(
-                width: 34,
-                height: 34,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      value: score / 100.0,
-                      strokeWidth: 3.5,
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        isHot
-                            ? AppColors.dashboardTeal
-                            : AppColors.dashboardBlue,
-                      ),
-                    ),
-                    Text(
-                      '$score',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: const Color(0xFF0F172A),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── CANDIDATE LIST CARD ────────────────────────────────────────────────────
-  Widget _buildCohortTableCard({required bool isMobile}) {
-    final candidatesList = isMobile ? _getFilteredCohort() : _cohort;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header title
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Ranked Candidates',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (!isMobile)
-                  Text(
-                    'T · B · C · SCORE',
-                    style: GoogleFonts.jetBrainsMono(
-                      color: const Color(0xFF94A3B8),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const Divider(color: Color(0xFFF1F5F9), height: 1),
-
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: candidatesList.length,
-            separatorBuilder: (_, __) =>
-                const Divider(color: Color(0xFFF1F5F9), height: 1),
-            itemBuilder: (context, idx) {
-              final cand = candidatesList[idx];
-              final int rank = cand['rank'];
-              final String name = cand['name'];
-              final String driver = cand['driver'];
-              final double t = cand['t'];
-              final double b = cand['b'];
-              final double c = cand['c'];
-              final int score = cand['score'];
-              final String badge = cand['badge'];
-              final Color badgeColor = cand['badgeColor'];
-              final bool isSelected = cand['selected'];
-              final Color avatarBg = cand['avatarBg'];
-              final int originalIndex = _cohort.indexOf(cand);
-
-              // Candidate #1 glow effect rule (both web and mobile list views)
-              final bool isTopGlow = rank == 1;
-
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: isTopGlow
-                      ? AppColors.dashboardTeal.withValues(alpha: 0.02)
-                      : Colors.transparent,
-                  boxShadow: isTopGlow
-                      ? [
-                          BoxShadow(
-                            color: AppColors.dashboardTeal.withValues(
-                              alpha: 0.04,
-                            ),
-                            blurRadius: 10,
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Row(
-                  children: [
-                    // Monospace Rank Numeral (24px)
-                    SizedBox(
-                      width: 32,
-                      child: Text(
-                        '#$rank',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: isTopGlow
-                              ? AppColors.dashboardTeal
-                              : const Color(0xFF94A3B8),
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-
-                    // Compare Checkbox
-                    Checkbox(
-                      value: isSelected,
-                      activeColor: AppColors.dashboardBlue,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      onChanged: (val) => _toggleSelect(originalIndex),
-                    ),
-                    const SizedBox(width: 6),
-
-                    // Avatar
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: avatarBg,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          cand['initials'],
-                          style: GoogleFonts.spaceGrotesk(
-                            color: const Color(0xFF334155),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // Name + SHAP Driver Metadata line
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF0F172A),
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Strongest driver: $driver',
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF64748B),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-
-                    // Stats T B C (Web Only)
-                    if (!isMobile) ...[
-                      _buildStatText(t.toStringAsFixed(1)),
-                      const SizedBox(width: 16),
-                      _buildStatText(b.toStringAsFixed(1)),
-                      const SizedBox(width: 16),
-                      _buildStatText(c.toStringAsFixed(1)),
-                      const SizedBox(width: 20),
-                    ],
-
-                    // Score Ring (32px diameter)
-                    SizedBox(
-                      width: 32,
-                      height: 32,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: score / 100.0,
-                            strokeWidth: 3.2,
-                            backgroundColor: const Color(0xFFE2E8F0),
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              badgeColor,
-                            ),
-                          ),
-                          Text(
-                            '$score',
-                            style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF0F172A),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // Recommendation Badge
-                    _buildRecommendationBadge(label: badge, color: badgeColor),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatText(String val) {
-    return SizedBox(
-      width: 24,
-      child: Text(
-        val,
-        textAlign: TextAlign.right,
-        style: GoogleFonts.jetBrainsMono(
-          color: const Color(0xFF475569),
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecommendationBadge({
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      width: 86,
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: GoogleFonts.jetBrainsMono(
-            color: color,
-            fontSize: 9,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── SIDE-BY-SIDE DR-03 COMPARE PANEL ───────────────────────────────────────
-  Widget _buildCompareOverlay() {
-    final selectedCandidates = _cohort
-        .where((c) => c['selected'] == true)
-        .toList();
-
-    return Positioned.fill(
-      child: Container(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.3),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Container(
-            width: 580,
-            height: double.infinity,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(20),
-                bottomLeft: Radius.circular(20),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 20,
-                  spreadRadius: 5,
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Candidate Comparison',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: const Color(0xFF0F172A),
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Color(0xFF64748B),
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _showCompareModal = false;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Side-by-side technical, behavioral, and confidence scores breakdown.',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF64748B),
-                    fontSize: 12.5,
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                Expanded(
-                  child: Row(
-                    children: [
-                      for (
-                        int i = 0;
-                        i < selectedCandidates.length.clamp(0, 2);
-                        i++
-                      ) ...[
-                        if (i > 0) const SizedBox(width: 20),
-                        Expanded(
-                          child: _buildComparisonScorecard(
-                            selectedCandidates[i],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _showCompareModal = false;
-                        });
-                      },
-                      child: Text(
-                        'Close Comparison',
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF475569),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildComparisonScorecard(Map<String, dynamic> candidate) {
-    final String name = candidate['name'];
-    final String driver = candidate['driver'];
-    final double t = candidate['t'];
-    final double b = candidate['b'];
-    final double c = candidate['c'];
-    final int score = candidate['score'];
-    final Color color = candidate['badgeColor'];
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: candidate['avatarBg'],
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    candidate['initials'],
-                    style: GoogleFonts.spaceGrotesk(
-                      color: const Color(0xFF334155),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.spaceGrotesk(
-                    color: const Color(0xFF0F172A),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          Center(
-            child: SizedBox(
-              width: 72,
-              height: 72,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    value: score / 100.0,
-                    strokeWidth: 5,
-                    backgroundColor: const Color(0xFFE2E8F0),
-                    valueColor: AlwaysStoppedAnimation<Color>(color),
-                  ),
-                  Text(
-                    '$score',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: const Color(0xFF0F172A),
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                items: [
+                  for (final j in jobs)
+                    DropdownMenuItem(value: j.id, child: Text(j.title)),
                 ],
+                onChanged: loading
+                    ? null
+                    : (id) {
+                        setState(() {
+                          jobId = id;
+                          page = 1;
+                        });
+                        load();
+                      },
               ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          _buildComparisonMetricRow('Technical', t, Colors.blue),
-          const SizedBox(height: 12),
-          _buildComparisonMetricRow('Behavioral', b, AppColors.dashboardTeal),
-          const SizedBox(height: 12),
-          _buildComparisonMetricRow('Confidence', c, AppColors.dashboardAmber),
-
-          const SizedBox(height: 20),
-          const Divider(color: Color(0xFFE2E8F0), height: 1),
-          const SizedBox(height: 16),
-
-          Text(
-            'KEY REASONING DRIVER',
-            style: GoogleFonts.inter(
-              color: const Color(0xFF94A3B8),
-              fontSize: 9.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'XGBoost model identified $driver as the primary positive performance signal for this candidate.',
-            style: GoogleFonts.inter(
-              color: const Color(0xFF475569),
-              fontSize: 12,
-              height: 1.45,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildComparisonMetricRow(String label, double value, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                color: const Color(0xFF64748B),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              value.toStringAsFixed(1),
-              style: GoogleFonts.jetBrainsMono(
-                color: const Color(0xFF334155),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(2),
-          child: LinearProgressIndicator(
-            value: value / 10.0,
-            minHeight: 4,
-            backgroundColor: const Color(0xFFE2E8F0),
-            valueColor: AlwaysStoppedAnimation<Color>(color),
+              if (loading) const LinearProgressIndicator(),
+              if (error != null) Text(error!),
+              if (!loading && jobs.isEmpty) const Text('No jobs available.'),
+              if (ranking != null) ...[
+                Text('${ranking!.count} applications · Page $page'),
+                for (final row in ranking!.results)
+                  Card(
+                    child: ListTile(
+                      title: Text(row.name.isEmpty ? row.email : row.name),
+                      subtitle: Text(
+                        '${row.status} · Rubric ${row.rubricVersion ?? 'Unavailable'} · ${row.email}',
+                      ),
+                      trailing: Text(
+                        percent(
+                          row.status == 'COMPLETE' ? row.finalScore : null,
+                        ),
+                      ),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => RecruitmentReviewScreen(
+                              applicationId: row.applicationId,
+                            ),
+                          ),
+                        );
+                        if (mounted) load();
+                      },
+                    ),
+                  ),
+                if (ranking!.results.isEmpty)
+                  const Text('No ranked applications on this page.'),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: ranking!.hasPrevious
+                          ? () {
+                              page--;
+                              load();
+                            }
+                          : null,
+                      child: const Text('Previous'),
+                    ),
+                    TextButton(
+                      onPressed: ranking!.hasNext
+                          ? () {
+                              page++;
+                              load();
+                            }
+                          : null,
+                      child: const Text('Next'),
+                    ),
+                    TextButton(
+                      onPressed: loading ? null : load,
+                      child: const Text('Refresh'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
         ),
       ],
-    );
-  }
-
-  // ── WEB LEFT RAIL NAVIGATION ───────────────────────────────────────────────
-  // Legacy rail is kept for reference while the shared recruiter rail owns navigation.
-  // ignore: unused_element
-  Widget _buildLeftRail(BuildContext context) {
-    final List<Map<String, dynamic>> navItems = [
-      {
-        'icon': Icons.dashboard_rounded,
-        'label': 'Dashboard',
-        'route': '/dashboard',
-      },
-      {'icon': Icons.menu_book_rounded, 'label': 'Jobs', 'route': '/pipeline'},
-      {
-        'icon': Icons.calendar_month_rounded,
-        'label': 'Interviews',
-        'route': '/schedule',
-      },
-      {
-        'icon': Icons.emoji_events_outlined,
-        'label': 'Rankings',
-        'route': '/rankings',
-      },
-      {
-        'icon': Icons.analytics_outlined,
-        'label': 'Analytics',
-        'route': '/analytics',
-      },
-      {
-        'icon': Icons.settings_outlined,
-        'label': 'Settings',
-        'route': '/settings',
-      },
-    ];
-
-    return Container(
-      width: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: PointerGestureDetector(
-              onTap: () {
-                Navigator.of(context).pushNamed('/dashboard');
-              },
-              child: SvgPicture.asset('assets/images/logo.svg', height: 48),
-            ),
-          ),
-          const SizedBox(height: 40),
-
-          // Nav Items
-          Expanded(
-            child: ListView.separated(
-              itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
-              itemBuilder: (context, index) {
-                final isSelected =
-                    index == 3; // Rankings is active/selected (index 3)
-                final item = navItems[index];
-                final bool hasBadge =
-                    index == 1; // Jobs has unread item badge "18"
-
-                return Center(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Active glowing orb
-                      if (isSelected)
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.dashboardBlue,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.dashboardBlue.withValues(
-                                  alpha: 0.4,
-                                ),
-                                blurRadius: 12,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      Tooltip(
-                        message: item['label'],
-                        waitDuration: const Duration(milliseconds: 350),
-                        preferBelow: false,
-                        verticalOffset: 24,
-                        margin: const EdgeInsets.only(left: 45),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: PointerGestureDetector(
-                            onTap: () {
-                              if (!isSelected) {
-                                Navigator.of(context).pushNamed(item['route']);
-                              }
-                            },
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: Center(
-                                child: Icon(
-                                  item['icon'],
-                                  color: isSelected
-                                      ? Colors.white
-                                      : const Color(0xFF64748B),
-                                  size: 19,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Badge Sit on Top-Right Corner
-                      if (hasBadge)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.dashboardBlue,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: const Text(
-                              '18',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Avatar bottom
-          Container(
-            width: 36,
-            height: 36,
-            margin: const EdgeInsets.only(bottom: 24),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFEFF6FF),
-              border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
-            ),
-            child: Center(
-              child: Text(
-                'AR',
-                style: GoogleFonts.inter(
-                  color: AppColors.dashboardBlue,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() =>
-      const RecruiterMobileNav(currentRoute: '/recruiter/rankings');
+    ),
+  );
 }

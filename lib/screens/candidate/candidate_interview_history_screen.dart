@@ -120,7 +120,7 @@ class _CandidateInterviewHistoryScreenState
       final dio = await ApiClient.getInstance();
       final response = await dio.get(
         '/interviews/',
-        queryParameters: {'candidate': 'me', 'status': 'completed'},
+        queryParameters: {'candidate': 'me', 'status': 'DONE'},
       );
       final data = response.data;
       final List rows;

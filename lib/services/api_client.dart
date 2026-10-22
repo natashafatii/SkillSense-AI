@@ -4,6 +4,13 @@ import 'package:dio/dio.dart';
 import 'session_scope.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+/// Apply this before retaining a response beyond its visible view state.
+bool responseAllowsStorage(Response response) =>
+    !(response.headers.value('cache-control') ?? '')
+        .toLowerCase()
+        .split(',')
+        .any((directive) => directive.trim().split('=').first == 'no-store');
+
 typedef TokenSupplier = Future<String?> Function();
 
 // Central HTTP client that attaches the Clerk session token to every request.

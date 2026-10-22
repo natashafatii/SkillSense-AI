@@ -36,6 +36,9 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     'APPLIED',
     'UNDER_REVIEW',
     'SHORTLISTED',
+    'SCHEDULED',
+    'IN_PROGRESS',
+    'INTERVIEW_FAILED',
     'INTERVIEWED',
     'DECIDED',
   ];
@@ -43,6 +46,9 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     Color(0xFF7D8BAA),
     Color(0xFF5B85F6),
     Color(0xFF22BFA5),
+    Color(0xFF4268F0),
+    Color(0xFF087F72),
+    Color(0xFFE85D5B),
     Color(0xFF8B72EC),
     Color(0xFF27A46E),
   ];
@@ -420,6 +426,10 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     ApplicationStatus.interviewed => 'INTERVIEWED',
     ApplicationStatus.decision => 'DECIDED',
     ApplicationStatus.rejected => 'REJECTED',
+    ApplicationStatus.scheduled => 'SCHEDULED',
+    ApplicationStatus.inProgress => 'IN_PROGRESS',
+    ApplicationStatus.interviewFailed => 'INTERVIEW_FAILED',
+    ApplicationStatus.unknown => 'UNKNOWN',
   };
 
   Widget _applicants(Job job) {
@@ -706,8 +716,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     if (apps.isEmpty) {
       return _panel('CANDIDATES AT A GLANCE', _bodyText('No applicants yet.'));
     }
-    final scored = apps.where((a) => a.resumeScore != null).toList()
-      ..sort((a, b) => b.resumeScore!.compareTo(a.resumeScore!));
+    final scored = apps.where((a) => a.resumeScore != null).toList();
     if (scored.isEmpty) {
       return _panel(
         'CANDIDATES AT A GLANCE',
@@ -833,7 +842,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
           if (withDelete)
             _actionButton('Delete draft', _DetailAction.delete, danger: true),
         ],
-        JobStatus.closed => [],
+        JobStatus.closed || JobStatus.unknown => [],
       };
 
   Widget _pipelineLink(Job job) => TextButton(
@@ -868,7 +877,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     final color = switch (status) {
       JobStatus.active => const Color(0xFF0E9F72),
       JobStatus.draft => const Color(0xFFC98619),
-      JobStatus.closed => const Color(0xFF74829E),
+      JobStatus.closed || JobStatus.unknown => const Color(0xFF74829E),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -894,6 +903,13 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
       if (job.location.trim().isNotEmpty) job.location,
       if (_raw['job_type'] != null) _label(job.jobType.value),
       if (_raw['experience_level'] != null) _label(job.experienceLevel.value),
+      _label(
+        'Minimum verified experience: ${job.screeningCriteria['minimum_experience_years'] ?? 'Not specified'} years',
+      ),
+      _label(
+        'Auto-shortlist: ${job.autoShortlistEnabled ? 'Enabled' : 'Disabled'} · non-passing recommendation: ${job.nonPassPolicy}',
+      ),
+      _label('Policy changes apply to new or rescreened assessments.'),
       'Posted ${_ago(job.createdAt)}',
     ];
     return Padding(

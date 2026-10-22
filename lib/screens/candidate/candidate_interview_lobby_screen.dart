@@ -10,7 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import 'candidate_interview_session_screen.dart';
 import '../../widgets/candidate_side_nav.dart';
-import '../../services/api_client.dart';
+import '../../services/interview_service.dart';
 import '../../services/api_exception.dart';
 import '../../services/session_scope.dart';
 import '../../models/interview.dart';
@@ -53,6 +53,7 @@ class _CandidateInterviewLobbyScreenState
   final CancelToken _voiceRequests = CancelToken();
   bool _starting = false;
   bool _startUncertain = false;
+  bool _videoRequired = true;
   String? _startError;
   bool _isLoading = true;
   bool _hasInterview = false;
@@ -74,28 +75,11 @@ class _CandidateInterviewLobbyScreenState
 
   Future<void> _checkInterviews() async {
     try {
-      final dio = await ApiClient.getInstance();
-      final response = await dio.get(
-        '/interviews/',
-        queryParameters: {'candidate': 'me'},
-        cancelToken: _voiceRequests,
-      );
-      final data = response.data;
-      final List rows;
-      if (data is List) {
-        rows = data;
-      } else if (data is Map && data['results'] is List) {
-        rows = data['results'] as List;
-      } else {
-        throw const FormatException('Unexpected interview list response.');
-      }
-
+      final requestedId = _identity?.interviewId ?? widget.interviewId;
+      final interviews = requestedId == null
+          ? await InterviewService.listAll()
+          : [await InterviewService.getInterview(requestedId)];
       if (!mounted || _account != SessionScope.generation) return;
-      final interviews = rows
-          .map(
-            (row) => Interview.fromJson(Map<String, dynamic>.from(row as Map)),
-          )
-          .toList();
       final matches = interviews
           .where(
             (item) => _identity != null
@@ -137,6 +121,7 @@ class _CandidateInterviewLobbyScreenState
     if (_starting ||
         _startUncertain ||
         interview == null ||
+        (!immediately && !interview.canJoinAt(DateTime.now())) ||
         !mounted ||
         _account != SessionScope.generation) {
       return;
@@ -150,11 +135,12 @@ class _CandidateInterviewLobbyScreenState
       if (immediately) {
         // The explicit click owns the device permission flow. A denied device
         // must not create a paid provider call or pretend the interview started.
-        if (!_media.cameraReady) await _media.requestCamera();
+        if (_videoRequired && !_media.cameraReady) await _media.requestCamera();
         if (!mounted || _account != SessionScope.generation) return;
         if (!_media.microphoneChecked) await _media.checkMicrophone();
         if (!mounted || _account != SessionScope.generation) return;
-        if (!_media.cameraReady || !_media.microphoneChecked) {
+        if ((_videoRequired && !_media.cameraReady) ||
+            !_media.microphoneChecked) {
           setState(() {
             _startError =
                 'Allow camera and microphone access to start the interview.';
@@ -166,17 +152,18 @@ class _CandidateInterviewLobbyScreenState
       final snapshot = await backend
           .start(
             interview.id,
-            videoRequired: true,
+            videoRequired: _videoRequired,
             startNow: immediately,
             cancelToken: _voiceRequests,
           )
           .timeout(const Duration(seconds: 20));
       if (!mounted || _account != SessionScope.generation) return;
+      final safeSnapshot = VoiceSessionSnapshot.withoutCredential(snapshot);
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => CandidateInterviewSessionScreen(
-            identity: snapshot.identity,
-            initialSnapshot: snapshot,
+            identity: safeSnapshot.identity,
+            initialSnapshot: safeSnapshot,
             startImmediately: immediately,
           ),
         ),
@@ -186,13 +173,16 @@ class _CandidateInterviewLobbyScreenState
         setState(() {
           _startError = error.message;
           _startUncertain =
-              error.statusCode == null || error.statusCode! >= 500;
+              error.statusCode == null ||
+              error.statusCode == 409 ||
+              error.statusCode! >= 500;
         });
       }
     } on VoiceContractUnavailable catch (error) {
       if (mounted && _account == SessionScope.generation) {
         setState(() {
           _startError = error.message;
+          _startUncertain = backend.available;
         });
       }
     } catch (_) {
@@ -226,15 +216,21 @@ class _CandidateInterviewLobbyScreenState
       final backend = _voiceBackend.available
           ? _voiceBackend
           : _immediateBackend;
-      final snapshot = await backend
-          .read(interview.id, cancelToken: _voiceRequests)
-          .timeout(const Duration(seconds: 20));
+      final snapshot =
+          await (_startUncertain
+                  ? backend.syncInterview(
+                      interview.id,
+                      cancelToken: _voiceRequests,
+                    )
+                  : backend.read(interview.id, cancelToken: _voiceRequests))
+              .timeout(const Duration(seconds: 20));
       if (!mounted || _account != SessionScope.generation) return;
+      final safeSnapshot = VoiceSessionSnapshot.withoutCredential(snapshot);
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => CandidateInterviewSessionScreen(
-            identity: snapshot.identity,
-            initialSnapshot: snapshot,
+            identity: safeSnapshot.identity,
+            initialSnapshot: safeSnapshot,
             startImmediately:
                 _allowImmediateTesting && !_voiceBackend.available,
           ),
@@ -604,7 +600,10 @@ class _CandidateInterviewLobbyScreenState
     bool isMobile,
   ) {
     final bool canEnter =
-        _media.cameraReady && _media.microphoneChecked && _identity != null;
+        _interview?.canJoinAt(DateTime.now()) == true &&
+        _media.cameraReady &&
+        _media.microphoneChecked &&
+        _identity != null;
 
     return Container(
       padding: EdgeInsets.all(isMobile ? 20 : 32),
@@ -646,8 +645,7 @@ class _CandidateInterviewLobbyScreenState
 
           // Countdown Numbers
           Text(
-            (_interview?.scheduledAt?.toLocal().toString() ??
-                'Time unavailable'),
+            ('${_interview?.scheduledAt?.toLocal() ?? 'Time unavailable'} · ${_interview?.workflowState ?? 'UNKNOWN'} · Questions: ${_interview?.questionReadiness.state ?? 'UNKNOWN'}'),
             style: GoogleFonts.jetBrainsMono(
               color: textPrimary,
               fontSize: isMobile ? 37 : 44,
@@ -666,6 +664,18 @@ class _CandidateInterviewLobbyScreenState
               fontWeight: FontWeight.w500,
             ),
           ),
+          SwitchListTile(
+            title: const Text('Include video'),
+            subtitle: const Text(
+              'Audio-only interviews do not require camera evidence. The session mode is fixed once started.',
+            ),
+            value: _videoRequired,
+            onChanged: _starting || _startUncertain
+                ? null
+                : (value) => setState(() {
+                    _videoRequired = value;
+                  }),
+          ),
           if (_startError != null)
             Semantics(liveRegion: true, child: Text(_startError!)),
           if (_allowImmediateTesting) ...[
@@ -675,14 +685,16 @@ class _CandidateInterviewLobbyScreenState
               onPressed: !_starting && !_startUncertain && !_media.busy
                   ? () => _startVideoInterview(immediately: true)
                   : null,
-              style: CandidateButtonStyle.primaryColors(FilledButton.styleFrom(
-                backgroundColor: AppColors.dashboardTeal,
-                foregroundColor: const Color(0xFF0F172A),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
+              style: CandidateButtonStyle.primaryColors(
+                FilledButton.styleFrom(
+                  backgroundColor: AppColors.dashboardTeal,
+                  foregroundColor: const Color(0xFF0F172A),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
                 ),
-              )),
+              ),
               icon: _starting
                   ? const SizedBox(
                       width: 18,
@@ -696,14 +708,22 @@ class _CandidateInterviewLobbyScreenState
             ),
             const SizedBox(height: 8),
             Text(
-              _interview?.questionPreparationMode == 'DEMO_TEMPLATE'
-                  ? 'Demo interview: this session uses generic test questions.'
-                  : 'Development test: approved interview questions are reused. Legacy test interviews without approved questions use generic demo templates.',
+              'Development-only immediate start. Production joining follows server readiness and the scheduled time.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(color: textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 12),
           ],
+          Text(
+            'Workflow: ${_interview?.workflowState ?? 'UNKNOWN'} · Questions: ${_interview?.questionReadiness.state ?? 'UNKNOWN'}',
+          ),
+          Text(
+            'Join opens 15 minutes before the appointment. Times shown in ${DateTime.now().timeZoneName}.',
+          ),
+          TextButton(
+            onPressed: _starting ? null : _checkInterviews,
+            child: const Text('Refresh joining availability'),
+          ),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -713,6 +733,7 @@ class _CandidateInterviewLobbyScreenState
                     !_starting &&
                         !_startUncertain &&
                         _voiceBackend.available &&
+                        _interview?.canJoinAt(DateTime.now()) == true &&
                         _media.cameraReady &&
                         _media.microphoneChecked
                     ? _startVideoInterview

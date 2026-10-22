@@ -42,7 +42,7 @@ import 'screens/hr/live_monitor_screen.dart';
 import 'screens/hr/recruiter_observation_screen.dart';
 import 'screens/hr/rankings_screen.dart';
 import 'screens/hr/schedule_interview_screen.dart';
-import 'screens/hr/settings_screen.dart';
+
 import 'screens/hr/job_listings_screen.dart';
 import 'screens/hr/recruiter_job_detail_screen.dart';
 import 'screens/hr/recruiter_profile_screen.dart';
@@ -60,7 +60,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final adminLaunchRoute = adminRoutes.values.cast<String?>().firstWhere(
-    (route) => route == Uri.base.fragment.split('?').first || route == Uri.base.path,
+    (route) =>
+        route == Uri.base.fragment.split('?').first || route == Uri.base.path,
     orElse: () => null,
   );
   if (adminLaunchRoute != null) {
@@ -114,7 +115,9 @@ class AuthInitializationFailure extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      scrollBehavior: const MaterialScrollBehavior().copyWith(scrollbars: false),
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
+        scrollbars: false,
+      ),
       builder: mobileHomeIndicatorBuilder,
       home: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
@@ -183,7 +186,9 @@ class AppRouteObserver extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
-    if (route.settings.name != null && route.settings.name != '/' && !adminRoutes.containsValue(route.settings.name)) {
+    if (route.settings.name != null &&
+        route.settings.name != '/' &&
+        !adminRoutes.containsValue(route.settings.name)) {
       RouteStorage.saveLastRoute(route.settings.name!);
     }
   }
@@ -191,7 +196,9 @@ class AppRouteObserver extends NavigatorObserver {
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
-    if (newRoute?.settings.name != null && newRoute!.settings.name != '/' && !adminRoutes.containsValue(newRoute.settings.name)) {
+    if (newRoute?.settings.name != null &&
+        newRoute!.settings.name != '/' &&
+        !adminRoutes.containsValue(newRoute.settings.name)) {
       RouteStorage.saveLastRoute(newRoute.settings.name!);
     }
   }
@@ -214,27 +221,39 @@ class SkillSenseApp extends StatelessWidget {
       });
     }
 
-    final googleCallback = initialAdminRoute == null && AuthService.isGoogleCallback;
+    final googleCallback =
+        initialAdminRoute == null && AuthService.isGoogleCallback;
     return MaterialApp(
       title: 'SkillSense AI',
       debugShowCheckedModeBanner: false,
-      scrollBehavior: const MaterialScrollBehavior().copyWith(scrollbars: false),
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
+        scrollbars: false,
+      ),
       builder: mobileHomeIndicatorBuilder,
       navigatorKey: navigatorKey,
       navigatorObservers: [AppRouteObserver(), interviewMediaRouteObserver],
-      initialRoute: initialAdminRoute ?? (googleCallback ? '/oauth/callback' : null),
+      initialRoute:
+          initialAdminRoute ?? (googleCallback ? '/oauth/callback' : null),
       onGenerateInitialRoutes: initialAdminRoute != null
           ? (_) => [
               MaterialPageRoute<void>(
                 settings: RouteSettings(name: initialAdminRoute),
                 builder: (adminContext) {
-                  final brightness = MediaQuery.platformBrightnessOf(adminContext);
+                  final brightness = MediaQuery.platformBrightnessOf(
+                    adminContext,
+                  );
                   return Theme(
                     data: auroraTheme(
-                      brightness == Brightness.dark ? AuroraTokens.auroraNight : AuroraTokens.auroraDay,
+                      brightness == Brightness.dark
+                          ? AuroraTokens.auroraNight
+                          : AuroraTokens.auroraDay,
                       brightness,
                     ),
-                    child: AdminPortal(module: adminRoutes.entries.firstWhere((e) => e.value == initialAdminRoute).key),
+                    child: AdminPortal(
+                      module: adminRoutes.entries
+                          .firstWhere((e) => e.value == initialAdminRoute)
+                          .key,
+                    ),
                   );
                 },
               ),
@@ -258,15 +277,20 @@ class SkillSenseApp extends StatelessWidget {
       darkTheme: auroraTheme(AuroraTokens.auroraNight, Brightness.dark),
       themeMode: ThemeMode.system,
       // Routing observes only backend-verified application sessions.
-      home: initialAdminRoute == null && !googleCallback ? buildPlatformHome(
-        signedInBuilder: (role) {
-          return const RoleGuard(
-            allowedRoles: [EnvConfig.roleRecruiter, EnvConfig.roleCandidate],
-            child: _VerifiedHome(),
-          );
-        },
-        signedOutWidget: const ApertureSplashScreen(),
-      ) : null,
+      home: initialAdminRoute == null && !googleCallback
+          ? buildPlatformHome(
+              signedInBuilder: (role) {
+                return const RoleGuard(
+                  allowedRoles: [
+                    EnvConfig.roleRecruiter,
+                    EnvConfig.roleCandidate,
+                  ],
+                  child: _VerifiedHome(),
+                );
+              },
+              signedOutWidget: const ApertureSplashScreen(),
+            )
+          : null,
       onGenerateRoute: (settings) {
         // Old detail links carry their ID only in memory. Keep the ID in the
         // URL so refresh restores it; an unselected detail link opens the feed.
@@ -278,7 +302,9 @@ class SkillSenseApp extends StatelessWidget {
                 : '/candidate/jobs/${Uri.encodeComponent(id)}',
           );
         }
-        if (settings.name != null && settings.name != '/' && !adminRoutes.containsValue(settings.name)) {
+        if (settings.name != null &&
+            settings.name != '/' &&
+            !adminRoutes.containsValue(settings.name)) {
           RouteStorage.saveLastRoute(settings.name!);
         }
 
@@ -286,16 +312,22 @@ class SkillSenseApp extends StatelessWidget {
         Widget builder;
 
         if (adminRoutes.containsValue(name)) {
-          final module = adminRoutes.entries.firstWhere((e) => e.value == name).key;
+          final module = adminRoutes.entries
+              .firstWhere((e) => e.value == name)
+              .key;
           return MaterialPageRoute<void>(
             settings: settings,
             builder: (adminContext) => Theme(
               data: auroraTheme(
-                MediaQuery.platformBrightnessOf(adminContext)==Brightness.dark
-                    ? AuroraTokens.auroraNight : AuroraTokens.auroraDay,
+                MediaQuery.platformBrightnessOf(adminContext) == Brightness.dark
+                    ? AuroraTokens.auroraNight
+                    : AuroraTokens.auroraDay,
                 MediaQuery.platformBrightnessOf(adminContext),
               ),
-              child: AdminPortal(module: module, initialAnalyticsTab: settings.arguments as String?),
+              child: AdminPortal(
+                module: module,
+                initialAnalyticsTab: settings.arguments as String?,
+              ),
             ),
           );
         }
@@ -402,7 +434,10 @@ class SkillSenseApp extends StatelessWidget {
               builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleRecruiter],
                 child: settings.arguments is RecruiterObservationTarget
-                    ? RecruiterObservationScreen(target: settings.arguments! as RecruiterObservationTarget)
+                    ? RecruiterObservationScreen(
+                        target:
+                            settings.arguments! as RecruiterObservationTarget,
+                      )
                     : const CandidateReportScreen(),
               );
               break;
@@ -410,8 +445,12 @@ class SkillSenseApp extends StatelessWidget {
             case '/recruiter/live-monitor':
               builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleRecruiter],
-                child: LiveMonitorScreen(observationTarget: settings.arguments is RecruiterObservationTarget
-                    ? settings.arguments! as RecruiterObservationTarget : null),
+                child: LiveMonitorScreen(
+                  observationTarget:
+                      settings.arguments is RecruiterObservationTarget
+                      ? settings.arguments! as RecruiterObservationTarget
+                      : null,
+                ),
               );
               break;
             case '/create-role':
@@ -471,7 +510,7 @@ class SkillSenseApp extends StatelessWidget {
             case '/recruiter/scoring-model':
               builder = const RoleGuard(
                 allowedRoles: [EnvConfig.roleRecruiter],
-                child: SettingsScreen(),
+                child: RankingsScreen(),
               );
               break;
             case '/recruiter/profile':
@@ -520,9 +559,12 @@ class SkillSenseApp extends StatelessWidget {
               builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleCandidate],
                 child: CandidateInterviewLobbyScreen(
-                  interviewId: settings.arguments is String ? settings.arguments as String : null,
+                  interviewId: settings.arguments is String
+                      ? settings.arguments as String
+                      : null,
                   identity: settings.arguments is InterviewSessionIdentity
-                    ? settings.arguments as InterviewSessionIdentity : null,
+                      ? settings.arguments as InterviewSessionIdentity
+                      : null,
                 ),
               );
               break;
@@ -530,8 +572,15 @@ class SkillSenseApp extends StatelessWidget {
               builder = RoleGuard(
                 allowedRoles: [EnvConfig.roleCandidate],
                 child: settings.arguments is InterviewSessionIdentity
-                  ? CandidateInterviewSessionScreen(identity: settings.arguments as InterviewSessionIdentity)
-                  : const Scaffold(body: Center(child: Text('A valid interview session is required.'))),
+                    ? CandidateInterviewSessionScreen(
+                        identity:
+                            settings.arguments as InterviewSessionIdentity,
+                      )
+                    : const Scaffold(
+                        body: Center(
+                          child: Text('A valid interview session is required.'),
+                        ),
+                      ),
               );
               break;
             case '/candidate/feedback-report':
