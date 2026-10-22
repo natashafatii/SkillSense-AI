@@ -3,12 +3,16 @@ class Interview {
   final String applicationId;
   final DateTime? scheduledAt;
   final String status;
+  final String questionPreparationMode;
+  final String questionFallbackReason;
 
   const Interview({
     required this.id,
     required this.applicationId,
     this.scheduledAt,
     this.status = 'SCHEDULED',
+    this.questionPreparationMode = 'LEGACY_UNVERIFIED',
+    this.questionFallbackReason = '',
   });
 
   factory Interview.fromJson(Map<String, dynamic> json) {
@@ -28,6 +32,10 @@ class Interview {
       applicationId: application,
       scheduledAt: scheduled,
       status: (json['status'] ?? 'SCHEDULED').toString(),
+      questionPreparationMode:
+          (json['question_preparation_mode'] ?? 'LEGACY_UNVERIFIED').toString(),
+      questionFallbackReason: (json['question_fallback_reason'] ?? '')
+          .toString(),
     );
   }
 }
@@ -36,11 +44,13 @@ class InterviewQuestion {
   final String id;
   final String text;
   final bool isApproved;
+  final String source;
 
   const InterviewQuestion({
     required this.id,
     required this.text,
     required this.isApproved,
+    this.source = 'LEGACY_UNVERIFIED',
   });
 
   factory InterviewQuestion.fromJson(Map<String, dynamic> json) {
@@ -57,6 +67,7 @@ class InterviewQuestion {
       id: id,
       text: text,
       isApproved: json['is_approved'] == true || json['approved'] == true,
+      source: json['source']?.toString() ?? 'LEGACY_UNVERIFIED',
     );
   }
 

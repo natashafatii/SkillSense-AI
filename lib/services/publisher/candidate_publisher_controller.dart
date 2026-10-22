@@ -234,7 +234,7 @@ class CandidatePublisherController extends ChangeNotifier {
     } on ApiException catch (error) {
       if (!_current(epoch)) return;
       final status = error.statusCode;
-      if (status != null && status >= 400 && status < 500 && status != 429) {
+      if (status != null && status >= 400 && status < 500) {
         _terminal(switch (status) {
           401 =>
             'Your sign-in could not authorize frame transport. Sign in again.',
@@ -244,6 +244,8 @@ class CandidatePublisherController extends ChangeNotifier {
           409 =>
             'This session cannot accept a publisher right now. Check for another active interview tab.',
           410 => 'This session is no longer eligible for frame publishing.',
+          429 =>
+            'The video ticket limit was reached after connection attempts. Wait for unused tickets to expire, then reconnect video. Check the backend WebSocket origin and server configuration if this repeats.',
           _ =>
             'The ticket service rejected this session request (HTTP $status).',
         });

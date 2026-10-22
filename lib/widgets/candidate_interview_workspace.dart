@@ -122,6 +122,7 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                       child: SizedBox(
                         width: double.infinity,
                         child: _bottomBar(
+                          context,
                           MediaQuery.sizeOf(context).width < 760,
                         ),
                       ),
@@ -619,7 +620,30 @@ class CandidateInterviewWorkspace extends StatelessWidget {
     );
   }
 
-  Widget _bottomBar(bool mobile) => _card(
+  Future<void> _confirmEnd(BuildContext context) async {
+    final stop = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('End your interview early?'),
+        content: const Text(
+          'Your available answers will be retained. Ending now cannot be undone in this call; your recruiter can arrange a continuation.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep interviewing'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('End interview'),
+          ),
+        ],
+      ),
+    );
+    if (stop == true && context.mounted) await lifecycle.finish();
+  }
+
+  Widget _bottomBar(BuildContext context, bool mobile) => _card(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
     child: Wrap(
       alignment: WrapAlignment.spaceBetween,
@@ -648,7 +672,7 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                   !lifecycle.backend.available ||
                   lifecycle.finishing
               ? null
-              : lifecycle.finish,
+              : () => _confirmEnd(context),
           style: OutlinedButton.styleFrom(
             foregroundColor: const Color(0xFFB34F49),
             side: const BorderSide(color: Color(0xFFEED7D4)),
@@ -662,6 +686,9 @@ class CandidateInterviewWorkspace extends StatelessWidget {
 
   Widget _completion(bool mobile) {
     final pending = !_completed;
+    final outcome = lifecycle.snapshot?.conversationOutcome ?? 'UNVERIFIED';
+    final complete = !pending && outcome == 'COMPLETED';
+    final early = !pending && outcome == 'ENDED_EARLY';
     final reportState = lifecycle.snapshot?.analysisStatus;
     final failedReport = reportState == AnalysisState.failed;
     return Center(
@@ -685,7 +712,9 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                     child: Icon(
                       pending
                           ? Icons.hourglass_top_rounded
-                          : Icons.check_rounded,
+                          : complete
+                          ? Icons.check_rounded
+                          : Icons.info_outline_rounded,
                       size: 40,
                       color: _teal,
                     ),
@@ -694,12 +723,22 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                 const SizedBox(height: 24),
                 Center(
                   child: _eyebrow(
-                    pending ? 'JUST A MOMENT' : 'INTERVIEW COMPLETE',
+                    pending
+                        ? 'CONFIRMING SESSION'
+                        : complete
+                        ? 'INTERVIEW COMPLETE'
+                        : 'SESSION ENDED',
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  pending ? 'Wrapping things up.' : 'You’re all done.',
+                  pending
+                      ? 'Wrapping things up.'
+                      : complete
+                      ? 'You’re all done.'
+                      : early
+                      ? 'Your interview ended early.'
+                      : 'Your interview session ended.',
                   textAlign: TextAlign.center,
                   style: _title(mobile ? 30 : 38),
                 ),
@@ -707,7 +746,9 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                 Text(
                   pending
                       ? 'We’re confirming that your interview has ended. Your camera and audio have been stopped on this device.'
-                      : 'Thank you for sharing your experience.\nYou can take a breath and get back to your day.',
+                      : complete
+                      ? 'Thank you for sharing your experience.\nYou can take a breath and get back to your day.'
+                      : 'Your available answers have been retained. Completion of every question has not been confirmed. Contact your recruiter to arrange a continuation if needed.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: _muted,

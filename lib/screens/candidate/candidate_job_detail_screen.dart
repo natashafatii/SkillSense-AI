@@ -70,7 +70,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
 
   ResumeDetail? _resumeDetail;
   bool? _hasUploadedResume;
-  bool _warnedMissingJobScore = false;
   bool _isLoadingResume = true;
   bool _isLoadingSkills = true;
   List<JobSkill>? _jobSkills;
@@ -99,7 +98,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     _isLoadingSkills = true;
     _resumeDetail = null;
     _hasUploadedResume = null;
-    _warnedMissingJobScore = false;
     _isLoadingResume = true;
     _jobError = null;
     _isLoadingJob = true;
@@ -123,7 +121,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           _isApplied = job.hasApplied;
           _isLoadingJob = false;
         });
-        _warnIfMissingJobScore();
       }
     } catch (_) {
       if (mounted && request == _jobRequest && jobId == widget.jobId) {
@@ -156,7 +153,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           _hasUploadedResume = hasUploadedResume;
           _isLoadingResume = false;
         });
-        _warnIfMissingJobScore();
         if (detail != null && _needsParsing(detail)) {
           _pollActiveResume(detail.id, request);
         }
@@ -213,7 +209,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
             _resumeDetail = detail;
             _hasUploadedResume = true;
           });
-          _warnIfMissingJobScore();
         }
       } catch (_) {
         // Transient request errors retry on the next tick.
@@ -221,18 +216,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     }
   }
 
-  void _warnIfMissingJobScore() {
-    if (_warnedMissingJobScore ||
-        _job == null ||
-        _resumeDetail?.isParsed != true ||
-        _job!.matchScore != null) {
-      return;
-    }
-    _warnedMissingJobScore = true;
-    debugPrint(
-      'Job ${_job!.id} has no match_score for a candidate with a parsed resume.',
-    );
-  }
+  // Job match_score is nullable until a successful application assessment
+  // exists. Parsing a resume alone does not establish a score for every job.
 
   void _applyJob() {
     _showApplyModal();
@@ -503,9 +488,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
             children: [
               Text(_jobError ?? 'Job unavailable.'),
               TextButton(
-                onPressed: () => Navigator.of(
-                  context,
-                ).pushNamed('/candidate/jobs'),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/candidate/jobs'),
                 style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
                 child: const Text('Back to jobs'),
               ),
@@ -1108,9 +1092,11 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              if (!hasScore && _hasUploadedResume == false)
+              if (!hasScore)
                 Text(
-                  'Upload a resume to see your match score.',
+                  _hasUploadedResume == false
+                      ? 'Upload a resume to apply. Match scores are available after application screening.'
+                      : 'Match scores are available after a successful screening assessment of your application.',
                   style: GoogleFonts.inter(color: textSecondary, fontSize: 12),
                 ),
               const SizedBox(height: 20),

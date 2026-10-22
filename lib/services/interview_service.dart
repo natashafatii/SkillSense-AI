@@ -88,6 +88,8 @@ class InterviewService {
   static Future<Interview> schedule({
     required String applicationId,
     required DateTime scheduledAt,
+    String? questionSetId,
+    int? expectedRevision,
     Dio? client,
   }) async {
     if (applicationId.isEmpty || !scheduledAt.isAfter(DateTime.now())) {
@@ -103,6 +105,8 @@ class InterviewService {
         data: {
           'application': applicationId,
           'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+          'question_set': questionSetId,
+          'expected_revision': expectedRevision,
         },
       );
       final interview = Interview.fromJson(
