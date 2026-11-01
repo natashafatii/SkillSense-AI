@@ -7,6 +7,40 @@ import 'api_exception.dart';
 class FeedbackService {
   FeedbackService._();
 
+  static Future<PaginatedResponse<CandidateFeedback>> forIdentity({
+    String? interviewId,
+    String? applicationId,
+    Dio? client,
+  }) async {
+    final matches = <CandidateFeedback>[];
+    for (var page = 1; page <= 100; page++) {
+      final result = await list(page: page, client: client);
+      matches.addAll(
+        result.results.where(
+          (row) =>
+              (interviewId == null || row.interviewId == interviewId) &&
+              (applicationId == null || row.applicationId == applicationId),
+        ),
+      );
+      if (!result.hasNext) {
+        return PaginatedResponse(count: matches.length, results: matches);
+      }
+    }
+    throw const FormatException('Feedback pagination did not finish.');
+  }
+
+  static Future<CandidateFeedback> detail(String id, {Dio? client}) async {
+    try {
+      final dio = client ?? await ApiClient.getInstance();
+      final response = await dio.get('/feedback/${Uri.encodeComponent(id)}/');
+      return CandidateFeedback.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
+    }
+  }
+
   static Future<PaginatedResponse<CandidateFeedback>> list({
     int page = 1,
     Dio? client,

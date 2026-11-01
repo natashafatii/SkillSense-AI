@@ -140,7 +140,19 @@ class RecruitmentReviewController extends ChangeNotifier {
         captured.transcripts?.version?.value !=
             current.transcripts?.version?.value ||
         captured.latestEvaluation?.id != current.latestEvaluation?.id ||
-        captured.latestEvaluation?.status != current.latestEvaluation?.status) {
+        captured.latestEvaluation?.status != current.latestEvaluation?.status ||
+        captured.feedback
+                .map(
+                  (f) =>
+                      '${f.id}:${f.editVersion.value}:${f.hash}:${f.releasedAt}:${f.retractedAt}',
+                )
+                .join('|') !=
+            current.feedback
+                .map(
+                  (f) =>
+                      '${f.id}:${f.editVersion.value}:${f.hash}:${f.releasedAt}:${f.retractedAt}',
+                )
+                .join('|')) {
       requiresReview = true;
       error =
           'Versions changed while confirmation was open. Refresh and review the current evidence. Your input is retained.';

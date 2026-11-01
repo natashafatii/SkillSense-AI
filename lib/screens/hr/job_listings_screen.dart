@@ -16,6 +16,7 @@ import '../../services/job_service.dart';
 import '../../models/app_notification.dart';
 import '../../models/paginated_response.dart';
 import '../../services/notification_service.dart';
+import '../../services/notification_navigation.dart';
 import '../../services/session_scope.dart';
 
 enum _JobAction { edit, close, view, publish, delete }
@@ -719,6 +720,7 @@ class _RecruiterNotificationsScreenState
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     AuthService.currentUserNotifier.addListener(_accountChanged);
+    SessionScope.invalidations.addListener(_clearNotificationSession);
     _fetch();
     if (widget.refreshInterval > Duration.zero) {
       _poller = Timer.periodic(widget.refreshInterval, (_) {
@@ -732,6 +734,7 @@ class _RecruiterNotificationsScreenState
     _poller?.cancel();
     _request++;
     AuthService.currentUserNotifier.removeListener(_accountChanged);
+    SessionScope.invalidations.removeListener(_clearNotificationSession);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -740,6 +743,28 @@ class _RecruiterNotificationsScreenState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _active = state == AppLifecycleState.resumed;
     if (_active) _fetch();
+  }
+
+  void _clearNotificationSession() {
+    ++_request;
+    if (!mounted) return;
+    setState(() {
+      _items = [];
+      _unread = 0;
+      _loaded = false;
+      _busy = false;
+      _error = 'Session changed.';
+      _marking.clear();
+    });
+  }
+
+  Future<void> _openNotification(AppNotification item) async {
+    final generation = SessionScope.generation;
+    await _markRead(item);
+    if (mounted && generation == SessionScope.generation) {
+      await openNotification(context, item);
+    }
+    if (mounted && generation == SessionScope.generation) _fetch();
   }
 
   void _accountChanged() {
@@ -786,6 +811,7 @@ class _RecruiterNotificationsScreenState
         _items = byId.values.toList();
         _missingRefetchQueued = false;
         _unread = results[1] as int;
+        NotificationService.publishUnread(_unread);
         _page = page;
         _hasNext = response.hasNext;
         _loaded = true;
@@ -841,11 +867,16 @@ class _RecruiterNotificationsScreenState
           await (widget.markRead?.call(item.id) ??
               NotificationService.markRead(item.id));
       if (!mounted || generation != SessionScope.generation) return;
+      final serverUnread =
+          await (widget.loadUnreadCount?.call() ??
+              NotificationService.unreadCount());
+      if (!mounted || generation != SessionScope.generation) return;
       setState(() {
         _items = _items
             .map((row) => row.id == item.id ? updated : row)
             .toList();
-        if (_unread > 0) _unread--;
+        _unread = serverUnread;
+        NotificationService.publishUnread(_unread);
       });
     } catch (error) {
       if (mounted &&
@@ -920,7 +951,7 @@ class _RecruiterNotificationsScreenState
             _items = _items
                 .map((row) => row.id == item.id ? updated : row)
                 .toList();
-            if (_unread > 0) _unread--;
+            // Refresh the authoritative count once the batch has finished.
           });
         } on ApiException catch (error) {
           if (error.statusCode == 400) continue;
@@ -1237,7 +1268,7 @@ class _RecruiterNotificationsScreenState
                 onPressed: () => _markRead(item),
                 icon: const Icon(Icons.done_rounded),
               ),
-        onTap: () => _markRead(item),
+        onTap: () => _openNotification(item),
       ),
     ),
   );

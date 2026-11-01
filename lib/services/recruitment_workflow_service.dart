@@ -197,6 +197,59 @@ class RecruitmentWorkflowService {
     );
   }
 
+  Future<void> releaseFeedback(FeedbackReviewRevision report) async {
+    await request(
+      '/feedback/${report.id}/release/',
+      data: {
+        'expected_revision': report.revision.value,
+        'expected_edit_version': report.editVersion.value,
+      },
+    );
+  }
+
+  Future<void> editFeedback(
+    RecruitmentReview review,
+    FeedbackReviewRevision report, {
+    required String commandReason,
+    required bool acknowledged,
+    required Json amendments,
+  }) async {
+    if (!acknowledged) {
+      throw ArgumentError('Candidate visibility acknowledgment is required.');
+    }
+    if (amendments.isEmpty ||
+        amendments.keys.any(
+          (key) => !{'summary', 'improvement_suggestions'}.contains(key),
+        )) {
+      throw ArgumentError('Only public guidance can be edited.');
+    }
+    await request(
+      '/feedback/${report.id}/edit/',
+      data: {
+        'expected_version': review.application.version,
+        'expected_edit_version': report.editVersion.value,
+        'reason': reason(commandReason),
+        'public_acknowledged': true,
+        'amendments': amendments,
+      },
+    );
+  }
+
+  Future<void> retractFeedback(
+    RecruitmentReview review,
+    FeedbackReviewRevision report,
+    String commandReason,
+  ) async {
+    await request(
+      '/feedback/${report.id}/retract/',
+      data: {
+        'expected_version': review.application.version,
+        'expected_edit_version': report.editVersion.value,
+        'reason': reason(commandReason),
+      },
+    );
+  }
+
   static String reason(String value) {
     final text = value.trim();
     if (text.isEmpty || text.length > 2000) {

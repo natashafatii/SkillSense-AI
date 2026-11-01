@@ -584,9 +584,19 @@ class SkillSenseApp extends StatelessWidget {
               );
               break;
             case '/candidate/feedback-report':
-              builder = const RoleGuard(
-                allowedRoles: [EnvConfig.roleCandidate],
-                child: CandidateFeedbackReportScreen(),
+              builder = RoleGuard(
+                allowedRoles: const [EnvConfig.roleCandidate],
+                child: CandidateFeedbackReportScreen(
+                  reportId: settings.arguments is Map
+                      ? (settings.arguments as Map)['reportId'] as String?
+                      : null,
+                  interviewId: settings.arguments is Map
+                      ? (settings.arguments as Map)['interviewId'] as String?
+                      : null,
+                  applicationId: settings.arguments is Map
+                      ? (settings.arguments as Map)['applicationId'] as String?
+                      : null,
+                ),
               );
               break;
             case '/candidate/resumes':

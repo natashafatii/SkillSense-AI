@@ -1,4 +1,5 @@
 import 'api_contract.dart';
+import 'candidate_feedback.dart';
 
 typedef Json = Map<String, dynamic>;
 Json object(Object? value) => Map<String, dynamic>.from(value as Map);
@@ -332,13 +333,26 @@ class WorkflowAction {
 }
 
 class FeedbackReviewRevision {
+  final FeedbackContent? content;
+  final Map<String, dynamic> amendments;
   final String id, status, contract, hash;
   final String? evaluation, error;
   final FeedbackRevision revision;
   final FeedbackEditVersion editVersion;
   final DateTime? preparedAt, releasedAt, retractedAt;
   FeedbackReviewRevision.fromJson(Json j)
-    : id = j['id'].toString(),
+    : content =
+          j['status'] == 'READY' &&
+              j['content'] != null &&
+              j['contract_version'] == 'FEEDBACK_V1'
+          ? FeedbackContent.fromJson({
+              ...object(j['content']),
+              if (j['amendments'] is Map && (j['amendments'] as Map).isNotEmpty)
+                'recruiter_public_guidance': j['amendments'],
+            })
+          : null,
+      amendments = Map.unmodifiable(object(j['amendments'] ?? {})),
+      id = j['id'].toString(),
       revision = FeedbackRevision(ApiValue.integer(j['revision'])),
       editVersion = FeedbackEditVersion(ApiValue.integer(j['edit_version'])),
       status = j['status']?.toString() ?? 'UNKNOWN',

@@ -60,11 +60,9 @@ class FeedbackFinding {
       text = _text(data[field]);
 }
 
-class CandidateFeedbackReport {
-  final String id, summary;
-  FeedbackRevision get feedbackRevision => FeedbackRevision(revision);
-  final int revision, assessedQuestions, totalQuestions;
-  final DateTime releasedAt;
+class FeedbackContent {
+  final String summary;
+  final int assessedQuestions, totalQuestions;
   final double? performance;
   final double coverage;
   final List<FeedbackDimension> dimensions;
@@ -72,14 +70,11 @@ class CandidateFeedbackReport {
   final List<String> limitations, publicSuggestions;
   final String? publicSummary;
 
-  CandidateFeedbackReport._(
+  FeedbackContent._(
     Map<String, dynamic> data,
     Map<String, dynamic> summaryData,
     Map<String, dynamic>? guidance,
-  ) : id = _text(data['id']),
-      revision = _count(data['revision']),
-      releasedAt = DateTime.parse(_text(data['released_at'])),
-      summary = _text(summaryData['text']),
+  ) : summary = _text(summaryData['text']),
       performance = summaryData['performance_percentage'] == null
           ? null
           : _number(summaryData['performance_percentage'], 100),
@@ -110,17 +105,44 @@ class CandidateFeedbackReport {
           ? const []
           : _items(guidance!['improvement_suggestions'], _text);
 
-  factory CandidateFeedbackReport.fromJson(Map<String, dynamic> data) {
-    if (data['contract_version'] != 'FEEDBACK_V1') {
-      throw const FormatException('Unsupported feedback report contract.');
-    }
-    final row = CandidateFeedbackReport._(
+  factory FeedbackContent.fromJson(Map<String, dynamic> data) {
+    final content = FeedbackContent._(
       data,
       _object(data['interview_summary']),
       data['recruiter_public_guidance'] == null
           ? null
           : _object(data['recruiter_public_guidance']),
     );
+    if (content.assessedQuestions > content.totalQuestions) {
+      throw const FormatException('Invalid evidence coverage.');
+    }
+    return content;
+  }
+}
+
+class CandidateFeedbackReport extends FeedbackContent {
+  final String id;
+  final int revision;
+  final DateTime releasedAt;
+  FeedbackRevision get feedbackRevision => FeedbackRevision(revision);
+  CandidateFeedbackReport._(Map<String, dynamic> data)
+    : id = _text(data['id']),
+      revision = _count(data['revision']),
+      releasedAt =
+          ApiValue.instant(data['released_at']) ??
+          (throw const FormatException('Missing release time.')),
+      super._(
+        data,
+        _object(data['interview_summary']),
+        data['recruiter_public_guidance'] == null
+            ? null
+            : _object(data['recruiter_public_guidance']),
+      );
+  factory CandidateFeedbackReport.fromJson(Map<String, dynamic> data) {
+    if (data['contract_version'] != 'FEEDBACK_V1') {
+      throw const FormatException('Unsupported feedback report contract.');
+    }
+    final row = CandidateFeedbackReport._(data);
     if (row.revision < 1 || row.assessedQuestions > row.totalQuestions) {
       throw const FormatException('Invalid feedback revision or coverage.');
     }

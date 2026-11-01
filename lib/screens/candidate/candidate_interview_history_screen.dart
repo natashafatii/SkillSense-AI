@@ -1,159 +1,72 @@
-import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
-import '../../widgets/mobile_edge_shadow_wrapper.dart';
-import '../../widgets/candidate_mobile_nav.dart';
-import '../../widgets/candidate_button_style.dart';
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../models/interview.dart';
+import '../../services/interview_service.dart';
+import '../../services/session_scope.dart';
+import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../constants/app_colors.dart';
-import '../../widgets/candidate_side_nav.dart';
-import '../../services/api_client.dart';
 
+/// Public interview identities only. Grades are available through released
+/// feedback, never sample trends or private evaluation/behavioral endpoints.
 class CandidateInterviewHistoryScreen extends StatefulWidget {
-  const CandidateInterviewHistoryScreen({super.key});
-
+  const CandidateInterviewHistoryScreen({super.key, this.loadInterviews});
+  final Future<List<Interview>> Function()? loadInterviews;
   @override
   State<CandidateInterviewHistoryScreen> createState() =>
       _CandidateInterviewHistoryScreenState();
 }
 
 class _CandidateInterviewHistoryScreenState
-    extends State<CandidateInterviewHistoryScreen>
-    with TickerProviderStateMixin {
-  late AnimationController _latestController;
-  late AnimationController _bestController;
-  late Animation<double> _latestAnimation;
-  late Animation<double> _bestAnimation;
-
-  bool _isLoading = true;
-  bool _hasHistory = false;
-
-  // History Items
-  final List<Map<String, dynamic>> _history = [
-    {
-      'date': '13 MAY',
-      'role': 'Senior Django Dev',
-      'company': 'TechVerse',
-      'score': 76,
-      'color': AppColors.dashboardTeal,
-      'memory': 'Strong technical depth · pacing to improve',
-    },
-    {
-      'date': '28 MAR',
-      'role': 'Backend Eng',
-      'company': 'DataFlow',
-      'score': 81,
-      'color': AppColors.dashboardTeal,
-      'memory': 'Best answer: system design walkthrough',
-    },
-    {
-      'date': '02 FEB',
-      'role': 'Full Stack Dev',
-      'company': 'CodeCraft',
-      'score': 64,
-      'color': AppColors.dashboardBlue,
-      'memory': 'Filler words high in first half',
-    },
-  ];
-
-  // 5-Interview Trend (ordered chronologically, oldest left to latest right)
-  final List<Map<String, dynamic>> _trendData = [
-    {
-      'score': 52,
-      'color': const Color(0xFFF59E0B),
-      'label': 'Feb 02',
-      'role': 'QA Intern',
-    }, // wkf/gold
-    {
-      'score': 64,
-      'color': AppColors.dashboardBlue,
-      'label': 'Mar 01',
-      'role': 'Python Dev',
-    },
-    {
-      'score': 81,
-      'color': AppColors.dashboardTeal,
-      'label': 'Mar 28',
-      'role': 'Backend Eng',
-    },
-    {
-      'score': 70,
-      'color': AppColors.dashboardTeal,
-      'label': 'Apr 15',
-      'role': 'Django Eng',
-    },
-    {
-      'score': 76,
-      'color': AppColors.dashboardTeal,
-      'label': 'May 13',
-      'role': 'Sr Django Dev',
-    },
-  ];
-
-  int? _hoveredTrendBarIndex;
-
+    extends State<CandidateInterviewHistoryScreen> {
+  List<Interview> _items = [];
+  bool _loading = true;
+  String? _error;
+  int _request = 0;
   @override
   void initState() {
     super.initState();
-    _checkHistory();
-    _latestController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _bestController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-
-    _latestAnimation = Tween<double>(begin: 0, end: 76).animate(
-      CurvedAnimation(parent: _latestController, curve: Curves.easeOut),
-    );
-    _bestAnimation = Tween<double>(
-      begin: 0,
-      end: 81,
-    ).animate(CurvedAnimation(parent: _bestController, curve: Curves.easeOut));
+    SessionScope.invalidations.addListener(_clear);
+    _load();
   }
 
-  Future<void> _checkHistory() async {
-    try {
-      final dio = await ApiClient.getInstance();
-      final response = await dio.get(
-        '/interviews/',
-        queryParameters: {'candidate': 'me', 'status': 'DONE'},
-      );
-      final data = response.data;
-      final List rows;
-      if (data is List) {
-        rows = data;
-      } else if (data is Map && data['results'] is List) {
-        rows = data['results'] as List;
-      } else {
-        rows = [];
-      }
+  void _clear() {
+    ++_request;
+    if (mounted) {
+      setState(() {
+        _items = [];
+        _loading = false;
+        _error = 'Session changed. Sign in again.';
+      });
+    }
+  }
 
-      if (rows.isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _hasHistory = true;
-            _isLoading = false;
-          });
-          _latestController.forward();
-          _bestController.forward();
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _hasHistory = false;
-            _isLoading = false;
-          });
-        }
+  Future<void> _load() async {
+    final request = ++_request, generation = SessionScope.generation;
+    setState(() {
+      _loading = true;
+      _items = [];
+      _error = null;
+    });
+    try {
+      final items =
+          await (widget.loadInterviews?.call() ?? InterviewService.listAll());
+      if (!mounted ||
+          request != _request ||
+          generation != SessionScope.generation) {
+        return;
       }
-    } catch (e) {
-      if (mounted) {
+      setState(() {
+        _items = items
+            .where((row) => row.status == 'DONE' && row.completedAt != null)
+            .toList();
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted &&
+          request == _request &&
+          generation == SessionScope.generation) {
         setState(() {
-          _hasHistory = false;
-          _isLoading = false;
+          _loading = false;
+          _error = 'Unable to load interview history. Refresh to retry.';
         });
       }
     }
@@ -161,921 +74,70 @@ class _CandidateInterviewHistoryScreenState
 
   @override
   void dispose() {
-    _latestController.dispose();
-    _bestController.dispose();
+    ++_request;
+    SessionScope.invalidations.removeListener(_clear);
     super.dispose();
   }
 
-  void _navigateToFeedback() {
-    Navigator.of(context).pushNamed('/candidate/feedback-report');
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 900;
-
-    final Color bgBase = const Color(0xFFF8FAFC);
-    final Color textPrimary = const Color(0xFF0F172A);
-    final Color textSecondary = const Color(0xFF64748B);
-    final Color cardBg = Colors.white;
-    final Color cardBorder = const Color(0xFFE2E8F0);
-
-    return Scaffold(
-      backgroundColor: bgBase,
-      body: Stack(
-        children: [
-          // Grid Painter Background
-          Positioned.fill(
-            child: CustomPaint(
-              painter: GridPainter(
-                color: Colors.black.withValues(alpha: 0.015),
-              ),
-            ),
-          ),
-
-          // Teal Aurora Glow
-          Positioned(
-            top: isMobile ? -50 : -120,
-            left: isMobile ? 20 : 180,
-            child: Container(
-              width: isMobile ? 300 : 450,
-              height: isMobile ? 300 : 450,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.dashboardTeal.withValues(
-                  alpha: isMobile ? 0.06 : 0.04,
-                ),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-          ),
-
-          // Content Wrapper
-          SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      // Left Rail (Web Only)
-                      if (!isMobile)
-                        const CandidateSideNav(
-                          currentRoute: '/candidate/interviews',
-                        ),
-
-                      // Main Canvas
-                      Expanded(
-                        child: Column(
-                          children: [
-                            RecruiterTopBar(
-                              pageTitle: 'Interview history',
-                              candidate: true,
-                            ),
-                            Expanded(
-                              child: MobileEdgeShadowWrapper(
-                                child: _isLoading
-                                    ? const Center(
-                                        child: CircularProgressIndicator(
-                                          color: AppColors.dashboardTeal,
-                                        ),
-                                      )
-                                    : !_hasHistory
-                                    ? _buildEmptyState(isMobile)
-                                    : SingleChildScrollView(
-                                        physics: const BouncingScrollPhysics(),
-                                        padding: EdgeInsets.only(
-                                          left: isMobile ? 16 : 24,
-                                          right: isMobile ? 16 : 24,
-                                          top: 16,
-                                          bottom: isMobile ? 164 : 32,
-                                        ),
-                                        child: isMobile
-                                            ? _buildMobileLayout(
-                                                textPrimary,
-                                                textSecondary,
-                                                cardBg,
-                                                cardBorder,
-                                              )
-                                            : _buildWebLayout(
-                                                textPrimary,
-                                                textSecondary,
-                                                cardBg,
-                                                cardBorder,
-                                              ),
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Bottom Navigation Dock (Mobile Only)
-          if (isMobile)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildMobileBottomDock(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ── EMPTY STATE ────────────────────────────────────────────────────────────
-  Widget _buildEmptyState(bool isMobile) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: isMobile ? 54 : 64,
-              height: isMobile ? 54 : 64,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9), // --field
-                borderRadius: BorderRadius.circular(isMobile ? 17 : 20),
-                border: Border.all(color: const Color(0xFFE2E8F0)), // --edge2
-              ),
-              child: Center(
-                child: Icon(
-                  Icons.view_headline_rounded, // document/list icon
-                  size: isMobile ? 20 : 24,
-                  color: const Color(0xFF64748B), // --tx2
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No interviews yet',
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A), // --tx
-                fontSize: isMobile ? 15 : 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: isMobile ? -0.03 : -0.025,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: isMobile ? 280 : 380),
-              child: Text(
-                isMobile
-                    ? 'Completed interviews appear here.'
-                    : 'Completed interviews appear here with your score, trajectory and feedback links.',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B), // --tx3
-                  fontSize: isMobile ? 11 : 12.5,
-                  height: 1.65,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: CandidateButtonStyle.primaryGradient,
-                borderRadius: BorderRadius.circular(11),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF14B584).withValues(alpha: 0.25),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 22 : 26),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pushNamed('/candidate/applications');
-                },
-                child: Text(
-                  'View applications',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600, // apprx 550
-                  ),
-                ),
-              ),
-            ),
-            if (!isMobile) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Scores appear after your first interview',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF94A3B8), // --tx4
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w400,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── WEB LAYOUT ─────────────────────────────────────────────────────────────
-  Widget _buildWebLayout(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => CandidateScaffold(
+    currentRoute: '/candidate/interviews',
+    body: Column(
       children: [
-        // Top Row: Latest (1fr) + Best (1fr) + Trend (1fr)
-        Row(
-          children: [
-            Expanded(
-              child: _buildLatestPanel(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: _buildBestPanel(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: _buildTrendPanel(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-                false,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        // Bottom Row: History List
-        _buildHistoryListPanel(
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          false,
-        ),
-      ],
-    );
-  }
-
-  // ── MOBILE LAYOUT ──────────────────────────────────────────────────────────
-  Widget _buildMobileLayout(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    return Column(
-      children: [
-        // Side by Side Latest + Best panels
-        Row(
-          children: [
-            Expanded(
-              child: _buildLatestPanel(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildBestPanel(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _buildTrendPanel(textPrimary, textSecondary, cardBg, cardBorder, true),
-        const SizedBox(height: 16),
-        _buildHistoryListPanel(
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          true,
-        ),
-      ],
-    );
-  }
-
-  // ── LATEST PANEL ───────────────────────────────────────────────────────────
-  Widget _buildLatestPanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: PointerGestureDetector(
-        onTap: _navigateToFeedback,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.dashboardTeal.withValues(alpha: 0.3),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.dashboardTeal.withValues(alpha: 0.05),
-                blurRadius: 12,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'LATEST',
-                style: GoogleFonts.spaceGrotesk(
-                  color: AppColors.dashboardTeal,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  AnimatedBuilder(
-                    animation: _latestAnimation,
-                    builder: (context, child) {
-                      return _buildScoreRing(
-                        64,
-                        _latestAnimation.value,
-                        AppColors.dashboardTeal,
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Senior Django Dev',
-                          style: GoogleFonts.spaceGrotesk(
-                            color: textPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '13 May · TechVerse',
-                          style: GoogleFonts.inter(
-                            color: textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+        const RecruiterTopBar(pageTitle: 'Interview history', candidate: true),
+        Align(
+          alignment: Alignment.centerRight,
+          child: IconButton(
+            tooltip: 'Refresh interview history',
+            onPressed: _loading ? null : _load,
+            icon: const Icon(Icons.refresh),
           ),
         ),
-      ),
-    );
-  }
-
-  // ── BEST PANEL ─────────────────────────────────────────────────────────────
-  Widget _buildBestPanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: PointerGestureDetector(
-        onTap: _navigateToFeedback,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFF59E0B).withValues(alpha: 0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'BEST',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: const Color(0xFFF59E0B),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '★ Best',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: const Color(0xFFD97706),
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  AnimatedBuilder(
-                    animation: _bestAnimation,
-                    builder: (context, child) {
-                      return _buildScoreRing(
-                        64,
-                        _bestAnimation.value,
-                        AppColors.dashboardTeal,
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Backend Eng',
-                          style: GoogleFonts.spaceGrotesk(
-                            color: textPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '28 Mar · DataFlow',
-                          style: GoogleFonts.inter(
-                            color: textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── TREND PANEL ────────────────────────────────────────────────────────────
-  Widget _buildTrendPanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isMobile,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'TREND · 5 INTERVIEWS',
-            style: GoogleFonts.spaceGrotesk(
-              color: textSecondary,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.0,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Simple Custom Bar Chart
-          SizedBox(
-            height: isMobile ? 50 : 64,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(_trendData.length, (idx) {
-                final bar = _trendData[idx];
-                final score = bar['score'] as int;
-                final isHovered = _hoveredTrendBarIndex == idx;
-
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: MouseRegion(
-                      onEnter: (_) =>
-                          setState(() => _hoveredTrendBarIndex = idx),
-                      onExit: (_) =>
-                          setState(() => _hoveredTrendBarIndex = null),
-                      cursor: SystemMouseCursors.click,
-                      child: PointerGestureDetector(
-                        onTap: _navigateToFeedback,
-                        child: Tooltip(
-                          message: '${bar['role']}: $score% on ${bar['label']}',
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            height: (score / 100) * (isMobile ? 50 : 64),
-                            decoration: BoxDecoration(
-                              color: bar['color'] as Color,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(4),
-                                topRight: Radius.circular(4),
-                              ),
-                              boxShadow: isHovered
-                                  ? [
-                                      BoxShadow(
-                                        color: (bar['color'] as Color)
-                                            .withValues(alpha: 0.4),
-                                        blurRadius: 8,
-                                        spreadRadius: 1,
-                                      ),
-                                    ]
-                                  : [],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Trend growth caption
-          Row(
-            children: [
-              const Icon(
-                Icons.trending_up_rounded,
-                color: AppColors.dashboardTeal,
-                size: 16,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '+24 points since your first interview',
-                style: GoogleFonts.inter(
-                  color: AppColors.dashboardTeal,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── HISTORY LIST PANEL ─────────────────────────────────────────────────────
-  Widget _buildHistoryListPanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isMobile,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'All interviews',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // List of Rows
-          Column(
-            children: List.generate(_history.length, (idx) {
-              final row = _history[idx];
-
-              return InkWell(
-                onTap: _navigateToFeedback,
-                child: Column(
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+              ? Center(child: Text(_error!))
+              : _items.isEmpty
+              ? const Center(child: Text('No completed interviews yet.'))
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: isMobile
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Text(
-                                            '${row['date']}  ·  ',
-                                            style: GoogleFonts.jetBrainsMono(
-                                              color: textSecondary,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Text(
-                                              '${row['role']} — ${row['company']}',
-                                              style: GoogleFonts.spaceGrotesk(
-                                                color: textPrimary,
-                                                fontSize: 13.5,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        row['memory'],
-                                        style: GoogleFonts.inter(
-                                          color: textSecondary,
-                                          fontSize: 11.5,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                    for (final row in _items)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Interview ${row.id}'),
+                              Text('Application ${row.applicationId}'),
+                              Text('Workflow: ${row.workflowState}'),
+                              Text('Call ended: ${row.completedAt!.toLocal()}'),
+                              const Text(
+                                'Results are shown only when your recruiter releases validated feedback.',
+                              ),
+                              OutlinedButton(
+                                onPressed: () => Navigator.pushNamed(
+                                  context,
+                                  '/candidate/feedback-report',
+                                  arguments: {
+                                    'interviewId': row.id,
+                                    'applicationId': row.applicationId,
+                                  },
                                 ),
-                                const SizedBox(width: 12),
-                                _buildScoreRing(
-                                  34,
-                                  (row['score'] as int).toDouble(),
-                                  row['color'] as Color,
+                                child: const Text(
+                                  'View feedback for this interview',
                                 ),
-                                const SizedBox(width: 8),
-                                SizedBox(
-                                  height: 32,
-                                  child: OutlinedButton(
-                                    style: CandidateButtonStyle.secondary(
-                                      OutlinedButton.styleFrom(
-                                        foregroundColor: textPrimary,
-                                        side: BorderSide(color: cardBorder),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                        ),
-                                      ),
-                                    ),
-                                    onPressed: _navigateToFeedback,
-                                    child: Text(
-                                      'Feedback',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                SizedBox(
-                                  width: 58,
-                                  child: Text(
-                                    row['date'],
-                                    style: GoogleFonts.jetBrainsMono(
-                                      color: textSecondary,
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 4,
-                                  child: Text(
-                                    '${row['role']} — ${row['company']}',
-                                    style: GoogleFonts.spaceGrotesk(
-                                      color: textPrimary,
-                                      fontSize: 14.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  flex: 6,
-                                  child: Text(
-                                    row['memory'],
-                                    style: GoogleFonts.inter(
-                                      color: textSecondary,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                _buildScoreRing(
-                                  36,
-                                  (row['score'] as int).toDouble(),
-                                  row['color'] as Color,
-                                ),
-                                const SizedBox(width: 16),
-                                OutlinedButton(
-                                  style: CandidateButtonStyle.secondary(
-                                    OutlinedButton.styleFrom(
-                                      foregroundColor: textPrimary,
-                                      side: BorderSide(color: cardBorder),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 8,
-                                      ),
-                                    ),
-                                  ),
-                                  onPressed: _navigateToFeedback,
-                                  child: Text(
-                                    'Feedback',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                    if (idx < _history.length - 1)
-                      const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Helper widget to draw score rings
-  Widget _buildScoreRing(double size, double score, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFFF8FAFC),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: size,
-            height: size,
-            child: CircularProgressIndicator(
-              value: score / 100,
-              strokeWidth: size < 40 ? 3.0 : 4.5,
-              backgroundColor: Colors.transparent,
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-            ),
-          ),
-          Text(
-            score.toInt().toString(),
-            style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
-              fontSize: size < 40 ? 11 : 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
-  // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() =>
-      const CandidateMobileNav(currentRoute: '/candidate/interviews');
-
-  // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-}
-
-class GridPainter extends CustomPainter {
-  final Color color;
-  GridPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.0;
-
-    const double step = 30.0;
-    for (double i = 0; i < size.width; i += step) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-    for (double i = 0; i < size.height; i += step) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+        ),
+      ],
+    ),
+  );
 }
