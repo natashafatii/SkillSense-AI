@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'notification_unread_scope.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -67,7 +68,9 @@ class RecruiterTopBar extends StatelessWidget {
   final bool profileReference;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      NotificationUnreadScope(builder: _header);
+  Widget _header(BuildContext context, int count) {
     final mobile = MediaQuery.sizeOf(context).width < mobileBreakpoint;
     final darkHeader = dark && !mobile;
     final surface = darkHeader ? const Color(0xFF0D1424) : Colors.white;
@@ -83,11 +86,7 @@ class RecruiterTopBar extends StatelessWidget {
         : const Color(0xFF475569);
     final text3 = dark ? const Color(0xFF8593B0) : const Color(0xFF64748B);
     final accent = dark ? const Color(0xFF6C9BFF) : const Color(0xFF3E6FF0);
-    final showUnread = useExactUnread
-        ? hasUnread
-        : hasUnread ||
-              AppNavState.hasUnreadNotifications ||
-              AppNavState.unreadInterviews > 0;
+    final showUnread = useExactUnread ? hasUnread : count > 0;
     void openNotifications() => Navigator.of(context).pushNamed(
       candidate ? '/candidate/notifications' : '/recruiter/notifications',
     );

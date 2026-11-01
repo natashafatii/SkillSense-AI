@@ -2,6 +2,7 @@ import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/notification_list_skeleton.dart';
@@ -11,6 +12,7 @@ import '../../widgets/candidate_side_nav.dart';
 import '../../models/app_notification.dart';
 import '../../models/paginated_response.dart';
 import '../../services/notification_service.dart';
+import '../../services/notification_navigation.dart';
 import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_scope.dart';
@@ -35,16 +37,50 @@ class _CandidateNotificationsScreenState
   String? _error;
   final Set<String> _marking = {};
   int _request = 0;
+  Timer? _poller;
+  bool _sessionInvalid = false;
   bool _missingRefetchQueued = false;
 
   @override
   void initState() {
     super.initState();
+    SessionScope.invalidations.addListener(_clearSession);
     _fetch();
+    _poller = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!_sessionInvalid &&
+          !_loading &&
+          ModalRoute.of(context)?.isCurrent == true) {
+        _fetch();
+      }
+    });
+  }
+
+  void _clearSession() {
+    ++_request;
+    _sessionInvalid = true;
+    _poller?.cancel();
+    if (mounted) {
+      setState(() {
+        _items = [];
+        _unreadCount = 0;
+        _loaded = false;
+        _loading = false;
+        _error = 'Session changed.';
+      });
+    }
+  }
+
+  Future<void> _openNotification(AppNotification item) async {
+    final generation = SessionScope.generation;
+    await _markRead(item.id);
+    if (mounted && generation == SessionScope.generation) {
+      await openNotification(context, item);
+    }
+    if (mounted && generation == SessionScope.generation) _fetch();
   }
 
   Future<void> _fetch({bool more = false}) async {
-    if (_loading && _loaded) return;
+    if (_sessionInvalid || (_loading && _loaded)) return;
     final request = ++_request;
     final generation = SessionScope.generation;
     final page = more ? _page + 1 : 1;
@@ -73,6 +109,7 @@ class _CandidateNotificationsScreenState
         _items = byId.values.toList();
         _missingRefetchQueued = false;
         _unreadCount = results[1] as int;
+        NotificationService.publishUnread(_unreadCount);
         _page = page;
         _hasNext = response.hasNext;
         _loaded = true;
@@ -126,9 +163,12 @@ class _CandidateNotificationsScreenState
     try {
       final updated = await NotificationService.markRead(id);
       if (!mounted || generation != SessionScope.generation) return;
+      final serverUnread = await NotificationService.unreadCount();
+      if (!mounted || generation != SessionScope.generation) return;
       setState(() {
         _items = _items.map((item) => item.id == id ? updated : item).toList();
-        if (_unreadCount > 0) _unreadCount--;
+        _unreadCount = serverUnread;
+        NotificationService.publishUnread(_unreadCount);
       });
     } catch (error) {
       if (mounted && generation == SessionScope.generation) {
@@ -147,6 +187,8 @@ class _CandidateNotificationsScreenState
 
   @override
   void dispose() {
+    _poller?.cancel();
+    SessionScope.invalidations.removeListener(_clearSession);
     _searchController.dispose();
     super.dispose();
   }
@@ -486,7 +528,7 @@ class _CandidateNotificationsScreenState
     required Color textSecondary,
   }) {
     return PointerGestureDetector(
-      onTap: () => _markRead(notif.id),
+      onTap: () => _openNotification(notif),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         color: notif.isRead ? Colors.transparent : const Color(0xFFFAFCFF),
@@ -659,9 +701,8 @@ class _CandidateNotificationsScreenState
   }
 
   // ── MOBILE BOTTOM DOCK ───────────────────────────────────────────────────────
-  Widget _buildMobileBottomDock() => const CandidateMobileNav(
-    currentRoute: '/candidate/notifications',
-  );
+  Widget _buildMobileBottomDock() =>
+      const CandidateMobileNav(currentRoute: '/candidate/notifications');
 }
 
 // ── GRID PAINTER ─────────────────────────────────────────────────────────────

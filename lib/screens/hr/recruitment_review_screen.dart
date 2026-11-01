@@ -4,6 +4,7 @@ import '../../models/recruitment_evidence.dart';
 import '../../services/recruitment_review_controller.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/feedback_review_panel.dart';
 
 String percent(double? value, {bool ratio = false}) => value == null
     ? 'Unavailable'
@@ -775,6 +776,12 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                   if (r.transcripts != null) transcripts(r),
                   if (r.evaluations != null) evaluations(r),
                   decisions(r),
+                  FeedbackReviewPanel(
+                    key: ValueKey(
+                      'feedback-${r.application.id}-${r.interview?.id}',
+                    ),
+                    controller: controller,
+                  ),
                   section('Feedback report history', [
                     const Text(
                       'Released reports retain their original evidence identity. These are independent of behavioral analysis reports.',

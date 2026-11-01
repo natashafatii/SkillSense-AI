@@ -295,11 +295,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       ? _threshold.toStringAsFixed(2)
       : _threshold.round().toString();
   bool _autoShortlist = true;
-  final _minimumExperience = TextEditingController(text: '0');
-  String _nonPassPolicy = 'REVIEW';
-  final _educationLevels = TextEditingController();
-  final _certifications = TextEditingController();
-  bool _manualReviewRequired = false;
   bool _saving = false;
   String? _savedJobId;
   double _scrollOffset = 0;
@@ -375,15 +370,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     }
     _threshold = job.screeningThreshold.clamp(0, 100);
     _autoShortlist = job.autoShortlistEnabled;
-    _minimumExperience.text =
-        '${job.screeningCriteria['minimum_experience_years'] ?? 0}';
-    _nonPassPolicy = job.nonPassPolicy;
-    _educationLevels.text =
-        (job.screeningCriteria['education_levels'] as List? ?? []).join(', ');
-    _certifications.text =
-        (job.screeningCriteria['certifications'] as List? ?? []).join(', ');
-    _manualReviewRequired =
-        job.screeningCriteria['manual_review_required'] == true;
     final weights = job.screeningCriteria['skill_weights'];
     final names = job.skillsRequired.isNotEmpty
         ? job.skillsRequired
@@ -421,9 +407,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       _description,
       _requirements,
       _skillSearch,
-      _minimumExperience,
-      _educationLevels,
-      _certifications,
     ]) {
       controller.dispose();
     }
@@ -633,8 +616,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                           _experience,
                           (v) => setState(() => _experience = v),
                         ),
-                        const SizedBox(height: 14),
-                        _screeningPolicyFields(),
                       ]),
                       const SizedBox(height: 14),
                       _mobileCard(
@@ -1209,8 +1190,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               ),
               compact,
             ),
-            const SizedBox(height: 14),
-            _screeningPolicyFields(),
           ],
         ),
         _section(
@@ -2763,11 +2742,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       final restoredLocation = data['location']?.toString();
       final restoredWorkType = data['workType']?.toString();
       final restoredExperience = data['experience']?.toString();
-      _minimumExperience.text = data['minimumExperience']?.toString() ?? '0';
-      _educationLevels.text = data['educationLevels']?.toString() ?? '';
-      _certifications.text = data['certifications']?.toString() ?? '';
-      _manualReviewRequired = data['manualReviewRequired'] == true;
-      _nonPassPolicy = data['nonPassPolicy']?.toString() ?? 'REVIEW';
       final restoredDeadline = DateTime.tryParse(
         data['deadline']?.toString() ?? '',
       );
@@ -2848,11 +2822,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         ],
         'threshold': _threshold,
         'autoShortlist': _autoShortlist,
-        'minimumExperience': _minimumExperience.text,
-        'educationLevels': _educationLevels.text,
-        'certifications': _certifications.text,
-        'manualReviewRequired': _manualReviewRequired,
-        'nonPassPolicy': _nonPassPolicy,
         'mix': _mix,
       }),
     );
@@ -2943,77 +2912,8 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     _ => ExperienceLevel.mid,
   };
 
-  Widget _screeningPolicyFields() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      TextField(
-        key: const Key('minimum-experience'),
-        controller: _minimumExperience,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: const InputDecoration(
-          labelText: 'Minimum verified experience (years)',
-          helperText:
-              '0 means no minimum experience requirement. Unknown evidence requires review.',
-          helperMaxLines: 3,
-          border: OutlineInputBorder(),
-        ),
-      ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _educationLevels,
-        decoration: const InputDecoration(
-          labelText: 'Required education levels (comma separated)',
-        ),
-      ),
-      TextField(
-        controller: _certifications,
-        decoration: const InputDecoration(
-          labelText: 'Required certifications (comma separated)',
-        ),
-      ),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Require manual qualification review'),
-        value: _manualReviewRequired,
-        onChanged: (value) => setState(() => _manualReviewRequired = value),
-      ),
-      const SizedBox(height: 12),
-      DropdownButtonFormField<String>(
-        isExpanded: true,
-        initialValue: const {'REVIEW', 'REJECT'}.contains(_nonPassPolicy)
-            ? _nonPassPolicy
-            : 'REVIEW',
-        decoration: const InputDecoration(
-          labelText: 'Non-passing policy recommendation',
-        ),
-        items: const [
-          DropdownMenuItem(value: 'REVIEW', child: Text('Recruiter review')),
-          DropdownMenuItem(
-            value: 'REJECT',
-            child: Text('Recommend rejection for recruiter review'),
-          ),
-        ],
-        onChanged: (value) {
-          if (value != null) setState(() => _nonPassPolicy = value);
-        },
-      ),
-      const SizedBox(height: 8),
-      const Text(
-        'Policy changes affect new or explicitly rescreened assessments. Existing assessment evidence and decisions keep their saved policy.',
-      ),
-    ],
-  );
-
   Future<void> _saveRole({required bool publish}) async {
     if (_saving) return;
-    final minimumExperience = double.tryParse(_minimumExperience.text);
-    if (minimumExperience == null ||
-        !minimumExperience.isFinite ||
-        minimumExperience < 0 ||
-        minimumExperience > 80) {
-      _toast('Enter minimum experience from 0 to 80 years.');
-      return;
-    }
     if (publish || widget.initialJob != null) {
       _validatePublish();
       if (_errors.isNotEmpty) {
@@ -3046,21 +2946,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             ? widget.initialJob!.screeningThreshold
             : _threshold.roundToDouble(),
         autoShortlistEnabled: _autoShortlist,
-        nonPassPolicy: _nonPassPolicy,
+        nonPassPolicy: widget.initialJob?.nonPassPolicy ?? 'REVIEW',
         screeningCriteria: {
           ...?widget.initialJob?.screeningCriteria,
-          'minimum_experience_years': minimumExperience,
-          'education_levels': _educationLevels.text
-              .split(',')
-              .map((s) => s.trim())
-              .where((s) => s.isNotEmpty)
-              .toList(),
-          'certifications': _certifications.text
-              .split(',')
-              .map((s) => s.trim())
-              .where((s) => s.isNotEmpty)
-              .toList(),
-          'manual_review_required': _manualReviewRequired,
           'question_mix': {
             for (var i = 0; i < _mix.length; i++)
               _mixNames[i].toLowerCase(): _mix[i],
@@ -3164,40 +3052,40 @@ class _SuggestedSkillChipState extends State<_SuggestedSkillChip> {
   bool _hovered = false;
 
   @override
-  Widget build(BuildContext context) => IntrinsicWidth(
-    child: MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(99),
-        child: CustomPaint(
-          foregroundPainter: _DashedPillBorder(
-            _hovered ? widget.accentColor : widget.borderColor,
-            solid: _hovered,
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _hovered = true),
+    onExit: (_) => setState(() => _hovered = false),
+    child: InkWell(
+      onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(99),
+      child: CustomPaint(
+        foregroundPainter: _DashedPillBorder(
+          _hovered ? widget.accentColor : widget.borderColor,
+          solid: _hovered,
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _hovered
+                ? widget.accentColor.withValues(alpha: .08)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(99),
           ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: _hovered
-                  ? widget.accentColor.withValues(alpha: .08)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(99),
-            ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 11),
             child: SizedBox(
               height: widget.height,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(width: 11),
-                  Text(
-                    '+ ${widget.name}',
-                    style: GoogleFonts.inter(
-                      fontSize: 12.5,
-                      color: _hovered ? widget.accentColor : widget.textColor,
-                    ),
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  '+ ${widget.name}',
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    color: _hovered ? widget.accentColor : widget.textColor,
                   ),
-                  const SizedBox(width: 11),
-                ],
+                ),
               ),
             ),
           ),

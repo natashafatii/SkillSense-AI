@@ -1,14 +1,24 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../widgets/feedback_content_view.dart';
 import '../../models/candidate_feedback.dart';
 import '../../models/paginated_response.dart';
 import '../../services/feedback_service.dart';
 import '../../services/session_scope.dart';
+import '../../services/media/interview_media_route_observer.dart';
 import '../../widgets/candidate_scaffold.dart';
 
 class CandidateFeedbackReportScreen extends StatefulWidget {
   final Future<PaginatedResponse<CandidateFeedback>> Function(int page)?
   loadFeedback;
-  const CandidateFeedbackReportScreen({super.key, this.loadFeedback});
+  final String? reportId, interviewId, applicationId;
+  const CandidateFeedbackReportScreen({
+    super.key,
+    this.loadFeedback,
+    this.reportId,
+    this.interviewId,
+    this.applicationId,
+  });
 
   @override
   State<CandidateFeedbackReportScreen> createState() =>
@@ -16,24 +26,60 @@ class CandidateFeedbackReportScreen extends StatefulWidget {
 }
 
 class _CandidateFeedbackReportScreenState
-    extends State<CandidateFeedbackReportScreen> {
+    extends State<CandidateFeedbackReportScreen>
+    with WidgetsBindingObserver, RouteAware {
   PaginatedResponse<CandidateFeedback>? _data;
   bool _loading = true;
   String? _error;
   int _page = 1, _request = 0;
+  Timer? _refresh;
+  final int _session = SessionScope.generation;
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF475569);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     SessionScope.invalidations.addListener(_clearSession);
     _load();
+    _refresh = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!_loading && ModalRoute.of(context)?.isCurrent == true) _load();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    interviewMediaRouteObserver.unsubscribe(this);
+    final route = ModalRoute.of(context);
+    if (route != null) interviewMediaRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() {
+    ++_request;
+    setState(() {
+      _data = null;
+      _loading = true;
+    });
+  }
+
+  @override
+  void didPopNext() => _load();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      _load();
+    }
   }
 
   void _clearSession() {
     if (!mounted) return;
     _request++;
+    _refresh?.cancel();
     setState(() {
       _data = null;
       _loading = false;
@@ -42,6 +88,7 @@ class _CandidateFeedbackReportScreenState
   }
 
   Future<void> _load([int? page]) async {
+    if (_session != SessionScope.generation) return;
     final request = ++_request;
     final generation = SessionScope.generation;
     final selectedPage = page ?? _page;
@@ -51,16 +98,38 @@ class _CandidateFeedbackReportScreenState
       _data = null;
     });
     try {
-      final data =
-          await (widget.loadFeedback?.call(selectedPage) ??
-              FeedbackService.list(page: selectedPage));
+      final data = widget.reportId == null
+          ? await (widget.loadFeedback?.call(selectedPage) ??
+                ((widget.interviewId != null || widget.applicationId != null)
+                    ? FeedbackService.forIdentity(
+                        interviewId: widget.interviewId,
+                        applicationId: widget.applicationId,
+                      )
+                    : FeedbackService.list(page: selectedPage)))
+          : PaginatedResponse<CandidateFeedback>(
+              count: 1,
+              results: [await FeedbackService.detail(widget.reportId!)],
+            );
       if (!mounted ||
           request != _request ||
           generation != SessionScope.generation) {
         return;
       }
       setState(() {
-        _data = data;
+        _data = PaginatedResponse<CandidateFeedback>(
+          count: data.count,
+          next: data.next,
+          previous: data.previous,
+          results: data.results
+              .where(
+                (row) =>
+                    (widget.interviewId == null ||
+                        row.interviewId == widget.interviewId) &&
+                    (widget.applicationId == null ||
+                        row.applicationId == widget.applicationId),
+              )
+              .toList(),
+        );
         _page = selectedPage;
         _loading = false;
       });
@@ -80,6 +149,9 @@ class _CandidateFeedbackReportScreenState
   @override
   void dispose() {
     _request++;
+    _refresh?.cancel();
+    interviewMediaRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     SessionScope.invalidations.removeListener(_clearSession);
     super.dispose();
   }
@@ -267,77 +339,7 @@ class _CandidateFeedbackReportScreenState
   List<Widget> _report(CandidateFeedbackReport report) => [
     Text(
       'Revision ${report.revision} · Released ${report.releasedAt.toLocal()}',
-      style: const TextStyle(color: _muted, fontSize: 12),
     ),
-    const SizedBox(height: 12),
-    Text(
-      'Interview answer performance: ${report.performance == null ? 'Unavailable' : '${report.performance!.toStringAsFixed(1)}%'}',
-      style: const TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
-        color: _ink,
-      ),
-    ),
-    const SizedBox(height: 8),
-    Text(report.summary),
-    Text(
-      'Evidence coverage: ${(report.coverage * 100).toStringAsFixed(0)}% · ${report.assessedQuestions}/${report.totalQuestions} questions assessed',
-    ),
-    if (report.dimensions.isNotEmpty) ...[
-      _heading('Performance dimensions'),
-      for (final dimension in report.dimensions)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${dimension.label}: ${dimension.percentage.toStringAsFixed(1)}% (${dimension.assessedAnswers} assessed answers)',
-              ),
-              const SizedBox(height: 5),
-              LinearProgressIndicator(value: dimension.percentage / 100),
-            ],
-          ),
-        ),
-    ],
-    if (report.strengths.isNotEmpty) ...[
-      _heading('Supported strengths'),
-      for (final finding in report.strengths) _bullet(finding.text),
-    ],
-    if (report.gaps.isNotEmpty) ...[
-      _heading('Areas to improve'),
-      for (final finding in report.gaps) _bullet(finding.text),
-    ],
-    if (report.suggestions.isNotEmpty) ...[
-      _heading('Practice suggestions'),
-      for (final suggestion in report.suggestions) _bullet(suggestion.text),
-    ],
-    if (report.publicSummary != null ||
-        report.publicSuggestions.isNotEmpty) ...[
-      _heading('Recruiter guidance'),
-      if (report.publicSummary != null) Text(report.publicSummary!),
-      for (final text in report.publicSuggestions) _bullet(text),
-    ],
-    if (report.limitations.isNotEmpty) ...[
-      _heading('Report limitations'),
-      for (final text in report.limitations) _bullet(text),
-    ],
+    FeedbackContentView(content: report),
   ];
-
-  Widget _heading(String text) => Padding(
-    padding: const EdgeInsets.only(top: 18, bottom: 8),
-    child: Text(
-      text,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
-        color: _ink,
-      ),
-    ),
-  );
-
-  Widget _bullet(String text) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Text('• $text'),
-  );
 }

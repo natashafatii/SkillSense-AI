@@ -92,4 +92,5 @@ tooling/browser_qa/run_flutter_tests.mjs
 *.[mM][dD]
 docs/
 **/docs/
+.vscode/
 

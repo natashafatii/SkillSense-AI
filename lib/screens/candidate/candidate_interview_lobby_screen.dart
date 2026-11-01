@@ -664,17 +664,19 @@ class _CandidateInterviewLobbyScreenState
               fontWeight: FontWeight.w500,
             ),
           ),
-          SwitchListTile(
-            title: const Text('Include video'),
-            subtitle: const Text(
-              'Audio-only interviews do not require camera evidence. The session mode is fixed once started.',
+          Material(
+            child: SwitchListTile(
+              title: const Text('Include video'),
+              subtitle: const Text(
+                'Audio-only interviews do not require camera evidence. The session mode is fixed once started.',
+              ),
+              value: _videoRequired,
+              onChanged: _starting || _startUncertain
+                  ? null
+                  : (value) => setState(() {
+                      _videoRequired = value;
+                    }),
             ),
-            value: _videoRequired,
-            onChanged: _starting || _startUncertain
-                ? null
-                : (value) => setState(() {
-                    _videoRequired = value;
-                  }),
           ),
           if (_startError != null)
             Semantics(liveRegion: true, child: Text(_startError!)),
