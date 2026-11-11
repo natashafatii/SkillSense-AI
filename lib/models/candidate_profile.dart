@@ -29,28 +29,13 @@ class CandidateProfile {
   /// but the DRF serializer constrains to 150).
   static const int headlineMaxLength = 150;
 
-  /// Uses completion calculated by the API from the saved database record.
-  /// Older API versions fall back to the same nine-field calculation.
-  int get completionPercentage {
-    if (_savedCompletionPercentage != null) return _savedCompletionPercentage;
-    final completed = [
-      user.firstName?.trim().isNotEmpty == true,
-      user.lastName?.trim().isNotEmpty == true,
-      user.email.trim().isNotEmpty,
-      phone.trim().isNotEmpty,
-      location.trim().isNotEmpty,
-      headline.trim().isNotEmpty,
-      linkedinUrl.trim().isNotEmpty,
-      portfolioUrl.trim().isNotEmpty,
-      yearsExperience != null && yearsExperience! >= 0,
-    ];
-    return (completed.where((value) => value).length / completed.length * 100)
-        .round();
-  }
+  /// Server-calculated completion; absent or invalid values remain unavailable.
+  int? get completionPercentage => _savedCompletionPercentage;
 
   factory CandidateProfile.fromJson(Map<String, dynamic> json) {
     final user = UserSummary.fromJson(json['user'] as Map<String, dynamic>);
     final imageUrl = imageUrlFrom(json);
+    final completion = double.tryParse('${json['completion_percentage']}');
     return CandidateProfile(
       user: user.withProfileImageUrl(imageUrl),
       phone: json['phone'] as String? ?? '',
@@ -59,11 +44,13 @@ class CandidateProfile {
       portfolioUrl: json['portfolio_url'] as String? ?? '',
       yearsExperience: (json['years_experience'] as num?)?.toInt(),
       headline: json['headline'] as String? ?? '',
-      savedCompletionPercentage: switch (json['completion_percentage']) {
-        num value when value.isFinite && value >= 0 && value <= 100 =>
-          value.round(),
-        _ => null,
-      },
+      savedCompletionPercentage:
+          completion != null &&
+              completion.isFinite &&
+              completion >= 0 &&
+              completion <= 100
+          ? completion.round()
+          : null,
     );
   }
 

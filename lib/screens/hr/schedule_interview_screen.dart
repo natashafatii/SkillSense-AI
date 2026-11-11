@@ -1,11 +1,11 @@
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
-import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/question_preparation_panel.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../models/application.dart';
 import '../../models/interview.dart';
@@ -53,9 +53,17 @@ class ScheduleInterviewScreen extends StatefulWidget {
 }
 
 class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
-  static const _ink = Color(0xFF17233B);
-  static const _muted = Color(0xFF8190A8);
-  static const _edge = Color(0xFFE4EAF3);
+  bool get _dark => Theme.of(context).brightness == Brightness.dark;
+  Color get _ink => _dark ? const Color(0xFFE8EDF8) : const Color(0xFF17233B);
+  Color get _muted => _dark ? const Color(0xFFA3AFC8) : const Color(0xFF66748F);
+  Color get _edge => _dark ? const Color(0xFF33415B) : const Color(0xFFE1E6EF);
+  Color get _surface => _dark ? const Color(0xFF172237) : Colors.white;
+  Color get _background =>
+      _dark ? const Color(0xFF0D1424) : const Color(0xFFF6F8FD);
+  Color get _activeFill => _blue.withValues(alpha: _dark ? 0.22 : 0.10);
+  final _message = TextEditingController();
+  final _reviewKey = GlobalKey();
+  bool _reviewExpanded = false;
   static const _blue = Color(0xFF4268F0);
   static const _slots = <(int, int)>[
     (9, 0),
@@ -78,7 +86,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   String? _busyApplicationId;
   String? _error;
   bool _loading = true;
-  bool _hasAnyShortlisted = false;
   int _request = 0;
   final _session = SessionScope.generation;
   final Set<String> _scheduleReviewRequired = {};
@@ -122,6 +129,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _approvedQuestionSet = null;
       _approvedQuestionRevision = null;
       _error = 'Account session changed. Reopen scheduling.';
+      _message.clear();
+      _reviewExpanded = false;
     });
     for (final controller in _questionTexts.values) {
       controller.clear();
@@ -142,6 +151,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   @override
   void dispose() {
     SessionScope.invalidations.removeListener(_clearSession);
+    _message.dispose();
     for (final controller in _questionTexts.values) {
       controller.dispose();
     }
@@ -196,7 +206,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         _jobId = requested ?? (jobs.length == 1 ? jobs.first.id : null);
         _awaiting = [];
         _booked = [];
-        _hasAnyShortlisted = false;
         if (_jobId == null) _loading = false;
       });
       if (_jobId != null) await _loadAwaiting();
@@ -257,7 +266,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         setState(() {
           _awaiting = shortlisted;
           _booked = booked;
-          _hasAnyShortlisted = shortlisted.isNotEmpty;
           _loading = false;
         });
         final selected =
@@ -272,7 +280,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         }
       }
       setState(() {
-        _hasAnyShortlisted = shortlisted.isNotEmpty;
         _awaiting = shortlisted;
         _booked = booked;
         if (!shortlisted.any((app) => app.id == _applicationId)) {
@@ -337,6 +344,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _selectedSlot = null;
       _rowErrors.clear();
       _interview = null;
+      _message.clear();
+      _reviewExpanded = false;
     });
     _loadAwaiting();
   }
@@ -375,9 +384,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
 
   String _time(DateTime date) =>
       '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-
-  String _slotLabel(DateTime date) =>
-      '${_time(date)} ${_days[date.weekday - 1]}';
 
   bool _canSchedule(Application app) =>
       _isShortlisted(app) &&
@@ -435,6 +441,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         _booked = [...?_booked, interview];
         _applicationId = null;
         _selectedSlot = null;
+        _message.clear();
+        _reviewExpanded = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Interview invitation scheduled.')),
@@ -506,92 +514,83 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     }
   }
 
-  bool get _showEmptyState =>
-      _applicationId == null &&
-      !_hasAnyShortlisted &&
-      (_booked?.isEmpty ?? true);
+  Application? get _selectedApplication =>
+      _awaiting.where((app) => app.id == _applicationId).firstOrNull;
 
-  Widget _buildLoadingSkeleton(bool compact) => Padding(
-    padding: EdgeInsets.all(compact ? 16 : 22),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final height in [28.0, 160.0, 110.0]) ...[
-          Container(
-            height: height,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE9EDF5),
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          const SizedBox(height: 14),
-        ],
-      ],
-    ),
-  );
+  String _dateLabel(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${_days[date.weekday - 1]}, ${date.day} ${months[date.month - 1]} ${date.year}';
+  }
 
-  Widget _buildJobPicker(bool compact) => Align(
-    alignment: Alignment.topLeft,
-    child: Padding(
-      padding: EdgeInsets.all(compact ? 16 : 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Select a job to schedule interviews.',
-            style: GoogleFonts.spaceGrotesk(
-              color: _ink,
-              fontSize: compact ? 17 : 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButton<String>(
-            hint: const Text('Select an active job'),
-            value: _jobId,
-            items: [
-              for (final job in _jobs)
-                DropdownMenuItem(value: job.id, child: Text(job.title)),
-            ],
-            onChanged: _changeJob,
-          ),
-        ],
-      ),
-    ),
-  );
+  String get _zone {
+    final offset = DateTime.now().timeZoneOffset;
+    final minutes = offset.inMinutes.abs();
+    return '${DateTime.now().timeZoneName} · UTC${offset.isNegative ? '-' : '+'}'
+        '${(minutes ~/ 60).toString().padLeft(2, '0')}:'
+        '${(minutes % 60).toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 900;
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FD),
-      body: Stack(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      const RecruiterTopBar(
-                        pageTitle: 'Schedule interview',
-                        breadcrumbSegments: ['Schedule interview'],
-                      ),
-                      Expanded(
-                        child: MobileEdgeShadowWrapper(
-                          child: _loading
-                              ? _buildLoadingSkeleton(compact)
-                              : _error != null
-                              ? Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
+      backgroundColor: _background,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            if (compact)
+              _mobileHeader()
+            else
+              RecruiterTopBar(
+                pageTitle: 'Schedule interview',
+                mobileTitle: 'Schedule interview',
+                dark: _dark,
+                breadcrumbSegments: const ['Recruitment', 'Interviews'],
+              ),
+            Expanded(
+              child: _loading
+                  ? Center(child: CircularProgressIndicator(color: _blue))
+                  : SingleChildScrollView(
+                      key: const Key('schedule-scroll'),
+                      padding: EdgeInsets.all(compact ? 16 : 28),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1520),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _pageHeader(compact),
+                              const SizedBox(height: 24),
+                              if (!compact) ...[
+                                _progress(),
+                                const SizedBox(height: 24),
+                              ],
+                              if (_error != null) ...[
+                                _panel(
+                                  child: Row(
                                     children: [
-                                      Text(
-                                        _error!,
-                                        style: const TextStyle(
-                                          color: Color(0xFFDC354A),
+                                      Expanded(
+                                        child: Text(
+                                          _error!,
+                                          style: TextStyle(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.error,
+                                          ),
                                         ),
                                       ),
                                       TextButton(
@@ -600,421 +599,850 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                                       ),
                                     ],
                                   ),
-                                )
-                              : _jobId == null && _jobs.length > 1
-                              ? _buildJobPicker(compact)
-                              : _showEmptyState
-                              ? _buildEmptyState(compact)
-                              : SingleChildScrollView(
-                                  padding: EdgeInsets.all(compact ? 16 : 22),
-                                  child: Center(
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 1240,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          if (_jobs.length > 1) ...[
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: DropdownButton<String>(
-                                                value: _jobId,
-                                                items: [
-                                                  for (final job in _jobs)
-                                                    DropdownMenuItem(
-                                                      value: job.id,
-                                                      child: Text(job.title),
-                                                    ),
-                                                ],
-                                                onChanged:
-                                                    _busyApplicationId == null
-                                                    ? _changeJob
-                                                    : null,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 14),
-                                          ],
-                                          if (compact)
-                                            Column(
-                                              children: [
-                                                _weekPanel(),
-                                                const SizedBox(height: 14),
-                                                _awaitingPanel(),
-                                                const SizedBox(height: 14),
-                                                _invitationPanel(),
-                                              ],
-                                            )
-                                          else
-                                            Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Expanded(
-                                                  flex: 14,
-                                                  child: Column(
-                                                    children: [
-                                                      _weekPanel(),
-                                                      const SizedBox(
-                                                        height: 14,
-                                                      ),
-                                                      _invitationPanel(),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 14),
-                                                Expanded(
-                                                  flex: 10,
-                                                  child: _awaitingPanel(),
-                                                ),
-                                              ],
-                                            ),
-                                          if (_applicationId != null) ...[
-                                            const SizedBox(height: 14),
-                                            QuestionPreparationPanel(
-                                              key: ValueKey(
-                                                '$_applicationId-$_questionReload',
-                                              ),
-                                              application: _awaiting
-                                                  .where(
-                                                    (app) =>
-                                                        app.id ==
-                                                        _applicationId,
-                                                  )
-                                                  .firstOrNull,
-                                              applicationId: _applicationId!,
-                                              client: widget.questionClient,
-                                              onApprovalChanged: (setId, revision) {
-                                                setState(() {
-                                                  _approvedQuestionApplication =
-                                                      setId == null
-                                                      ? null
-                                                      : _applicationId;
-                                                  _approvedQuestionSet = setId;
-                                                  _approvedQuestionRevision =
-                                                      revision;
-                                                });
-                                              },
-                                            ),
-                                          ],
-                                          if (_interview != null) ...[
-                                            const SizedBox(height: 14),
-                                            _questionPanel(),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  ),
                                 ),
+                                const SizedBox(height: 16),
+                              ],
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  if (compact) {
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _candidatePanel(compact),
+                                        const SizedBox(height: 16),
+                                        _availabilityPanel(compact),
+                                        const SizedBox(height: 16),
+                                        _invitationPanel(compact),
+                                        const SizedBox(height: 16),
+                                        _safeguards(),
+                                      ],
+                                    );
+                                  }
+                                  final left = Column(
+                                    children: [
+                                      _candidatePanel(false),
+                                      const SizedBox(height: 16),
+                                      _availabilityPanel(false),
+                                    ],
+                                  );
+                                  if (constraints.maxWidth < 1180) {
+                                    return Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(flex: 6, child: left),
+                                        const SizedBox(width: 18),
+                                        Expanded(
+                                          flex: 5,
+                                          child: Column(
+                                            children: [
+                                              _invitationPanel(false),
+                                              const SizedBox(height: 16),
+                                              _safeguards(),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }
+                                  return Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(flex: 46, child: left),
+                                      const SizedBox(width: 18),
+                                      Expanded(
+                                        flex: 34,
+                                        child: _invitationPanel(false),
+                                      ),
+                                      const SizedBox(width: 18),
+                                      Expanded(
+                                        flex: 24,
+                                        child: Column(
+                                          children: [_safeguards()],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              _questionReview(),
+                              if (_interview != null) ...[
+                                const SizedBox(height: 18),
+                                _questionPanel(),
+                              ],
+                              const SizedBox(height: 24),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: compact
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    border: Border(top: BorderSide(color: _edge)),
                   ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: _sendButton(true),
+                  ),
+                ),
+                const RecruiterMobileNav(
+                  currentRoute: '/recruiter/schedule-interview',
+                  key: Key('schedule-mobile-dock'),
                 ),
               ],
+            )
+          : null,
+    );
+  }
+
+  Widget _mobileHeader() => Container(
+    height: 64,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    decoration: BoxDecoration(
+      color: _surface,
+      border: Border(bottom: BorderSide(color: _edge)),
+    ),
+    child: Row(
+      children: [
+        SvgPicture.asset('assets/images/logo.svg', width: 24, height: 24),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Schedule interview',
+            style: GoogleFonts.inter(
+              color: _ink,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          if (compact)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildMobileBottomDock(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool compact) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: compact ? 54 : 64,
-              height: compact ? 54 : 64,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(compact ? 17 : 20),
-                border: Border.all(color: _edge),
-              ),
-              child: Center(
-                child: Icon(
-                  Icons.calendar_month_rounded,
-                  size: compact ? 20 : 24,
-                  color: _muted,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              compact ? 'Nothing scheduled' : 'No interviews scheduled',
-              style: GoogleFonts.inter(
-                color: _ink,
-                fontSize: compact ? 15 : 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: compact ? -0.03 : -0.025,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: compact ? 280 : 380),
-              child: Text(
-                compact
-                    ? 'Booked interviews show up here.'
-                    : 'Invite a shortlisted candidate to book an AI interview. Booked slots appear here as a weekly agenda.',
-                style: GoogleFonts.inter(
-                  color: _muted,
-                  fontSize: compact ? 11 : 12.5,
-                  height: 1.65,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              height: compact ? 38 : 40,
-              decoration: BoxDecoration(
-                color: RecruiterButtonStyle.blue,
-                borderRadius: BorderRadius.circular(11),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF4D7BFA).withValues(alpha: 0.25),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ElevatedButton(
-                style: RecruiterButtonStyle.primary(
-                  ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: compact ? 22 : 26,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                  ),
-                ),
-                onPressed: () {
-                  final jobId = _jobId;
-                  Navigator.of(context).pushNamed(
-                    jobId == null || jobId.isEmpty
-                        ? '/recruiter/pipeline'
-                        : '/recruiter/jobs/${Uri.encodeComponent(jobId)}/pipeline',
-                  );
-                },
-                child: Text(
-                  'Go to pipeline',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-            if (!compact) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Needs at least one shortlisted candidate',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF94A3B8),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w400,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildMobileBottomDock() => const RecruiterMobileNav(
-    currentRoute: '/recruiter/schedule-interview',
-    key: Key('schedule-mobile-dock'),
-  );
-
-  Widget _weekPanel() => _panel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(child: _heading('This week')),
-            Text(
-              '${_monday.month}/${_monday.day}–${_dateFor(4).month}/${_dateFor(4).day}',
-              style: GoogleFonts.inter(color: _muted, fontSize: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: _surface,
+            border: Border.all(color: _edge),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            'STEP 1–3',
+            style: GoogleFonts.inter(
+              color: _muted,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
             ),
-          ],
-        ),
-        const Divider(height: 26, color: _edge),
-        Row(
-          children: [
-            for (var day = 0; day < 5; day++) ...[
-              if (day > 0) const SizedBox(width: 7),
-              Expanded(child: _dayCard(day)),
-            ],
-          ],
-        ),
-        const SizedBox(height: 16),
-        _tick('${_days[_selectedDay].toUpperCase()} SLOTS · AGENT CAPACITY'),
-        const SizedBox(height: 9),
-        Wrap(
-          spacing: 7,
-          runSpacing: 7,
-          children: [
-            for (final time in _slots) _slotChip(_slotFor(_selectedDay, time)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        const Divider(height: 1, color: _edge),
-        const SizedBox(height: 11),
-        _tick('AGENT CONFIG'),
-        const SizedBox(height: 7),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            _configChip('Retell · voice EN-F2'),
-            _configChip('Recruiter-reviewed questions'),
-            _configChip('Proctoring on'),
-            _configChip('Recording on'),
-          ],
+          ),
         ),
       ],
     ),
   );
 
-  Widget _dayCard(int day) {
-    final date = _dateFor(day);
-    final selected = day == _selectedDay;
-    return InkWell(
-      onTap: _busyApplicationId == null
-          ? () => setState(() {
-              _selectedDay = day;
-              _selectedSlot = null;
-            })
-          : null,
-      borderRadius: BorderRadius.circular(11),
-      child: Container(
-        height: 72,
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE5ECFF) : const Color(0xFFFCFDFF),
-          border: Border.all(color: selected ? const Color(0xFFBCD0FF) : _edge),
-          borderRadius: BorderRadius.circular(11),
+  Widget _pageHeader(bool compact) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        compact ? 'RECRUITER WORKSPACE' : 'RECRUITMENT / INTERVIEWS',
+        style: GoogleFonts.inter(
+          color: _blue,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.4,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _tick(_days[day].toUpperCase()),
-            Text(
-              '${date.day}',
-              style: GoogleFonts.jetBrainsMono(
+      ),
+      const SizedBox(height: 9),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              'Schedule an interview',
+              style: GoogleFonts.inter(
                 color: _ink,
-                fontSize: 16,
+                fontSize: compact ? 23 : 28,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.8,
+              ),
+            ),
+          ),
+          if (!compact) ...[
+            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: _surface,
+                border: Border.all(color: _edge),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Text(
+                '• Retell AI · Voice Interview',
+                style: GoogleFonts.inter(color: _ink, fontSize: 11),
+              ),
+            ),
+          ],
+        ],
+      ),
+      const SizedBox(height: 8),
+      _body(
+        compact
+            ? 'Confirm a candidate and select a free slot.'
+            : 'Choose a shortlisted candidate, reserve a time, and send a professional invitation.',
+      ),
+    ],
+  );
+
+  Widget _progress() => Row(
+    children: [
+      for (var i = 0; i < 3; i++) ...[
+        if (i > 0)
+          Expanded(child: Divider(color: _edge, indent: 10, endIndent: 10)),
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: i < 2 ? _blue : _surface,
+          ),
+          child: Center(
+            child: Text(
+              '${i + 1}',
+              style: TextStyle(
+                color: i < 2 ? Colors.white : _muted,
+                fontSize: 10,
                 fontWeight: FontWeight.w700,
               ),
             ),
-            Text(
-              _booked == null ? '—' : '${_bookedCount(day)} booked',
-              style: GoogleFonts.inter(color: _muted, fontSize: 9),
-            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          ['Candidate', 'Availability', 'Invitation'][i],
+          style: GoogleFonts.inter(
+            color: _muted,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ],
+  );
+
+  Widget _candidatePanel(bool compact) => _panel(
+    key: const Key('schedule-candidate-card'),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _heading(compact ? '01 · Candidate' : '01 · Candidate and role'),
+        if (!compact) ...[
+          const SizedBox(height: 6),
+          _body('Only shortlisted candidates are available for scheduling.'),
+        ],
+        const SizedBox(height: 18),
+        _label('Job opening'),
+        const SizedBox(height: 8),
+        _dropdown(
+          key: const Key('schedule-job-dropdown'),
+          value: _jobId,
+          hint: 'Select a job opening',
+          items: [
+            for (final job in _jobs)
+              DropdownMenuItem(
+                value: job.id,
+                child: Text(
+                  job.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
           ],
+          onChanged: _busyApplicationId == null ? _changeJob : null,
+        ),
+        const SizedBox(height: 18),
+        _label('Candidate'),
+        const SizedBox(height: 8),
+        _dropdown(
+          key: const Key('schedule-candidate-dropdown'),
+          value: _selectedApplication?.id,
+          hint: _jobId == null
+              ? 'Select a job first'
+              : 'Select a shortlisted candidate',
+          items: [
+            for (final app in _awaiting)
+              DropdownMenuItem(
+                value: app.id,
+                child: Text(
+                  '${_candidateName(app)}${app.resumeScore == null ? '' : ' · ${_scoreText(app.resumeScore!)}% match'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: _busyApplicationId != null
+              ? null
+              : (id) {
+                  final app = _awaiting
+                      .where((app) => app.id == id)
+                      .firstOrNull;
+                  if (app != null) _selectForReview(app);
+                },
+        ),
+        if (_jobId != null && _awaiting.isEmpty) ...[
+          const SizedBox(height: 12),
+          _body(
+            _jobs.isEmpty
+                ? 'Create an active role to begin scheduling.'
+                : 'No eligible shortlisted candidates for this role.',
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).pushNamed('/recruiter/pipeline'),
+            child: const Text('Go to pipeline'),
+          ),
+        ],
+      ],
+    ),
+  );
+
+  Widget _dropdown({
+    required Key key,
+    required String? value,
+    required String hint,
+    required List<DropdownMenuItem<String>> items,
+    required ValueChanged<String?>? onChanged,
+  }) => DropdownButtonFormField<String>(
+    key: key,
+    initialValue: value,
+    isExpanded: true,
+    dropdownColor: _surface,
+    icon: Icon(Icons.keyboard_arrow_down_rounded, color: _ink),
+    style: GoogleFonts.inter(color: _ink, fontSize: 12),
+    decoration: _inputDecoration(),
+    hint: Text(hint, style: GoogleFonts.inter(color: _muted, fontSize: 12)),
+    items: items,
+    onChanged: items.isEmpty ? null : onChanged,
+  );
+
+  InputDecoration _inputDecoration() => InputDecoration(
+    filled: true,
+    fillColor: _surface,
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: _edge),
+    ),
+    disabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: _edge),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: _blue, width: 1.5),
+    ),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: _edge),
+    ),
+  );
+
+  Widget _availabilityPanel(bool compact) => _panel(
+    key: const Key('schedule-availability-card'),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _heading(compact ? '02 · Date & time' : '02 · Choose date and time'),
+        const SizedBox(height: 7),
+        _body(_zone),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            for (var day = 0; day < 5; day++) ...[
+              if (day > 0) const SizedBox(width: 6),
+              Expanded(child: _dayCard(day, compact)),
+            ],
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (!compact) ...[
+          _label('Available starts · Voice interview'),
+          const SizedBox(height: 9),
+        ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = compact ? 3 : 4;
+            final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final time in _slots)
+                  SizedBox(
+                    width: width,
+                    child: _slotChip(_slotFor(_selectedDay, time)),
+                  ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _body(
+          'Booked and past times remain visible but cannot be selected.',
+          size: 10,
+        ),
+      ],
+    ),
+  );
+
+  Widget _dayCard(int day, bool compact) {
+    final date = _dateFor(day), selected = day == _selectedDay;
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: InkWell(
+        key: ValueKey('schedule-day-$day'),
+        onTap: _busyApplicationId == null
+            ? () => setState(() {
+                _selectedDay = day;
+                _selectedSlot = null;
+              })
+            : null,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          height: compact ? 66 : 82,
+          decoration: BoxDecoration(
+            color: selected ? _activeFill : _surface,
+            border: Border.all(
+              color: selected ? _blue : _edge,
+              width: selected ? 1.5 : 1,
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _days[day].toUpperCase(),
+                style: GoogleFonts.inter(
+                  color: _muted,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                '${date.day}',
+                style: GoogleFonts.inter(
+                  color: _ink,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (!compact) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _booked == null ? '—' : '${_bookedCount(day)} booked',
+                  style: GoogleFonts.inter(color: _muted, fontSize: 9),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _slotChip(DateTime slot) {
-    final taken = _taken(slot) || !slot.isAfter(DateTime.now());
+    final taken =
+        _booked == null || _taken(slot) || !slot.isAfter(DateTime.now());
     final selected = _selectedSlot != null && _sameMinute(_selectedSlot!, slot);
-    return ChoiceChip(
-      label: Text(
-        _time(slot),
-        style: GoogleFonts.jetBrainsMono(
-          fontSize: 10,
-          color: taken
-              ? const Color(0xFFADB8C9)
-              : selected
-              ? _blue
-              : _muted,
-          decoration: taken ? TextDecoration.lineThrough : null,
+    return SizedBox(
+      height: 38,
+      child: OutlinedButton(
+        key: ValueKey('schedule-slot-${_time(slot)}'),
+        onPressed: taken || _busyApplicationId != null
+            ? null
+            : () => setState(() {
+                _selectedSlot = slot;
+                _rowErrors.clear();
+              }),
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          foregroundColor: selected ? _blue : _ink,
+          disabledForegroundColor: _muted.withValues(alpha: 0.45),
+          backgroundColor: selected ? _activeFill : _surface,
+          side: BorderSide(
+            color: selected ? _blue : _edge,
+            width: selected ? 1.5 : 1,
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+        ),
+        child: Text(
+          _time(slot),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            decoration: taken ? TextDecoration.lineThrough : null,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          ),
         ),
       ),
-      selected: selected,
-      onSelected: taken || _busyApplicationId != null
-          ? null
-          : (_) => setState(() {
-              _selectedSlot = slot;
-              _rowErrors.clear();
-            }),
-      selectedColor: const Color(0xFFE4ECFF),
-      backgroundColor: Colors.white,
-      side: BorderSide(color: selected ? const Color(0xFFBCD0FF) : _edge),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      showCheckmark: false,
-      visualDensity: VisualDensity.compact,
     );
   }
 
-  Widget _awaitingPanel() => _panel(
-    padding: EdgeInsets.zero,
-    hot: true,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _summaryRow(String label, String value) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 11),
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: _edge)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 17, 16, 13),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Awaiting schedule',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: _ink,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 9),
-              _configChip('SHORTLIST · ${_awaiting.length}', active: true),
-            ],
-          ),
-        ),
-        const Divider(height: 1, color: _edge),
-        if (!_loading && _awaiting.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(28),
-            child: Center(
-              child: Text(
-                'No shortlisted candidates yet',
-                style: GoogleFonts.inter(color: _muted, fontSize: 11),
-              ),
+        Text(label, style: GoogleFonts.inter(color: _muted, fontSize: 11)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.inter(
+              color: _ink,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        for (var index = 0; index < _awaiting.length; index++) ...[
-          if (index > 0) const Divider(height: 1, color: _edge),
-          _candidateRow(_awaiting[index]),
-        ],
+        ),
       ],
     ),
   );
+
+  Widget _invitationPanel(bool compact) => _panel(
+    key: const Key('schedule-invitation-card'),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _heading(compact ? '03 · Invitation' : '03 · Invitation details'),
+        const SizedBox(height: 7),
+        _body('Review the session before sending.'),
+        const SizedBox(height: 5),
+        _summaryRow(
+          'Candidate',
+          _selectedApplication == null
+              ? 'Select a candidate'
+              : _candidateName(_selectedApplication!),
+        ),
+        _summaryRow('Date', _dateLabel(_dateFor(_selectedDay))),
+        _summaryRow(
+          'Time',
+          _selectedSlot == null
+              ? 'Select a time'
+              : '${_time(_selectedSlot!)} ${DateTime.now().timeZoneName}',
+        ),
+        _summaryRow('Duration', 'Set by interview agent'),
+        _summaryRow('Interview type', 'Retell AI · Voice'),
+        const SizedBox(height: 18),
+        _label('Optional message to candidate'),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _message,
+          minLines: 3,
+          maxLines: 5,
+          style: GoogleFonts.inter(color: _ink, fontSize: 12),
+          decoration: _inputDecoration().copyWith(
+            hintText: 'We look forward to speaking with you.',
+            hintStyle: TextStyle(color: _muted),
+          ),
+        ),
+        const SizedBox(height: 6),
+        _body(
+          'Preview draft only. Invitations currently use the standard message.',
+          size: 10,
+        ),
+        const SizedBox(height: 10),
+        _deliveryOption('Email invitation'),
+        _deliveryOption('In-app invitation'),
+        const SizedBox(height: 5),
+        _body('Delivery channels are managed automatically.', size: 10),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _blue.withValues(alpha: 0.04),
+            border: Border.all(color: _blue.withValues(alpha: 0.18)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline_rounded, size: 15, color: _blue),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _body(
+                  'The candidate receives a preparation link and device-check instructions. The invitation is sent only after you confirm.',
+                  size: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_applicationId != null && _rowErrors[_applicationId] != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            _rowErrors[_applicationId]!,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: 12,
+            ),
+          ),
+        ],
+        const SizedBox(height: 18),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            OutlinedButton(
+              onPressed: _selectedApplication != null && _selectedSlot != null
+                  ? () => _previewInvite(false)
+                  : null,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _ink,
+                side: BorderSide(color: _edge),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Preview invite',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+            if (!compact) _sendButton(false),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _deliveryOption(String label) => Row(
+    children: [
+      SizedBox(
+        width: 23,
+        height: 28,
+        child: Checkbox(
+          value: true,
+          onChanged: null,
+          fillColor: WidgetStatePropertyAll(_blue),
+          checkColor: Colors.white,
+          side: BorderSide.none,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+        ),
+      ),
+      const SizedBox(width: 5),
+      Expanded(child: _body(label, size: 11)),
+    ],
+  );
+
+  Widget _sendButton(bool compact) => FilledButton(
+    key: Key(compact ? 'schedule-mobile-review-send' : 'schedule-review-send'),
+    onPressed:
+        !_loading &&
+            _error == null &&
+            _selectedApplication != null &&
+            _selectedSlot != null &&
+            _busyApplicationId == null
+        ? _reviewAndSend
+        : null,
+    style: RecruiterButtonStyle.primary(
+      FilledButton.styleFrom(
+        backgroundColor: _blue,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    ),
+    child: _busyApplicationId != null
+        ? const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
+            ),
+          )
+        : Text(
+            compact ? 'Review & send invitation →' : 'Review & send →',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+  );
+
+  Widget _safeguards() => _panel(
+    key: const Key('schedule-safeguards-card'),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _heading('Scheduling safeguards'),
+        const SizedBox(height: 12),
+        _body(
+          'Availability is checked again when you submit. A reserved slot cannot be double-booked.',
+        ),
+        const SizedBox(height: 14),
+        _body(
+          'Only eligible shortlisted candidates can be invited. Review and approve the current interview questions before sending.',
+        ),
+        const SizedBox(height: 14),
+        _body('All times shown in $_zone.', size: 10),
+      ],
+    ),
+  );
+
+  Widget _questionReview() => KeyedSubtree(
+    key: _reviewKey,
+    child: _panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: _selectedApplication == null
+                ? null
+                : () => setState(() => _reviewExpanded = !_reviewExpanded),
+            child: Row(
+              children: [
+                Expanded(child: _heading('Review interview questions')),
+                Icon(
+                  _reviewExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: _muted,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 9),
+          _body(
+            _selectedApplication == null
+                ? 'Select a candidate to review their interview questions.'
+                : _canSchedule(_selectedApplication!)
+                ? 'Current question revision approved.'
+                : 'Question approval is required before sending.',
+          ),
+          if (_reviewExpanded && _selectedApplication != null) ...[
+            const SizedBox(height: 12),
+            QuestionPreparationPanel(
+              key: ValueKey('$_applicationId-$_questionReload'),
+              application: _selectedApplication,
+              applicationId: _applicationId!,
+              client: widget.questionClient,
+              onApprovalChanged: (setId, revision) {
+                setState(() {
+                  _approvedQuestionApplication = setId == null
+                      ? null
+                      : _applicationId;
+                  _approvedQuestionSet = setId;
+                  _approvedQuestionRevision = revision;
+                  if (setId != null) {
+                    _scheduleReviewRequired.remove(_applicationId);
+                  }
+                });
+              },
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+
+  Future<void> _reviewAndSend() async {
+    final app = _selectedApplication;
+    if (app == null) return;
+    if (!_canSchedule(app)) {
+      setState(() => _reviewExpanded = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final reviewContext = _reviewKey.currentContext;
+        if (reviewContext != null) {
+          Scrollable.ensureVisible(
+            reviewContext,
+            duration: const Duration(milliseconds: 250),
+            alignment: 0.1,
+          );
+        }
+      });
+      return;
+    }
+    await _previewInvite(true);
+  }
+
+  Future<void> _previewInvite(bool confirm) async {
+    final app = _selectedApplication, slot = _selectedSlot;
+    if (app == null || slot == null) return;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _surface,
+        title: Text(
+          confirm ? 'Review & send invitation' : 'Invitation preview',
+          style: TextStyle(color: _ink),
+        ),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _summaryRow('Candidate', _candidateName(app)),
+                _summaryRow('Date', _dateLabel(slot)),
+                _summaryRow(
+                  'Time',
+                  '${_time(slot)} ${DateTime.now().timeZoneName}',
+                ),
+                _summaryRow('Interview type', 'Retell AI · Voice'),
+                if (_message.text.trim().isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _label('Message draft (preview only)'),
+                  const SizedBox(height: 8),
+                  _body(_message.text.trim()),
+                ],
+                const SizedBox(height: 16),
+                _body(
+                  confirm
+                      ? 'Confirm to schedule this interview using the approved question revision and send the standard invitation.'
+                      : 'The invitation is sent only after confirmation.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(confirm ? 'Cancel' : 'Close'),
+          ),
+          if (confirm)
+            FilledButton(
+              style: RecruiterButtonStyle.primary(FilledButton.styleFrom()),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Send invitation'),
+            ),
+        ],
+      ),
+    );
+    if (approved == true &&
+        mounted &&
+        _applicationId == app.id &&
+        _selectedSlot == slot) {
+      await _sendInvite(app);
+    }
+  }
 
   void _selectForReview(Application app) {
     if (_applicationId == app.id) return;
@@ -1023,135 +1451,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _approvedQuestionApplication = null;
       _approvedQuestionSet = null;
       _approvedQuestionRevision = null;
+      _reviewExpanded = false;
+      _message.clear();
     });
-  }
-
-  Widget _candidateRow(Application app) {
-    final selected = _applicationId == app.id;
-    final busy = _busyApplicationId == app.id;
-    final name = _candidateName(app);
-    final date = app.updatedAt ?? app.createdAt;
-    final error = _rowErrors[app.id];
-    return InkWell(
-      onTap: _busyApplicationId == null ? () => _selectForReview(app) : null,
-      child: Container(
-        color: selected ? const Color(0xFFF7F9FF) : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 29,
-                  height: 29,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE5ECFF),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Text(
-                    _initials(name),
-                    style: GoogleFonts.inter(
-                      color: _blue,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          color: _ink,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        'Shortlisted ${_timeAgo(date)}${app.resumeScore == null ? '' : ' · ${_scoreText(app.resumeScore!)}'}',
-                        style: GoogleFonts.inter(color: _muted, fontSize: 9.5),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                FilledButton(
-                  onPressed:
-                      _selectedSlot != null &&
-                          _busyApplicationId == null &&
-                          _canSchedule(app)
-                      ? () => _sendInvite(app)
-                      : null,
-                  style: RecruiterButtonStyle.primary(
-                    FilledButton.styleFrom(
-                      minimumSize: const Size(75, 31),
-                      padding: const EdgeInsets.symmetric(horizontal: 9),
-                      backgroundColor: _blue,
-                      textStyle: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  child: busy
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text(
-                          _selectedSlot == null
-                              ? 'Pick slot'
-                              : _slotLabel(_selectedSlot!),
-                        ),
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: _busyApplicationId == null
-                    ? () => _selectForReview(app)
-                    : null,
-                child: Text(
-                  selected ? 'Reviewing questions' : 'Review questions',
-                ),
-              ),
-            ),
-            if (_scheduleReviewRequired.contains(app.id))
-              TextButton(
-                onPressed: _busyApplicationId == null
-                    ? () =>
-                          setState(() => _scheduleReviewRequired.remove(app.id))
-                    : null,
-                child: const Text(
-                  'I reviewed the refreshed application and questions',
-                ),
-              ),
-            if (error != null) ...[
-              const SizedBox(height: 7),
-              Text(
-                error,
-                style: GoogleFonts.inter(
-                  color: const Color(0xFFD64255),
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 
   String _candidateName(Application app) {
@@ -1169,97 +1471,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         .join(' ');
   }
 
-  String _initials(String name) => name
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .take(2)
-      .map((part) => part[0].toUpperCase())
-      .join();
-
-  String _timeAgo(DateTime date) {
-    final delta = DateTime.now().difference(date);
-    if (delta.isNegative || delta.inMinutes < 1) return 'just now';
-    if (delta.inHours < 1) return '${delta.inMinutes}m ago';
-    if (delta.inDays < 1) return '${delta.inHours}h ago';
-    return '${delta.inDays}d ago';
-  }
-
   String _scoreText(double score) => score == score.roundToDouble()
       ? score.round().toString()
       : score.toStringAsFixed(1);
-
-  Widget _invitationPanel() => _panel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _heading('Invitation'),
-        const Divider(height: 25, color: _edge),
-        Text(
-          'Candidate receives email + in-app invite with device-check link. '
-          'Auto-reminder 24h and 1h before.',
-          style: GoogleFonts.inter(color: _muted, fontSize: 10, height: 1.6),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _applicationId != null && _selectedSlot != null
-                    ? () => showDialog<void>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Invitation preview'),
-                          content: Text(
-                            'Interview invitation for ${_candidateName(_awaiting.firstWhere((app) => app.id == _applicationId))} on '
-                            '${_selectedSlot!.toLocal()}.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('Close'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : null,
-                child: const Text('Preview email'),
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: FilledButton(
-                onPressed:
-                    _applicationId != null &&
-                        _selectedSlot != null &&
-                        _busyApplicationId == null &&
-                        _awaiting.any(
-                          (app) =>
-                              app.id == _applicationId && _canSchedule(app),
-                        )
-                    ? () => _sendInvite(
-                        _awaiting.firstWhere((app) => app.id == _applicationId),
-                      )
-                    : null,
-                style: RecruiterButtonStyle.primary(
-                  FilledButton.styleFrom(backgroundColor: _blue),
-                ),
-                child: _busyApplicationId != null
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Send invite'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
 
   Widget _questionPanel() => _panel(
     child: Column(
@@ -1318,78 +1532,43 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     ),
   );
 
-  Widget _panel({
-    required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
-    bool hot = false,
-  }) => Container(
-    padding: padding,
+  Widget _panel({Key? key, required Widget child}) => Container(
+    key: key,
+    width: double.infinity,
+    padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: _surface,
       border: Border.all(color: _edge),
       borderRadius: BorderRadius.circular(16),
       boxShadow: [
         BoxShadow(
-          color: const Color(0xFF596B96).withValues(alpha: hot ? 0.12 : 0.06),
-          blurRadius: hot ? 26 : 16,
-          offset: const Offset(0, 7),
+          color: Colors.black.withValues(alpha: _dark ? 0.10 : 0.025),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
         ),
       ],
     ),
-    child: hot
-        ? ClipRRect(
-            borderRadius: BorderRadius.circular(15),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  height: 2,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Color(0xFF20D9BD),
-                        Color(0xFF627AFF),
-                        Color(0xFFE0E7FF),
-                      ],
-                    ),
-                  ),
-                ),
-                child,
-              ],
-            ),
-          )
-        : child,
+    child: child,
   );
 
-  Widget _heading(String label) => Text(
-    label,
+  Widget _heading(String text) => Text(
+    text,
     style: GoogleFonts.inter(
       color: _ink,
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: FontWeight.w700,
     ),
   );
-
-  Widget _tick(String label) => Text(
-    label,
-    style: GoogleFonts.spaceGrotesk(
+  Widget _label(String text) => Text(
+    text,
+    style: GoogleFonts.inter(
       color: _muted,
-      fontSize: 9,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 1.2,
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
     ),
   );
-
-  Widget _configChip(String label, {bool active = false}) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-    decoration: BoxDecoration(
-      color: active ? const Color(0xFFE6EDFF) : Colors.white,
-      border: Border.all(color: active ? const Color(0xFFCAD8FF) : _edge),
-      borderRadius: BorderRadius.circular(13),
-    ),
-    child: Text(
-      label,
-      style: GoogleFonts.inter(color: active ? _blue : _muted, fontSize: 9),
-    ),
+  Widget _body(String text, {double size = 12}) => Text(
+    text,
+    style: GoogleFonts.inter(color: _muted, fontSize: size, height: 1.6),
   );
 }

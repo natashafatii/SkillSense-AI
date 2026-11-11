@@ -12,6 +12,17 @@ import 'api_exception.dart';
 class ApplicationService {
   ApplicationService._();
 
+  /// Uses the paginated total without downloading every applicant for a role.
+  static Future<int> countForJob(String jobId, {Dio? client}) async {
+    if (jobId.trim().isEmpty) throw ArgumentError('Job ID is required.');
+    final applications = await listApplications(
+      jobId: jobId,
+      pageSize: 1,
+      client: client,
+    );
+    return applications.count;
+  }
+
   /// The API scopes this list to the authenticated user's applications.
   static Future<List<Application>> listAllApplications({
     String? jobId,

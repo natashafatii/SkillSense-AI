@@ -795,32 +795,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                       ),
                     ),
 
-                  // ── BADGE (Top-Right of Icon) ──
-                  if (badgeCount > 0)
-                    Positioned(
-                      top: 2,
-                      right: 2,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEF4444),
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 14,
-                          minHeight: 14,
-                        ),
-                        child: Text(
-                          '$badgeCount',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),

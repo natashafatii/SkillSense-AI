@@ -1383,29 +1383,33 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(4),
-                        color: AppColors.dashboardBlue.withValues(alpha: 0.08),
-                      ),
-                      child: Text(
-                        'Screening evidence',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.jetBrainsMono(
-                          color: AppColors.dashboardBlue,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
+                  if (!isMobile) ...[
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          color: AppColors.dashboardBlue.withValues(
+                            alpha: 0.08,
+                          ),
+                        ),
+                        child: Text(
+                          'Screening evidence',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.jetBrainsMono(
+                            color: AppColors.dashboardBlue,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               );
               if (constraints.maxWidth < 300) {
@@ -1533,10 +1537,24 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                             ],
                           ),
                         ),
-                        if (score != null)
-                          _buildSmallScoreRing(theme, score, scoreColor),
-                        const SizedBox(width: 16),
-                        _buildStatusBadge(badge, scoreColor),
+                        if (isMobile) ...[
+                          const SizedBox(width: 12),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (score != null) ...[
+                                _buildSmallScoreRing(theme, score, scoreColor),
+                                const SizedBox(height: 6),
+                              ],
+                              _buildStatusBadge(badge, scoreColor),
+                            ],
+                          ),
+                        ] else ...[
+                          if (score != null)
+                            _buildSmallScoreRing(theme, score, scoreColor),
+                          const SizedBox(width: 16),
+                          _buildStatusBadge(badge, scoreColor),
+                        ],
                       ],
                     ),
                   ),
@@ -1869,24 +1887,34 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   // ── OPEN ROLES SECTION ─────────────────────────────────────────────────────
   Widget _buildOpenRolesSection(DeckTheme theme, bool isMobile) {
-    final maxApplicants = _activeJobs.fold<int>(
-      0,
-      (max, job) => job.applicantCount > max ? job.applicantCount : max,
-    );
+    final applicantCounts = <String, int>{};
+    final shortlistedCounts = <String, int>{};
+    for (final application in _applications) {
+      applicantCounts.update(
+        application.job,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+      if (application.status == ApplicationStatus.screened) {
+        shortlistedCounts.update(
+          application.job,
+          (count) => count + 1,
+          ifAbsent: () => 1,
+        );
+      }
+    }
+    final maxApplicants = _activeJobs.fold<int>(0, (max, job) {
+      final count = applicantCounts[job.id] ?? 0;
+      return count > max ? count : max;
+    });
     final roles = _activeJobs.map((job) {
-      final shortlisted = _applications
-          .where(
-            (app) =>
-                app.job == job.id &&
-                (app.rawStatus ?? '').toUpperCase() == 'SHORTLISTED',
-          )
-          .length;
+      final applicants = applicantCounts[job.id] ?? 0;
       return <String, dynamic>{
         'title': job.title,
-        'apps': job.applicantCount,
-        'shortlisted': shortlisted,
+        'apps': _applicationsError == null ? applicants : '—',
+        'shortlisted': shortlistedCounts[job.id] ?? 0,
         'color': AppColors.dashboardBlue,
-        'pct': maxApplicants == 0 ? 0.0 : job.applicantCount / maxApplicants,
+        'pct': maxApplicants == 0 ? 0.0 : applicants / maxApplicants,
       };
     }).toList();
 
