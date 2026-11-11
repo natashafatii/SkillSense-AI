@@ -43,65 +43,64 @@ class MobileNavTab extends StatelessWidget {
       );
     }
     final color = selected ? accent : const Color(0xFF7E8DAA);
-    return ExcludeSemantics(
-      child: AnimatedContainer(
-        height: double.infinity,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 180),
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? accent.withValues(alpha: 0.11) : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (selected)
-              Positioned(
-                top: 1,
-                child: Container(
-                  width: 19,
-                  height: 2,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accent.withValues(alpha: 0.18),
-                        blurRadius: 5,
-                      ),
-                    ],
-                  ),
+    final tab = AnimatedContainer(
+      height: double.infinity,
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      decoration: BoxDecoration(
+        color: selected ? accent.withValues(alpha: 0.11) : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (selected)
+            Positioned(
+              top: 1,
+              child: Container(
+                width: 19,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.18),
+                      blurRadius: 5,
+                    ),
+                  ],
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(3, 4, 3, 0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 20, color: color),
-                  const SizedBox(height: 3),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 9,
-                        height: 1.2,
-                        fontWeight: FontWeight.w600,
-                        color: color,
-                      ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(3, 4, 3, 0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 20, color: color),
+                const SizedBox(height: 3),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 9,
+                      height: 1.2,
+                      fontWeight: FontWeight.w600,
+                      color: color,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+    return ExcludeSemantics(child: selected ? Center(child: tab) : tab);
   }
 }

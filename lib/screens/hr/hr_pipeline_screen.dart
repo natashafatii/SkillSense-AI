@@ -363,6 +363,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
     final overlay = Overlay.of(context).context.findRenderObject();
     if (button is! RenderBox || overlay is! RenderBox) return;
     final origin = button.localToGlobal(Offset.zero, ancestor: overlay);
+    final compact = MediaQuery.sizeOf(context).width < 900;
     final selected = await showMenu<Job>(
       context: context,
       position: RelativeRect.fromRect(
@@ -383,14 +384,20 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
               final current = job.id == _jobId;
               return PopupMenuItem<Job>(
                 value: job,
+                padding: compact
+                    ? const EdgeInsets.symmetric(horizontal: 8, vertical: 2)
+                    : null,
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  padding: compact
+                      ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
+                      : const EdgeInsets.symmetric(vertical: 5),
                   decoration: BoxDecoration(
                     color: current ? const Color(0xFFEAF0FF) : null,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: Column(

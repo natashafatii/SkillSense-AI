@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'recruiter_side_nav.dart';
 import 'mobile_nav_tab.dart';
+import 'mobile_nav_tooltip.dart';
+import 'mobile_subcategory_pill.dart';
 
 /// Four fixed mobile categories, using the same destinations as the web rail.
 /// The submenu is an overlay so opening it never shifts the page or dock.
@@ -99,8 +101,8 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
             child: Material(
               key: const Key('recruiter-mobile-subcategories'),
               color: Colors.white,
-              elevation: 4,
-              shadowColor: Colors.black.withValues(alpha: 0.10),
+              elevation: 6,
+              shadowColor: Colors.black.withValues(alpha: 0.12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(26),
                 side: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -123,7 +125,15 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 4,
                                 ),
-                                child: TextButton(
+                                child: MobileSubcategoryPill(
+                                  label: item.label,
+                                  selected:
+                                      widget.currentRoute == item.route ||
+                                      (widget.currentRoute ==
+                                              '/recruiter/job-detail' &&
+                                          item.route ==
+                                              '/recruiter/job-listings'),
+                                  accent: widget.accentColor,
                                   onPressed: () {
                                     _close();
                                     if (widget.currentRoute != item.route) {
@@ -132,14 +142,6 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
                                       ).pushNamed(item.route);
                                     }
                                   },
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: const Color(0xFF0F172A),
-                                    textStyle: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  child: Text(item.label),
                                 ),
                               ),
                           ],
@@ -191,17 +193,19 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
                         selected: selected == index,
                         button: true,
                         label: recruiterSections[index].label,
-                        child: Tooltip(
-                          message: recruiterSections[index].label,
-                          excludeFromSemantics: true,
-                          child: Material(
+                        child: MobileNavTooltip(
+                          message: _tabLabels[index],
+                          builder: (showTooltip) => Material(
                             color: Colors.transparent,
                             child: InkWell(
                               key: ValueKey('recruiter-mobile-category-$index'),
                               borderRadius: BorderRadius.circular(
                                 widget.radius,
                               ),
-                              onTap: () => _select(index),
+                              onTap: () {
+                                showTooltip();
+                                _select(index);
+                              },
                               child: MobileNavTab(
                                 icon: recruiterSections[index].icon,
                                 label: _tabLabels[index],

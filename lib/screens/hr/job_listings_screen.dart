@@ -13,6 +13,7 @@ import 'create_role_screen.dart';
 import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
+import '../../services/application_service.dart';
 import '../../models/app_notification.dart';
 import '../../models/paginated_response.dart';
 import '../../services/notification_service.dart';
@@ -21,10 +22,21 @@ import '../../services/session_scope.dart';
 
 enum _JobAction { edit, close, view, publish, delete }
 
+enum _JobSort {
+  newest('Newest'),
+  oldest('Oldest'),
+  mostApplicants('Most Applicants'),
+  highestMatch('Highest Match');
+
+  const _JobSort(this.label);
+  final String label;
+}
+
 class JobListingsScreen extends StatefulWidget {
   final Future<List<Job>> Function()? loadJobs;
+  final Future<int> Function(String jobId)? loadApplicantCount;
 
-  const JobListingsScreen({super.key, this.loadJobs});
+  const JobListingsScreen({super.key, this.loadJobs, this.loadApplicantCount});
 
   @override
   State<JobListingsScreen> createState() => _JobListingsScreenState();
@@ -33,8 +45,10 @@ class JobListingsScreen extends StatefulWidget {
 class _JobListingsScreenState extends State<JobListingsScreen> {
   final TextEditingController _searchController = TextEditingController();
   JobStatus _activeFilter = JobStatus.active;
+  _JobSort _sort = _JobSort.newest;
   bool _isLoading = true;
   List<Job> _allJobs = [];
+  Map<String, int> _applicantCounts = {};
   String? _loadError;
   String? _busyJobId;
 
@@ -64,9 +78,18 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
     });
     try {
       final jobs = await (widget.loadJobs?.call() ?? JobService.listAllJobs());
+      final counts = await Future.wait(
+        jobs.map((job) async {
+          final count =
+              await (widget.loadApplicantCount?.call(job.id) ??
+                  ApplicationService.countForJob(job.id));
+          return MapEntry(job.id, count);
+        }),
+      );
       if (mounted) {
         setState(() {
           _allJobs = jobs;
+          _applicantCounts = Map.fromEntries(counts);
           _isLoading = false;
         });
       }
@@ -458,11 +481,27 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
     );
   }
 
+  int _compareJobs(Job a, Job b) {
+    double score(Job job) =>
+        job.averageScore?.isFinite == true ? job.averageScore! : -1;
+    final order = switch (_sort) {
+      _JobSort.newest => b.createdAt.compareTo(a.createdAt),
+      _JobSort.oldest => a.createdAt.compareTo(b.createdAt),
+      _JobSort.mostApplicants => (_applicantCounts[b.id] ?? 0).compareTo(
+        _applicantCounts[a.id] ?? 0,
+      ),
+      _JobSort.highestMatch => score(b).compareTo(score(a)),
+    };
+    if (order != 0) return order;
+    final dateOrder = b.createdAt.compareTo(a.createdAt);
+    return dateOrder != 0 ? dateOrder : a.id.compareTo(b.id);
+  }
+
   Widget _buildListPanel(bool isMobile) {
     final filteredJobs = _allJobs
         .where((j) => j.status == _activeFilter)
         .toList();
-    filteredJobs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    filteredJobs.sort(_compareJobs);
 
     return Container(
       margin: EdgeInsets.fromLTRB(
@@ -500,11 +539,26 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                     color: const Color(0xFF0F172A),
                   ),
                 ),
-                Text(
-                  'Sort: Newest',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFF64748B),
+                PopupMenuButton<_JobSort>(
+                  key: const Key('job-listings-sort'),
+                  tooltip: 'Sort jobs',
+                  padding: EdgeInsets.zero,
+                  initialValue: _sort,
+                  onSelected: (value) => setState(() => _sort = value),
+                  itemBuilder: (_) => [
+                    for (final option in _JobSort.values)
+                      CheckedPopupMenuItem(
+                        value: option,
+                        checked: option == _sort,
+                        child: Text(option.label),
+                      ),
+                  ],
+                  child: Text(
+                    'Sort: ${_sort.label}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: const Color(0xFF64748B),
+                    ),
                   ),
                 ),
               ],
@@ -589,13 +643,19 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _buildApplicantCount(job.applicantCount, isMobile: true),
+                    _buildApplicantCount(
+                      _applicantCounts[job.id] ?? 0,
+                      isMobile: true,
+                    ),
                     const SizedBox(height: 5),
                     _buildStatusBadge(job, badgeColor, badgeBackground),
                   ],
                 )
               else ...[
-                _buildApplicantCount(job.applicantCount, isMobile: false),
+                _buildApplicantCount(
+                  _applicantCounts[job.id] ?? 0,
+                  isMobile: false,
+                ),
                 const SizedBox(width: 12),
                 _buildStatusBadge(job, badgeColor, badgeBackground),
               ],
@@ -1004,14 +1064,14 @@ class _RecruiterNotificationsScreenState
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(30, 24, 30, 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
                       'Notifications',
                       style: GoogleFonts.spaceGrotesk(
                         color: const Color(0xFF0F172A),
@@ -1019,33 +1079,40 @@ class _RecruiterNotificationsScreenState
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Text(
-                      '$_unread unread',
-                      style: GoogleFonts.inter(
-                        color: const Color(0xFF64748B),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: 'Refresh notifications',
-                onPressed: _busy ? null : _fetch,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-              if (_items.isNotEmpty && _unread > 0)
-                TextButton(
-                  onPressed: _busy ? null : _markAllRead,
-                  child: Text(
-                    'Mark all read',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF0A8A76),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
                   ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        tooltip: 'Refresh notifications',
+                        onPressed: _busy ? null : _fetch,
+                        icon: const Icon(Icons.refresh_rounded),
+                      ),
+                      if (_items.isNotEmpty && _unread > 0)
+                        TextButton(
+                          onPressed: _busy ? null : _markAllRead,
+                          child: Text(
+                            'Mark all read',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF0A8A76),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+              Text(
+                '$_unread unread',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF64748B),
+                  fontSize: 13,
                 ),
+              ),
             ],
           ),
         ),
@@ -1205,6 +1272,7 @@ class _RecruiterNotificationsScreenState
       color: item.isRead ? Colors.white : const Color(0xFFFAFCFF),
       child: ListTile(
         key: ValueKey(item.id),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: item.isRead
             ? const SizedBox(width: 8)
             : const Icon(Icons.circle, color: Color(0xFFE85D5B), size: 8),
@@ -1221,14 +1289,19 @@ class _RecruiterNotificationsScreenState
           style: GoogleFonts.inter(
             color: const Color(0xFF0F172A),
             fontSize: 13.5,
+            height: 1.4,
             fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w700,
           ),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(item.message),
+            const SizedBox(height: 6),
+            Text(item.message, style: const TextStyle(height: 1.5)),
+            const SizedBox(height: 8),
             Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 8,
               runSpacing: 4,
               children: [

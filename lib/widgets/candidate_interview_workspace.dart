@@ -634,6 +634,9 @@ class CandidateInterviewWorkspace extends StatelessWidget {
             child: const Text('Keep interviewing'),
           ),
           FilledButton(
+            style: CandidateButtonStyle.primaryColors(
+              Theme.of(context).filledButtonTheme.style ?? const ButtonStyle(),
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('End interview'),
           ),
@@ -685,6 +688,11 @@ class CandidateInterviewWorkspace extends StatelessWidget {
   );
 
   Widget _completion(bool mobile) {
+    final primaryStyle = CandidateButtonStyle.primaryColors(
+      FilledButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
     final pending = !_completed;
     final workflow =
         lifecycle.snapshot?.workflowState ??
@@ -820,12 +828,14 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                 if (!pending)
                   FilledButton.icon(
                     key: const Key('session-return-home'),
+                    style: primaryStyle,
                     onPressed: onHome,
                     icon: const Icon(Icons.arrow_forward_rounded, size: 18),
                     label: const Text('Back to dashboard'),
                   ),
                 if (pending)
                   FilledButton.icon(
+                    style: primaryStyle,
                     onPressed: lifecycle.finishing ? null : lifecycle.finish,
                     icon: const Icon(Icons.sync_rounded, size: 18),
                     label: Text(

@@ -83,12 +83,13 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     return upcoming.firstOrNull;
   }
 
-  int get _profileCompletion => _profile?.completionPercentage ?? 0;
+  int? get _profileCompletion => _profile?.completionPercentage;
 
   @override
   void initState() {
     super.initState();
     SessionScope.invalidations.addListener(_clearAccountData);
+    ProfileService.currentProfileNotifier.addListener(_profileChanged);
     _initializeData();
     _countdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (_current && _interviews.isNotEmpty) setState(() {});
@@ -195,6 +196,14 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     }
   }
 
+  void _profileChanged() {
+    if (!_current) return;
+    setState(() {
+      _profile = ProfileService.currentProfileNotifier.value;
+      _profileError = null;
+    });
+  }
+
   Future<void> _loadProfile() async {
     try {
       final profile =
@@ -268,6 +277,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   @override
   void dispose() {
     SessionScope.invalidations.removeListener(_clearAccountData);
+    ProfileService.currentProfileNotifier.removeListener(_profileChanged);
     _countdownTimer?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -958,9 +968,10 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   ) {
     final double gaugeSize = isMobile ? 54 : 64;
 
-    final unavailable = _profileError != null;
-    final score = unavailable ? 0.0 : _profileCompletion / 100;
-    final scoreText = unavailable ? '—' : '$_profileCompletion';
+    final completion = _profileCompletion;
+    final unavailable = _profileError != null || completion == null;
+    final score = unavailable ? 0.0 : completion / 100;
+    final scoreText = unavailable ? '—' : '$completion';
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -984,6 +995,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     width: gaugeSize,
                     height: gaugeSize,
                     child: CircularProgressIndicator(
+                      key: const Key('candidate-profile-strength-ring'),
                       value: score,
                       strokeWidth: 4.5,
                       backgroundColor: const Color(0xFFE2E8F0),
@@ -999,6 +1011,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     children: [
                       Text(
                         scoreText,
+                        key: const Key('candidate-profile-strength-value'),
                         style: GoogleFonts.spaceGrotesk(
                           color: score > 0
                               ? const Color(0xFF0F172A)

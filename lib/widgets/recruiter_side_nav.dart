@@ -667,6 +667,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                 ),
               ),
 
+              if (!_contentExpanded) const SizedBox(height: 24),
               Expanded(
                 child: ScrollConfiguration(
                   behavior: ScrollConfiguration.of(

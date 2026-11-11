@@ -310,7 +310,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     Color cardBorder,
   ) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Title / Summary row
         Row(
@@ -377,6 +377,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
         if (!_loading && _error == null)
           if (isMobile)
             ListView.separated(
+              padding: EdgeInsets.zero,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: processedJobs.length,
@@ -394,6 +395,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
             )
           else
             GridView.builder(
+              padding: EdgeInsets.zero,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -528,26 +530,31 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
   Widget _buildFilterChipsWeb(Color cardBorder) {
     final chips = ['All', 'Best match', 'Newest', 'Remote', 'Lahore'];
 
-    return SingleChildScrollView(
-      key: const Key('job-feed-filter-scroll'),
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: chips.map((chip) {
-          final isSelected = _selectedFilter == chip;
-          return Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: Semantics(
-              button: true,
-              selected: isSelected,
-              child: _HoverableFilterChip(
-                chip: chip,
-                isSelected: isSelected,
-                onTap: () => _selectFilter(chip),
-              ),
-            ),
-          );
-        }).toList(),
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        key: const Key('job-feed-filter-scroll'),
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: chips.map((chip) {
+              final isSelected = _selectedFilter == chip;
+              return Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Semantics(
+                  button: true,
+                  selected: isSelected,
+                  child: _HoverableFilterChip(
+                    chip: chip,
+                    isSelected: isSelected,
+                    onTap: () => _selectFilter(chip),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }

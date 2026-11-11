@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'mobile_nav_tab.dart';
+import 'mobile_nav_tooltip.dart';
+import 'mobile_subcategory_pill.dart';
 
 /// Mobile counterpart of the candidate sidebar. Main categories stay fixed;
 /// their destinations appear in a separate, dismissible row above the dock.
@@ -118,8 +120,8 @@ class _CandidateMobileNavState extends State<CandidateMobileNav> {
                     child: Material(
                       key: ValueKey('candidate-mobile-submenu-$_expanded'),
                       color: Colors.white,
-                      elevation: 4,
-                      shadowColor: Colors.black.withValues(alpha: 0.10),
+                      elevation: 6,
+                      shadowColor: Colors.black.withValues(alpha: 0.12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(26),
                         side: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -143,18 +145,12 @@ class _CandidateMobileNavState extends State<CandidateMobileNav> {
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 4,
                                         ),
-                                        child: TextButton(
+                                        child: MobileSubcategoryPill(
+                                          label: item.$1,
+                                          selected:
+                                              widget.currentRoute == item.$2,
+                                          accent: const Color(0xFF00AD87),
                                           onPressed: () => _navigate(item.$2),
-                                          style: TextButton.styleFrom(
-                                            foregroundColor: const Color(
-                                              0xFF0F172A,
-                                            ),
-                                            textStyle: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          child: Text(item.$1),
                                         ),
                                       ),
                                   ],
@@ -198,17 +194,18 @@ class _CandidateMobileNavState extends State<CandidateMobileNav> {
                       selected: selected == index,
                       button: true,
                       label: _categories[index].$1,
-                      child: Tooltip(
-                        message: _categories[index].$1,
-                        excludeFromSemantics: true,
-                        child: Material(
+                      child: MobileNavTooltip(
+                        message: _tabLabels[index],
+                        builder: (showTooltip) => Material(
                           color: Colors.transparent,
                           child: InkWell(
                             key: ValueKey('candidate-mobile-category-$index'),
                             borderRadius: BorderRadius.circular(32),
                             onTap: () {
-                              if (index == 0) {
-                                _navigate('/candidate/home');
+                              showTooltip();
+                              final destinations = _categories[index].$3;
+                              if (destinations.length == 1) {
+                                _navigate(destinations.single.$2);
                               } else {
                                 FocusManager.instance.primaryFocus?.unfocus();
                                 setState(

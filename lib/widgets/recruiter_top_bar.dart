@@ -8,6 +8,7 @@ import '../services/profile_service.dart';
 import '../services/auth_service.dart';
 import 'candidate_avatar_image.dart';
 import 'candidate_mobile_search.dart';
+import 'global_search.dart';
 
 class AppNavState {
   static int unreadInterviews = 0;
@@ -214,63 +215,65 @@ class RecruiterTopBar extends StatelessWidget {
                           width: searchFocused ? 1.5 : 1,
                         ),
                       ),
-                      child: TextField(
-                        controller: searchController,
-                        focusNode: searchFocusNode,
-                        readOnly: searchController == null,
-                        mouseCursor:
-                            searchController == null && onSearchTap != null
-                            ? SystemMouseCursors.click
-                            : null,
-                        onTap: onSearchTap,
-                        style: GoogleFonts.inter(
-                          color: text,
-                          fontSize: profileReference ? 13.5 : 12,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Search or jump to…',
-                          hintStyle: GoogleFonts.inter(
-                            color: text3,
+                      child: WebGlobalSearchLauncher(
+                        candidate: candidate,
+                        dark: dark,
+                        builder: (controller, focus, open) => TextField(
+                          key: const Key('web-global-search-field'),
+                          controller: controller,
+                          focusNode: focus,
+                          onTap: open,
+                          onChanged: (_) => open(),
+                          onSubmitted: (_) => open(),
+                          style: GoogleFonts.inter(
+                            color: text,
                             fontSize: profileReference ? 13.5 : 12,
                           ),
-                          prefixIcon: Icon(
-                            Icons.search_rounded,
-                            color: text3,
-                            size: profileReference ? 18 : 12,
-                          ),
-                          prefixIconConstraints: const BoxConstraints(
-                            minWidth: 32,
-                          ),
-                          suffixIcon: Container(
-                            width: 30,
-                            alignment: Alignment.center,
-                            margin: const EdgeInsets.only(
-                              right: 5,
-                              top: 4,
-                              bottom: 4,
+                          decoration: InputDecoration(
+                            hintText: 'Search or jump to…',
+                            hintStyle: GoogleFonts.inter(
+                              color: text3,
+                              fontSize: profileReference ? 13.5 : 12,
                             ),
-                            decoration: BoxDecoration(
-                              color: surface,
-                              border: Border.all(color: edge),
-                              borderRadius: BorderRadius.circular(5),
+                            prefixIcon: Icon(
+                              Icons.search_rounded,
+                              color: text3,
+                              size: profileReference ? 18 : 12,
                             ),
-                            child: Text(
-                              '⌘K',
-                              style: GoogleFonts.jetBrainsMono(
-                                color: text3,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w500,
+                            prefixIconConstraints: const BoxConstraints(
+                              minWidth: 32,
+                            ),
+                            suffixIcon: Container(
+                              width: 30,
+                              alignment: Alignment.center,
+                              margin: const EdgeInsets.only(
+                                right: 5,
+                                top: 4,
+                                bottom: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: surface,
+                                border: Border.all(color: edge),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Text(
+                                '⌘K',
+                                style: GoogleFonts.jetBrainsMono(
+                                  color: text3,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
+                            suffixIconConstraints: const BoxConstraints(
+                              minWidth: 35,
+                            ),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                            ),
+                            border: InputBorder.none,
                           ),
-                          suffixIconConstraints: const BoxConstraints(
-                            minWidth: 35,
-                          ),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8,
-                          ),
-                          border: InputBorder.none,
                         ),
                       ),
                     ),
