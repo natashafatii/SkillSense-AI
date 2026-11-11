@@ -13,13 +13,13 @@ class CandidateJobCard extends StatefulWidget {
   final VoidCallback onApply;
 
   const CandidateJobCard({
-    Key? key,
+    super.key,
     required this.job,
     required this.isMobile,
     required this.isHot,
     required this.hasUploadedResume,
     required this.onApply,
-  }) : super(key: key);
+  });
 
   @override
   State<CandidateJobCard> createState() => _CandidateJobCardState();
@@ -105,9 +105,18 @@ class _CandidateJobCardState extends State<CandidateJobCard>
     final location = widget.job.location;
     final skills = widget.job.skillsRequired;
 
-    // Fallback to 85 if no averageScore provided for the visual
-    final score = widget.job.averageScore ?? 85.0;
-    final ringColor = _getRingColor(score);
+    final matchScore = widget.job.matchScore;
+    final score =
+        widget.hasUploadedResume &&
+            matchScore != null &&
+            matchScore.isFinite &&
+            matchScore >= 0 &&
+            matchScore <= 100
+        ? matchScore
+        : null;
+    final ringColor = score == null
+        ? const Color(0xFF94A3B8)
+        : _getRingColor(score);
     final isHot = widget.isHot;
 
     // Day shadow
@@ -198,7 +207,7 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                       Stack(
                         alignment: Alignment.center,
                         children: [
-                          if (isHot && !_isHovered)
+                          if (score != null && isHot && !_isHovered)
                             AnimatedBuilder(
                               animation: _pulseAnimation,
                               builder: (context, child) {
@@ -224,7 +233,8 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                 return CustomPaint(
                                   painter: _RingPainter(
                                     progress:
-                                        (score / 100) * _ringAnimation.value,
+                                        ((score ?? 0) / 100) *
+                                        _ringAnimation.value,
                                     ringColor: ringColor,
                                     trackColor: const Color(
                                       0xFF26334D,
@@ -235,7 +245,7 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                             ),
                           ),
                           Text(
-                            '${score.round()}',
+                            score == null ? '—' : '${score.round()}',
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -291,10 +301,11 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                   ),
                               ],
                             ),
-                            if (widget.job.averageScore == null &&
-                                !widget.hasUploadedResume)
+                            if (score == null)
                               Text(
-                                'Upload a resume to see your match score.',
+                                !widget.hasUploadedResume
+                                    ? 'Upload a resume to see your match score.'
+                                    : 'Match score available after application screening.',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.inter(

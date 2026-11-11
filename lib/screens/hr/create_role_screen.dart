@@ -14,6 +14,7 @@ import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import 'role_skill_picker.dart';
 
 @immutable
 class CreateRoleTokens extends ThemeExtension<CreateRoleTokens> {
@@ -182,12 +183,6 @@ class _SalaryFormatter extends TextInputFormatter {
   }
 }
 
-class _SelectedSkill {
-  _SelectedSkill(this.name, [this.weight = 2]);
-  final String name;
-  int weight;
-}
-
 enum CreateRoleEditResult { notFound }
 
 class CreateRoleScreen extends StatefulWidget {
@@ -200,32 +195,6 @@ class CreateRoleScreen extends StatefulWidget {
 }
 
 class _CreateRoleScreenState extends State<CreateRoleScreen> {
-  static const _catalog = [
-    'Python',
-    'Django',
-    'Django REST Framework',
-    'PostgreSQL',
-    'Celery',
-    'Redis',
-    'Docker',
-    'AWS',
-    'REST APIs',
-    'GraphQL',
-    'React',
-    'TypeScript',
-    'JavaScript',
-    'Node.js',
-    'FastAPI',
-    'Kubernetes',
-    'CI/CD',
-    'Git',
-    'Linux',
-    'Machine Learning',
-    'SQL',
-    'Flutter',
-    'Figma',
-    'Communication',
-  ];
   static const _suggested = [
     'Python',
     'Django',
@@ -265,12 +234,8 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   final _salaryMax = TextEditingController();
   final _description = TextEditingController();
   final _requirements = TextEditingController();
-  final _skillSearch = TextEditingController();
   final _pageScroll = ScrollController();
-  final _skillFocus = FocusNode();
-  final _skillLink = LayerLink();
-  final _skillOverlay = OverlayPortalController();
-  final _skillFieldKey = GlobalKey();
+  final _addSkillsFocus = FocusNode();
   final _dateFieldKey = GlobalKey();
   final _sectionKeys = List.generate(6, (_) => GlobalKey());
   final _fieldFocus = List.generate(6, (_) => FocusNode());
@@ -279,13 +244,12 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   OverlayEntry? _calendarOverlay;
   DateTime _calendarMonth = DateTime(DateTime.now().year, DateTime.now().month);
   final _errors = <String, String>{};
-  final _skills = <_SelectedSkill>[];
+  final _skills = <String>[];
   final _mix = [4, 2, 2];
   String? _location;
   String _workType = 'Remote';
   String _experience = 'Mid';
   DateTime? _deadline;
-  int _highlighted = -1;
   double _threshold = 66;
   bool _thresholdEdited = false;
   String get _thresholdLabel =>
@@ -297,7 +261,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   bool _autoShortlist = true;
   bool _saving = false;
   String? _savedJobId;
-  double _scrollOffset = 0;
 
   // The recruiter workspace has a light navigation shell. Keep the form and
   // its overlays in the same palette regardless of the OS appearance setting.
@@ -324,26 +287,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     ]) {
       controller.addListener(_refresh);
     }
-    _skillSearch.addListener(() {
-      _highlighted = -1;
-      if (_skillFocus.hasFocus) _skillOverlay.show();
-      _refresh();
-    });
-    _skillFocus.addListener(() {
-      if (_skillFocus.hasFocus) {
-        _skillOverlay.show();
-      } else {
-        Future<void>.delayed(const Duration(milliseconds: 120), () {
-          if (mounted && !_skillFocus.hasFocus) _skillOverlay.hide();
-        });
-      }
-      _refresh();
-    });
-    _pageScroll.addListener(() {
-      if (mounted && _pageScroll.offset != _scrollOffset) {
-        setState(() => _scrollOffset = _pageScroll.offset);
-      }
-    });
   }
 
   void _prefillJob(Job job) {
@@ -370,19 +313,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     }
     _threshold = job.screeningThreshold.clamp(0, 100);
     _autoShortlist = job.autoShortlistEnabled;
-    final weights = job.screeningCriteria['skill_weights'];
-    final names = job.skillsRequired.isNotEmpty
-        ? job.skillsRequired
-        : job.jobSkills.map((skill) => skill.skillName).toList();
     _skills.addAll(
-      names.map(
-        (name) => _SelectedSkill(
-          name,
-          weights is Map && weights[name] is num
-              ? (weights[name] as num).toInt().clamp(1, 3)
-              : 2,
-        ),
-      ),
+      job.skillsRequired.isNotEmpty
+          ? job.skillsRequired
+          : job.jobSkills.map((skill) => skill.skillName),
     );
     final mix = job.screeningCriteria['question_mix'];
     if (mix is Map) {
@@ -406,14 +340,13 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       _salaryMax,
       _description,
       _requirements,
-      _skillSearch,
     ]) {
       controller.dispose();
     }
     for (final focus in [
       ..._fieldFocus,
       ..._mixFocus,
-      _skillFocus,
+      _addSkillsFocus,
       _salaryMaxFocus,
     ]) {
       focus.dispose();
@@ -541,11 +474,20 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                                         ],
                                       ),
                                     ),
-                                    Positioned(
-                                      right: 0,
-                                      top: math.max(20, 174 - _scrollOffset),
-                                      bottom: 0,
-                                      width: 360,
+                                    ListenableBuilder(
+                                      listenable: _pageScroll,
+                                      builder: (context, child) {
+                                        final offset = _pageScroll.hasClients
+                                            ? _pageScroll.offset
+                                            : 0.0;
+                                        return Positioned(
+                                          right: 0,
+                                          top: math.max(20, 174 - offset),
+                                          bottom: 0,
+                                          width: 360,
+                                          child: child!,
+                                        );
+                                      },
                                       child: SingleChildScrollView(
                                         padding: const EdgeInsets.only(
                                           bottom: 24,
@@ -718,7 +660,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                       const SizedBox(height: 14),
                       _mobileCard(
                         'Skills',
-                        'Tap a ×1 to ×3 badge to set how much a skill matters.',
+                        'Add the skills required for this role.',
                         [_skillsField()],
                       ),
                       const SizedBox(height: 14),
@@ -957,8 +899,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   );
 
   Future<void> _openMobilePreview() async {
-    _skillFocus.unfocus();
-    _skillOverlay.hide();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1086,7 +1026,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final skill in _skills.take(6)) _previewSkill(skill.name),
+                for (final skill in _skills.take(6)) _previewSkill(skill),
                 if (_skills.length > 6) _previewSkill('+${_skills.length - 6}'),
               ],
             ),
@@ -1274,7 +1214,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         ),
         _section(
           'Skills',
-          'Weight skills from ×1 (nice to have) to ×3 (essential).',
+          'Add the skills required for this role.',
           compact,
           children: [_skillsField()],
         ),
@@ -1283,6 +1223,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           'Choose how the interview agent splits its questions.',
           compact,
           last: true,
+          contentGap: 8,
           children: [_interviewMix()],
         ),
       ],
@@ -1295,6 +1236,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     bool compact, {
     required List<Widget> children,
     bool last = false,
+    double contentGap = 20,
   }) => Container(
     padding: EdgeInsets.symmetric(
       horizontal: compact ? 18 : 32,
@@ -1315,7 +1257,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         ),
         const SizedBox(height: 4),
         Text(subtitle, style: _body(13.5, color: _c.text3)),
-        const SizedBox(height: 20),
+        SizedBox(height: contentGap),
         ...children,
       ],
     ),
@@ -1783,205 +1725,56 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     ],
   );
 
-  List<String> _skillOptions() {
-    final query = _skillSearch.text.trim().toLowerCase();
-    final matches = _catalog
-        .where(
-          (name) =>
-              !_skills.any(
-                (selected) => selected.name.toLowerCase() == name.toLowerCase(),
-              ) &&
-              (query.isEmpty || name.toLowerCase().contains(query)),
-        )
-        .take(_isMobile ? 6 : 7)
-        .toList();
-    if (query.isNotEmpty &&
-        !_catalog.any((name) => name.toLowerCase() == query) &&
-        !_skills.any((selected) => selected.name.toLowerCase() == query)) {
-      matches.add(_skillSearch.text.trim());
-    }
-    return matches;
+  bool _hasSkill(String name) {
+    final normalized = name.toLowerCase();
+    return _skills.any((skill) => skill.toLowerCase() == normalized);
   }
 
   void _addSkill(String name) {
-    final clean = name.trim();
-    if (clean.isEmpty ||
-        _skills.length >= 20 ||
-        _skills.any(
-          (selected) => selected.name.toLowerCase() == clean.toLowerCase(),
-        )) {
-      return;
-    }
+    if (_skills.length >= RoleSkillPicker.maxSkills || _hasSkill(name)) return;
     setState(() {
-      _skills.add(_SelectedSkill(clean));
-      _skillSearch.clear();
-      _highlighted = -1;
+      _skills.add(name);
       _errors.remove('skills');
     });
-    _skillOverlay.hide();
   }
 
-  KeyEventResult _onSkillKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final options = _skillOptions();
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      if (options.isNotEmpty) {
-        setState(
-          () => _highlighted = math.min(_highlighted + 1, options.length - 1),
-        );
-      }
-      _skillOverlay.show();
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      if (options.isNotEmpty) {
-        setState(() => _highlighted = math.max(_highlighted - 1, 0));
-      }
-      _skillOverlay.show();
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.enter) {
-      if (options.isNotEmpty) {
-        _addSkill(options[_highlighted < 0 ? 0 : _highlighted]);
-      }
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.escape) {
-      _skillOverlay.hide();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
+  Future<void> _openSkillPicker() async {
+    final selection = await showDialog<List<String>>(
+      context: context,
+      builder: (_) => RoleSkillPicker(initialSkills: _skills),
+    );
+    if (!mounted || selection == null) return;
+    setState(() {
+      _skills
+        ..clear()
+        ..addAll(selection);
+      if (_skills.isNotEmpty) _errors.remove('skills');
+    });
   }
 
   Widget _skillsField() => Column(
     key: _sectionKeys[5],
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _label('Add skills', trailing: '${_skills.length} of 20'),
-      OverlayPortal(
-        controller: _skillOverlay,
-        overlayChildBuilder: (context) {
-          final options = _skillOptions();
-          final width =
-              (_skillFieldKey.currentContext?.findRenderObject() as RenderBox?)
-                  ?.size
-                  .width ??
-              300;
-          return CompositedTransformFollower(
-            link: _skillLink,
-            showWhenUnlinked: false,
-            offset: Offset(0, _isMobile ? 54 : 52),
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: SizedBox(
-                width: width,
-                child: Material(
-                  color: _c.surface,
-                  elevation: 12,
-                  shadowColor: Colors.black.withValues(alpha: .3),
-                  borderRadius: BorderRadius.circular(_isMobile ? 14 : 12),
-                  child: Container(
-                    constraints: BoxConstraints(
-                      maxHeight: _isMobile ? 220 : 240,
-                    ),
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _c.borderStrong),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListView(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      children: [
-                        for (var i = 0; i < options.length; i++)
-                          InkWell(
-                            key: Key('skill-option-$i'),
-                            onTap: () => _addSkill(options[i]),
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: _isMobile ? 12 : 10,
-                                vertical: _isMobile ? 12 : 9,
-                              ),
-                              decoration: BoxDecoration(
-                                color: i == _highlighted ? _c.accentSoft : null,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                i == options.length - 1 &&
-                                        !_catalog.any(
-                                          (name) =>
-                                              name.toLowerCase() ==
-                                              options[i].toLowerCase(),
-                                        )
-                                    ? 'Add “${options[i]}”'
-                                    : options[i],
-                                style: _body(
-                                  14,
-                                  color: i == _highlighted
-                                      ? _c.accent
-                                      : _c.text,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-        child: CompositedTransformTarget(
-          link: _skillLink,
-          child: Focus(
-            onKeyEvent: _onSkillKey,
-            onFocusChange: (_) => _refresh(),
-            child: Builder(
-              builder: (context) {
-                final focused = Focus.of(context).hasFocus;
-                return Container(
-                  key: _skillFieldKey,
-                  height: _isMobile ? 48 : 46,
-                  decoration: _inputBox(
-                    focused,
-                    _errors.containsKey('skills'),
-                    radius: _isMobile ? 12 : 10,
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 14),
-                      Icon(Icons.search, size: 16, color: _c.text3),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          key: const Key('create-role-skill-search'),
-                          controller: _skillSearch,
-                          focusNode: _skillFocus,
-                          textInputAction: _isMobile
-                              ? TextInputAction.done
-                              : TextInputAction.search,
-                          enabled: _skills.length < 20,
-                          style: _body(14.5),
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Search skills, e.g. Django',
-                            hintStyle: _body(14.5, color: _c.text3),
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 13,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+      Row(
+        children: [
+          OutlinedButton.icon(
+            key: const Key('create-role-add-skills'),
+            focusNode: _addSkillsFocus,
+            onPressed: _openSkillPicker,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Skills'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _c.accent,
+              side: BorderSide(color: _c.borderStrong),
             ),
           ),
-        ),
+          const Spacer(),
+          Text(
+            '${_skills.length} of ${RoleSkillPicker.maxSkills}',
+            style: _body(12.5, color: _c.text3),
+          ),
+        ],
       ),
       const SizedBox(height: 14),
       ConstrainedBox(
@@ -2002,16 +1795,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           runSpacing: 6,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            if (_suggested.any(
-              (name) => !_skills.any(
-                (skill) => skill.name.toLowerCase() == name.toLowerCase(),
-              ),
-            ))
+            if (_suggested.any((name) => !_hasSkill(name)))
               Text('Suggested:', style: _body(13, color: _c.text3)),
             for (final name in _suggested)
-              if (!_skills.any(
-                (skill) => skill.name.toLowerCase() == name.toLowerCase(),
-              ))
+              if (!_hasSkill(name))
                 _SuggestedSkillChip(
                   key: Key('suggested-skill-$name'),
                   name: name,
@@ -2022,12 +1809,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                 ),
           ],
         ),
-      if (_isMobile &&
-          _suggested.any(
-            (name) => !_skills.any(
-              (skill) => skill.name.toLowerCase() == name.toLowerCase(),
-            ),
-          ))
+      if (_isMobile && _suggested.any((name) => !_hasSkill(name)))
         SizedBox(
           height: 36,
           child: ListView(
@@ -2038,9 +1820,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               ),
               const SizedBox(width: 8),
               for (final name in _suggested)
-                if (!_skills.any(
-                  (skill) => skill.name.toLowerCase() == name.toLowerCase(),
-                )) ...[
+                if (!_hasSkill(name)) ...[
                   _SuggestedSkillChip(
                     key: Key('suggested-skill-$name'),
                     name: name,
@@ -2058,7 +1838,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     ],
   );
 
-  Widget _skillChip(_SelectedSkill skill) => Container(
+  Widget _skillChip(String skill) => Container(
     height: _isMobile ? 36 : 34,
     constraints: BoxConstraints(
       maxWidth: _isMobile
@@ -2078,27 +1858,15 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           child: Padding(
             padding: const EdgeInsets.only(left: 13, right: 8),
             child: Text(
-              skill.name,
+              skill,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: _body(13.5, weight: FontWeight.w500, color: _c.accent),
             ),
           ),
         ),
-        Container(width: 1, height: 20, color: _c.accent.withValues(alpha: .3)),
         InkWell(
-          key: Key('skill-weight-${skill.name}'),
-          onTap: () => setState(() => skill.weight = skill.weight % 3 + 1),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 9),
-            child: Text(
-              '×${skill.weight}',
-              style: _body(12.5, weight: FontWeight.w600, color: _c.accent),
-            ),
-          ),
-        ),
-        InkWell(
-          key: Key('skill-remove-${skill.name}'),
+          key: Key('skill-remove-$skill'),
           onTap: () => setState(() => _skills.remove(skill)),
           child: Padding(
             padding: const EdgeInsets.only(left: 2, right: 10),
@@ -2143,7 +1911,6 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           ),
         ),
       ),
-      const SizedBox(height: 18),
       for (var i = 0; i < _mix.length; i++)
         Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -2379,8 +2146,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                     spacing: 6,
                     runSpacing: 6,
                     children: [
-                      for (final skill in _skills.take(6))
-                        _previewSkill(skill.name),
+                      for (final skill in _skills.take(6)) _previewSkill(skill),
                       if (_skills.length > 6)
                         _previewSkill('+${_skills.length - 6}'),
                     ],
@@ -2750,13 +2516,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       final restoredThreshold = (data['threshold'] as num?)?.toDouble();
       final restoredSkills = (data['skills'] as List? ?? [])
           .whereType<Map>()
-          .map((item) {
-            final name = item['name']?.toString().trim() ?? '';
-            final weight = (item['weight'] as num?)?.toInt() ?? 2;
-            return _SelectedSkill(name, weight.clamp(1, 3));
-          })
-          .where((skill) => skill.name.isNotEmpty)
-          .take(20)
+          .map((item) => item['name']?.toString().trim() ?? '')
+          .where((name) => name.isNotEmpty)
+          .take(RoleSkillPicker.maxSkills)
           .toList();
       final restoredMix = data['mix'] as List?;
       final mixValues = restoredMix?.length == _mix.length
@@ -2817,8 +2579,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         'description': _description.text,
         'requirements': _requirements.text,
         'skills': [
-          for (final skill in _skills)
-            {'name': skill.name, 'weight': skill.weight},
+          for (final skill in _skills) {'name': skill},
         ],
         'threshold': _threshold,
         'autoShortlist': _autoShortlist,
@@ -2890,7 +2651,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     }
     if (!mounted) return;
     if (index == 0 || index == 2 || index == 4 || index == 5) {
-      (index == 5 ? _skillFocus : _fieldFocus[index]).requestFocus();
+      (index == 5 ? _addSkillsFocus : _fieldFocus[index]).requestFocus();
     } else if (index == 1) {
       _fieldFocus[1].requestFocus();
     }
@@ -2934,7 +2695,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         title: _title.text.trim(),
         description: _description.text.trim(),
         requirements: _requirements.text.trim(),
-        skillsRequired: _skills.map((skill) => skill.name).toList(),
+        skillsRequired: _skills.toList(),
         location: _location!,
         salary: 'PKR ${_salaryMin.text}–${_salaryMax.text}',
         jobType: _apiJobType,
@@ -2953,10 +2714,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             for (var i = 0; i < _mix.length; i++)
               _mixNames[i].toLowerCase(): _mix[i],
           },
-          'skill_weights': {
-            for (final skill in _skills) skill.name: skill.weight,
-          },
-        },
+        }..remove('skill_weights'),
       );
       final saved = _savedJobId == null
           ? await JobService.createJob(payload)

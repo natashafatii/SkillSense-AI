@@ -12,16 +12,20 @@ class WebCameraAdapter extends CameraAdapter {
   WebCameraAdapter({
     Future<web.MediaStream> Function(web.MediaStreamConstraints)? acquire,
     Future<JSArray<web.MediaDeviceInfo>> Function()? enumerateDevices,
+    bool Function()? pageHidden,
   }) : _acquire =
            acquire ??
            ((constraints) => web.window.navigator.mediaDevices
                .getUserMedia(constraints)
                .toDart),
+       _pageHidden = pageHidden ?? (() => web.document.hidden),
        _enumerateDevices =
            enumerateDevices ??
            (() => web.window.navigator.mediaDevices.enumerateDevices().toDart) {
     _visibility = ((web.Event _) {
-      if (web.document.hidden) _interrupt(MediaFailureCode.background);
+      if (_pageHidden() && !_keepAliveInBackground) {
+        _interrupt(MediaFailureCode.background);
+      }
     }).toJS;
     _pageHide = ((web.Event _) => _interrupt(MediaFailureCode.background)).toJS;
     web.document.addEventListener('visibilitychange', _visibility);
@@ -29,6 +33,7 @@ class WebCameraAdapter extends CameraAdapter {
   }
   final Future<web.MediaStream> Function(web.MediaStreamConstraints) _acquire;
   final Future<JSArray<web.MediaDeviceInfo>> Function() _enumerateDevices;
+  final bool Function() _pageHidden;
   late final JSFunction _visibility, _pageHide;
   web.MediaStream? _camera, _microphone;
   final web.HTMLVideoElement _video = web.HTMLVideoElement();
@@ -43,6 +48,10 @@ class WebCameraAdapter extends CameraAdapter {
       _testingMic = false;
   int _generation = 0;
   int _microphoneGeneration = 0;
+  bool _keepAliveInBackground = false;
+  @override
+  set keepAliveInBackground(bool value) => _keepAliveInBackground = value;
+  bool get _pageUsable => _keepAliveInBackground || !_pageHidden();
   @override
   bool get supported =>
       web.window.isSecureContext &&
@@ -51,7 +60,7 @@ class WebCameraAdapter extends CameraAdapter {
   bool get cameraReady =>
       !_disposed &&
       _ready &&
-      !web.document.hidden &&
+      _pageUsable &&
       _camera != null &&
       _camera!.getVideoTracks().toDart.any(
         (t) => t.readyState == 'live' && t.enabled && !t.muted,
@@ -71,13 +80,13 @@ class WebCameraAdapter extends CameraAdapter {
       throw const MediaFailure(MediaFailureCode.insecure);
     }
     if (!supported) throw const MediaFailure(MediaFailureCode.unsupported);
-    if (web.document.hidden) {
+    if (!_pageUsable) {
       throw const MediaFailure(MediaFailureCode.background);
     }
   }
 
   bool _current(int generation) =>
-      !_disposed && generation == _generation && !web.document.hidden;
+      !_disposed && generation == _generation && _pageUsable;
   static void _release(web.MediaStream? stream) {
     if (stream == null) return;
     for (final track in stream.getTracks().toDart) {
@@ -116,7 +125,7 @@ class WebCameraAdapter extends CameraAdapter {
               'video': {
                 'width': {'ideal': 640, 'max': 1280},
                 'height': {'ideal': 480, 'max': 720},
-                'frameRate': {'ideal': 15, 'max': 30},
+                'frameRate': {'ideal': 30, 'max': 30},
                 if (deviceId != null) 'deviceId': {'exact': deviceId},
               },
             }.jsify()!
@@ -230,15 +239,21 @@ class WebCameraAdapter extends CameraAdapter {
     }
   }
 
-  @override
-  Widget buildPreview() => HtmlElementView.fromTagName(
-    tagName: 'video',
-    onElementCreated: (element) {
-      if (_disposed) return;
-      _preview = element as web.HTMLVideoElement;
-      _attachPreview();
-    },
+  // Keep the platform view stable across transport acknowledgements. Camera
+  // preview cadence is independent of the lower-rate analysis sampler.
+  late final Widget _previewWidget = RepaintBoundary(
+    child: HtmlElementView.fromTagName(
+      tagName: 'video',
+      onElementCreated: (element) {
+        if (_disposed) return;
+        _preview = element as web.HTMLVideoElement;
+        _attachPreview();
+      },
+    ),
   );
+
+  @override
+  Widget buildPreview() => _previewWidget;
   @override
   Future<void> testMicrophone() async {
     _check();

@@ -31,6 +31,7 @@ class RecruitmentReviewScreen extends StatefulWidget {
 class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
   late final RecruitmentReviewController controller;
   final reason = TextEditingController(),
+      decisionReason = TextEditingController(),
       overrideReason = TextEditingController();
   String? transcriptId, compareTranscriptId, evaluationId, compareEvaluationId;
   DateTime? scheduledAt;
@@ -50,6 +51,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
   void _changed() {
     if (controller.review == null && controller.error == 'Session changed.') {
       reason.clear();
+      decisionReason.clear();
       overrideReason.clear();
     }
     if (mounted) setState(() {});
@@ -60,6 +62,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
     controller.removeListener(_changed);
     controller.dispose();
     reason.dispose();
+    decisionReason.dispose();
     overrideReason.dispose();
     super.dispose();
   }
@@ -110,12 +113,13 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       false;
   Future<void> decision(String outcome, {bool override = false}) async {
     final r = controller.review!;
-    if (reason.text.trim().isEmpty ||
-        (override && overrideReason.text.trim().isEmpty)) {
+    final rationale = decisionReason.text.trim();
+    final justification = override ? overrideReason.text.trim() : null;
+    if (rationale.isEmpty || justification == '') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Enter the reason and, for an early override, a separate override justification.',
+            'Enter a decision reason and a separate justification if overriding.',
           ),
         ),
       );
@@ -127,15 +131,15 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           : 'Record $outcome decision',
       '${r.application.candidateName ?? r.application.candidateEmail}\nApplication version ${r.application.version}\n'
       'Current outcome: ${r.decision?.outcome ?? 'None'}\nLatest evaluation: ${r.latestEvaluation?.revision.value ?? 'Unavailable'} (${r.latestEvaluation?.id ?? 'Unavailable'})\n'
-      '${override ? 'You are deliberately overriding normal evidence readiness.\nJustification: ${overrideReason.text}\n' : ''}Reason: ${reason.text}',
+      '${override ? 'You are deliberately overriding normal evidence readiness.\nJustification: $justification\n' : ''}Reason: $rationale',
     );
     if (!accepted || !mounted) return;
     await controller.command((captured) async {
       await controller.service.decide(
         captured,
         outcome,
-        reason.text,
-        overrideReason: override ? overrideReason.text : null,
+        rationale,
+        overrideReason: justification,
       );
     }, reviewed: r);
   }
@@ -271,7 +275,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           'Assessment ${s.assessmentId ?? 'Unavailable'} revision ${s.assessmentRevision ?? 'Unavailable'}\nEvaluation ${s.evaluationId ?? 'Unavailable'} revision ${s.evaluationRevision ?? 'Unavailable'}',
         ),
         line(
-          'Server weights: ${s.weights}\nBreakdown: ${s.breakdown}\nCompleted: ${localTime(s.completedAt)}\n${s.explanation}\n${s.error}',
+          'Server weights: ${s.weights}\nBreakdown: ${s.breakdown}\nCompleted: ${localTime(s.completedAt)}\n${s.explanation}\n${s.blockers.isNotEmpty ? s.blockers.join('\n') : s.error}',
         ),
       ],
       const Text(
@@ -569,9 +573,32 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         const Text(
           'Select the latest attempt to review its current evidence before recording or reversing a decision.',
         ),
-      line(
-        'Current outcome: ${d?.legacy == true ? 'Legacy — unrecorded decision' : d?.outcome ?? 'None'}\nActor: ${d?.actor ?? 'Unavailable'} · ${localTime(d?.createdAt)}\nEvaluation: ${d?.evaluation ?? 'Unavailable'}\nReason: ${d?.reason ?? ''}${d?.override == true ? '\nOverride: ${d?.overrideReason}' : ''}',
-      ),
+      if (d == null)
+        const Text(
+          'No hiring decision has been recorded. Feedback release is a separate step.',
+        )
+      else
+        line(
+          'Current outcome: ${d.legacy ? 'Legacy — unrecorded decision' : d.outcome}\nActor: ${d.actor ?? 'Unavailable'} · ${localTime(d.createdAt)}\nDecision evaluation: ${d.evaluation ?? 'Unavailable'}\nReason: ${d.reason}${d.override ? '\nOverride: ${d.overrideReason}' : ''}',
+        ),
+      if (r.latestEvaluation case final evaluation?)
+        Text(
+          'Latest evaluation: revision ${evaluation.revision.value} · ${evaluation.status}',
+        ),
+      if (currentAttemptReviewed &&
+          (d == null && !finalStage ||
+              r.application.status == ApplicationStatus.decision))
+        TextField(
+          key: const Key('hiring-decision-reason'),
+          controller: decisionReason,
+          maxLength: 2000,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Decision reason (required)',
+            helperText: 'Used for Hire, Reject, early override, or reversal.',
+          ),
+        ),
       Wrap(
         children: [
           button(
@@ -621,12 +648,21 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       button(
         'Reverse recorded decision',
         () async {
+          final rationale = decisionReason.text.trim();
+          if (rationale.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Enter a reason for reversing the decision.'),
+              ),
+            );
+            return;
+          }
           if (await confirm(
             'Reverse current decision?',
-            'Outcome ${d?.outcome ?? 'Legacy / unavailable'}\nDecision evaluation ${d?.evaluation ?? 'Unavailable'} (revision ${r.evaluations?.revisions.where((e) => e.id == d?.evaluation).firstOrNull?.revision.value ?? 'Unavailable'})\nCurrent evaluation revision ${r.latestEvaluation?.revision.value ?? 'Unavailable'}\nApplication version ${r.application.version}\nReason: ${reason.text}\nThis does not record a replacement decision.',
+            'Outcome ${d?.outcome ?? 'Legacy / unavailable'}\nDecision evaluation ${d?.evaluation ?? 'Unavailable'} (revision ${r.evaluations?.revisions.where((e) => e.id == d?.evaluation).firstOrNull?.revision.value ?? 'Unavailable'})\nCurrent evaluation revision ${r.latestEvaluation?.revision.value ?? 'Unavailable'}\nApplication version ${r.application.version}\nReason: $rationale\nThis does not record a replacement decision.',
           )) {
             await controller.command((captured) async {
-              await controller.service.reverse(captured, reason.text);
+              await controller.service.reverse(captured, rationale);
             }, reviewed: r);
           }
         },

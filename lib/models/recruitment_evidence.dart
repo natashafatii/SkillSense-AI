@@ -207,6 +207,7 @@ class EvaluationHistory {
 }
 
 class ServerScore {
+  final List<String> blockers;
   final String status, error, explanation;
   final String? id, rubric;
   final int? revision, rubricVersion;
@@ -217,7 +218,10 @@ class ServerScore {
   final int? assessmentRevision, evaluationRevision;
   final DateTime? completedAt;
   ServerScore.fromJson(Json j)
-    : status = j['status']?.toString() ?? 'UNKNOWN',
+    : blockers = List.unmodifiable(
+        (j['blockers'] as List? ?? []).map((v) => v.toString()),
+      ),
+      status = j['status']?.toString() ?? 'UNKNOWN',
       id = j['score_revision']?.toString(),
       revision = j['revision'] == null ? null : ApiValue.integer(j['revision']),
       rubric = j['rubric']?.toString(),

@@ -2,11 +2,10 @@ import '../application_screening_screen.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/application.dart';
 import '../../models/resume_detail.dart';
-import '../../services/api_client.dart';
+import '../../services/resume_download.dart';
 import '../../services/api_exception.dart';
 import '../../services/application_service.dart';
 import '../../services/resume_service.dart';
@@ -133,17 +132,17 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  Future<void> _openFile(String url) async {
-    final parsed = Uri.tryParse(url);
-    if (parsed == null) return;
-    final uri = parsed.hasScheme
-        ? parsed
-        : Uri.parse(ApiClient.baseUrl).resolveUri(parsed);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
-        mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open resume.')));
+  Future<void> _openFile(ResumeDetail resume) async {
+    try {
+      await downloadResume(resume.id, resume.filename);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not download resume. Please try again.'),
+          ),
+        );
+      }
     }
   }
 
@@ -303,6 +302,17 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
               runSpacing: 10,
               alignment: WrapAlignment.end,
               children: [
+                if (app != null)
+                  OutlinedButton(
+                    onPressed: () async {
+                      await Navigator.of(context).pushNamed(
+                        '/recruiter/candidate-report',
+                        arguments: app.id,
+                      );
+                      if (mounted) await _load();
+                    },
+                    child: const Text('View candidate report'),
+                  ),
                 OutlinedButton(
                   onPressed: _loading ? null : _openScreening,
                   child: const Text('Review screening evidence'),
@@ -402,7 +412,7 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
             ),
             if (resume.fileUrl?.isNotEmpty == true)
               TextButton(
-                onPressed: () => _openFile(resume.fileUrl!),
+                onPressed: () => _openFile(resume),
                 child: const Text('Open / Download'),
               ),
           ],

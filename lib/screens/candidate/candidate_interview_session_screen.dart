@@ -64,13 +64,7 @@ class _CandidateInterviewSessionScreenState
   void didPop() => _lifecycle.pauseLocal();
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if ([
-      AppLifecycleState.hidden,
-      AppLifecycleState.paused,
-      AppLifecycleState.detached,
-    ].contains(state)) {
-      _lifecycle.pauseLocal();
-    }
+    _lifecycle.handleAppLifecycle(state);
   }
 
   @override
@@ -118,7 +112,7 @@ class _CandidateInterviewSessionScreenState
       widget.identity,
       service: analysis,
     );
-    _media = InterviewMediaController();
+    _media = InterviewMediaController(keepAliveInBackground: true);
     _publisher = CandidatePublisherController(
       widget.identity,
       _media,

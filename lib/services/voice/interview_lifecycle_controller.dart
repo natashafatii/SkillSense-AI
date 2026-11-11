@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show AppLifecycleState;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../models/interview_analysis_contract.dart';
@@ -88,6 +89,19 @@ class InterviewLifecycleController extends ChangeNotifier {
   bool get isCurrent =>
       !_disposed && !_invalid && _account == SessionScope.generation;
   bool get videoRequired => _snapshot?.videoRequired ?? true;
+
+  void handleAppLifecycle(AppLifecycleState state) {
+    // SDK stop disconnects the provider call; it is not a resumable pause.
+    // Keep an active call when focus changes. Navigation/logout still clean up.
+    if (state == AppLifecycleState.detached ||
+        ((state == AppLifecycleState.hidden ||
+                state == AppLifecycleState.paused) &&
+            _state != InterviewLifecycleState.live &&
+            _state != InterviewLifecycleState.joining)) {
+      pauseLocal();
+    }
+  }
+
   bool get canUseMedia =>
       isCurrent &&
       !_finishWanted &&

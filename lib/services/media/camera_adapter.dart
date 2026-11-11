@@ -148,6 +148,10 @@ class EncodedCameraFrame {
 
 /// Production implementation is platform-isolated; fakes belong only in tests.
 abstract class CameraAdapter extends ChangeNotifier {
+  /// Live interviews can keep existing devices while another app has focus.
+  /// Lobby device checks retain the default stop-on-background behavior.
+  set keepAliveInBackground(bool value) {}
+
   /// Cancel/release only local microphone testing; the voice SDK owns its audio.
   void stopMicrophone() {}
   bool get supported;

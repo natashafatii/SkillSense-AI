@@ -359,7 +359,7 @@ class CandidateInterviewWorkspace extends StatelessWidget {
               ),
               if (lifecycle.videoRequired)
                 OutlinedButton.icon(
-                  onPressed: media.busy || !lifecycle.canUseMedia
+                  onPressed: media.busy || !lifecycle.canUseMedia || _live
                       ? null
                       : () {
                           if (media.cameraReady) {
@@ -375,7 +375,11 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                     size: 17,
                   ),
                   label: Text(
-                    media.cameraReady ? 'Turn camera off' : 'Turn camera on',
+                    _live
+                        ? 'Camera required'
+                        : media.cameraReady
+                        ? 'Turn camera off'
+                        : 'Turn camera on',
                   ),
                 ),
             ],
@@ -534,7 +538,8 @@ class CandidateInterviewWorkspace extends StatelessWidget {
   String get _voiceLabel => switch (lifecycle.state) {
     InterviewLifecycleState.loading ||
     InterviewLifecycleState.joining => 'Connecting',
-    InterviewLifecycleState.interrupted => 'Paused',
+    InterviewLifecycleState.interrupted =>
+      lifecycle.snapshot?.audioEndedAt != null ? 'Ended' : 'Disconnected',
     InterviewLifecycleState.unavailable => 'Unavailable',
     _ => 'Not connected',
   };
@@ -579,11 +584,13 @@ class CandidateInterviewWorkspace extends StatelessWidget {
               children: [
                 Text(
                   interrupted
-                      ? 'Your interview is paused'
+                      ? lifecycle.canUseMedia
+                            ? 'Your connection was interrupted'
+                            : 'This session can no longer be joined'
                       : unavailable
                       ? 'Audio needs your attention'
                       : videoIssue
-                      ? 'Audio and camera connect separately'
+                      ? 'Video connection needs attention'
                       : _live
                       ? 'You’re connected'
                       : 'Settle in before you begin',
@@ -602,7 +609,7 @@ class CandidateInterviewWorkspace extends StatelessWidget {
                       : unavailable
                       ? 'We couldn’t connect your audio. Check your microphone and try joining again.'
                       : videoIssue
-                      ? 'Your conversation can be live while the video connection is being restored.'
+                      ? publisher.notice
                       : _live
                       ? 'Keep this tab open and your camera in position during the conversation.'
                       : 'Choose a quiet place, check your camera, and join when you’re ready.',

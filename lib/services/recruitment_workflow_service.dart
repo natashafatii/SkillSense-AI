@@ -93,6 +93,7 @@ class RecruitmentWorkflowService {
 
   Future<List<RecruiterInterview>> interviews({
     CancelToken? cancelToken,
+    String? applicationId,
   }) async {
     if (_role() != 'RECRUITER') throw StateError('Recruiter access required.');
     final generation = SessionScope.generation;
@@ -102,7 +103,10 @@ class RecruitmentWorkflowService {
       for (var page = 1; page <= 100; page++) {
         final r = await dio.get(
           '/interviews/',
-          queryParameters: {'page': page},
+          queryParameters: {
+            'page': page,
+            if (applicationId != null) 'application': applicationId,
+          },
           cancelToken: cancelToken,
         );
         if (generation != SessionScope.generation || _role() != 'RECRUITER') {

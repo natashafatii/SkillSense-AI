@@ -14,6 +14,8 @@ import '../services/session_scope.dart';
 import '../services/auth_service.dart';
 import '../widgets/question_preparation_panel.dart';
 import 'hr/schedule_interview_screen.dart';
+import '../widgets/candidate_scaffold.dart';
+import 'candidate/widgets/candidate_application_summary.dart';
 
 /// Application-owned progress and screening actions, shared by both roles.
 class ApplicationScreeningScreen extends StatefulWidget {
@@ -255,6 +257,7 @@ class _ApplicationScreeningScreenState
   @override
   Widget build(BuildContext context) {
     final app = _app;
+    if (!_recruiter) return _buildCandidateView(app);
     final assessment = app?.assessment;
     final evidence = app?.screening;
     final criteria = assessment?['criteria_results'] as List? ?? const [];
@@ -319,9 +322,15 @@ class _ApplicationScreeningScreenState
                     Text(
                       'Assessment ${assessment['revision']} · policy ${assessment['policy_version']}',
                     ),
-                  Text(
-                    'Eligibility: ${evidence?.eligibility ?? 'UNKNOWN'}${evidence?.eligibility == 'UNKNOWN' ? ' — requires review' : ''}',
-                  ),
+                  Text(switch (evidence?.eligibility) {
+                    'PASS' =>
+                      'Requirements check: All required criteria verified',
+                    'FAIL' =>
+                      'Requirements check: Some requirements are not met',
+                    'UNKNOWN' =>
+                      'Requirements check: Needs recruiter review — some requirements could not be verified',
+                    _ => 'Requirements check: Awaiting screening',
+                  }),
                   Text(
                     'Policy recommendation: ${evidence?.outcome ?? 'Unavailable'}',
                   ),
@@ -352,7 +361,13 @@ class _ApplicationScreeningScreenState
                   for (final row in criteria.whereType<Map>())
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: Text('${row['requirement']} — ${row['status']}'),
+                      title: Text(
+                        '${row['requirement']} — ${switch ((row['kind'], row['status'])) {
+                          ('skill', 'UNKNOWN') => 'Missing',
+                          (_, 'UNKNOWN') => 'Needs verification',
+                          _ => row['status'],
+                        }}',
+                      ),
                       subtitle: Text('${row['evidence']}'),
                     ),
                   if ((assessment?['error_message'] ?? '')
@@ -473,6 +488,92 @@ class _ApplicationScreeningScreenState
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCandidateView(Application? app) {
+    final canRetry =
+        app != null &&
+        app.allowedActions.contains('retry-screening') &&
+        !{'WAIT', 'CONTACT_SUPPORT'}.contains(app.screening?.recoveryAction);
+    return CandidateScaffold(
+      currentRoute: '/candidate/applications',
+      body: Column(
+        children: [
+          RecruiterTopBar(pageTitle: 'My application', candidate: true),
+          Expanded(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 850),
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    24,
+                    24,
+                    MediaQuery.of(context).size.width < 900 ? 164 : 32,
+                  ),
+                  children: [
+                    Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          label: const Text('Back'),
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: _busy ? null : _load,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Refresh'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(_error!),
+                      ),
+                    if (app == null && _error == null)
+                      const Center(child: CircularProgressIndicator()),
+                    if (app != null)
+                      CandidateApplicationSummary(application: app),
+                    if (_reviewRequired)
+                      TextButton(
+                        onPressed: _busy || !_fresh
+                            ? null
+                            : () => setState(() => _reviewRequired = false),
+                        child: const Text(
+                          'I reviewed the refreshed application',
+                        ),
+                      ),
+                    if (canRetry)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: FilledButton(
+                          onPressed:
+                              _busy ||
+                                  _reviewRequired ||
+                                  !_fresh ||
+                                  app.status == ApplicationStatus.unknown
+                              ? null
+                              : () => _act('retry-screening'),
+                          child: Text(
+                            app.screening?.recoveryAction == 'REPLACE_RESUME'
+                                ? 'Replace resume and retry'
+                                : 'Retry resume processing',
+                          ),
+                        ),
+                      ),
+                    if (_busy) const LinearProgressIndicator(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -66,6 +66,18 @@ class AppNotification {
   final String type;
   final NotificationLinks links;
   NotificationEvent get event => NotificationEvent.parse(type);
+  String get displayType => switch (event) {
+    NotificationEvent.applicationReceived => 'Application received',
+    NotificationEvent.applicationStatusChanged => 'Application update',
+    NotificationEvent.interviewScheduled => 'Interview scheduled',
+    NotificationEvent.questionReviewReady => 'Questions ready',
+    NotificationEvent.evaluationReady => 'Evaluation ready',
+    NotificationEvent.evaluationFailed => 'Evaluation unavailable',
+    NotificationEvent.scoreReady => 'Score ready',
+    NotificationEvent.feedbackReleased => 'Feedback released',
+    NotificationEvent.feedbackRetracted => 'Feedback withdrawn',
+    NotificationEvent.unknown => 'Notification',
+  };
   final String message;
   final bool isRead;
   final DateTime createdAt;

@@ -27,7 +27,7 @@ class AuthServiceWeb
   @override
   bool get isGoogleCallback =>
       Uri.base.queryParameters['skillsense_oauth'] == 'google' ||
-      Uri.base.fragment == '/oauth/callback';
+      Uri.base.fragment.split('?').first == '/oauth/callback';
 
   Map<String, dynamic>? get _googleAttempt {
     try {
@@ -40,7 +40,8 @@ class AuthServiceWeb
       final age = DateTime.now().difference(started);
       if (age.isNegative || age > const Duration(minutes: 30)) return null;
       final automaticRole = data['sign_in'] == true && data['role'] == null;
-      if (!automaticRole && !['CANDIDATE', 'RECRUITER'].contains(data['role'])) {
+      if (!automaticRole &&
+          !['CANDIDATE', 'RECRUITER'].contains(data['role'])) {
         return null;
       }
       return data;
@@ -246,13 +247,15 @@ class AuthServiceWeb
       final query = Map<String, String>.from(Uri.base.queryParameters)
         ..remove('skillsense_oauth');
       web.window.history.replaceState(
-        null,
+        web.window.history.state,
         '',
         Uri.base
             .replace(
               queryParameters: query.isEmpty ? null : query,
               query: query.isEmpty ? '' : null,
-              fragment: '',
+              fragment: Uri.base.fragment.split('?').first == '/oauth/callback'
+                  ? ''
+                  : Uri.base.fragment,
             )
             .toString(),
       );

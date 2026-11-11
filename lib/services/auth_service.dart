@@ -92,6 +92,15 @@ class AuthService {
       }
     });
     await instance.initialize(publishableKey);
+    // A completed redirect can remain in browser history after its temporary
+    // attempt has been consumed or expired. It must not block restoration of
+    // an existing Clerk session. Pending OAuth/profile flows still own routing.
+    if (isGoogleCallback &&
+        instance.isSignedIn &&
+        pendingGoogleRole == null &&
+        !pendingGoogleSignIn) {
+      clearGoogleRedirect();
+    }
     if (instance.isSignedIn && !isGoogleCallback) await _restoreSession();
   }
 

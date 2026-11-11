@@ -9,9 +9,12 @@ enum DeviceCheckState { notChecked, checking, ready, stopped, failed }
 
 /// Owns local devices only. Voice/socket/report state stay in the F1 controller.
 class InterviewMediaController extends ChangeNotifier {
-  InterviewMediaController({CameraAdapter? adapter})
-    : adapter = adapter ?? createCameraAdapter(),
-      _account = SessionScope.generation {
+  InterviewMediaController({
+    CameraAdapter? adapter,
+    bool keepAliveInBackground = false,
+  }) : adapter = adapter ?? createCameraAdapter(),
+       _account = SessionScope.generation {
+    this.adapter.keepAliveInBackground = keepAliveInBackground;
     sampler = BoundedFrameSampler(
       this.adapter,
       interval: Duration(

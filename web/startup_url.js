@@ -4,7 +4,17 @@
 (() => {
   const current = new URL(window.location.href);
   const path = current.pathname.replace(/^\/{2,}/, '/');
-  if (path === current.pathname) return;
+  const repaired = path !== current.pathname;
   current.pathname = path;
+  // Staff links can be shared as clean paths. Enter Flutter's existing hash
+  // routing format before startup so subsequent console navigation and reloads
+  // use one route, including an optional returnTo query.
+  const adminLink = !current.hash && /^\/admin\/[a-z-]+$/.test(path);
+  if (adminLink) {
+    current.hash = path + current.search;
+    current.search = '';
+    current.pathname = new URL(document.baseURI).pathname;
+  }
+  if (!repaired && !adminLink) return;
   window.history.replaceState(window.history.state, '', current.href);
 })();
