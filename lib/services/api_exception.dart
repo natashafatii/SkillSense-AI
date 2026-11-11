@@ -12,6 +12,15 @@ class ApiException implements Exception {
   bool get requiresStateRefresh =>
       requiresReview || statusCode == null || statusCode == 503;
 
+  /// A confirmed pre-call rejection can be retried without session recovery.
+  /// Unknown/network failures remain conservative to avoid duplicate calls.
+  bool get voiceStartNeedsRecovery =>
+      statusCode == null ||
+      statusCode == 409 ||
+      ((statusCode ?? 0) >= 500 &&
+          !(validationBody is Map &&
+              (validationBody as Map)['call_creation_uncertain'] == false));
+
   final String message;
   final Map<String, dynamic>? fieldErrors;
 

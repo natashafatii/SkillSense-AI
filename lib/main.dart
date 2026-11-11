@@ -32,7 +32,7 @@ import 'screens/candidate/candidate_notifications_screen.dart';
 import 'screens/candidate/candidate_resume_management_screen.dart';
 import 'screens/dashboard/command_deck_screen.dart';
 import 'screens/hr/analytics_screen.dart';
-import 'screens/admin/admin_portal.dart';
+import 'screens/admin/admin_entry.dart';
 import 'screens/admin/aurora_tokens.dart';
 import 'screens/hr/candidate_report_screen.dart';
 import 'screens/hr/create_role_screen.dart';
@@ -59,16 +59,6 @@ import 'services/route_storage.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final adminLaunchRoute = adminRoutes.values.cast<String?>().firstWhere(
-    (route) =>
-        route == Uri.base.fragment.split('?').first || route == Uri.base.path,
-    orElse: () => null,
-  );
-  if (adminLaunchRoute != null) {
-    runApp(SkillSenseApp(initialAdminRoute: adminLaunchRoute));
-    return;
-  }
-
   // Set the status bar style
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -92,11 +82,20 @@ void main() async {
     return;
   }
 
+  final launchUrl = Uri.base;
+  final adminLaunch =
+      adminLocation(launchUrl.fragment) ??
+      adminLocation(
+        Uri(
+          path: launchUrl.path,
+          query: launchUrl.hasQuery ? launchUrl.query : null,
+        ).toString(),
+      );
   runApp(
     // Both platforms use the verified session owned by AuthService.
     wrapWithPlatformAuth(
       publishableKey: EnvConfig.clerkPublishableKey,
-      child: const SkillSenseApp(),
+      child: SkillSenseApp(initialAdminRoute: adminLaunch?.toString()),
     ),
   );
 }
@@ -178,7 +177,7 @@ class AppRouteObserver extends NavigatorObserver {
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
     final name = previousRoute?.settings.name;
-    if (name != null && name != '/' && !adminRoutes.containsValue(name)) {
+    if (name != null && name != '/' && adminLocation(name) == null) {
       RouteStorage.saveLastRoute(name);
     }
   }
@@ -188,7 +187,7 @@ class AppRouteObserver extends NavigatorObserver {
     super.didPush(route, previousRoute);
     if (route.settings.name != null &&
         route.settings.name != '/' &&
-        !adminRoutes.containsValue(route.settings.name)) {
+        adminLocation(route.settings.name) == null) {
       RouteStorage.saveLastRoute(route.settings.name!);
     }
   }
@@ -198,7 +197,7 @@ class AppRouteObserver extends NavigatorObserver {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
     if (newRoute?.settings.name != null &&
         newRoute!.settings.name != '/' &&
-        !adminRoutes.containsValue(newRoute.settings.name)) {
+        adminLocation(newRoute.settings.name) == null) {
       RouteStorage.saveLastRoute(newRoute.settings.name!);
     }
   }
@@ -208,21 +207,45 @@ class SkillSenseApp extends StatelessWidget {
   const SkillSenseApp({super.key, this.initialAdminRoute});
   final String? initialAdminRoute;
 
+  Route<void> _adminRoute(RouteSettings settings, Uri location) {
+    final arguments = settings.arguments;
+    return MaterialPageRoute<void>(
+      settings: settings,
+      builder: (context) {
+        final brightness = MediaQuery.platformBrightnessOf(context);
+        return Theme(
+          data: auroraTheme(
+            brightness == Brightness.dark
+                ? AuroraTokens.auroraNight
+                : AuroraTokens.auroraDay,
+            brightness,
+          ),
+          child: AdminEntry(
+            location: location,
+            analyticsTab: arguments is String ? arguments : null,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Configure ApiClient token supplier dynamically from the auth service.
-    if (initialAdminRoute == null) {
-      ApiClient.setTokenSupplier(() async {
-        try {
-          return await AuthService.getSessionToken();
-        } catch (_) {
-          return null;
-        }
-      });
-    }
+    ApiClient.setTokenSupplier(() async {
+      try {
+        return await AuthService.getSessionToken();
+      } catch (_) {
+        return null;
+      }
+    });
 
-    final googleCallback =
-        initialAdminRoute == null && AuthService.isGoogleCallback;
+    final adminLaunch =
+        adminLocation(initialAdminRoute) ??
+        adminLocation(
+          WidgetsBinding.instance.platformDispatcher.defaultRouteName,
+        );
+    final googleCallback = adminLaunch == null && AuthService.isGoogleCallback;
     return MaterialApp(
       title: 'SkillSense AI',
       debugShowCheckedModeBanner: false,
@@ -233,29 +256,22 @@ class SkillSenseApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       navigatorObservers: [AppRouteObserver(), interviewMediaRouteObserver],
       initialRoute:
-          initialAdminRoute ?? (googleCallback ? '/oauth/callback' : null),
-      onGenerateInitialRoutes: initialAdminRoute != null
+          adminLaunch?.toString() ??
+          (googleCallback
+              ? '/oauth/callback'
+              // The engine captures the launch hash before auth initialization
+              // can remove a consumed callback URL. Do not reopen that screen.
+              : WidgetsBinding.instance.platformDispatcher.defaultRouteName
+                        .split('?')
+                        .first ==
+                    '/oauth/callback'
+              ? '/'
+              : null),
+      onGenerateInitialRoutes: adminLaunch != null
           ? (_) => [
-              MaterialPageRoute<void>(
-                settings: RouteSettings(name: initialAdminRoute),
-                builder: (adminContext) {
-                  final brightness = MediaQuery.platformBrightnessOf(
-                    adminContext,
-                  );
-                  return Theme(
-                    data: auroraTheme(
-                      brightness == Brightness.dark
-                          ? AuroraTokens.auroraNight
-                          : AuroraTokens.auroraDay,
-                      brightness,
-                    ),
-                    child: AdminPortal(
-                      module: adminRoutes.entries
-                          .firstWhere((e) => e.value == initialAdminRoute)
-                          .key,
-                    ),
-                  );
-                },
+              _adminRoute(
+                RouteSettings(name: adminLaunch.toString()),
+                adminLaunch,
               ),
             ]
           : googleCallback
@@ -275,9 +291,11 @@ class SkillSenseApp extends StatelessWidget {
         extensions: const [AuroraTokens.auroraDay],
       ),
       darkTheme: auroraTheme(AuroraTokens.auroraNight, Brightness.dark),
-      themeMode: ThemeMode.system,
+      // Candidate and recruiter screens use light palettes. Admin routes apply
+      // their own system-aware theme locally.
+      themeMode: ThemeMode.light,
       // Routing observes only backend-verified application sessions.
-      home: initialAdminRoute == null && !googleCallback
+      home: adminLaunch == null && !googleCallback
           ? buildPlatformHome(
               signedInBuilder: (role) {
                 return const RoleGuard(
@@ -302,35 +320,15 @@ class SkillSenseApp extends StatelessWidget {
                 : '/candidate/jobs/${Uri.encodeComponent(id)}',
           );
         }
-        if (settings.name != null &&
-            settings.name != '/' &&
-            !adminRoutes.containsValue(settings.name)) {
+        final admin = adminLocation(settings.name);
+        if (admin != null) return _adminRoute(settings, admin);
+
+        if (settings.name != null && settings.name != '/') {
           RouteStorage.saveLastRoute(settings.name!);
         }
 
         final name = settings.name ?? '';
         Widget builder;
-
-        if (adminRoutes.containsValue(name)) {
-          final module = adminRoutes.entries
-              .firstWhere((e) => e.value == name)
-              .key;
-          return MaterialPageRoute<void>(
-            settings: settings,
-            builder: (adminContext) => Theme(
-              data: auroraTheme(
-                MediaQuery.platformBrightnessOf(adminContext) == Brightness.dark
-                    ? AuroraTokens.auroraNight
-                    : AuroraTokens.auroraDay,
-                MediaQuery.platformBrightnessOf(adminContext),
-              ),
-              child: AdminPortal(
-                module: module,
-                initialAnalyticsTab: settings.arguments as String?,
-              ),
-            ),
-          );
-        }
 
         // Deep link handling for job detail route: /candidate/jobs/:id
         if (name.startsWith('/candidate/jobs/') &&
@@ -438,7 +436,11 @@ class SkillSenseApp extends StatelessWidget {
                         target:
                             settings.arguments! as RecruiterObservationTarget,
                       )
-                    : const CandidateReportScreen(),
+                    : CandidateReportScreen(
+                        applicationId: settings.arguments is String
+                            ? settings.arguments! as String
+                            : null,
+                      ),
               );
               break;
             case '/monitor':

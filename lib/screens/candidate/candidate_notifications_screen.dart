@@ -574,7 +574,7 @@ class _CandidateNotificationsScreenState
               borderRadius: BorderRadius.circular(5),
             ),
             child: Text(
-              notif.type.toUpperCase(),
+              notif.displayType,
               style: GoogleFonts.inter(
                 color: const Color(0xFF1D4ED8),
                 fontSize: 9.5,
@@ -662,7 +662,7 @@ class _CandidateNotificationsScreenState
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        notif.type.toUpperCase(),
+                        notif.displayType,
                         style: GoogleFonts.inter(
                           color: const Color(0xFF1D4ED8),
                           fontSize: 9,

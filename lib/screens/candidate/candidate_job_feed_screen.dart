@@ -67,7 +67,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
   void _warnMissingScores() {
     if (!_hasParsedResume) return;
     for (final job in _jobs) {
-      if (job.matchScore != null || job.averageScore != null) continue;
+      if (!job.hasApplied || job.matchScore != null) continue;
       if (_warnedMissingScores.add(job.id)) {
         debugPrint(
           'Job ${job.id} has no match_score for a candidate with a parsed resume.',
@@ -143,7 +143,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
         .toList();
     if (_selectedFilter == 'Best match') {
       double? score(Job job) {
-        final value = job.matchScore;
+        final value = _hasUploadedResume == true ? job.matchScore : null;
         return value != null && value.isFinite && value >= 0 && value <= 100
             ? value
             : null;
@@ -333,7 +333,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                     ],
                   ),
                   Text(
-                    'Ranked by semantic match to your profile · updated 5 min ago',
+                    _hasUploadedResume == false
+                        ? 'Upload a resume to get your match scores after application screening.'
+                        : 'Browse active jobs · match scores appear after application screening.',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(

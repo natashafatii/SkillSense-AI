@@ -45,9 +45,11 @@ class AdminPortal extends StatefulWidget {
     super.key,
     required this.module,
     this.initialAnalyticsTab,
+    this.onSignOut,
   });
   final String module;
   final String? initialAnalyticsTab;
+  final VoidCallback? onSignOut;
   @override
   State<AdminPortal> createState() => _AdminPortalState();
 }
@@ -78,7 +80,25 @@ class _AdminPortalState extends State<AdminPortal> {
       final t = context.aurora;
       return Scaffold(
         backgroundColor: t.bg,
-        body: mobile ? _mobileShell() : _webShell(),
+        body: Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ColoredBox(
+                color: t.knob,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(
+                    'Preview · Sample data and simulated actions',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: t.tx2, fontSize: 12),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(child: mobile ? _mobileShell() : _webShell()),
+          ],
+        ),
         bottomNavigationBar: mobile ? _bottomNav() : null,
       );
     },
@@ -201,18 +221,6 @@ class _AdminPortalState extends State<AdminPortal> {
                       style: TextStyle(color: t.tx2),
                     ),
                     const Spacer(),
-                    MonoText(
-                      'PRODUCTION',
-                      style: TextStyle(color: t.tx3, fontSize: 9),
-                    ),
-                    const SizedBox(width: 16),
-                    const AdminLed(pulse: true),
-                    const SizedBox(width: 7),
-                    MonoText(
-                      'ALL SYSTEMS',
-                      style: TextStyle(color: t.tx3, fontSize: 9),
-                    ),
-                    const SizedBox(width: 15),
                     IconButton(
                       onPressed: () => go('AD-04'),
                       icon: Icon(
@@ -221,7 +229,7 @@ class _AdminPortalState extends State<AdminPortal> {
                         size: 19,
                       ),
                     ),
-                    _avatar('SA'),
+                    _signOutButton(),
                   ],
                 ),
               ),
@@ -386,7 +394,7 @@ class _AdminPortalState extends State<AdminPortal> {
                 ),
               ),
               const Spacer(),
-              _avatar('SA'),
+              _signOutButton(),
             ],
           ),
         ),
@@ -402,6 +410,12 @@ class _AdminPortalState extends State<AdminPortal> {
       ],
     );
   }
+
+  Widget _signOutButton() => IconButton(
+    tooltip: 'Sign out',
+    onPressed: widget.onSignOut,
+    icon: Icon(Icons.logout, color: context.aurora.tx2, size: 20),
+  );
 
   Widget _bottomNav() {
     final t = context.aurora;
@@ -1937,17 +1951,6 @@ class _AdminPortalState extends State<AdminPortal> {
     );
   }
 
-  static final weights = <String, int>{
-    'Resume Match': 30,
-    'Technical': 35,
-    'Behavioral': 20,
-    'Communication': 15,
-  };
-  static final scoringThresholds = <String, double>{
-    'Phone-detection threshold': 70,
-    'Multi-person threshold': 65,
-  };
-  static final penalties = <String, int>{'LOW': 2, 'MED': 7, 'HIGH': 15};
   Widget _weightRow(String name, String subtitle) {
     final t = context.aurora;
     return Padding(
@@ -1975,7 +1978,7 @@ class _AdminPortalState extends State<AdminPortal> {
             width: 70,
             child: TextFormField(
               key: ValueKey('weight-$name'),
-              initialValue: '${weights[name]}',
+              initialValue: '${store.weights[name]}',
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               style: TextStyle(
@@ -1984,7 +1987,7 @@ class _AdminPortalState extends State<AdminPortal> {
                 fontSize: 12,
               ),
               onChanged: (v) =>
-                  setState(() => weights[name] = int.tryParse(v) ?? 0),
+                  setState(() => store.weights[name] = int.tryParse(v) ?? 0),
             ),
           ),
           const SizedBox(width: 6),
@@ -2051,7 +2054,7 @@ class _AdminPortalState extends State<AdminPortal> {
 
   Widget _scoring(bool mobile) {
     final t = context.aurora;
-    final total = weights.values.fold(0, (a, b) => a + b);
+    final total = store.weights.values.fold(0, (a, b) => a + b);
     Widget weightPanel = AdminPanel(
       title: 'Default scoring weights',
       hot: true,
@@ -2134,17 +2137,18 @@ class _AdminPortalState extends State<AdminPortal> {
           _rangeRow(
             'Phone-detection threshold',
             'YOLOv8-nano frame event sensitivity',
-            scoringThresholds['Phone-detection threshold']!,
+            store.scoringThresholds['Phone-detection threshold']!,
             (v) => setState(
-              () => scoringThresholds['Phone-detection threshold'] = v,
+              () => store.scoringThresholds['Phone-detection threshold'] = v,
             ),
           ),
           _rangeRow(
             'Multi-person threshold',
             'YOLOv8-nano presence signal',
-            scoringThresholds['Multi-person threshold']!,
-            (v) =>
-                setState(() => scoringThresholds['Multi-person threshold'] = v),
+            store.scoringThresholds['Multi-person threshold']!,
+            (v) => setState(
+              () => store.scoringThresholds['Multi-person threshold'] = v,
+            ),
           ),
         ],
       ),
@@ -2181,7 +2185,7 @@ class _AdminPortalState extends State<AdminPortal> {
                     width: 55,
                     child: TextFormField(
                       key: ValueKey('penalty-${e[0]}'),
-                      initialValue: '${penalties[e[0]]}',
+                      initialValue: '${store.penalties[e[0]]}',
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       style: TextStyle(
@@ -2189,7 +2193,8 @@ class _AdminPortalState extends State<AdminPortal> {
                         fontFamily: 'JetBrains Mono',
                         fontSize: 11,
                       ),
-                      onChanged: (v) => penalties[e[0]] = int.tryParse(v) ?? 0,
+                      onChanged: (v) =>
+                          store.penalties[e[0]] = int.tryParse(v) ?? 0,
                     ),
                   ),
                   const SizedBox(width: 5),
@@ -3010,32 +3015,10 @@ class _AdminPortalState extends State<AdminPortal> {
     );
   }
 
-  static final modelVersions = <String, String>{
-    'Resume parsing': 'Gemini 3.5 Flash-Lite',
-    'Question generation': 'Gemini 3.5 Flash-Lite',
-    'Semantic matching': 'SBERT · all-MiniLM-L6-v2',
-    'Behavioral observation': 'MediaPipe + YOLOv8-nano + FER',
-  };
-  static final modelCodes = <String, String>{
-    'Resume parsing': 'gemini-3.5-flash-lite',
-    'Question generation': 'gemini-3.5-flash-lite',
-    'Semantic matching': 'all-MiniLM-L6-v2',
-    'Behavioral observation': 'mp-yolo-fer-v1',
-  };
-  static final modelThresholds = <String, double>{
-    'Phone detection': 70,
-    'Multiple people': 65,
-    'Gaze anomaly': 75,
-  };
   final modelPreview = <String, double>{};
-  static final flags = <String, bool>{
-    'Integrity detection': true,
-    'Rubric explanations': true,
-    'Model health alerts': true,
-  };
   Future<void> _changeVersion(String name) async {
     final t = context.aurora;
-    final old = modelCodes[name]!;
+    final old = store.modelCodes[name]!;
     final alt = const {
       'Resume parsing': 'gemini-3.5-flash-lite',
       'Question generation': 'gemini-2.5-pro',
@@ -3084,8 +3067,8 @@ class _AdminPortalState extends State<AdminPortal> {
         false;
     if (ok && mounted) {
       setState(() {
-        modelCodes[name] = selected;
-        modelVersions[name] = name == 'Semantic matching'
+        store.modelCodes[name] = selected;
+        store.modelVersions[name] = name == 'Semantic matching'
             ? 'SBERT · $selected'
             : name == 'Behavioral observation'
             ? 'Behavioral stack · $selected'
@@ -3106,7 +3089,7 @@ class _AdminPortalState extends State<AdminPortal> {
       confirmLabel: 'Apply threshold',
     );
     if (ok && mounted) {
-      setState(() => modelThresholds[name] = next);
+      setState(() => store.modelThresholds[name] = next);
       store.addAudit(
         'MODEL_CONFIG_CHANGED',
         '$name threshold changed ${old.round()}% → ${next.round()}%',
@@ -3118,7 +3101,7 @@ class _AdminPortalState extends State<AdminPortal> {
 
   Widget _modelRangeRow(String name, String description) {
     final t = context.aurora;
-    final saved = modelThresholds[name]!;
+    final saved = store.modelThresholds[name]!;
     final shown = modelPreview[name] ?? saved;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -3174,7 +3157,7 @@ class _AdminPortalState extends State<AdminPortal> {
       confirmLabel: 'Apply change',
     );
     if (ok && mounted) {
-      setState(() => flags[name] = next);
+      setState(() => store.flags[name] = next);
       store.addAudit(
         'MODEL_CONFIG_CHANGED',
         '$name ${next ? 'enabled' : 'disabled'}',
@@ -3204,7 +3187,7 @@ class _AdminPortalState extends State<AdminPortal> {
           ),
           const SizedBox(height: 12),
           Text(
-            modelVersions[name]!,
+            store.modelVersions[name]!,
             style: TextStyle(
               color: t.tx,
               fontSize: 15,
@@ -3220,7 +3203,7 @@ class _AdminPortalState extends State<AdminPortal> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               MonoText(
-                modelCodes[name]!,
+                store.modelCodes[name]!,
                 style: TextStyle(color: t.gd, fontSize: 9),
               ),
               AdminButton(
@@ -3341,7 +3324,7 @@ class _AdminPortalState extends State<AdminPortal> {
                     ),
                   ),
                   Switch(
-                    value: flags[e[0]]!,
+                    value: store.flags[e[0]]!,
                     activeThumbColor: t.tglOn,
                     onChanged: (v) => _changeFlag(e[0], v),
                   ),
@@ -3387,11 +3370,6 @@ class _AdminPortalState extends State<AdminPortal> {
     );
   }
 
-  static final retention = <String, int>{
-    'Behavioral frame data': 30,
-    'Interview recordings': 90,
-    'Application resumes': 180,
-  };
   final userIdController = TextEditingController();
   final jobIdController = TextEditingController();
   Future<void> _saveRetention() async {
@@ -3404,7 +3382,7 @@ class _AdminPortalState extends State<AdminPortal> {
     if (ok && mounted) {
       store.addAudit(
         'RETENTION_CHANGED',
-        'Retention policy updated: frames ${retention['Behavioral frame data']}d, recordings ${retention['Interview recordings']}d, resumes ${retention['Application resumes']}d',
+        'Retention policy updated: frames ${store.retention['Behavioral frame data']}d, recordings ${store.retention['Interview recordings']}d, resumes ${store.retention['Application resumes']}d',
         'Privacy',
       );
       AdminToast.show(context, 'Retention policy saved');
@@ -3495,10 +3473,10 @@ class _AdminPortalState extends State<AdminPortal> {
           SizedBox(
             width: 135,
             child: _dropdown(
-              '${retention[label]} days',
+              '${store.retention[label]} days',
               options.map((e) => '$e days').toList(),
               (v) => setState(
-                () => retention[label] = int.parse(v.split(' ').first),
+                () => store.retention[label] = int.parse(v.split(' ').first),
               ),
             ),
           ),

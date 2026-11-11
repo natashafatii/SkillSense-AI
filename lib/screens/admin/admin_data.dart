@@ -1,3 +1,5 @@
+import '../../services/session_scope.dart';
+
 class AdminUser {
   AdminUser(
     this.id,
@@ -37,8 +39,57 @@ class ErasureRequest {
 }
 
 class AdminStore {
-  static final AdminStore instance = AdminStore._();
+  static AdminStore? _sessionStore;
+  static int? _generation;
+
+  static AdminStore get instance {
+    if (_generation != SessionScope.generation) {
+      _sessionStore = null;
+      _generation = SessionScope.generation;
+    }
+    return _sessionStore ??= AdminStore._();
+  }
+
   AdminStore._();
+
+  final weights = <String, int>{
+    'Resume Match': 30,
+    'Technical': 35,
+    'Behavioral': 20,
+    'Communication': 15,
+  };
+  final scoringThresholds = <String, double>{
+    'Phone-detection threshold': 70,
+    'Multi-person threshold': 65,
+  };
+  final penalties = <String, int>{'LOW': 2, 'MED': 7, 'HIGH': 15};
+  final modelVersions = <String, String>{
+    'Resume parsing': 'Gemini 3.5 Flash-Lite',
+    'Question generation': 'Gemini 3.5 Flash-Lite',
+    'Semantic matching': 'SBERT · all-MiniLM-L6-v2',
+    'Behavioral observation': 'MediaPipe + YOLOv8-nano + FER',
+  };
+  final modelCodes = <String, String>{
+    'Resume parsing': 'gemini-3.5-flash-lite',
+    'Question generation': 'gemini-3.5-flash-lite',
+    'Semantic matching': 'all-MiniLM-L6-v2',
+    'Behavioral observation': 'mp-yolo-fer-v1',
+  };
+  final modelThresholds = <String, double>{
+    'Phone detection': 70,
+    'Multiple people': 65,
+    'Gaze anomaly': 75,
+  };
+  final flags = <String, bool>{
+    'Integrity detection': true,
+    'Rubric explanations': true,
+    'Model health alerts': true,
+  };
+  final retention = <String, int>{
+    'Behavioral frame data': 30,
+    'Interview recordings': 90,
+    'Application resumes': 180,
+  };
   final users = <AdminUser>[
     AdminUser(
       'USR-1081',

@@ -53,7 +53,6 @@ class _CandidateInterviewLobbyScreenState
   final CancelToken _voiceRequests = CancelToken();
   bool _starting = false;
   bool _startUncertain = false;
-  bool _videoRequired = true;
   String? _startError;
   bool _isLoading = true;
   bool _hasInterview = false;
@@ -135,12 +134,11 @@ class _CandidateInterviewLobbyScreenState
       if (immediately) {
         // The explicit click owns the device permission flow. A denied device
         // must not create a paid provider call or pretend the interview started.
-        if (_videoRequired && !_media.cameraReady) await _media.requestCamera();
+        if (!_media.cameraReady) await _media.requestCamera();
         if (!mounted || _account != SessionScope.generation) return;
         if (!_media.microphoneChecked) await _media.checkMicrophone();
         if (!mounted || _account != SessionScope.generation) return;
-        if ((_videoRequired && !_media.cameraReady) ||
-            !_media.microphoneChecked) {
+        if (!_media.cameraReady || !_media.microphoneChecked) {
           setState(() {
             _startError =
                 'Allow camera and microphone access to start the interview.';
@@ -152,7 +150,7 @@ class _CandidateInterviewLobbyScreenState
       final snapshot = await backend
           .start(
             interview.id,
-            videoRequired: _videoRequired,
+            videoRequired: true,
             startNow: immediately,
             cancelToken: _voiceRequests,
           )
@@ -172,10 +170,7 @@ class _CandidateInterviewLobbyScreenState
       if (mounted && _account == SessionScope.generation) {
         setState(() {
           _startError = error.message;
-          _startUncertain =
-              error.statusCode == null ||
-              error.statusCode == 409 ||
-              error.statusCode! >= 500;
+          _startUncertain = error.voiceStartNeedsRecovery;
         });
       }
     } on VoiceContractUnavailable catch (error) {
@@ -656,26 +651,12 @@ class _CandidateInterviewLobbyScreenState
           const SizedBox(height: 12),
 
           Text(
-            'Voice and frame transport availability are checked separately in the session.',
+            'Camera and microphone are required for every interview. Keep your camera on throughout the session.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w500,
-            ),
-          ),
-          Material(
-            child: SwitchListTile(
-              title: const Text('Include video'),
-              subtitle: const Text(
-                'Audio-only interviews do not require camera evidence. The session mode is fixed once started.',
-              ),
-              value: _videoRequired,
-              onChanged: _starting || _startUncertain
-                  ? null
-                  : (value) => setState(() {
-                      _videoRequired = value;
-                    }),
             ),
           ),
           if (_startError != null)

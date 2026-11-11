@@ -116,12 +116,14 @@ class InterviewQuestion {
   final String text;
   final bool isApproved;
   final String source;
+  final String category;
 
   const InterviewQuestion({
     required this.id,
     required this.text,
     required this.isApproved,
     this.source = 'LEGACY_UNVERIFIED',
+    this.category = '',
   });
 
   factory InterviewQuestion.fromJson(Map<String, dynamic> json) {
@@ -139,6 +141,7 @@ class InterviewQuestion {
       text: text,
       isApproved: json['is_approved'] == true || json['approved'] == true,
       source: json['source']?.toString() ?? 'LEGACY_UNVERIFIED',
+      category: json['category']?.toString() ?? '',
     );
   }
 

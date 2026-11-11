@@ -10,6 +10,17 @@ import '../services/application_service.dart';
 import '../services/api_exception.dart';
 import '../services/question_preparation_service.dart';
 
+typedef QuestionPreviewBuilder =
+    Widget Function(
+      BuildContext context, {
+      required QuestionSet? draft,
+      required String? error,
+      required bool busy,
+      required VoidCallback refresh,
+      required VoidCallback? edit,
+      required VoidCallback? regenerate,
+    });
+
 /// Review the actual application draft before scheduling; no sample questions.
 class QuestionPreparationPanel extends StatefulWidget {
   const QuestionPreparationPanel({
@@ -18,10 +29,12 @@ class QuestionPreparationPanel extends StatefulWidget {
     required this.onApprovalChanged,
     this.client,
     this.application,
+    this.previewBuilder,
   });
   final String applicationId;
   final Dio? client;
   final Application? application;
+  final QuestionPreviewBuilder? previewBuilder;
   final void Function(String? setId, int? revision) onApprovalChanged;
   @override
   State<QuestionPreparationPanel> createState() =>
@@ -98,7 +111,8 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
         return;
       }
       _accept(data);
-      if (data['generation_status'] == 'NOT_REQUESTED') {
+      if (data['generation_status'] == 'NOT_REQUESTED' &&
+          (widget.previewBuilder == null || widget.application == null)) {
         final application = await ApplicationService.getApplication(
           widget.applicationId,
           client: widget.client,
@@ -348,6 +362,41 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
       _reviewRequired = false;
       widget.onApprovalChanged(null, null);
       _refresh();
+    } else if (widget.previewBuilder != null &&
+        oldWidget.application != widget.application) {
+      _application = widget.application;
+    }
+  }
+
+  Future<void> _openEditor() async {
+    final epoch = _resourceEpoch;
+    final applicationId = widget.applicationId;
+    final application = _application;
+    final client = widget.client;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Interview question editor')),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 850),
+                child: QuestionPreparationPanel(
+                  applicationId: applicationId,
+                  application: application,
+                  client: client,
+                  onApprovalChanged: (_, _) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (mounted && epoch == _resourceEpoch) {
+      _reviewRequired = false;
+      await _refresh();
     }
   }
 
@@ -383,6 +432,35 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
         !_stale &&
         !_reviewRequired &&
         (_retryAt == null || !DateTime.now().isBefore(_retryAt!));
+    if (widget.previewBuilder case final preview?) {
+      final draft = _data == null ? null : QuestionSet.fromJson(_data!);
+      final canRegenerate =
+          !approved &&
+          !frozen &&
+          !_busy &&
+          !_stale &&
+          !_reviewRequired &&
+          (_retryAt == null || !DateTime.now().isBefore(_retryAt!)) &&
+          const {'READY', 'FALLBACK', 'FAILED'}.contains(state);
+      return preview(
+        context,
+        draft: draft,
+        error: _error,
+        busy: _busy,
+        refresh: _refresh,
+        edit:
+            !_busy &&
+                (editable ||
+                    (!frozen && state == 'FAILED') ||
+                    (state == 'NOT_REQUESTED' &&
+                        _application?.canPrepareQuestions == true))
+            ? state == 'NOT_REQUESTED' && !_reviewRequired
+                  ? _prepare
+                  : _openEditor
+            : null,
+        regenerate: canRegenerate ? _regenerate : null,
+      );
+    }
     const ink = Color(0xFF17233B);
     const muted = Color(0xFF64748B);
     const teal = Color(0xFF087F72);

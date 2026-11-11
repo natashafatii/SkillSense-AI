@@ -383,7 +383,6 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
         : job.skillsRequired.isNotEmpty
         ? job.skillsRequired
         : _endpointSkills;
-    final weights = job.screeningCriteria['skill_weights'];
     return _panel(
       'REQUIRED SKILLS',
       names == null
@@ -406,7 +405,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                       border: Border.all(color: const Color(0xFFD8E2FF)),
                     ),
                     child: Text(
-                      '$name${weights is Map && weights[name] is num ? '  ×${weights[name]}' : ''}',
+                      name,
                       style: GoogleFonts.inter(
                         color: _ink,
                         fontSize: 12,

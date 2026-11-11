@@ -120,7 +120,9 @@ class SocketTicket {
 void _version(JsonObject json, {bool required = false}) {
   if ((required || json.containsKey('protocol_version')) &&
       json['protocol_version'] != 1) {
-    throw const FormatException('Unsupported Interview Analysis protocol version.');
+    throw const FormatException(
+      'Unsupported Interview Analysis protocol version.',
+    );
   }
 }
 
@@ -136,7 +138,9 @@ sealed class AnalysisMessage {
     required String sessionId,
   }) {
     if (negotiatedVersion != 1) {
-      throw const FormatException('Unsupported Interview Analysis protocol version.');
+      throw const FormatException(
+        'Unsupported Interview Analysis protocol version.',
+      );
     }
     requireInterviewIdentity(sessionId);
     final json = requireJsonObject(value);
@@ -240,7 +244,9 @@ class AckMessage extends AnalysisMessage {
         'dropped' => AdmissionState.dropped,
         _ => throw const FormatException('Invalid acknowledgement status.'),
       },
-      reason = json['reason'] == null ? null : requireJsonString(json, 'reason') {
+      reason = json['reason'] == null
+          ? null
+          : requireJsonString(json, 'reason') {
     if (status == AdmissionState.dropped && reason == null) {
       throw const FormatException('Dropped acknowledgement needs a reason.');
     }
@@ -277,7 +283,8 @@ class BehavioralObservation {
   final double? durationSeconds;
 
   BehavioralObservation.fromJson(JsonObject json)
-    : type = '${requireJsonString(json, 'kind')}: ${requireJsonString(json, 'value')}',
+    : type =
+          '${requireJsonString(json, 'kind')}: ${requireJsonString(json, 'value')}',
       startedAt = _date(json, 'observed_at'),
       durationSeconds = null;
 }
@@ -489,6 +496,20 @@ JsonObject _reportSnapshot(JsonObject json) {
     'limitations': [
       'Approximate sampled observations; real-world accuracy validation is outstanding.',
       'Centered percentage uses supported gaze duration, not attention or ranking.',
+      if ((json['limitations'] as List? ?? []).contains('gaze_not_calibrated'))
+        'Gaze measurement is unavailable because this session was not calibrated.',
+      if ((json['limitations'] as List? ?? []).contains(
+        'insufficient_temporal_coverage',
+      ))
+        'Samples are too far apart to measure continuous behavior. Missing duration is not zero.',
+      if ((json['limitations'] as List? ?? []).contains(
+        'sampling_exceeds_processing_capacity',
+      ))
+        'Some pending samples were replaced by newer frames. Review processed coverage.',
+      if ((json['limitations'] as List? ?? []).contains(
+        'unusable_image_quality',
+      ))
+        'Some frames could not support measurements because of image quality.',
       if (episodes['events_truncated'] == true)
         'Server episode window is truncated.',
       if (json['versions_truncated'] == true)

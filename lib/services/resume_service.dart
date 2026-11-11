@@ -87,15 +87,22 @@ class ResumeService {
   // ── DETAIL / POLL ─────────────────────────────────────────────────────────
 
   /// GET /api/candidates/resumes/{id}/ — fetch one resume's parsed detail.
-  static Future<ResumeDetail> getResumeDetail(String resumeId) async {
+  static Future<ResumeDetail> getResumeDetail(
+    String resumeId, {
+    bool refresh = false,
+    CancelToken? cancelToken,
+  }) async {
     // Return cached instance to avoid redundant parses (feeds CD-04 / CD-10).
-    if (_cachedDetailId == resumeId && _cachedDetail != null) {
+    if (!refresh && _cachedDetailId == resumeId && _cachedDetail != null) {
       return _cachedDetail!;
     }
     final epoch = SessionScope.generation;
     try {
       final dio = await ApiClient.getInstance();
-      final response = await dio.get('/resumes/$resumeId/');
+      final response = await dio.get(
+        '/resumes/$resumeId/',
+        cancelToken: cancelToken,
+      );
       final detail = ResumeDetail.fromJson(
         response.data as Map<String, dynamic>,
       );

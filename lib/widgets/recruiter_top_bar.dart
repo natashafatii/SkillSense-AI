@@ -34,6 +34,7 @@ class RecruiterTopBar extends StatelessWidget {
     this.showWorkspacePrefix = true,
     this.subduedPageTitle = false,
     this.forceSearchField = false,
+    this.showSearch = true,
     this.trailingIcon = Icons.language_rounded,
     this.candidate = false,
     this.ancestor = 'Workspace',
@@ -59,6 +60,7 @@ class RecruiterTopBar extends StatelessWidget {
   final bool showWorkspacePrefix;
   final bool subduedPageTitle;
   final bool forceSearchField;
+  final bool showSearch;
   final IconData trailingIcon;
   final bool candidate;
   final String ancestor;
@@ -185,7 +187,9 @@ class RecruiterTopBar extends StatelessWidget {
                     )
                   else
                     Expanded(child: title),
-                  if (compact && (candidate || onSearchTap != null))
+                  if (showSearch &&
+                      compact &&
+                      (candidate || onSearchTap != null))
                     _iconButton(
                       key: const Key('recruiter-top-search'),
                       icon: Icons.search_rounded,
@@ -200,7 +204,7 @@ class RecruiterTopBar extends StatelessWidget {
                               : null),
                       prominent: true,
                     )
-                  else if (!compact)
+                  else if (showSearch && !compact)
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       width: 300,

@@ -29,6 +29,7 @@ class ResumeDetail {
   final List<String>? skills;
   final List<Map<String, dynamic>>? education;
   final List<Map<String, dynamic>>? experience;
+  final List<ResumeProject>? projects;
   final List<String>? certifications;
   final double? matchScore;
   final List<String>? matchedSkills;
@@ -44,6 +45,7 @@ class ResumeDetail {
     this.skills,
     this.education,
     this.experience,
+    this.projects,
     this.certifications,
     this.matchScore,
     this.matchedSkills,
@@ -71,6 +73,9 @@ class ResumeDetail {
       experience: (json['experience'] as List<dynamic>?)
           ?.map((e) => Map<String, dynamic>.from(e as Map))
           .toList(),
+      projects: (json['projects'] as List?)
+          ?.map((entry) => ResumeProject.fromJson(entry as Map))
+          .toList(),
       certifications: (json['certifications'] as List<dynamic>?)
           ?.map((e) => e.toString())
           .toList(),
@@ -87,4 +92,22 @@ class ResumeDetail {
   @override
   String toString() =>
       'ResumeDetail($id, status=${status.value}, score=$matchScore)';
+}
+
+class ResumeProject {
+  const ResumeProject({
+    required this.title,
+    required this.description,
+    required this.skills,
+  });
+
+  final String title;
+  final String description;
+  final List<String> skills;
+
+  factory ResumeProject.fromJson(Map json) => ResumeProject(
+    title: json['title']?.toString() ?? '',
+    description: json['description']?.toString() ?? '',
+    skills: (json['skills'] as List? ?? const []).whereType<String>().toList(),
+  );
 }

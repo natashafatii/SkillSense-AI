@@ -1277,15 +1277,7 @@ class _RecruiterNotificationsScreenState
             ? const SizedBox(width: 8)
             : const Icon(Icons.circle, color: Color(0xFFE85D5B), size: 8),
         title: Text(
-          item.type
-              .split('_')
-              .map(
-                (word) => word.isEmpty
-                    ? ''
-                    : word[0].toUpperCase() + word.substring(1),
-              )
-              .join(' ')
-              .replaceFirst(' Received', ' received'),
+          item.displayType,
           style: GoogleFonts.inter(
             color: const Color(0xFF0F172A),
             fontSize: 13.5,
@@ -1315,7 +1307,7 @@ class _RecruiterNotificationsScreenState
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
-                    item.type.toUpperCase(),
+                    item.displayType,
                     style: GoogleFonts.inter(
                       color: const Color(0xFF1D4ED8),
                       fontSize: 9.5,

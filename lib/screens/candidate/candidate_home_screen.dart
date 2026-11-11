@@ -147,11 +147,12 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
         });
       }
     } catch (_) {
-      if (_current)
+      if (_current) {
         setState(() {
           _loadingApplications = false;
           _applicationsError = 'Unable to load applications.';
         });
+      }
     }
   }
 
@@ -180,11 +181,12 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
         });
       }
     } catch (_) {
-      if (_current)
+      if (_current) {
         setState(() {
           _loadingJobs = false;
           _jobsError = 'Unable to load matched jobs.';
         });
+      }
     }
   }
 
@@ -212,14 +214,16 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 forceRefresh: true,
                 allowCachedOnError: false,
               ));
-      if (_current)
+      if (_current) {
         setState(() {
           _profile = profile;
           _profileError = null;
         });
+      }
     } catch (_) {
-      if (_current)
+      if (_current) {
         setState(() => _profileError = 'Unable to load your profile.');
+      }
     }
   }
 
@@ -227,16 +231,18 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     try {
       final interviews =
           await (widget.loadInterviews?.call() ?? InterviewService.listAll());
-      if (_current)
+      if (_current) {
         setState(() {
           _interviews = interviews;
           _interviewsError = null;
         });
+      }
     } catch (_) {
-      if (_current)
+      if (_current) {
         setState(
           () => _interviewsError = 'Unable to load upcoming interviews.',
         );
+      }
     }
   }
 
@@ -244,14 +250,16 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     try {
       final resumes =
           await (widget.loadResumes?.call() ?? ResumeService.listResumes());
-      if (_current)
+      if (_current) {
         setState(() {
           _resumes = resumes;
           _resumesError = null;
         });
+      }
     } catch (_) {
-      if (_current)
+      if (_current) {
         setState(() => _resumesError = 'Unable to load your resumes.');
+      }
     }
   }
 

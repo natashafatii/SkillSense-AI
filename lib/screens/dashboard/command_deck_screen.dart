@@ -1903,6 +1903,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
         );
       }
     }
+    final countsAvailable = !_loadingApplications && _applicationsError == null;
     final maxApplicants = _activeJobs.fold<int>(0, (max, job) {
       final count = applicantCounts[job.id] ?? 0;
       return count > max ? count : max;
@@ -1911,10 +1912,12 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       final applicants = applicantCounts[job.id] ?? 0;
       return <String, dynamic>{
         'title': job.title,
-        'apps': _applicationsError == null ? applicants : '—',
+        'apps': applicants,
         'shortlisted': shortlistedCounts[job.id] ?? 0,
         'color': AppColors.dashboardBlue,
-        'pct': maxApplicants == 0 ? 0.0 : applicants / maxApplicants,
+        'pct': !countsAvailable || maxApplicants == 0
+            ? 0.0
+            : applicants / maxApplicants,
       };
     }).toList();
 
@@ -1993,7 +1996,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${role['apps']} apps · ${_applicationsError == null ? role['shortlisted'] : '—'} shortlisted',
+                            '${countsAvailable ? role['apps'] : '—'} apps · ${countsAvailable ? role['shortlisted'] : '—'} shortlisted',
                             style: GoogleFonts.inter(
                               color: theme.textSecondary,
                               fontSize: 12,
@@ -2086,7 +2089,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '${role['apps']} apps · ${_applicationsError == null ? role['shortlisted'] : '—'} shortlisted',
+                                '${countsAvailable ? role['apps'] : '—'} apps · ${countsAvailable ? role['shortlisted'] : '—'} shortlisted',
                                 style: GoogleFonts.inter(
                                   color: theme.textSecondary,
                                   fontSize: 12.5,

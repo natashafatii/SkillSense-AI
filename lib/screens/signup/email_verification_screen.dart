@@ -16,17 +16,20 @@ class EmailVerificationScreen extends StatefulWidget {
   final String email;
   final String role;
   final bool isSignIn;
+  final bool returnOnSuccess;
 
   const EmailVerificationScreen({
     super.key,
     required this.email,
     required this.role,
-  }) : isSignIn = false;
+  }) : isSignIn = false,
+       returnOnSuccess = false;
 
   const EmailVerificationScreen.signIn({
     super.key,
     required this.email,
     required this.role,
+    this.returnOnSuccess = false,
   }) : isSignIn = true;
 
   @override
@@ -66,7 +69,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     );
     // Auto-focus the first field.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNodes[0].requestFocus();
+      if (mounted) _focusNodes[0].requestFocus();
     });
   }
 
@@ -109,6 +112,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       }
       await AuthService.fetchCurrentUser();
       if (!mounted) return;
+      if (widget.returnOnSuccess) {
+        Navigator.of(context).pop(true);
+        return;
+      }
       _snack(
         widget.isSignIn
             ? 'Device verified. Signing you in…'

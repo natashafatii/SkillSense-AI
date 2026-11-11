@@ -134,6 +134,12 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
                     Text(
                       'Revision ${f.revision.value} · ${f.status} · Edit ${f.editVersion.value}',
                     ),
+                    if (f.error == 'EVALUATION_UNAVAILABLE')
+                      const Text(
+                        'Feedback is blocked because the answer evaluation is unavailable. '
+                        'Review its failure details and request a new evaluation revision. '
+                        'This does not mean the candidate failed the interview.',
+                      ),
                     Text(
                       f.retractedAt != null
                           ? 'Withdrawn · cannot be released again'
