@@ -518,6 +518,25 @@ JsonObject _reportSnapshot(JsonObject json) {
   };
 }
 
+class BehavioralEpisode {
+  final String type;
+  final DateTime startedAt;
+  final double? observedSeconds;
+  final String? severity;
+
+  BehavioralEpisode.fromJson(JsonObject json)
+    : type = requireJsonString(json, 'type'),
+      startedAt = DateTime.fromMillisecondsSinceEpoch(
+        ((_nullableNumber(json, 'start') ??
+                    (throw const FormatException('Missing episode start.'))) *
+                1000)
+            .round(),
+        isUtc: true,
+      ),
+      observedSeconds = _nullableNumber(json, 'observed_seconds'),
+      severity = json['severity'] as String?;
+}
+
 class BehavioralReport {
   final AnalysisSnapshot snapshot;
   final FrameCounts counts;
@@ -525,6 +544,9 @@ class BehavioralReport {
   final String? finalizationReason;
   final DateTime? finalizedAt;
   final Map<String, String> versions;
+  final List<BehavioralEpisode> episodes;
+  final bool episodesTruncated;
+  final Map<String, double> expressionPercentages;
 
   BehavioralReport._bounded(BehavioralReport source, int limit)
     : snapshot = source.snapshot.bounded(limit),
@@ -532,7 +554,11 @@ class BehavioralReport {
       centeredPercentage = source.centeredPercentage,
       finalizationReason = source.finalizationReason,
       finalizedAt = source.finalizedAt,
-      versions = source.versions;
+      versions = source.versions,
+      episodes = List.unmodifiable(source.episodes.take(limit)),
+      episodesTruncated =
+          source.episodesTruncated || source.episodes.length > limit,
+      expressionPercentages = source.expressionPercentages;
   BehavioralReport bounded(int limit) => BehavioralReport._bounded(this, limit);
 
   BehavioralReport.fromJson(JsonObject json, {required String sessionId})
@@ -548,6 +574,17 @@ class BehavioralReport {
       finalizedAt = json['finalized_at'] == null
           ? null
           : _date(json, 'finalized_at'),
+      episodes = List.unmodifiable(
+        ((requireJsonObject(json['episodes'])['events'] as List?) ?? const [])
+            .map(
+              (event) => BehavioralEpisode.fromJson(requireJsonObject(event)),
+            ),
+      ),
+      episodesTruncated =
+          requireJsonObject(json['episodes'])['events_truncated'] == true,
+      expressionPercentages = _expressionPercentages(
+        requireJsonObject(json['expression']),
+      ),
       versions = Map.unmodifiable(
         requireJsonObject(json['versions']).map((key, value) {
           if (value is! List ||
@@ -563,6 +600,22 @@ class BehavioralReport {
       throw const FormatException('Invalid centered percentage for coverage.');
     }
   }
+}
+
+Map<String, double> _expressionPercentages(JsonObject expression) {
+  final values = expression['percentages'];
+  if (expression['status'] == 'disabled' || values == null) return const {};
+  final percentages = requireJsonObject(values).map((label, value) {
+    final percentage = _nullableNumber({'value': value}, 'value');
+    if (label.trim().isEmpty || percentage == null || percentage > 100) {
+      throw const FormatException('Invalid expression percentage.');
+    }
+    return MapEntry(label, percentage);
+  });
+  if (percentages.values.fold(0.0, (sum, value) => sum + value) > 100.01) {
+    throw const FormatException('Invalid expression distribution.');
+  }
+  return Map.unmodifiable(percentages);
 }
 
 class FinishVideoResult {

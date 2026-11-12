@@ -1369,58 +1369,29 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   ),
                 ),
               );
-              final titleAndBadge = Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Recent applicants',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.spaceGrotesk(
-                        color: theme.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (!isMobile) ...[
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          color: AppColors.dashboardBlue.withValues(
-                            alpha: 0.08,
-                          ),
-                        ),
-                        child: Text(
-                          'Screening evidence',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.jetBrainsMono(
-                            color: AppColors.dashboardBlue,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+              final title = Text(
+                'Recent applicants',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.spaceGrotesk(
+                  color: theme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
               );
               if (constraints.maxWidth < 300) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [titleAndBadge, const SizedBox(height: 6), allLink],
+                  children: [
+                    Align(alignment: Alignment.centerLeft, child: title),
+                    const SizedBox(height: 6),
+                    allLink,
+                  ],
                 );
               }
               return Row(
                 children: [
-                  Expanded(child: titleAndBadge),
+                  Expanded(child: title),
                   const SizedBox(width: 8),
                   allLink,
                 ],

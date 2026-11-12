@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../widgets/feedback_content_view.dart';
+import '../../widgets/candidate_feedback_dashboard.dart';
 import '../../models/candidate_feedback.dart';
 import '../../models/paginated_response.dart';
 import '../../services/feedback_service.dart';
@@ -340,6 +340,7 @@ class _CandidateFeedbackReportScreenState
     Text(
       'Revision ${report.revision} · Released ${report.releasedAt.toLocal()}',
     ),
-    FeedbackContentView(content: report),
+    const SizedBox(height: 12),
+    CandidateFeedbackDashboard(content: report),
   ];
 }

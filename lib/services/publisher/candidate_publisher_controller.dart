@@ -241,6 +241,8 @@ class CandidatePublisherController extends ChangeNotifier {
           403 =>
             'Your account does not have permission to publish this session.',
           404 => 'This session or its frame-transport endpoint is unavailable.',
+          409 when error.fieldErrors?['error'] == 'session_not_publishable' =>
+            'This interview can no longer accept video. Reopen the interview to check its current status.',
           409 =>
             'This session cannot accept a publisher right now. Check for another active interview tab.',
           410 => 'This session is no longer eligible for frame publishing.',

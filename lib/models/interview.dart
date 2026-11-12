@@ -90,13 +90,15 @@ class CandidateInterview extends Interview {
 
 class RecruiterInterview extends Interview {
   final List<InterviewQuestion> questions;
+  final DateTime? createdAt;
   final String completionOutcome, evaluationStatus;
   @override
   final String questionPreparationMode;
   @override
   final String questionFallbackReason;
   RecruiterInterview.fromJson(Map<String, dynamic> json)
-    : questions = List.unmodifiable(
+    : createdAt = ApiValue.instant(json['created_at']),
+      questions = List.unmodifiable(
         (json['questions'] as List? ?? []).map(
           (q) =>
               InterviewQuestion.fromJson(Map<String, dynamic>.from(q as Map)),

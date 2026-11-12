@@ -2345,15 +2345,6 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
   Widget _mobile(_Palette c) {
     final safeBottom = MediaQuery.paddingOf(context).bottom;
     final reducedMotion = MediaQuery.disableAnimationsOf(context);
-    final name = (_values['name'] ?? '').isEmpty
-        ? 'Recruiter'
-        : _values['name']!;
-    final initials = name
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .take(2)
-        .map((part) => part[0].toUpperCase())
-        .join();
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
@@ -2446,148 +2437,12 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                     ),
                   ),
                 ),
-                Container(
-                  key: const Key('recruiter-profile-mobile-chip-trail'),
-                  height: 51,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    border: Border(top: BorderSide(color: c.border)),
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        children: [
-                          for (final label in const [
-                            'Profile and settings',
-                            'Scoring model',
-                            'Company profile',
-                          ]) ...[
-                            if (label != 'Profile and settings')
-                              const SizedBox(width: 8),
-                            InkWell(
-                              onTap: label == 'Profile and settings'
-                                  ? null
-                                  : () => _toast('Opening $label'),
-                              borderRadius: BorderRadius.circular(99),
-                              child: Container(
-                                height: 34,
-                                alignment: Alignment.center,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: label == 'Profile and settings'
-                                      ? c.accentSoft
-                                      : null,
-                                  border: Border.all(
-                                    color: label == 'Profile and settings'
-                                        ? c.accent
-                                        : c.border,
-                                  ),
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
-                                child: Text(
-                                  label,
-                                  style: _style(
-                                    c,
-                                    13.5,
-                                    weight: label == 'Profile and settings'
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
-                                    color: label == 'Profile and settings'
-                                        ? c.accent
-                                        : c.text2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Container(
-                  key: const Key('recruiter-profile-mobile-nav'),
-                  height: 64 + safeBottom,
-                  padding: EdgeInsets.fromLTRB(8, 0, 8, safeBottom),
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    border: Border(top: BorderSide(color: c.border)),
-                  ),
-                  child: Row(
-                    children: [
-                      for (final item in const [
-                        ('Dashboard', Icons.dashboard_outlined),
-                        ('Jobs', Icons.work_outline),
-                        ('Interviews', Icons.videocam_outlined),
-                        ('Insights', Icons.bar_chart_outlined),
-                        ('Profile', Icons.person_outline),
-                      ])
-                        Expanded(
-                          child: InkWell(
-                            onTap: item.$1 == 'Profile'
-                                ? null
-                                : () => _toast('Opening ${item.$1}'),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (item.$1 == 'Profile')
-                                  Container(
-                                    width: 24,
-                                    height: 24,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: c.accentSoft,
-                                      border: Border.all(
-                                        color: c.accent,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      initials,
-                                      style: _style(
-                                        c,
-                                        10,
-                                        weight: FontWeight.w600,
-                                        color: c.accent,
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  Icon(item.$2, size: 22, color: c.text3),
-                                const SizedBox(height: 2),
-                                Text(
-                                  item.$1,
-                                  style: _style(
-                                    c,
-                                    11.5,
-                                    weight: FontWeight.w600,
-                                    color: item.$1 == 'Profile'
-                                        ? c.accent
-                                        : c.text3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
               ],
             ),
             Positioned(
               left: 16,
               right: 16,
-              bottom: 140 + safeBottom,
+              bottom: 25 + safeBottom,
               child: IgnorePointer(
                 child: AnimatedSlide(
                   offset: _mobileToast == null

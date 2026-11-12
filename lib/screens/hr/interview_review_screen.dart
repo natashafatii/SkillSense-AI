@@ -20,6 +20,17 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
   String? error;
   bool loading = true, notFound = false, started = false;
   final token = CancelToken();
+  static const _ink = Color(0xFF1B2740);
+  static const _muted = Color(0xFF64748B);
+
+  String _createdAt(RecruiterInterview interview) {
+    final date = interview.createdAt?.toLocal();
+    if (date == null) return 'Creation time unavailable';
+    final localizations = MaterialLocalizations.of(context);
+    final time = localizations.formatTimeOfDay(TimeOfDay.fromDateTime(date));
+    return '${localizations.formatMediumDate(date)} · $time';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -92,7 +103,10 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
     backgroundColor: const Color(0xfff5f7fc),
     body: Column(
       children: [
-        const RecruiterTopBar(pageTitle: 'Interview review'),
+        const RecruiterTopBar(
+          pageTitle: 'Interview review',
+          showWorkspacePrefix: false,
+        ),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.all(24),
@@ -102,17 +116,16 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                   Expanded(
                     child: Text(
                       'Interview evidence and decisions',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(color: _ink, fontWeight: FontWeight.w700),
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Refresh interviews',
                     onPressed: loading || notFound ? null : load,
                     icon: const Icon(Icons.refresh),
                   ),
                 ],
-              ),
-              const Text(
-                'Select an attempt to review frozen evidence, authoritative scores, decisions and recovery. Historical attempts remain available.',
               ),
               if (loading) const LinearProgressIndicator(),
               if (error != null) Text(error!),
@@ -122,10 +135,27 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                 ),
               for (final i in interviews)
                 Card(
+                  margin: const EdgeInsets.only(top: 12),
+                  color: const Color(0xFFFAFBFD),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: Color(0xFFE5EAF3)),
+                  ),
                   child: ListTile(
-                    title: Text('Interview ${i.id}'),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 8,
+                    ),
+                    title: Text(
+                      'Interview ${i.id}',
+                      style: const TextStyle(
+                        color: _ink,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     subtitle: Text(
-                      'Application ${i.applicationId}\n${i.workflowState} · ${i.completionOutcome} · ${localTime(i.scheduledAt)}',
+                      'Application ${i.applicationId}\n${i.completionOutcome} · ${_createdAt(i)}',
+                      style: const TextStyle(color: _muted),
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
@@ -135,6 +165,8 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                           builder: (_) => RecruitmentReviewScreen(
                             applicationId: i.applicationId,
                             interviewId: i.id,
+                            service: widget.service,
+                            showInterviewDashboard: true,
                           ),
                         ),
                       );
