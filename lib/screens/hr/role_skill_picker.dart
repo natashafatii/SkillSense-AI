@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
+import '../../widgets/recruiter_button_style.dart';
 import 'package:flutter/material.dart';
 
 import 'role_skill_catalog.dart';
@@ -94,7 +96,7 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
 
   @override
   Widget build(BuildContext context) => Dialog(
-    backgroundColor: Colors.white,
+    backgroundColor: context.themeSurface(Colors.white),
     surfaceTintColor: Colors.transparent,
     clipBehavior: Clip.antiAlias,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(19)),
@@ -143,9 +145,9 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
       children: [
         Row(
           children: [
-            const DecoratedBox(
+            DecoratedBox(
               decoration: BoxDecoration(
-                color: Color(0xFFEEF1FF),
+                color: context.themeSurface(const Color(0xFFEEF1FF)),
                 borderRadius: BorderRadius.all(Radius.circular(11)),
               ),
               child: Padding(
@@ -163,22 +165,25 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
             IconButton(
               tooltip: 'Close without saving',
               onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.close, color: _muted),
+              icon: Icon(Icons.close, color: context.themeForeground(_muted)),
             ),
           ],
         ),
         const SizedBox(height: 7),
-        const Text(
+        Text(
           'Search, explore categories, and select up to $_maxSkills skills.',
-          style: TextStyle(color: _muted, fontSize: 13),
+          style: TextStyle(
+            color: context.themeForeground(_muted),
+            fontSize: 13,
+          ),
         ),
       ],
     ),
   );
 
   Widget _filters(double horizontal, bool wide) => DecoratedBox(
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: _line)),
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: context.themeOutline(_line))),
     ),
     child: Padding(
       padding: EdgeInsets.symmetric(horizontal: horizontal),
@@ -190,7 +195,10 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
             autofocus: wide,
             onChanged: (_) => _resetCatalog(() {}),
             decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search, color: _muted),
+              prefixIcon: Icon(
+                Icons.search,
+                color: context.themeForeground(_muted),
+              ),
               hintText: 'Search skills, e.g. Python, React, Flutter',
               isDense: true,
               border: const OutlineInputBorder(
@@ -261,7 +269,9 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
     child: TextButton(
       onPressed: () => _resetCatalog(() => _category = category),
       style: TextButton.styleFrom(
-        foregroundColor: _category == category ? _primary : _muted,
+        foregroundColor: _category == category
+            ? _primary
+            : context.themeForeground(_muted),
       ),
       child: Text('$category $count'),
     ),
@@ -317,7 +327,10 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
         ),
         Text(
           '$count skills',
-          style: const TextStyle(color: _muted, fontSize: 12),
+          style: TextStyle(
+            color: context.themeForeground(_muted),
+            fontSize: 12,
+          ),
         ),
       ],
     );
@@ -335,11 +348,13 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
               return Column(
                 children: [
                   if (groups.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 20),
                       child: Text(
                         'No matching skills',
-                        style: TextStyle(color: _muted),
+                        style: TextStyle(
+                          color: context.themeForeground(_muted),
+                        ),
                       ),
                     ),
                   if (canAdd)
@@ -364,8 +379,8 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
       children: [
         Text(
           '${group.heading.toUpperCase()}  ${group.names.length}',
-          style: const TextStyle(
-            color: _muted,
+          style: TextStyle(
+            color: context.themeForeground(_muted),
             fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
@@ -389,8 +404,10 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
       labelStyle: selected ? const TextStyle(color: Colors.white) : null,
       checkmarkColor: Colors.white,
       selectedColor: _primary,
-      backgroundColor: Colors.white,
-      side: BorderSide(color: selected ? _primary : _line),
+      backgroundColor: context.themeSurface(Colors.white),
+      side: BorderSide(
+        color: selected ? _primary : context.themeOutline(_line),
+      ),
       shape: const StadiumBorder(),
       onSelected: selected || !_atLimit ? (_) => _toggle(name) : null,
     );
@@ -399,9 +416,9 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
   Widget _selectionPanel() => Container(
     width: 258,
     padding: const EdgeInsets.all(16),
-    decoration: const BoxDecoration(
-      color: Color(0xFFFAFBFF),
-      border: Border(left: BorderSide(color: _line)),
+    decoration: BoxDecoration(
+      color: context.themeSurface(const Color(0xFFFAFBFF)),
+      border: Border(left: BorderSide(color: context.themeOutline(_line))),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -422,18 +439,21 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
           ],
         ),
         const SizedBox(height: 5),
-        const Text(
+        Text(
           'Tap a skill to add or remove it.',
-          style: TextStyle(color: _muted, fontSize: 12),
+          style: TextStyle(
+            color: context.themeForeground(_muted),
+            fontSize: 12,
+          ),
         ),
         const SizedBox(height: 10),
         Expanded(
           child: _selected.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'Selected skills will appear here before saving.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: _muted),
+                    style: TextStyle(color: context.themeForeground(_muted)),
                   ),
                 )
               : ListView(
@@ -441,7 +461,7 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
                     for (final name in _selected.values)
                       Card(
                         elevation: 0,
-                        color: Colors.white,
+                        color: context.themeSurface(Colors.white),
                         child: ListTile(
                           dense: true,
                           title: Text(name),
@@ -455,7 +475,7 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
                   ],
                 ),
         ),
-        const Divider(color: _line),
+        Divider(color: context.themeOutline(_line)),
         const Text(
           'Can’t find a skill? Add your own',
           style: TextStyle(fontSize: 12),
@@ -503,7 +523,7 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
             ),
             Text(
               '${(_maxSkills - _selected.length).clamp(0, _maxSkills)} more allowed',
-              style: const TextStyle(color: _muted),
+              style: TextStyle(color: context.themeForeground(_muted)),
             ),
             TextButton(
               onPressed: _selected.isEmpty
@@ -518,7 +538,7 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
           child: LinearProgressIndicator(
             value: (_selected.length / _maxSkills).clamp(0.0, 1.0),
             color: _primary,
-            backgroundColor: _line,
+            backgroundColor: context.themeSurface(_line),
             minHeight: 5,
             borderRadius: BorderRadius.circular(99),
           ),
@@ -539,10 +559,12 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
         FilledButton(
           key: const Key('role-skill-picker-save'),
           onPressed: () => Navigator.of(context).pop(_selected.values.toList()),
-          style: FilledButton.styleFrom(
-            backgroundColor: _primary,
-            foregroundColor: Colors.white,
-            padding: buttonPadding,
+          style: RecruiterButtonStyle.primary(
+            FilledButton.styleFrom(
+              backgroundColor: _primary,
+              foregroundColor: Colors.white,
+              padding: buttonPadding,
+            ),
           ),
           child: const Text('Save skills'),
         ),
@@ -550,8 +572,8 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
     );
     return Container(
       padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 12),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: _line)),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: context.themeOutline(_line))),
       ),
       child: wide
           ? Row(

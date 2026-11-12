@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/constants/app_colors.dart';
 import 'package:skillsense_ai/constants/env_config.dart';
+
 import 'models/job.dart';
 import 'models/interview_analysis_contract.dart';
+import 'services/app_theme_controller.dart';
 import 'services/media/interview_media_route_observer.dart';
 
 // Conditional import: picks the web or native platform integration.
@@ -60,14 +63,7 @@ import 'services/route_storage.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set the status bar style
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      statusBarBrightness: Brightness.light,
-    ),
-  );
+  final theme = await AppThemeController.load();
 
   Object? authInitializationError;
   try {
@@ -79,7 +75,12 @@ void main() async {
   }
 
   if (authInitializationError != null) {
-    runApp(AuthInitializationFailure(error: authInitializationError));
+    runApp(
+      AppThemeScope(
+        controller: theme,
+        child: AuthInitializationFailure(error: authInitializationError),
+      ),
+    );
     return;
   }
 
@@ -94,10 +95,42 @@ void main() async {
       );
   runApp(
     // Both platforms use the verified session owned by AuthService.
-    wrapWithPlatformAuth(
-      publishableKey: EnvConfig.clerkPublishableKey,
-      child: SkillSenseApp(initialAdminRoute: adminLaunch?.toString()),
+    AppThemeScope(
+      controller: theme,
+      child: wrapWithPlatformAuth(
+        publishableKey: EnvConfig.clerkPublishableKey,
+        child: SkillSenseApp(initialAdminRoute: adminLaunch?.toString()),
+      ),
     ),
+  );
+}
+
+ThemeData _appTheme(Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  final tokens = dark ? AuroraTokens.auroraNight : AuroraTokens.auroraDay;
+  return ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppColors.primary,
+      brightness: brightness,
+      surface: dark ? tokens.knob : null,
+      onSurface: dark ? tokens.tx : null,
+      onSurfaceVariant: dark ? tokens.tx2 : null,
+      outlineVariant: dark ? const Color(0xFF495771) : null,
+    ),
+    scaffoldBackgroundColor: dark ? tokens.bg : null,
+    useMaterial3: true,
+    extensions: [tokens],
+  );
+}
+
+Widget _appBuilder(BuildContext context, Widget? child) {
+  final brightness = Theme.of(context).brightness;
+  final overlay = brightness == Brightness.dark
+      ? SystemUiOverlayStyle.light
+      : SystemUiOverlayStyle.dark;
+  return AnnotatedRegion<SystemUiOverlayStyle>(
+    value: overlay.copyWith(statusBarColor: Colors.transparent),
+    child: mobileHomeIndicatorBuilder(context, child),
   );
 }
 
@@ -118,49 +151,57 @@ class AuthInitializationFailure extends StatelessWidget {
       scrollBehavior: const MaterialScrollBehavior().copyWith(
         scrollbars: false,
       ),
-      builder: mobileHomeIndicatorBuilder,
-      home: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        body: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.cloud_off_rounded,
-                    size: 52,
-                    color: Color(0xFFB91C1C),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Unable to start authentication',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
+      builder: _appBuilder,
+      theme: _appTheme(Brightness.light),
+      darkTheme: _appTheme(Brightness.dark),
+      themeMode: AppThemeScope.of(context).value,
+      home: Builder(
+        builder: (context) => Scaffold(
+          backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
+          body: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.cloud_off_rounded,
+                      size: 52,
+                      color: context.themeForeground(const Color(0xFFB91C1C)),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.5,
-                      color: Color(0xFF475569),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Unable to start authentication',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: context.themeForeground(const Color(0xFF0F172A)),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Check the network connection, then reload this page.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: context.themeForeground(const Color(0xFF475569)),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Check the network connection, then reload this page.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: context.themeForeground(const Color(0xFF64748B)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -213,7 +254,7 @@ class SkillSenseApp extends StatelessWidget {
     return MaterialPageRoute<void>(
       settings: settings,
       builder: (context) {
-        final brightness = MediaQuery.platformBrightnessOf(context);
+        final brightness = Theme.of(context).brightness;
         return Theme(
           data: auroraTheme(
             brightness == Brightness.dark
@@ -253,7 +294,7 @@ class SkillSenseApp extends StatelessWidget {
       scrollBehavior: const MaterialScrollBehavior().copyWith(
         scrollbars: false,
       ),
-      builder: mobileHomeIndicatorBuilder,
+      builder: _appBuilder,
       navigatorKey: navigatorKey,
       navigatorObservers: [AppRouteObserver(), interviewMediaRouteObserver],
       initialRoute:
@@ -283,18 +324,9 @@ class SkillSenseApp extends StatelessWidget {
               ),
             ]
           : null,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        extensions: const [AuroraTokens.auroraDay],
-      ),
-      darkTheme: auroraTheme(AuroraTokens.auroraNight, Brightness.dark),
-      // Candidate and recruiter screens use light palettes. Admin routes apply
-      // their own system-aware theme locally.
-      themeMode: ThemeMode.light,
+      theme: _appTheme(Brightness.light),
+      darkTheme: _appTheme(Brightness.dark),
+      themeMode: AppThemeScope.of(context).value,
       // Routing observes only backend-verified application sessions.
       home: adminLaunch == null && !googleCallback
           ? buildPlatformHome(

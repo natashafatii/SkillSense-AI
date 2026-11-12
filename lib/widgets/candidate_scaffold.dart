@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'candidate_mobile_nav.dart';
 import 'candidate_side_nav.dart';
@@ -23,13 +24,13 @@ class CandidateScaffold extends StatelessWidget {
 
     if (hideSideNav) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
         body: body,
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: Stack(
         children: [
           // Background layout
@@ -45,9 +46,7 @@ class CandidateScaffold extends StatelessWidget {
                   ),
 
                 // Main Canvas (Reflows automatically when sidebar width animates)
-                Expanded(
-                  child: body,
-                ),
+                Expanded(child: body),
               ],
             ),
           ),
@@ -65,8 +64,6 @@ class CandidateScaffold extends StatelessWidget {
     );
   }
 
-  Widget _buildMobileBottomDock(BuildContext context) => CandidateMobileNav(
-    currentRoute: currentRoute,
-    onNavigate: onNavigate,
-  );
+  Widget _buildMobileBottomDock(BuildContext context) =>
+      CandidateMobileNav(currentRoute: currentRoute, onNavigate: onNavigate);
 }

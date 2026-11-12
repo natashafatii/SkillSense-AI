@@ -157,6 +157,20 @@ class AdminButton extends StatelessWidget {
                   : t.edge,
             ),
           ),
+        ).copyWith(
+          backgroundBuilder: kind == AdminButtonKind.primary
+              ? (context, states, child) => states.contains(WidgetState.disabled)
+                    ? child ?? const SizedBox.shrink()
+                    : DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          gradient: LinearGradient(
+                            colors: [Color.lerp(t.gd, Colors.white, .12)!, t.gd],
+                          ),
+                        ),
+                        child: child,
+                      )
+              : null,
         ),
       ),
     );

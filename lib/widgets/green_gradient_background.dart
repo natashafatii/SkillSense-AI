@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import 'candidate_button_style.dart';
@@ -27,7 +28,9 @@ class GreenGradientBackground extends StatelessWidget {
                 CandidateButtonStyle.deepTeal.withValues(alpha: .04),
                 Colors.white,
               ).withValues(alpha: .5),
-              AppColors.backgroundBase.withValues(alpha: 0.0),
+              context
+                  .themeSurface(AppColors.backgroundBase)
+                  .withValues(alpha: 0.0),
             ],
             stops: const [0.0, 0.4, 1.0],
           ),

@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
+import '../../widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 // lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
@@ -344,10 +346,10 @@ class _LoginScreenState extends State<LoginScreen>
       hintText: hint,
       hintStyle: GoogleFonts.publicSans(
         fontSize: 15,
-        color: const Color(0xFFAAAAAA),
+        color: context.themeForeground(const Color(0xFFAAAAAA)),
       ),
       filled: true,
-      fillColor: AppColors.white,
+      fillColor: context.themeSurface(AppColors.white),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide.none,
@@ -401,7 +403,7 @@ class _LoginScreenState extends State<LoginScreen>
         }
 
         return Scaffold(
-          backgroundColor: AppColors.backgroundBase,
+          backgroundColor: context.themeCanvas(AppColors.backgroundBase),
           body: Stack(
             children: [
               // ── Same gradient background as WelcomeScreen & RoleSelectionScreen ──
@@ -442,7 +444,9 @@ class _LoginScreenState extends State<LoginScreen>
                                 style: GoogleFonts.publicSans(
                                   fontSize: 34,
                                   fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF1A1A1A),
+                                  color: context.themeForeground(
+                                    const Color(0xFF1A1A1A),
+                                  ),
                                   height: 1.15,
                                 ),
                               ),
@@ -454,7 +458,9 @@ class _LoginScreenState extends State<LoginScreen>
                                 style: GoogleFonts.publicSans(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w400,
-                                  color: const Color(0xFF888888),
+                                  color: context.themeForeground(
+                                    const Color(0xFF888888),
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: 28),
@@ -464,22 +470,28 @@ class _LoginScreenState extends State<LoginScreen>
                                   width: double.infinity,
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF2F2),
+                                    color: context.themeSurface(
+                                      const Color(0xFFFEF2F2),
+                                    ),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(
+                                      Icon(
                                         Icons.warning_amber_rounded,
-                                        color: Color(0xFF991B1B),
+                                        color: context.themeForeground(
+                                          const Color(0xFF991B1B),
+                                        ),
                                         size: 16,
                                       ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
                                           _loginError!,
-                                          style: const TextStyle(
-                                            color: Color(0xFF991B1B),
+                                          style: TextStyle(
+                                            color: context.themeForeground(
+                                              const Color(0xFF991B1B),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -502,7 +514,9 @@ class _LoginScreenState extends State<LoginScreen>
                                 keyboardType: TextInputType.emailAddress,
                                 style: GoogleFonts.publicSans(
                                   fontSize: 15,
-                                  color: const Color(0xFF1A1A1A),
+                                  color: context.themeForeground(
+                                    const Color(0xFF1A1A1A),
+                                  ),
                                 ),
                                 decoration: _fieldDecor(AppConstants.emailHint),
                               ),
@@ -514,7 +528,9 @@ class _LoginScreenState extends State<LoginScreen>
                                 obscureText: _obscurePassword,
                                 style: GoogleFonts.publicSans(
                                   fontSize: 15,
-                                  color: const Color(0xFF1A1A1A),
+                                  color: context.themeForeground(
+                                    const Color(0xFF1A1A1A),
+                                  ),
                                 ),
                                 decoration: _fieldDecor(
                                   AppConstants.passwordHint,
@@ -523,7 +539,9 @@ class _LoginScreenState extends State<LoginScreen>
                                       _obscurePassword
                                           ? Icons.visibility_off_outlined
                                           : Icons.visibility_outlined,
-                                      color: AppColors.textGrey,
+                                      color: context.themeForeground(
+                                        AppColors.textGrey,
+                                      ),
                                       size: 20,
                                     ),
                                     onPressed: () => setState(
@@ -571,7 +589,9 @@ class _LoginScreenState extends State<LoginScreen>
                                             AppConstants.rememberMe,
                                             style: GoogleFonts.publicSans(
                                               fontSize: 13,
-                                              color: const Color(0xFF555555),
+                                              color: context.themeForeground(
+                                                const Color(0xFF555555),
+                                              ),
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -605,12 +625,14 @@ class _LoginScreenState extends State<LoginScreen>
                                 height: 56,
                                 child: ElevatedButton(
                                   onPressed: _isLoading ? null : _login,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.buttonBlue,
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
+                                  style: PreAuthButtonStyle.active(
+                                    ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.buttonBlue,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
                                     ),
                                   ),
                                   child: _isLoading
@@ -650,7 +672,9 @@ class _LoginScreenState extends State<LoginScreen>
                                       AppConstants.orDivider,
                                       style: GoogleFonts.publicSans(
                                         fontSize: 13,
-                                        color: AppColors.textGrey,
+                                        color: context.themeForeground(
+                                          AppColors.textGrey,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -670,10 +694,14 @@ class _LoginScreenState extends State<LoginScreen>
                                 child: Container(
                                   height: 56,
                                   decoration: BoxDecoration(
-                                    color: AppColors.white,
+                                    color: context.themeSurface(
+                                      AppColors.white,
+                                    ),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: AppColors.socialBorder,
+                                      color: context.themeOutline(
+                                        AppColors.socialBorder,
+                                      ),
                                       width: 1.2,
                                     ),
                                   ),
@@ -691,7 +719,9 @@ class _LoginScreenState extends State<LoginScreen>
                                         style: GoogleFonts.publicSans(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w500,
-                                          color: AppColors.textDark,
+                                          color: context.themeForeground(
+                                            AppColors.textDark,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -707,10 +737,14 @@ class _LoginScreenState extends State<LoginScreen>
                                 child: Container(
                                   height: 56,
                                   decoration: BoxDecoration(
-                                    color: AppColors.white,
+                                    color: context.themeSurface(
+                                      AppColors.white,
+                                    ),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: AppColors.socialBorder,
+                                      color: context.themeOutline(
+                                        AppColors.socialBorder,
+                                      ),
                                       width: 1.2,
                                     ),
                                   ),
@@ -728,7 +762,9 @@ class _LoginScreenState extends State<LoginScreen>
                                         style: GoogleFonts.publicSans(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w500,
-                                          color: AppColors.textDark,
+                                          color: context.themeForeground(
+                                            AppColors.textDark,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -745,7 +781,9 @@ class _LoginScreenState extends State<LoginScreen>
                                     AppConstants.noAccount,
                                     style: GoogleFonts.publicSans(
                                       fontSize: 14,
-                                      color: AppColors.textGrey,
+                                      color: context.themeForeground(
+                                        AppColors.textGrey,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 6),

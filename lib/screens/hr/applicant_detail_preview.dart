@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../application_screening_screen.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'package:flutter/material.dart';
@@ -156,7 +157,7 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
         app != null &&
         (app.rawStatus == 'APPLIED' || app.rawStatus == 'UNDER_REVIEW');
     return Material(
-      color: Colors.white,
+      color: context.themeSurface(Colors.white),
       borderRadius: BorderRadius.vertical(
         top: Radius.circular(widget.mobile ? 24 : 20),
       ),
@@ -170,7 +171,7 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFC8D0DF),
+                  color: context.themeSurface(const Color(0xFFC8D0DF)),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -187,7 +188,7 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                     style: GoogleFonts.spaceGrotesk(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
-                      color: _ink,
+                      color: context.themeForeground(_ink),
                     ),
                   ),
                 ),
@@ -199,7 +200,7 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
               ],
             ),
           ),
-          const Divider(height: 1, color: _border),
+          Divider(height: 1, color: context.themeOutline(_border)),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -221,7 +222,9 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                           children: [
                             CircleAvatar(
                               radius: 24,
-                              backgroundColor: const Color(0xFFE8EEFF),
+                              backgroundColor: context.themeSurface(
+                                const Color(0xFFE8EEFF),
+                              ),
                               child: Text(
                                 _initials(name),
                                 style: GoogleFonts.inter(
@@ -240,21 +243,21 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                                     style: GoogleFonts.inter(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
-                                      color: _ink,
+                                      color: context.themeForeground(_ink),
                                     ),
                                   ),
                                   Text(
                                     app.candidateEmail,
                                     style: GoogleFonts.inter(
                                       fontSize: 12,
-                                      color: _muted,
+                                      color: context.themeForeground(_muted),
                                     ),
                                   ),
                                   Text(
                                     'Applied ${_timeAgo(app.createdAt)}',
                                     style: GoogleFonts.inter(
                                       fontSize: 11,
-                                      color: _muted,
+                                      color: context.themeForeground(_muted),
                                     ),
                                   ),
                                 ],
@@ -269,7 +272,10 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                             if (widget.company.trim().isNotEmpty)
                               widget.company.trim(),
                           ].join(' · '),
-                          style: GoogleFonts.inter(fontSize: 12, color: _muted),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: context.themeForeground(_muted),
+                          ),
                         ),
                         const SizedBox(height: 24),
                         _section('RESUME'),
@@ -286,15 +292,15 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                             fontSize: 13,
                             height: 1.5,
                             color: app.coverNote?.trim().isNotEmpty == true
-                                ? _ink
-                                : _muted,
+                                ? context.themeForeground(_ink)
+                                : context.themeForeground(_muted),
                           ),
                         ),
                       ],
                     ],
                   ),
           ),
-          const Divider(height: 1, color: _border),
+          Divider(height: 1, color: context.themeOutline(_border)),
           Padding(
             padding: EdgeInsets.fromLTRB(24, 14, 24, widget.mobile ? 24 : 18),
             child: Wrap(
@@ -359,7 +365,7 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
       fontSize: 11,
       letterSpacing: 1.1,
       fontWeight: FontWeight.w700,
-      color: _ink,
+      color: context.themeForeground(_ink),
     ),
   );
 
@@ -367,7 +373,10 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
     if (_resumeUnavailable) {
       return Text(
         'Resume not available',
-        style: GoogleFonts.inter(fontSize: 13, color: _muted),
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          color: context.themeForeground(_muted),
+        ),
       );
     }
     final resume = _resume;
@@ -399,13 +408,16 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: _ink,
+                      color: context.themeForeground(_ink),
                     ),
                   ),
                   if (meta.isNotEmpty)
                     Text(
                       meta.join(' · '),
-                      style: GoogleFonts.inter(fontSize: 11, color: _muted),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: context.themeForeground(_muted),
+                      ),
                     ),
                 ],
               ),
@@ -430,7 +442,10 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                 const SizedBox(width: 8),
                 Text(
                   'Parsing…',
-                  style: GoogleFonts.inter(fontSize: 12, color: _muted),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: context.themeForeground(_muted),
+                  ),
                 ),
               ],
             ),
@@ -465,7 +480,7 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: _ink,
+              color: context.themeForeground(_ink),
             ),
           ),
           const SizedBox(height: 8),
@@ -498,7 +513,7 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: _ink,
+              color: context.themeForeground(_ink),
             ),
           ),
           const SizedBox(height: 6),
@@ -510,7 +525,10 @@ class _ApplicantDetailPreviewState extends State<ApplicantDetailPreview> {
                     .map((key) => row[key]?.toString().trim() ?? '')
                     .where((value) => value.isNotEmpty)
                     .join(' · '),
-                style: GoogleFonts.inter(fontSize: 12, color: _muted),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: context.themeForeground(_muted),
+                ),
               ),
             ),
         ],

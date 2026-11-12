@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../models/interview_analysis_contract.dart';
 import '../services/recruiter_observation_controller.dart';
@@ -16,10 +17,12 @@ class RecruiterObservationPanel extends StatelessWidget {
       final report = controller.report;
       final counts = snapshot?.frameCounts;
       return Card(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFFE1E6F0)),
+          side: BorderSide(
+            color: context.themeOutline(const Color(0xFFE1E6F0)),
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(20),

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../services/media/interview_media_controller.dart';
@@ -73,10 +74,18 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
       final enabled = media.isCurrent && !media.busy;
       final brightness = widget.brightness ?? Theme.of(context).brightness;
       final dark = brightness == Brightness.dark;
-      final surface = dark ? const Color(0xFF172132) : Colors.white;
-      final ink = dark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A);
-      final muted = dark ? const Color(0xFFABB9CC) : const Color(0xFF64748B);
-      final border = dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+      final surface = dark
+          ? const Color(0xFF172132)
+          : context.themeSurface(Colors.white);
+      final ink = dark
+          ? const Color(0xFFF1F5F9)
+          : context.themeForeground(const Color(0xFF0F172A));
+      final muted = dark
+          ? const Color(0xFFABB9CC)
+          : context.themeForeground(const Color(0xFF64748B));
+      final border = dark
+          ? const Color(0xFF334155)
+          : context.themeOutline(const Color(0xFFE2E8F0));
       final tint = dark ? const Color(0xFF223448) : const Color(0xFFF1F8F7);
       const teal = Color(0xFF0A8A76);
       final accent = dark ? const Color(0xFF5EEAD4) : teal;
@@ -186,10 +195,12 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
                                           ),
                                         )
                                       else
-                                        const Icon(
+                                        Icon(
                                           Icons.videocam_off_outlined,
                                           size: 32,
-                                          color: Color(0xFF94A3B8),
+                                          color: context.themeForeground(
+                                            const Color(0xFF94A3B8),
+                                          ),
                                         ),
                                       const SizedBox(height: 12),
                                       Text(

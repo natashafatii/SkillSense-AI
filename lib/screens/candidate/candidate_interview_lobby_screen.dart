@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
@@ -283,11 +284,13 @@ class _CandidateInterviewLobbyScreenState
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 900;
 
-    final Color bgBase = const Color(0xFFF8FAFC);
-    final Color textPrimary = const Color(0xFF0F172A);
-    final Color textSecondary = const Color(0xFF64748B);
-    final Color cardBg = Colors.white;
-    final Color cardBorder = const Color(0xFFE2E8F0);
+    final Color bgBase = context.themeCanvas(const Color(0xFFF8FAFC));
+    final Color textPrimary = context.themeForeground(const Color(0xFF0F172A));
+    final Color textSecondary = context.themeForeground(
+      const Color(0xFF64748B),
+    );
+    final Color cardBg = context.themeSurface(Colors.white);
+    final Color cardBorder = context.themeOutline(const Color(0xFFE2E8F0));
 
     return Scaffold(
       backgroundColor: bgBase,
@@ -415,15 +418,17 @@ class _CandidateInterviewLobbyScreenState
               width: isMobile ? 54 : 64,
               height: isMobile ? 54 : 64,
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: context.themeSurface(const Color(0xFFF1F5F9)),
                 borderRadius: BorderRadius.circular(isMobile ? 17 : 20),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: context.themeOutline(const Color(0xFFE2E8F0)),
+                ),
               ),
               child: Center(
                 child: Icon(
                   Icons.radio_button_checked_rounded,
                   size: isMobile ? 20 : 24,
-                  color: const Color(0xFF64748B),
+                  color: context.themeForeground(const Color(0xFF64748B)),
                 ),
               ),
             ),
@@ -432,7 +437,7 @@ class _CandidateInterviewLobbyScreenState
               _loadError ??
                   (isMobile ? 'Nothing scheduled' : 'No interview scheduled'),
               style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A),
+                color: context.themeForeground(const Color(0xFF0F172A)),
                 fontSize: isMobile ? 15 : 18,
                 fontWeight: FontWeight.w700,
                 letterSpacing: isMobile ? -0.03 : -0.025,
@@ -447,7 +452,7 @@ class _CandidateInterviewLobbyScreenState
                     ? 'Invites appear here with a countdown.'
                     : 'When a recruiter invites you, your device check and countdown appear here.',
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
+                  color: context.themeForeground(const Color(0xFF64748B)),
                   fontSize: isMobile ? 11 : 12.5,
                   height: 1.65,
                 ),
@@ -495,7 +500,7 @@ class _CandidateInterviewLobbyScreenState
             Text(
               "You'll be notified when invited",
               style: GoogleFonts.inter(
-                color: const Color(0xFF94A3B8),
+                color: context.themeForeground(const Color(0xFF94A3B8)),
                 fontSize: 10.5,
                 fontWeight: FontWeight.w400,
               ),
@@ -671,7 +676,9 @@ class _CandidateInterviewLobbyScreenState
               style: CandidateButtonStyle.primaryColors(
                 FilledButton.styleFrom(
                   backgroundColor: AppColors.dashboardTeal,
-                  foregroundColor: const Color(0xFF0F172A),
+                  foregroundColor: context.themeForeground(
+                    const Color(0xFF0F172A),
+                  ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 16,
@@ -762,7 +769,9 @@ class _CandidateInterviewLobbyScreenState
                 style: CandidateButtonStyle.primary(
                   ElevatedButton.styleFrom(
                     backgroundColor: AppColors.dashboardTeal,
-                    foregroundColor: const Color(0xFF0F172A),
+                    foregroundColor: context.themeForeground(
+                      const Color(0xFF0F172A),
+                    ),
                     elevation: 0,
                     minimumSize: const Size(double.infinity, 48),
                     shape: RoundedRectangleBorder(
@@ -839,10 +848,7 @@ class _CandidateInterviewLobbyScreenState
     Color cardBorder,
     bool isMobile,
   ) {
-    return InterviewMediaPanel(
-      controller: _media,
-      brightness: Brightness.light,
-    );
+    return InterviewMediaPanel(controller: _media);
   }
 
   // ── HOUSE RULES PANEL ──────────────────────────────────────────────────────
@@ -907,7 +913,7 @@ class _CandidateInterviewLobbyScreenState
           child: Text(
             rule,
             style: GoogleFonts.inter(
-              color: const Color(0xFF475569),
+              color: context.themeForeground(const Color(0xFF475569)),
               fontSize: 13,
               height: 1.4,
               fontWeight: FontWeight.w500,
@@ -946,5 +952,6 @@ class GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant GridPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

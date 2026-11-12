@@ -16,7 +16,7 @@ class WebGlobalSearchLauncher extends StatefulWidget {
   const WebGlobalSearchLauncher({
     super.key,
     required this.candidate,
-    required this.dark,
+    this.dark = false,
     required this.builder,
     this.loadJobs,
   });
@@ -115,13 +115,12 @@ class _GlobalSearchDialogState extends State<GlobalSearchDialog> {
   String? _error;
   List<Job> _jobs = [];
 
-  Color get _surface => widget.dark ? const Color(0xFF172237) : Colors.white;
-  Color get _ink =>
-      widget.dark ? const Color(0xFFE8EDF8) : const Color(0xFF0F172A);
-  Color get _muted =>
-      widget.dark ? const Color(0xFFA3AFC8) : const Color(0xFF64748B);
-  Color get _edge =>
-      widget.dark ? const Color(0xFF33415B) : const Color(0xFFE2E8F0);
+  bool get _dark =>
+      widget.dark || Theme.of(context).brightness == Brightness.dark;
+  Color get _surface => _dark ? const Color(0xFF172237) : Colors.white;
+  Color get _ink => _dark ? const Color(0xFFE8EDF8) : const Color(0xFF0F172A);
+  Color get _muted => _dark ? const Color(0xFFA3AFC8) : const Color(0xFF64748B);
+  Color get _edge => _dark ? const Color(0xFF33415B) : const Color(0xFFE2E8F0);
   Color get _accent =>
       widget.candidate ? const Color(0xFF00AD87) : const Color(0xFF4D7BFA);
 

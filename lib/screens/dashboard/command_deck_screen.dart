@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -340,7 +341,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     final bool isMobile = screenWidth < 900;
 
     // Use light theme for both mobile and web
-    final DeckTheme currentTheme = DeckTheme.light;
+    final currentTheme = Theme.of(context).brightness == Brightness.dark
+        ? DeckTheme.dark
+        : DeckTheme.light;
 
     return Focus(
       focusNode: _keyboardFocusNode,
@@ -371,7 +374,10 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: const [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+                    colors: [
+                      context.themeSurface(const Color(0xFFF8FAFC)),
+                      context.themeSurface(const Color(0xFFF1F5F9)),
+                    ],
                   ),
                 ),
               ),
@@ -716,9 +722,14 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
     return Container(
       width: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+      decoration: BoxDecoration(
+        color: context.themeSurface(Colors.white),
+        border: Border(
+          right: BorderSide(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+            width: 1,
+          ),
+        ),
       ),
       child: Column(
         children: [
@@ -817,7 +828,9 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                   item['icon'],
                                   color: isSelected
                                       ? Colors.white
-                                      : const Color(0xFF64748B),
+                                      : context.themeForeground(
+                                          const Color(0xFF64748B),
+                                        ),
                                   size: 19,
                                 ),
                               ),
@@ -927,7 +940,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
               margin: const EdgeInsets.only(bottom: 24),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFFEFF6FF),
+                color: context.themeSurface(const Color(0xFFEFF6FF)),
                 border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
               ),
               child: Center(
@@ -1122,7 +1135,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                color: RecruiterButtonStyle.blue,
+                gradient: RecruiterButtonStyle.primaryGradient,
               ),
               child: ElevatedButton(
                 style: RecruiterButtonStyle.primary(
@@ -1211,7 +1224,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
-                  color: RecruiterButtonStyle.blue,
+                  gradient: RecruiterButtonStyle.primaryGradient,
                 ),
                 child: ElevatedButton(
                   style: RecruiterButtonStyle.primary(
@@ -1548,7 +1561,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
           CircularProgressIndicator(
             value: score / 100.0,
             strokeWidth: 3,
-            backgroundColor: const Color(0xFFE2E8F0),
+            backgroundColor: context.themeSurface(const Color(0xFFE2E8F0)),
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
           Text(
@@ -2127,15 +2140,15 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: context.themeSurface(const Color(0xFFF1F5F9)),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: theme.border),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Icon(
                       Icons.adjust_rounded,
                       size: 16,
-                      color: Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                     ),
                   ),
                 ),
@@ -2188,15 +2201,15 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: context.themeSurface(const Color(0xFFF1F5F9)),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: theme.border),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Icon(
                       Icons.adjust_rounded,
                       size: 16,
-                      color: Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                     ),
                   ),
                 ),
@@ -2426,11 +2439,11 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
         color: theme.cardBg,
         borderRadius: BorderRadius.circular(16),
         gradient: hasAuroraGlow && theme == DeckTheme.light
-            ? const LinearGradient(
+            ? LinearGradient(
                 colors: [
-                  Color(0xFFFFFFFF),
-                  Color(0xFFF8FAFC),
-                  Color(0xFFEEF2FF),
+                  context.themeSurface(const Color(0xFFFFFFFF)),
+                  context.themeSurface(const Color(0xFFF8FAFC)),
+                  context.themeSurface(const Color(0xFFEEF2FF)),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -2438,7 +2451,7 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
             : null,
         border: Border.all(
           color: hasAuroraGlow && theme == DeckTheme.light
-              ? const Color(0xFFC7D2FE)
+              ? context.themeOutline(const Color(0xFFC7D2FE))
               : theme.border,
           width: 1.2,
         ),
@@ -2512,7 +2525,7 @@ class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color.withValues(alpha: 0.2)
+      ..color = color.withValues(alpha: color.a * 0.2)
       ..strokeWidth = 1;
 
     const double step = 48.0;
@@ -2526,5 +2539,6 @@ class GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant GridPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

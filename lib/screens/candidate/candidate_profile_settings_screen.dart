@@ -1,3 +1,4 @@
+import '../../widgets/theme_switcher.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
@@ -19,15 +20,11 @@ import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/candidate_avatar_image.dart';
 import '../../widgets/recruiter_top_bar.dart';
 
-enum AppThemeMode { daylight, night, auto }
-
 enum _PhotoAction { gallery, camera, remove }
 
 /// Candidate Profile & Settings (CD-10). The spacing follows the supplied
 /// profile reference, with the candidate console's teal accent.
 class CandidateProfileSettingsScreen extends StatefulWidget {
-  static AppThemeMode currentTheme = AppThemeMode.daylight;
-
   final Future<CandidateProfile?> Function()? loadProfile;
 
   const CandidateProfileSettingsScreen({super.key, this.loadProfile});
@@ -50,7 +47,7 @@ class _Colors {
   Color get border2 => dark ? const Color(0x4794AADC) : const Color(0xFFC8D0E3);
   Color get text => dark ? const Color(0xFFE8EDF8) : const Color(0xFF16213A);
   Color get text2 => dark ? const Color(0xFFA3AFC8) : const Color(0xFF4A5875);
-  Color get text3 => dark ? const Color(0xFF6E7C99) : const Color(0xFF74829E);
+  Color get text3 => dark ? const Color(0xFF9FACC6) : const Color(0xFF74829E);
   Color get accent => dark ? const Color(0xFF2EE6C8) : const Color(0xFF10A778);
   Color get accentSoft =>
       dark ? const Color(0x242EE6C8) : const Color(0x1710A778);
@@ -440,8 +437,10 @@ class _CandidateProfileSettingsScreenState
               FilledButton(
                 onPressed: busy ? null : save,
                 style: CandidateButtonStyle.primaryColors(
-                  FilledButton(onPressed: null, child: const SizedBox())
-                      .defaultStyleOf(dialogContext),
+                  FilledButton(
+                    onPressed: null,
+                    child: const SizedBox(),
+                  ).defaultStyleOf(dialogContext),
                 ),
                 child: const Text('Save photo'),
               ),
@@ -712,7 +711,10 @@ class _CandidateProfileSettingsScreenState
                 onPressed: saving
                     ? null
                     : () => Navigator.of(dialogContext).pop(),
-                style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+                style: CandidateButtonStyle.secondary(
+                  context,
+                  TextButton.styleFrom(),
+                ),
                 child: const Text('Cancel'),
               ),
               TextButton(
@@ -774,7 +776,10 @@ class _CandidateProfileSettingsScreenState
               onPressed: saving
                   ? null
                   : () => Navigator.of(dialogContext).pop(),
-              style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+              style: CandidateButtonStyle.secondary(
+                context,
+                TextButton.styleFrom(),
+              ),
               child: const Text('Cancel'),
             ),
             TextButton(
@@ -825,7 +830,10 @@ class _CandidateProfileSettingsScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+            style: CandidateButtonStyle.secondary(
+              context,
+              TextButton.styleFrom(),
+            ),
             child: const Text('Cancel'),
           ),
           TextButton(
@@ -882,12 +890,18 @@ class _CandidateProfileSettingsScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+            style: CandidateButtonStyle.secondary(
+              context,
+              TextButton.styleFrom(),
+            ),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: CandidateButtonStyle.destructive(TextButton.styleFrom()),
+            style: CandidateButtonStyle.destructive(
+              context,
+              TextButton.styleFrom(),
+            ),
             child: const Text('Sign out'),
           ),
         ],
@@ -903,6 +917,7 @@ class _CandidateProfileSettingsScreenState
       key: Key(mobile ? 'candidate-mobile-sign-out' : 'candidate-web-sign-out'),
       onPressed: _signingOut ? null : _confirmSignOut,
       style: CandidateButtonStyle.destructive(
+        context,
         OutlinedButton.styleFrom(),
         radius: mobile ? 14 : 12,
       ),
@@ -926,9 +941,7 @@ class _CandidateProfileSettingsScreenState
       : 'Add your resume and skills to get a match score.';
 
   bool _isDark(BuildContext context) =>
-      CandidateProfileSettingsScreen.currentTheme == AppThemeMode.night ||
-      (CandidateProfileSettingsScreen.currentTheme == AppThemeMode.auto &&
-          MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+      Theme.of(context).brightness == Brightness.dark;
 
   TextStyle _inter(
     double size,
@@ -2681,87 +2694,20 @@ class _CandidateProfileSettingsScreenState
     _Colors c, {
     bool mobile = false,
     bool compact = false,
-  }) => Container(
-    padding: const EdgeInsets.all(3),
-    decoration: BoxDecoration(
-      color: c.surface2,
-      border: Border.all(color: c.border),
-      borderRadius: BorderRadius.circular(9),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _themeButton(
-          'Night',
-          AppThemeMode.night,
-          c,
-          mobile: mobile,
-          compact: compact,
-        ),
-        _themeButton(
-          'Daylight',
-          AppThemeMode.daylight,
-          c,
-          mobile: mobile,
-          compact: compact,
-        ),
-        _themeButton(
-          'Auto',
-          AppThemeMode.auto,
-          c,
-          mobile: mobile,
-          compact: compact,
-        ),
-      ],
-    ),
+  }) => ThemeSwitcher(
+    surface: c.surface,
+    track: c.surface2,
+    border: c.border,
+    foreground: c.text,
+    inactiveForeground: c.text2,
+    labelStyle: _inter(mobile ? 13.5 : 13, c.text, weight: FontWeight.w500),
+    mobile: mobile,
+    horizontalPadding: compact
+        ? 5
+        : mobile
+        ? 11
+        : 9,
   );
-
-  Widget _themeButton(
-    String label,
-    AppThemeMode mode,
-    _Colors c, {
-    bool mobile = false,
-    bool compact = false,
-  }) {
-    final active = CandidateProfileSettingsScreen.currentTheme == mode;
-    return PointerGestureDetector(
-      onTap: () =>
-          setState(() => CandidateProfileSettingsScreen.currentTheme = mode),
-      child: Container(
-        height: mobile ? 34 : 28,
-        padding: EdgeInsets.symmetric(
-          horizontal: compact
-              ? 5
-              : mobile
-              ? 11
-              : 9,
-        ),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(mobile ? 8 : 6),
-          border: active ? Border.all(color: c.border) : null,
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: .1),
-                    blurRadius: 2,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: _inter(
-            mobile ? 13.5 : 13,
-            active ? const Color(0xFF16213A) : c.text2,
-            weight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _link(String label, _Colors c, VoidCallback onPressed) => TextButton(
     onPressed: onPressed,

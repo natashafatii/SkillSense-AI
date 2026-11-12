@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
@@ -137,17 +138,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget build(BuildContext context) {
     final mobile = _mobile;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: Stack(
         children: [
           // ── BASE GRADIENT ──
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFFF1F4FC), Color(0xFFF5F7FC)],
+                  colors: [
+                    context.themeSurface(const Color(0xFFF1F4FC)),
+                    context.themeSurface(const Color(0xFFF5F7FC)),
+                  ],
                 ),
               ),
             ),
@@ -155,7 +159,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
           // ── GRID PATTERN OVERLAY (Web Only) ──
           if (!mobile)
-            Positioned.fill(child: CustomPaint(painter: GridPainter())),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: GridPainter(
+                  color: context.themeOutline(const Color(0xFFE2E8F0)),
+                ),
+              ),
+            ),
 
           // ── MAIN CONTENT ──
           SafeArea(
@@ -219,8 +229,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   width: mobile ? 54 : 64,
                   height: mobile ? 54 : 64,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    border: Border.all(color: const Color(0xFFE3EAF4)),
+                    color: context.themeSurface(const Color(0xFFF1F5F9)),
+                    border: Border.all(
+                      color: context.themeOutline(const Color(0xFFE3EAF4)),
+                    ),
                     borderRadius: BorderRadius.circular(mobile ? 17 : 20),
                   ),
                   alignment: Alignment.center,
@@ -228,7 +240,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     '◈',
                     style: TextStyle(
                       fontSize: mobile ? 20 : 24,
-                      color: const Color(0xFF8190A8),
+                      color: context.themeForeground(const Color(0xFF8190A8)),
                       height: 1.0,
                     ),
                   ),
@@ -242,7 +254,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     fontSize: mobile ? 15 : 18,
                     fontWeight: FontWeight.w700,
                     letterSpacing: mobile ? -0.2 : -0.45,
-                    color: const Color(0xFF17233B),
+                    color: context.themeForeground(const Color(0xFF17233B)),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -257,7 +269,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     style: GoogleFonts.inter(
                       fontSize: mobile ? 11 : 12.5,
                       height: 1.65,
-                      color: const Color(0xFF8190A8),
+                      color: context.themeForeground(const Color(0xFF8190A8)),
                     ),
                   ),
                 ),
@@ -266,7 +278,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 Container(
                   height: mobile ? 38 : 40,
                   decoration: BoxDecoration(
-                    color: RecruiterButtonStyle.blue,
+                    gradient: RecruiterButtonStyle.primaryGradient,
                     borderRadius: BorderRadius.circular(11),
                     boxShadow: [
                       BoxShadow(
@@ -311,7 +323,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
                       fontSize: 10.5,
-                      color: const Color(0xFF94A3B8),
+                      color: context.themeForeground(const Color(0xFF94A3B8)),
                     ),
                   ),
                 ],
@@ -327,7 +339,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(_error!, style: GoogleFonts.inter(color: _text2)),
+        Text(
+          _error!,
+          style: GoogleFonts.inter(color: context.themeForeground(_text2)),
+        ),
         TextButton(onPressed: _load, child: const Text('Retry')),
       ],
     ),
@@ -439,7 +454,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   Widget _card(Widget child, {bool highlight = false}) => DecoratedBox(
     decoration: BoxDecoration(
-      color: highlight ? Colors.white : _surface,
+      color: highlight
+          ? context.themeSurface(Colors.white)
+          : context.themeSurface(_surface),
       borderRadius: BorderRadius.circular(16),
       boxShadow: [
         BoxShadow(
@@ -527,8 +544,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             Container(
               constraints: const BoxConstraints(minHeight: 37),
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: _edge)),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: context.themeOutline(_edge)),
+                ),
               ),
               child: Row(
                 children: [
@@ -581,12 +600,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                   bin.count.clamp(0, maximum) / maximum,
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
-                                  color: [
-                                    _red,
-                                    _amber,
-                                    _accent,
-                                    _green,
-                                  ][index % 4],
+                                  color: context.themeForeground(
+                                    [_red, _amber, _accent, _green][index % 4],
+                                  ),
                                   borderRadius: const BorderRadius.vertical(
                                     top: Radius.circular(4),
                                   ),
@@ -616,8 +632,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           : Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xFFE4ECFF),
-                border: Border.all(color: const Color(0xFFCEDAFF)),
+                color: context.themeSurface(const Color(0xFFE4ECFF)),
+                border: Border.all(
+                  color: context.themeOutline(const Color(0xFFCEDAFF)),
+                ),
                 borderRadius: BorderRadius.circular(5),
               ),
               child: Text(
@@ -748,7 +766,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
       decoration: BoxDecoration(
-        border: Border.all(color: _edge),
+        border: Border.all(color: context.themeOutline(_edge)),
         borderRadius: BorderRadius.circular(11),
       ),
       child: Column(
@@ -773,27 +791,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  static Widget _bar(double value, Color color) => ClipRRect(
+  Widget _bar(double value, Color color) => ClipRRect(
     borderRadius: BorderRadius.circular(4),
     child: LinearProgressIndicator(
       value: value.clamp(0.0, 1.0),
-      color: color,
-      backgroundColor: _track,
+      color: context.themeForeground(color),
+      backgroundColor: context.themeChartTrack(_track),
       minHeight: 3,
       trackGap: 0,
       borderRadius: BorderRadius.circular(4),
     ),
   );
 
-  static TextStyle _eyebrow({Color color = _text3, double size = 8}) =>
-      _bodyStyle(
-        size,
-        color: color,
-        family: 'Space Grotesk',
-        weight: FontWeight.w700,
-      ).copyWith(letterSpacing: 1);
+  TextStyle _eyebrow({Color color = _text3, double size = 8}) => _bodyStyle(
+    size,
+    color: color,
+    family: 'Space Grotesk',
+    weight: FontWeight.w700,
+  ).copyWith(letterSpacing: 1);
 
-  static TextStyle _bodyStyle(
+  TextStyle _bodyStyle(
     double size, {
     Color color = _text,
     String family = 'Inter',
@@ -801,7 +818,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }) => TextStyle(
     fontFamily: family,
     fontSize: size,
-    color: color,
+    color: context.themeForeground(color),
     fontWeight: weight,
   );
 }

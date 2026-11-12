@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
+import '../../widgets/country_code_phone_field.dart';
+import '../../widgets/pre_auth_button_style.dart';
 import 'aurora_google_profile.dart';
 
 /// Completes OAuth and any required profile details before routing.
@@ -20,10 +22,11 @@ class _GoogleCallbackScreenState extends State<GoogleCallbackScreen> {
   final _phoneFocus = FocusNode();
   TextEditingController? _company;
   List<String> _fields = [];
-  String _country = '+92';
-  String _initialCountry = '+92';
+  CountryData? _phoneCountry;
+  String _phoneNumber = '';
+  bool _phoneValid = false;
   String _initialName = '';
-  String _initialPhone = '';
+  String? _initialPhone;
   bool _busy = false;
   bool _profileLoaded = false;
   bool _needsProfile = false;
@@ -81,9 +84,8 @@ class _GoogleCallbackScreenState extends State<GoogleCallbackScreen> {
       return;
     }
     final name = _name.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-    final rawPhone = _phone.text.trim();
-    final digits = rawPhone.replaceAll(RegExp(r'\D'), '');
-    final phone = rawPhone.startsWith('+') ? '+$digits' : '$_country$digits';
+    final phone = _phoneNumber;
+    final phoneChanged = phone != _initialPhone;
     final company = _company?.text.trim();
     if (editingProfile) {
       if (name.length < 2) {
@@ -99,7 +101,7 @@ class _GoogleCallbackScreenState extends State<GoogleCallbackScreen> {
         _nameFocus.requestFocus();
         return;
       }
-      if (digits.length < 7 || phone.length > 16) {
+      if (phoneChanged && !_phoneValid) {
         setState(
           () => _error = 'Enter a valid phone number for the selected country.',
         );
@@ -152,15 +154,7 @@ class _GoogleCallbackScreenState extends State<GoogleCallbackScreen> {
         _needsProfile = missingName || missingCompany || savedPhone.isEmpty;
         if (missingCompany) _company = TextEditingController();
         _initialName = _name.text = fullName;
-        var nationalPhone = savedPhone;
-        for (final code in AuroraGoogleProfile.countries.keys) {
-          if (savedPhone.startsWith(code)) {
-            _initialCountry = _country = code;
-            nationalPhone = savedPhone.substring(code.length);
-            break;
-          }
-        }
-        _initialPhone = _phone.text = nationalPhone;
+        if (savedPhone.isNotEmpty) _prefillPhone(savedPhone);
         _fields = [];
         if (_needsProfile) return;
       } else if (editingProfile) {
@@ -173,8 +167,7 @@ class _GoogleCallbackScreenState extends State<GoogleCallbackScreen> {
           _initialName = name;
         }
         final profilePatch = {
-          if (rawPhone != _initialPhone || _country != _initialCountry)
-            'phone': phone,
+          if (phoneChanged) 'phone': phone,
           if (company != null) 'company_name': company,
         };
         if (profilePatch.isNotEmpty) {
@@ -205,6 +198,22 @@ class _GoogleCallbackScreenState extends State<GoogleCallbackScreen> {
     }
   }
 
+  void _prefillPhone(String savedPhone) {
+    var country = kSupportedCountries.first;
+    var national = savedPhone;
+    for (final candidate in kSupportedCountries) {
+      if (savedPhone.startsWith(candidate.dialCode)) {
+        country = candidate;
+        national = savedPhone.substring(candidate.dialCode.length);
+        break;
+      }
+    }
+    final digits = country.normalizeNationalNumber(national);
+    _phoneCountry = country;
+    _phone.text = digits;
+    _initialPhone = _phoneNumber = '${country.dialCode}$digits';
+  }
+
   Future<void> _back() async {
     setState(() => _busy = true);
     try {
@@ -233,8 +242,9 @@ class _GoogleCallbackScreenState extends State<GoogleCallbackScreen> {
         nameFocus: _nameFocus,
         phoneFocus: _phoneFocus,
         company: _company,
-        country: _country,
-        onCountryChanged: (value) => setState(() => _country = value),
+        country: _phoneCountry,
+        onPhoneChanged: (value) => _phoneNumber = value,
+        onPhoneValidityChanged: (valid) => _phoneValid = valid,
         onSubmit: _complete,
         busy: _busy,
         error: _error,
@@ -299,6 +309,7 @@ class _GoogleCallbackScreenState extends State<GoogleCallbackScreen> {
                   else ...[
                     if (_fields.isNotEmpty || AuthService.isAuthenticated)
                       FilledButton(
+                        style: PreAuthButtonStyle.active(FilledButton.styleFrom()),
                         onPressed: _complete,
                         child: Text(_fields.isEmpty ? 'Retry' : 'Continue'),
                       ),

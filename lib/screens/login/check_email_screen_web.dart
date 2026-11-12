@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
+import '../../widgets/pre_auth_button_style.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -107,7 +109,7 @@ class _CheckEmailScreenWebState extends State<CheckEmailScreenWeb> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final horizontalPadding = Responsive.getSpacing(
@@ -148,14 +150,18 @@ class _CheckEmailScreenWebState extends State<CheckEmailScreenWeb> {
                                   ),
                                   child: ConstrainedBox(
                                     constraints: const BoxConstraints(
-                                      maxWidth: Responsive.rightPanelContentMaxWidth,
+                                      maxWidth:
+                                          Responsive.rightPanelContentMaxWidth,
                                     ),
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         _MessageBanner(
-                                          message: _errorMessage ??
+                                          message:
+                                              _errorMessage ??
                                               _successMessage ??
                                               'We sent a 6-digit reset code to ${widget.email}.',
                                           isError: _errorMessage != null,
@@ -166,36 +172,47 @@ class _CheckEmailScreenWebState extends State<CheckEmailScreenWeb> {
                                           style: GoogleFonts.inter(
                                             fontSize: 32,
                                             fontWeight: FontWeight.w800,
-                                            color: const Color(0xFF0F172A),
+                                            color: context.themeForeground(
+                                              const Color(0xFF0F172A),
+                                            ),
                                           ),
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          AppConstants.checkEmailWebRightSubtitle,
+                                          AppConstants
+                                              .checkEmailWebRightSubtitle,
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
-                                            color: const Color(0xFF64748B),
+                                            color: context.themeForeground(
+                                              const Color(0xFF64748B),
+                                            ),
                                             height: 1.5,
                                           ),
                                         ),
                                         const SizedBox(height: 28),
-                                        const WebAuthFieldLabel(label: 'Reset code'),
+                                        const WebAuthFieldLabel(
+                                          label: 'Reset code',
+                                        ),
                                         const SizedBox(height: 8),
                                         TextField(
                                           controller: _codeController,
                                           keyboardType: TextInputType.number,
                                           maxLength: 6,
                                           inputFormatters: [
-                                            FilteringTextInputFormatter.digitsOnly,
+                                            FilteringTextInputFormatter
+                                                .digitsOnly,
                                           ],
                                           onSubmitted: (_) => _continue(),
                                           decoration: InputDecoration(
                                             hintText: '000000',
                                             counterText: '',
                                             filled: true,
-                                            fillColor: const Color(0xFFF8FAFC),
+                                            fillColor: context.themeSurface(
+                                              const Color(0xFFF8FAFC),
+                                            ),
                                             border: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(10),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
                                             ),
                                           ),
                                         ),
@@ -205,9 +222,12 @@ class _CheckEmailScreenWebState extends State<CheckEmailScreenWeb> {
                                           height: 50,
                                           child: ElevatedButton(
                                             onPressed: _continue,
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppColors.webLoginButton,
-                                              foregroundColor: Colors.white,
+                                            style: PreAuthButtonStyle.active(
+                                              ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    AppColors.webLoginButton,
+                                                foregroundColor: Colors.white,
+                                              ),
                                             ),
                                             child: const Text('Continue'),
                                           ),
@@ -215,16 +235,19 @@ class _CheckEmailScreenWebState extends State<CheckEmailScreenWeb> {
                                         const SizedBox(height: 12),
                                         Center(
                                           child: TextButton(
-                                            onPressed: _secondsLeft == 0 && !_isResending
+                                            onPressed:
+                                                _secondsLeft == 0 &&
+                                                    !_isResending
                                                 ? _resend
                                                 : null,
                                             child: _isResending
                                                 ? const SizedBox(
                                                     width: 18,
                                                     height: 18,
-                                                    child: CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
                                                   )
                                                 : Text(
                                                     _secondsLeft > 0
@@ -235,14 +258,19 @@ class _CheckEmailScreenWebState extends State<CheckEmailScreenWeb> {
                                         ),
                                         Center(
                                           child: TextButton(
-                                            onPressed: widget.onUseDifferentEmail,
-                                            child: const Text('Use a different email'),
+                                            onPressed:
+                                                widget.onUseDifferentEmail,
+                                            child: const Text(
+                                              'Use a different email',
+                                            ),
                                           ),
                                         ),
                                         Center(
                                           child: TextButton(
                                             onPressed: widget.onBackToSignIn,
-                                            child: const Text('Back to sign in'),
+                                            child: const Text(
+                                              'Back to sign in',
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -279,7 +307,9 @@ class _MessageBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isError ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
+        color: isError
+            ? context.themeSurface(const Color(0xFFFEF2F2))
+            : context.themeSurface(const Color(0xFFECFDF5)),
         border: Border.all(color: color.withValues(alpha: 0.35)),
         borderRadius: BorderRadius.circular(10),
       ),

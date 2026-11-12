@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'dart:ui';
 import 'notification_unread_scope.dart';
 
@@ -75,19 +76,28 @@ class RecruiterTopBar extends StatelessWidget {
       NotificationUnreadScope(builder: _header);
   Widget _header(BuildContext context, int count) {
     final mobile = MediaQuery.sizeOf(context).width < mobileBreakpoint;
+    final dark = this.dark || context.isDarkTheme;
     final darkHeader = dark && !mobile;
-    final surface = darkHeader ? const Color(0xFF0D1424) : Colors.white;
+    final surface = darkHeader
+        ? const Color(0xFF0D1424)
+        : context.themeSurface(Colors.white);
     final field = mobile
-        ? Colors.white
+        ? context.themeSurface(Colors.white)
         : darkHeader
         ? const Color(0xFF0A1120)
         : const Color(0xFFF8FAFC);
-    final edge = darkHeader ? const Color(0x243A4A70) : const Color(0xFFE2E8F0);
-    final text = darkHeader ? const Color(0xFFE8EDF8) : const Color(0xFF0F172A);
+    final edge = darkHeader
+        ? const Color(0x4894AADC)
+        : context.themeOutline(const Color(0xFFE2E8F0));
+    final text = darkHeader
+        ? const Color(0xFFE8EDF8)
+        : context.themeForeground(const Color(0xFF0F172A));
     final text2 = darkHeader
         ? const Color(0xFFA3AFC8)
-        : const Color(0xFF475569);
-    final text3 = dark ? const Color(0xFF8593B0) : const Color(0xFF64748B);
+        : context.themeForeground(const Color(0xFF475569));
+    final text3 = dark
+        ? const Color(0xFF9FACC6)
+        : context.themeForeground(const Color(0xFF64748B));
     final accent = dark ? const Color(0xFF6C9BFF) : const Color(0xFF3E6FF0);
     final showUnread = useExactUnread ? hasUnread : count > 0;
     void openNotifications() => Navigator.of(context).pushNamed(
@@ -141,8 +151,11 @@ class RecruiterTopBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: surface.withValues(alpha: .92),
                 gradient: compact
-                    ? const LinearGradient(
-                        colors: [Color(0xFFF7F8FF), Color(0xFFF0F8F7)],
+                    ? LinearGradient(
+                        colors: [
+                          context.themeSurface(const Color(0xFFF7F8FF)),
+                          context.themeSurface(const Color(0xFFF0F8F7)),
+                        ],
                       )
                     : null,
                 border: Border(bottom: BorderSide(color: edge)),
@@ -221,7 +234,6 @@ class RecruiterTopBar extends StatelessWidget {
                       ),
                       child: WebGlobalSearchLauncher(
                         candidate: candidate,
-                        dark: dark,
                         builder: (controller, focus, open) => TextField(
                           key: const Key('web-global-search-field'),
                           controller: controller,
@@ -310,7 +322,9 @@ class RecruiterTopBar extends StatelessWidget {
                             width: 38,
                             height: 38,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE2F9F3),
+                              color: context.themeSurface(
+                                const Color(0xFFE2F9F3),
+                              ),
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: const Color(0xFFA7F3D0),
@@ -324,7 +338,9 @@ class RecruiterTopBar extends StatelessWidget {
                                     CandidateAvatarImage(
                                       profile: profile,
                                       initialsStyle: GoogleFonts.spaceGrotesk(
-                                        color: const Color(0xFF047857),
+                                        color: context.themeForeground(
+                                          const Color(0xFF047857),
+                                        ),
                                         fontSize: 13,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -344,8 +360,10 @@ class RecruiterTopBar extends StatelessWidget {
                           child: Container(
                             width: 38,
                             height: 38,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFE0E9FF),
+                            decoration: BoxDecoration(
+                              color: context.themeSurface(
+                                const Color(0xFFE0E9FF),
+                              ),
                               shape: BoxShape.circle,
                             ),
                             child: ClipOval(child: _recruiterAvatar()),

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
@@ -198,11 +199,13 @@ class _CandidateNotificationsScreenState
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 900;
 
-    const Color bgBase = Color(0xFFF8FAFC);
-    const Color textPrimary = Color(0xFF0F172A);
-    const Color textSecondary = Color(0xFF64748B);
-    const Color cardBg = Colors.white;
-    const Color cardBorder = Color(0xFFE2E8F0);
+    final Color bgBase = context.themeCanvas(const Color(0xFFF8FAFC));
+    final Color textPrimary = context.themeForeground(const Color(0xFF0F172A));
+    final Color textSecondary = context.themeForeground(
+      const Color(0xFF64748B),
+    );
+    final Color cardBg = context.themeSurface(Colors.white);
+    final Color cardBorder = context.themeOutline(const Color(0xFFE2E8F0));
 
     return Scaffold(
       backgroundColor: bgBase,
@@ -212,7 +215,9 @@ class _CandidateNotificationsScreenState
           Positioned.fill(
             child: CustomPaint(
               painter: _GridPainter(
-                color: Colors.black.withValues(alpha: 0.015),
+                color: context
+                    .themeForeground(Colors.black)
+                    .withValues(alpha: 0.015),
               ),
             ),
           ),
@@ -358,7 +363,7 @@ class _CandidateNotificationsScreenState
                 child: Text(
                   'Mark all read',
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF0A8A76),
+                    color: context.themeForeground(const Color(0xFF0A8A76)),
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -481,7 +486,7 @@ class _CandidateNotificationsScreenState
             child: Text(
               label,
               style: GoogleFonts.inter(
-                color: const Color(0xFF94A3B8),
+                color: context.themeForeground(const Color(0xFF94A3B8)),
                 fontSize: 10.5,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1.0,
@@ -503,8 +508,8 @@ class _CandidateNotificationsScreenState
                   textSecondary: textSecondary,
                 ),
                 if (!isLast)
-                  const Divider(
-                    color: Color(0xFFF1F5F9),
+                  Divider(
+                    color: context.themeOutline(const Color(0xFFF1F5F9)),
                     height: 1,
                     thickness: 1,
                     indent: 20,
@@ -570,7 +575,7 @@ class _CandidateNotificationsScreenState
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
             decoration: BoxDecoration(
-              color: const Color(0xFFDBEAFE),
+              color: context.themeSurface(const Color(0xFFDBEAFE)),
               borderRadius: BorderRadius.circular(5),
             ),
             child: Text(
@@ -605,7 +610,7 @@ class _CandidateNotificationsScreenState
                 Text(
                   notif.relativeTime,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF64748B),
+                    color: context.themeForeground(const Color(0xFF64748B)),
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
                   ),
@@ -658,7 +663,7 @@ class _CandidateNotificationsScreenState
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFDBEAFE),
+                        color: context.themeSurface(const Color(0xFFDBEAFE)),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
@@ -688,7 +693,7 @@ class _CandidateNotificationsScreenState
                 Text(
                   notif.relativeTime,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF64748B),
+                    color: context.themeForeground(const Color(0xFF64748B)),
                     fontSize: 11.5,
                   ),
                 ),
@@ -725,5 +730,6 @@ class _GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _GridPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

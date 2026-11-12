@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
@@ -33,16 +34,16 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
     final bool isRecruiter = selectedRole == 'recruiter';
     final bool isJobSeeker = selectedRole == 'job_seeker';
 
-    final Color ctaColor = selectedRole != null ? PreAuthButtonStyle.roleColor(selectedRole) : AppColors.primary.withValues(alpha: 0.4);
+    final Color ctaColor = selectedRole != null
+        ? PreAuthButtonStyle.roleColor(selectedRole)
+        : AppColors.primary.withValues(alpha: 0.4);
 
     final String ctaText = isRecruiter
         ? AppConstants.continueAsRecruiter
-        : (isJobSeeker
-            ? AppConstants.continueAsCandidate
-            : 'Continue');
+        : (isJobSeeker ? AppConstants.continueAsCandidate : 'Continue');
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double horizontalPadding = Responsive.getSpacing(
@@ -127,7 +128,9 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                           // Right: light lavender
                           Expanded(
                             child: Container(
-                              color: const Color(0xFFF5F7FF),
+                              color: context.themeSurface(
+                                const Color(0xFFF5F7FF),
+                              ),
                             ),
                           ),
                         ],
@@ -192,20 +195,25 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                             Container(
                                               width: 18,
                                               height: 1,
-                                              color: Colors.white.withValues(
-                                                alpha: 0.6,
-                                              ),
+                                              color: context
+                                                  .themeSurface(Colors.white)
+                                                  .withValues(alpha: 0.6),
                                             ),
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Text(
-                                                AppConstants.roleEyebrow.toUpperCase(),
-                                                style: GoogleFonts.jetBrainsMono(
-                                                  color: const Color(0xFF7BA5FF),
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 1.8,
-                                                ),
+                                                AppConstants.roleEyebrow
+                                                    .toUpperCase(),
+                                                style:
+                                                    GoogleFonts.jetBrainsMono(
+                                                      color: const Color(
+                                                        0xFF7BA5FF,
+                                                      ),
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      letterSpacing: 1.8,
+                                                    ),
                                               ),
                                             ),
                                           ],
@@ -215,19 +223,20 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                         // Headline — "Get the right experience from the start."
                                         ConstrainedBox(
                                           constraints: const BoxConstraints(
-                                            maxWidth:
-                                                Responsive.leftPanelContentMaxWidth,
+                                            maxWidth: Responsive
+                                                .leftPanelContentMaxWidth,
                                           ),
                                           child: RichText(
                                             text: TextSpan(
                                               style: GoogleFonts.inter(
                                                 color: Colors.white,
-                                                fontSize: Responsive.getFontSize(
-                                                  context,
-                                                  mobile: 30,
-                                                  tablet: 34,
-                                                  desktop: 40,
-                                                ),
+                                                fontSize:
+                                                    Responsive.getFontSize(
+                                                      context,
+                                                      mobile: 30,
+                                                      tablet: 34,
+                                                      desktop: 40,
+                                                    ),
                                                 fontWeight: FontWeight.w700,
                                                 height: 1.18,
                                                 letterSpacing: -1.2,
@@ -237,29 +246,36 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                                   text: 'Get the ',
                                                 ),
                                                 WidgetSpan(
-                                                  alignment: PlaceholderAlignment.baseline,
-                                                  baseline: TextBaseline.alphabetic,
+                                                  alignment:
+                                                      PlaceholderAlignment
+                                                          .baseline,
+                                                  baseline:
+                                                      TextBaseline.alphabetic,
                                                   child: ShaderMask(
                                                     blendMode: BlendMode.srcIn,
-                                                    shaderCallback: (bounds) => const LinearGradient(
-                                                      colors: [
-                                                        AppColors.webHeadlineFairlyStart,
-                                                        AppColors.webHeadlineFairlyEnd,
-                                                      ],
-                                                      begin: Alignment.centerLeft,
-                                                      end: Alignment.centerRight,
-                                                    ).createShader(bounds),
+                                                    shaderCallback: (bounds) =>
+                                                        const LinearGradient(
+                                                          colors: [
+                                                            AppColors
+                                                                .webHeadlineFairlyStart,
+                                                            AppColors
+                                                                .webHeadlineFairlyEnd,
+                                                          ],
+                                                          begin: Alignment
+                                                              .centerLeft,
+                                                          end: Alignment
+                                                              .centerRight,
+                                                        ).createShader(bounds),
                                                     child: Text(
                                                       'right',
-                                                      style:
-                                                          GoogleFonts.inter(
+                                                      style: GoogleFonts.inter(
                                                         fontSize:
                                                             Responsive.getFontSize(
-                                                          context,
-                                                          mobile: 30,
-                                                          tablet: 34,
-                                                          desktop: 40,
-                                                        ),
+                                                              context,
+                                                              mobile: 30,
+                                                              tablet: 34,
+                                                              desktop: 40,
+                                                            ),
                                                         fontWeight:
                                                             FontWeight.w700,
                                                         height: 1.18,
@@ -281,13 +297,15 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                         // Subcopy
                                         ConstrainedBox(
                                           constraints: const BoxConstraints(
-                                            maxWidth:
-                                                Responsive.leftPanelContentMaxWidth,
+                                            maxWidth: Responsive
+                                                .leftPanelContentMaxWidth,
                                           ),
                                           child: Text(
                                             AppConstants.signupWebLeftBody,
                                             style: GoogleFonts.inter(
-                                              color: const Color(0xFF94A3B8),
+                                              color: context.themeForeground(
+                                                const Color(0xFF94A3B8),
+                                              ),
                                               fontSize: 14.5,
                                               fontWeight: FontWeight.w400,
                                               height: 1.6,
@@ -305,7 +323,9 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                       child: Text(
                                         '© 2026 SkillSense AI',
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFF64748B),
+                                          color: context.themeForeground(
+                                            const Color(0xFF64748B),
+                                          ),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w400,
                                         ),
@@ -348,14 +368,16 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                                 style: GoogleFonts.inter(
                                                   fontSize:
                                                       Responsive.getFontSize(
-                                                    context,
-                                                    mobile: 26,
-                                                    tablet: 28,
-                                                    desktop: 32,
-                                                  ),
+                                                        context,
+                                                        mobile: 26,
+                                                        tablet: 28,
+                                                        desktop: 32,
+                                                      ),
                                                   fontWeight: FontWeight.w800,
-                                                  color:
-                                                      const Color(0xFF0F172A),
+                                                  color: context
+                                                      .themeForeground(
+                                                        const Color(0xFF0F172A),
+                                                      ),
                                                 ),
                                               ),
                                               const SizedBox(height: 12),
@@ -367,13 +389,15 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                                 style: GoogleFonts.inter(
                                                   fontSize:
                                                       Responsive.getFontSize(
-                                                    context,
-                                                    mobile: 14,
-                                                    desktop: 15,
-                                                  ),
+                                                        context,
+                                                        mobile: 14,
+                                                        desktop: 15,
+                                                      ),
                                                   fontWeight: FontWeight.w400,
-                                                  color:
-                                                      const Color(0xFF64748B),
+                                                  color: context
+                                                      .themeForeground(
+                                                        const Color(0xFF64748B),
+                                                      ),
                                                   height: 1.5,
                                                 ),
                                               ),
@@ -400,8 +424,8 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                                     .signupJobSeekerTitle,
                                                 description: AppConstants
                                                     .signupJobSeekerDescription,
-                                                icon:
-                                                    Icons.person_outline_rounded,
+                                                icon: Icons
+                                                    .person_outline_rounded,
                                                 roleColor:
                                                     AppColors.webRoleCandidate,
                                                 isSelected: isJobSeeker,
@@ -413,12 +437,15 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
 
                                               // Helper text
                                               Text(
-                                                AppConstants.signupWebHelperText,
+                                                AppConstants
+                                                    .signupWebHelperText,
                                                 textAlign: TextAlign.center,
                                                 style: GoogleFonts.inter(
                                                   fontSize: 13,
-                                                  color:
-                                                      const Color(0xFF64748B),
+                                                  color: context
+                                                      .themeForeground(
+                                                        const Color(0xFF64748B),
+                                                      ),
                                                   height: 1.5,
                                                 ),
                                               ),
@@ -434,22 +461,35 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                                   ),
                                                   curve: Curves.easeOut,
                                                   decoration: BoxDecoration(
-                                                    color: ctaColor,
-                                                    boxShadow: selectedRole != null ? PreAuthButtonStyle.roleGlow(selectedRole) : null,
+                                                    color: selectedRole == null
+                                                        ? ctaColor
+                                                        : null,
+                                                    gradient:
+                                                        selectedRole == null
+                                                        ? null
+                                                        : PreAuthButtonStyle.roleGradient(
+                                                            selectedRole,
+                                                          ),
+                                                    boxShadow:
+                                                        selectedRole != null
+                                                        ? PreAuthButtonStyle.roleGlow(
+                                                            selectedRole,
+                                                          )
+                                                        : null,
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                      28,
-                                                    ),
+                                                          28,
+                                                        ),
                                                   ),
                                                   child: Material(
                                                     color: Colors.transparent,
                                                     child: InkWell(
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                        28,
-                                                      ),
-                                                      onTap: selectedRole !=
-                                                              null
+                                                            28,
+                                                          ),
+                                                      onTap:
+                                                          selectedRole != null
                                                           ? onContinue
                                                           : null,
                                                       child: Center(
@@ -457,12 +497,15 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
                                                           ctaText,
                                                           style:
                                                               GoogleFonts.inter(
-                                                            fontSize: 16,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color: Colors.white,
-                                                            letterSpacing: 0,
-                                                          ),
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .white,
+                                                                letterSpacing:
+                                                                    0,
+                                                              ),
                                                         ),
                                                       ),
                                                     ),
@@ -473,35 +516,41 @@ class SignupRoleSelectionScreenWeb extends StatelessWidget {
 
                                               // Already have an account?
                                               MouseRegion(
-                                                cursor: SystemMouseCursors.click,
+                                                cursor:
+                                                    SystemMouseCursors.click,
                                                 child: PointerGestureDetector(
                                                   onTap: onLoginTap,
-                                                child: RichText(
-                                                  text: TextSpan(
-                                                    style: GoogleFonts.inter(
-                                                      fontSize: 13,
-                                                      color:
-                                                          const Color(0xFF64748B),
-                                                    ),
-                                                    children: [
-                                                      TextSpan(
-                                                        text: AppConstants
-                                                            .alreadyAccountPrompt,
+                                                  child: RichText(
+                                                    text: TextSpan(
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 13,
+                                                        color: context
+                                                            .themeForeground(
+                                                              const Color(
+                                                                0xFF64748B,
+                                                              ),
+                                                            ),
                                                       ),
-                                                      TextSpan(
-                                                        text: AppConstants
-                                                            .loginLinkText,
-                                                        style: GoogleFonts.inter(
-                                                          color:
-                                                              PreAuthButtonStyle.blue,
-                                                          fontWeight:
-                                                              FontWeight.w600,
+                                                      children: [
+                                                        TextSpan(
+                                                          text: AppConstants
+                                                              .alreadyAccountPrompt,
                                                         ),
-                                                      ),
-                                                    ],
+                                                        TextSpan(
+                                                          text: AppConstants
+                                                              .loginLinkText,
+                                                          style: GoogleFonts.inter(
+                                                            color:
+                                                                PreAuthButtonStyle
+                                                                    .blue,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
                                               ),
                                             ],
                                           ),
@@ -552,121 +601,127 @@ class _SignupRoleCard extends StatelessWidget {
       cursor: SystemMouseCursors.click,
       child: PointerGestureDetector(
         onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        decoration: BoxDecoration(
-          // Filled with role colour when selected, white when not
-          color: isSelected
-              ? (roleColor == AppColors.webRoleHr
-                    ? PreAuthButtonStyle.blue
-                    : roleColor)
-              : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? roleColor : AppColors.webCardBorderUnselected,
-            width: isSelected ? 0 : 1.0,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          decoration: BoxDecoration(
+            // Filled with role colour when selected, white when not
+            color: isSelected
+                ? (roleColor == AppColors.webRoleHr
+                      ? PreAuthButtonStyle.blue
+                      : roleColor)
+                : context.themeSurface(Colors.white),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected
+                  ? roleColor
+                  : context.themeOutline(AppColors.webCardBorderUnselected),
+              width: isSelected ? 0 : 1.0,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: roleColor.withValues(alpha: 0.30),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: roleColor.withValues(alpha: 0.30),
-                    blurRadius: 18,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-        ),
-        child: Row(
-          children: [
-            // Icon tile
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? Colors.white.withValues(alpha: 0.20)
-                    : roleColor.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                color: isSelected ? Colors.white : roleColor,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Text block
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: isSelected
-                          ? Colors.white
-                          : const Color(0xFF0F172A),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: isSelected
-                          ? Colors.white.withValues(alpha: 0.85)
-                          : const Color(0xFF64748B),
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Radio indicator
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected
-                    ? Colors.white.withValues(alpha: 0.25)
-                    : Colors.transparent,
-                border: Border.all(
+          child: Row(
+            children: [
+              // Icon tile
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
                   color: isSelected
-                      ? Colors.white
-                      : const Color(0xFFCBD5E0),
-                  width: isSelected ? 0 : 1.5,
+                      ? context
+                            .themeSurface(Colors.white)
+                            .withValues(alpha: 0.20)
+                      : roleColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  color: isSelected ? Colors.white : roleColor,
+                  size: 24,
                 ),
               ),
-              child: isSelected
-                  ? const Center(
-                      child: CircleAvatar(
-                        radius: 5,
-                        backgroundColor: Colors.white,
+              const SizedBox(width: 16),
+
+              // Text block
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected
+                            ? Colors.white
+                            : context.themeForeground(const Color(0xFF0F172A)),
                       ),
-                    )
-                  : null,
-            ),
-          ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: isSelected
+                            ? Colors.white.withValues(alpha: 0.85)
+                            : context.themeForeground(const Color(0xFF64748B)),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Radio indicator
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected
+                      ? context
+                            .themeSurface(Colors.white)
+                            .withValues(alpha: 0.25)
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: isSelected
+                        ? context.themeOutline(Colors.white)
+                        : context.themeOutline(const Color(0xFFCBD5E0)),
+                    width: isSelected ? 0 : 1.5,
+                  ),
+                ),
+                child: isSelected
+                    ? Center(
+                        child: CircleAvatar(
+                          radius: 5,
+                          backgroundColor: context.themeSurface(Colors.white),
+                        ),
+                      )
+                    : null,
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }

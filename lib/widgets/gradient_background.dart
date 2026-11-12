@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 
@@ -20,8 +21,12 @@ class GradientBackground extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: [
               AppColors.bgGradientTop,
-              AppColors.bgGradientMid.withValues(alpha: 0.5),
-              AppColors.backgroundBase.withValues(alpha: 0.0),
+              context
+                  .themeSurface(AppColors.bgGradientMid)
+                  .withValues(alpha: 0.5),
+              context
+                  .themeSurface(AppColors.backgroundBase)
+                  .withValues(alpha: 0.0),
             ],
             stops: const [0.0, 0.4, 1.0],
           ),

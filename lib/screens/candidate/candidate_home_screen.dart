@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
@@ -296,11 +297,13 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 900;
 
-    final Color bgBase = const Color(0xFFF8FAFC);
-    final Color textPrimary = const Color(0xFF0F172A);
-    final Color textSecondary = const Color(0xFF64748B);
-    final Color cardBg = Colors.white;
-    final Color cardBorder = const Color(0xFFE2E8F0);
+    final Color bgBase = context.themeCanvas(const Color(0xFFF8FAFC));
+    final Color textPrimary = context.themeForeground(const Color(0xFF0F172A));
+    final Color textSecondary = context.themeForeground(
+      const Color(0xFF64748B),
+    );
+    final Color cardBg = context.themeSurface(Colors.white);
+    final Color cardBorder = context.themeOutline(const Color(0xFFE2E8F0));
 
     return Scaffold(
       backgroundColor: bgBase,
@@ -369,7 +372,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                                             Text(
                                               'Could not load data',
                                               style: GoogleFonts.inter(
-                                                color: const Color(0xFF64748B),
+                                                color: context.themeForeground(
+                                                  const Color(0xFF64748B),
+                                                ),
                                               ),
                                             ),
                                             const SizedBox(height: 16),
@@ -667,7 +672,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                     Text(
                       'WELCOME',
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF64748B),
+                        color: context.themeForeground(const Color(0xFF64748B)),
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.2,
@@ -733,11 +738,18 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                           OutlinedButton(
                             onPressed: _openProfile,
                             style: CandidateButtonStyle.secondary(
+                              context,
                               OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF334155),
-                                side: const BorderSide(
-                                  color: Color(0xFFE2E8F0),
+                                backgroundColor: context.themeSurface(
+                                  Colors.white,
+                                ),
+                                foregroundColor: context.themeForeground(
+                                  const Color(0xFF334155),
+                                ),
+                                side: BorderSide(
+                                  color: context.themeOutline(
+                                    const Color(0xFFE2E8F0),
+                                  ),
                                   width: 1.5,
                                 ),
                                 padding: const EdgeInsets.symmetric(
@@ -767,7 +779,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 Text(
                   'Browse jobs and track your applications while you wait for an invitation.',
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF94A3B8),
+                    color: context.themeForeground(const Color(0xFF94A3B8)),
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
                   ),
@@ -819,7 +831,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
               Text(
                 'NEXT INTERVIEW',
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
+                  color: context.themeForeground(const Color(0xFF64748B)),
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.2,
@@ -917,7 +929,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 child: Text(
                   'Check your camera and microphone before joining your interview.',
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF64748B),
+                    color: context.themeForeground(const Color(0xFF64748B)),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -934,9 +946,12 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     return Container(
       height: isMobile ? 58 : 64,
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: context.themeSurface(const Color(0xFFF8FAFC)),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        border: Border.all(
+          color: context.themeOutline(const Color(0xFFE2E8F0)),
+          width: 1.5,
+        ),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -944,7 +959,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           Text(
             value,
             style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF0F172A),
+              color: context.themeForeground(const Color(0xFF0F172A)),
               fontSize: isMobile ? 18 : 22,
               fontWeight: FontWeight.bold,
               height: 1.1,
@@ -954,7 +969,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           Text(
             label,
             style: GoogleFonts.inter(
-              color: const Color(0xFF94A3B8),
+              color: context.themeForeground(const Color(0xFF94A3B8)),
               fontSize: 9,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.5,
@@ -1006,7 +1021,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       key: const Key('candidate-profile-strength-ring'),
                       value: score,
                       strokeWidth: 4.5,
-                      backgroundColor: const Color(0xFFE2E8F0),
+                      backgroundColor: context.themeSurface(
+                        const Color(0xFFE2E8F0),
+                      ),
                       valueColor: AlwaysStoppedAnimation<Color>(
                         score > 0
                             ? const Color(0xFF0FB89B)
@@ -1022,8 +1039,10 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                         key: const Key('candidate-profile-strength-value'),
                         style: GoogleFonts.spaceGrotesk(
                           color: score > 0
-                              ? const Color(0xFF0F172A)
-                              : const Color(0xFF94A3B8),
+                              ? context.themeForeground(const Color(0xFF0F172A))
+                              : context.themeForeground(
+                                  const Color(0xFF94A3B8),
+                                ),
                           fontSize: isMobile ? 14 : 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1031,7 +1050,9 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       Text(
                         'PROFILE',
                         style: GoogleFonts.inter(
-                          color: const Color(0xFF94A3B8),
+                          color: context.themeForeground(
+                            const Color(0xFF94A3B8),
+                          ),
                           fontSize: isMobile ? 7 : 8,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.5,
@@ -1122,7 +1143,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                   Text(
                     'All >',
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1151,14 +1172,20 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: context.themeSurface(const Color(0xFFF8FAFC)),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(
+                            color: context.themeOutline(
+                              const Color(0xFFE2E8F0),
+                            ),
+                          ),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.article_outlined,
                           size: 18,
-                          color: Color(0xFF94A3B8),
+                          color: context.themeForeground(
+                            const Color(0xFF94A3B8),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -1214,7 +1241,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF0F172A),
+                  color: context.themeForeground(const Color(0xFF0F172A)),
                   fontSize: 12.5,
                   fontWeight: FontWeight.bold,
                 ),
@@ -1224,7 +1251,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
+                  color: context.themeForeground(const Color(0xFF64748B)),
                   fontSize: 11,
                 ),
               ),
@@ -1236,8 +1263,8 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
             color: isInterview
-                ? const Color(0xFFD1FAE5)
-                : const Color(0xFFF1F5F9),
+                ? context.themeSurface(const Color(0xFFD1FAE5))
+                : context.themeSurface(const Color(0xFFF1F5F9)),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
@@ -1246,8 +1273,8 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.inter(
               color: isInterview
-                  ? const Color(0xFF065F46)
-                  : const Color(0xFF475569),
+                  ? context.themeForeground(const Color(0xFF065F46))
+                  : context.themeForeground(const Color(0xFF475569)),
               fontSize: 9.5,
               fontWeight: FontWeight.bold,
             ),
@@ -1313,14 +1340,16 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: context.themeSurface(const Color(0xFFF8FAFC)),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        border: Border.all(
+                          color: context.themeOutline(const Color(0xFFE2E8F0)),
+                        ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.donut_large_outlined,
                         size: 20,
-                        color: Color(0xFF94A3B8),
+                        color: context.themeForeground(const Color(0xFF94A3B8)),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1411,13 +1440,13 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE6FFFA),
+                      color: context.themeSurface(const Color(0xFFE6FFFA)),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       'MATCHED',
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF0D9488),
+                        color: context.themeForeground(const Color(0xFF0D9488)),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1430,7 +1459,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 child: Text(
                   'Feed >',
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF64748B),
+                    color: context.themeForeground(const Color(0xFF64748B)),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1511,9 +1540,11 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFA),
+        color: context.themeSurface(const Color(0xFFFAFAFA)),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: context.themeOutline(const Color(0xFFE2E8F0)),
+        ),
       ),
       child: Row(
         children: [
@@ -1536,7 +1567,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                 Text(
                   title,
                   style: GoogleFonts.spaceGrotesk(
-                    color: const Color(0xFF0F172A),
+                    color: context.themeForeground(const Color(0xFF0F172A)),
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1548,7 +1579,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF64748B),
+                    color: context.themeForeground(const Color(0xFF64748B)),
                     fontSize: 11,
                   ),
                 ),
@@ -1563,16 +1594,22 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: context.themeSurface(Colors.white),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(
+                            color: context.themeOutline(
+                              const Color(0xFFE2E8F0),
+                            ),
+                          ),
                         ),
                         child: Text(
                           tag1,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
-                            color: const Color(0xFF64748B),
+                            color: context.themeForeground(
+                              const Color(0xFF64748B),
+                            ),
                             fontSize: 9.5,
                           ),
                         ),
@@ -1584,16 +1621,22 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: context.themeSurface(Colors.white),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(
+                            color: context.themeOutline(
+                              const Color(0xFFE2E8F0),
+                            ),
+                          ),
                         ),
                         child: Text(
                           tag2,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
-                            color: const Color(0xFF64748B),
+                            color: context.themeForeground(
+                              const Color(0xFF64748B),
+                            ),
                             fontSize: 9.5,
                           ),
                         ),
@@ -1638,5 +1681,6 @@ class GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant GridPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

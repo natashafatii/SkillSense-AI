@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -289,7 +290,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                   ? Colors.white
                   : active
                   ? _accent
-                  : _muted,
+                  : context.themeForeground(_muted),
             ),
           ),
         ),
@@ -309,7 +310,11 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Row(
                 children: [
-                  Icon(section.icon, size: 14.5, color: _textSecondary),
+                  Icon(
+                    section.icon,
+                    size: 14.5,
+                    color: context.themeForeground(_textSecondary),
+                  ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
@@ -320,17 +325,17 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                         fontSize: 11.5,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.46,
-                        color: _ink,
+                        color: context.themeForeground(_ink),
                       ),
                     ),
                   ),
                   AnimatedRotation(
                     turns: _openSections.contains(index) ? 0 : .5,
                     duration: const Duration(milliseconds: 200),
-                    child: const Icon(
+                    child: Icon(
                       Icons.keyboard_arrow_down,
                       size: 13,
-                      color: _muted,
+                      color: context.themeForeground(_muted),
                     ),
                   ),
                 ],
@@ -377,7 +382,9 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
               Icon(
                 _destinationIcons[item.route],
                 size: 18,
-                color: active ? _accent : _textSecondary,
+                color: active
+                    ? _accent
+                    : context.themeForeground(_textSecondary),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -388,7 +395,9 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                    color: active ? _ink : _textSecondary,
+                    color: active
+                        ? context.themeForeground(_ink)
+                        : context.themeForeground(_textSecondary),
                   ),
                 ),
               ),
@@ -459,8 +468,10 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                                   return Container(
                                     width: 32,
                                     height: 32,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFFE0E9FF),
+                                    decoration: BoxDecoration(
+                                      color: context.themeSurface(
+                                        const Color(0xFFE0E9FF),
+                                      ),
                                       shape: BoxShape.circle,
                                     ),
                                     child: ClipOval(
@@ -506,7 +517,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: _ink,
+                              color: context.themeForeground(_ink),
                             ),
                           ),
                           Text(
@@ -515,7 +526,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.inter(
                               fontSize: 10,
-                              color: _textTertiary,
+                              color: context.themeForeground(_textTertiary),
                             ),
                           ),
                         ],
@@ -567,9 +578,11 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
               ? widget.expandedWidth
               : (_expanded ? widget.expandedWidth : 60),
           height: double.infinity,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(right: BorderSide(color: _border)),
+          decoration: BoxDecoration(
+            color: context.themeSurface(Colors.white),
+            border: Border(
+              right: BorderSide(color: context.themeOutline(_border)),
+            ),
           ),
           child: Column(
             children: [
@@ -626,14 +639,14 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: -0.135,
-                                color: _ink,
+                                color: context.themeForeground(_ink),
                               ),
                             ),
                             Text(
                               'Recruiter workspace',
                               style: GoogleFonts.spaceGrotesk(
                                 fontSize: 10,
-                                color: _textTertiary,
+                                color: context.themeForeground(_textTertiary),
                               ),
                             ),
                           ],
@@ -652,13 +665,13 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                             _contentExpanded = false;
                             _rememberExpanded(false);
                           }),
-                          child: const SizedBox(
+                          child: SizedBox(
                             width: 24,
                             height: 24,
                             child: Icon(
                               Icons.chevron_left,
                               size: 17,
-                              color: _muted,
+                              color: context.themeForeground(_muted),
                             ),
                           ),
                         ),
@@ -681,7 +694,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                   ),
                 ),
               ),
-              const Divider(height: 1, color: _border),
+              Divider(height: 1, color: context.themeOutline(_border)),
               _account(),
             ],
           ),

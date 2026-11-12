@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -89,7 +90,9 @@ class _CandidateSearchState extends State<_CandidateSearch> {
         pageSize: 20,
         cancelToken: cancel,
       );
-      if (!mounted || request != _request || session != SessionScope.generation) {
+      if (!mounted ||
+          request != _request ||
+          session != SessionScope.generation) {
         return;
       }
       setState(() {
@@ -140,10 +143,13 @@ class _CandidateSearchState extends State<_CandidateSearch> {
   Widget build(BuildContext context) => Material(
     key: const Key('candidate-mobile-search-overlay'),
     elevation: 8,
-    color: Colors.white,
+    color: context.themeSurface(Colors.white),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
-      side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5),
+      side: BorderSide(
+        color: context.themeOutline(const Color(0xFFE2E8F0)),
+        width: 1.5,
+      ),
     ),
     clipBehavior: Clip.antiAlias,
     child: Column(
@@ -161,7 +167,7 @@ class _CandidateSearchState extends State<_CandidateSearch> {
               _load();
             },
             style: GoogleFonts.inter(
-              color: const Color(0xFF0F172A),
+              color: context.themeForeground(const Color(0xFF0F172A)),
               fontSize: 13,
             ),
             decoration: InputDecoration(
@@ -189,7 +195,7 @@ class _CandidateSearchState extends State<_CandidateSearch> {
                   title: Text(
                     job.title,
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF0F172A),
+                      color: context.themeForeground(const Color(0xFF0F172A)),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -199,14 +205,14 @@ class _CandidateSearchState extends State<_CandidateSearch> {
                       job.location,
                     ].where((text) => text.trim().isNotEmpty).join(' · '),
                     style: GoogleFonts.jetBrainsMono(
-                      color: const Color(0xFF475569),
+                      color: context.themeForeground(const Color(0xFF475569)),
                       fontSize: 10,
                     ),
                   ),
-                  trailing: const Icon(
+                  trailing: Icon(
                     Icons.arrow_forward_ios_rounded,
                     size: 10,
-                    color: Color(0xFF475569),
+                    color: context.themeForeground(const Color(0xFF475569)),
                   ),
                   onTap: () => Navigator.of(
                     context,

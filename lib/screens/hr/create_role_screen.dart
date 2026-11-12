@@ -86,7 +86,7 @@ class CreateRoleTokens extends ThemeExtension<CreateRoleTokens> {
     borderStrong: Color(0x4D94AADC),
     text: Color(0xFFE8EDF8),
     text2: Color(0xFFA3AFC8),
-    text3: Color(0xFF6E7C99),
+    text3: Color(0xFF9FACC6),
     accent: Color(0xFF6C9BFF),
     accentStrong: Color(0xFF8FB0FF),
     accentSoft: Color(0x246C9BFF),
@@ -262,10 +262,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
   bool _saving = false;
   String? _savedJobId;
 
-  // The recruiter workspace has a light navigation shell. Keep the form and
-  // its overlays in the same palette regardless of the OS appearance setting.
-  CreateRoleTokens get _c =>
-      _isMobile ? CreateRoleTokens.mobileLight : CreateRoleTokens.light;
+  CreateRoleTokens get _c => Theme.of(context).brightness == Brightness.dark
+      ? CreateRoleTokens.dark
+      : _isMobile
+      ? CreateRoleTokens.mobileLight
+      : CreateRoleTokens.light;
   bool get _isMobile => MediaQuery.sizeOf(context).width < 900;
 
   @override
@@ -393,11 +394,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: Theme(
         data: Theme.of(context).copyWith(
-          brightness: Brightness.light,
-          extensions: [c],
+          extensions: [...Theme.of(context).extensions.values, c],
           colorScheme: ColorScheme.fromSeed(
             seedColor: c.accent,
-            brightness: Brightness.light,
+            brightness: Theme.of(context).brightness,
           ),
         ),
         child: _isMobile
@@ -2452,7 +2452,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           height: 48,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: RecruiterButtonStyle.blue,
+              gradient: RecruiterButtonStyle.primaryGradient,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(

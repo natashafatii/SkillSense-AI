@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
@@ -308,9 +309,11 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     width: double.infinity,
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: context.themeSurface(Colors.white),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: hot ? const Color(0xFFA9BFFF) : _edge),
+      border: Border.all(
+        color: hot ? const Color(0xFFA9BFFF) : context.themeOutline(_edge),
+      ),
       boxShadow: hot
           ? [BoxShadow(color: _blue.withValues(alpha: .10), blurRadius: 30)]
           : null,
@@ -336,7 +339,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
   Widget _bodyText(String value) => Text(
     value,
     style: GoogleFonts.inter(
-      color: const Color(0xFF4A5875),
+      color: context.themeForeground(const Color(0xFF4A5875)),
       fontSize: 13.5,
       height: 1.6,
     ),
@@ -370,7 +373,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
   Widget _sectionLabel(String text) => Text(
     text,
     style: GoogleFonts.spaceGrotesk(
-      color: _ink,
+      color: context.themeForeground(_ink),
       fontSize: 11,
       fontWeight: FontWeight.w700,
       letterSpacing: .7,
@@ -400,14 +403,16 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0F4FF),
+                      color: context.themeSurface(const Color(0xFFF0F4FF)),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFD8E2FF)),
+                      border: Border.all(
+                        color: context.themeOutline(const Color(0xFFD8E2FF)),
+                      ),
                     ),
                     child: Text(
                       name,
                       style: GoogleFonts.inter(
-                        color: _ink,
+                        color: context.themeForeground(_ink),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -448,7 +453,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
           Text(
             '${count is num ? count.toInt() : apps?.length ?? '—'} applicants',
             style: GoogleFonts.spaceGrotesk(
-              color: _ink,
+              color: context.themeForeground(_ink),
               fontSize: 24,
               fontWeight: FontWeight.w700,
             ),
@@ -484,7 +489,10 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                       const SizedBox(width: 5),
                       Text(
                         '${_label(_stages[i])} ${counts[_stages[i]]}',
-                        style: GoogleFonts.inter(fontSize: 10, color: _muted),
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: context.themeForeground(_muted),
+                        ),
                       ),
                     ],
                   ),
@@ -522,7 +530,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
               Text(
                 threshold == null ? '—' : '${threshold.round()}',
                 style: GoogleFonts.spaceGrotesk(
-                  color: _ink,
+                  color: context.themeForeground(_ink),
                   fontSize: 34,
                   fontWeight: FontWeight.w700,
                 ),
@@ -560,7 +568,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                       width: 10,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: context.themeSurface(Colors.white),
                         shape: BoxShape.circle,
                         border: Border.all(color: _ink, width: 2),
                       ),
@@ -628,13 +636,16 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                         Expanded(
                           child: Text(
                             _label(categories[i]),
-                            style: GoogleFonts.inter(color: _ink, fontSize: 12),
+                            style: GoogleFonts.inter(
+                              color: context.themeForeground(_ink),
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                         Text(
                           '${mix[categories[i]] is num ? counts[i] : '—'}',
                           style: GoogleFonts.spaceGrotesk(
-                            color: _ink,
+                            color: context.themeForeground(_ink),
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -683,7 +694,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
           child: Text(
             label,
             style: GoogleFonts.spaceGrotesk(
-              color: _muted,
+              color: context.themeForeground(_muted),
               fontSize: 10,
               fontWeight: FontWeight.w600,
               letterSpacing: .8,
@@ -694,7 +705,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
           child: Text(
             value,
             style: GoogleFonts.inter(
-              color: _ink,
+              color: context.themeForeground(_ink),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -733,7 +744,9 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                 children: [
                   CircleAvatar(
                     radius: 16,
-                    backgroundColor: const Color(0xFFEAF0FF),
+                    backgroundColor: context.themeSurface(
+                      const Color(0xFFEAF0FF),
+                    ),
                     child: Text(
                       _initials(app.candidateName ?? app.candidateEmail),
                       style: GoogleFonts.inter(
@@ -750,7 +763,10 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                           ? app.candidateName!
                           : app.candidateEmail,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(color: _ink, fontSize: 12),
+                      style: GoogleFonts.inter(
+                        color: context.themeForeground(_ink),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   SizedBox(
@@ -763,7 +779,9 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                           value: (app.resumeScore! / 100).clamp(0, 1),
                           strokeWidth: 3,
                           color: _blue,
-                          backgroundColor: const Color(0xFFE8EDF7),
+                          backgroundColor: context.themeSurface(
+                            const Color(0xFFE8EDF7),
+                          ),
                         ),
                         Text(
                           '${app.resumeScore!.round()}',
@@ -779,7 +797,10 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                   const SizedBox(width: 8),
                   Text(
                     _label(_stage(app)),
-                    style: GoogleFonts.inter(color: _muted, fontSize: 9),
+                    style: GoogleFonts.inter(
+                      color: context.themeForeground(_muted),
+                      fontSize: 9,
+                    ),
                   ),
                 ],
               ),
@@ -806,22 +827,27 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
   }) => OutlinedButton(
     key: Key('job-detail-${action.name}'),
     onPressed: _busy ? null : () => _act(action),
-    style: OutlinedButton.styleFrom(
-      foregroundColor: primary
-          ? Colors.white
-          : danger
-          ? const Color(0xFFD64545)
-          : _ink,
-      backgroundColor: primary ? RecruiterButtonStyle.blue : Colors.white,
-      side: BorderSide(
-        color: danger
-            ? const Color(0xFFF3C8C8)
-            : primary
+    style: RecruiterButtonStyle.primary(
+      OutlinedButton.styleFrom(
+        foregroundColor: primary
+            ? Colors.white
+            : danger
+            ? const Color(0xFFD64545)
+            : context.themeForeground(_ink),
+        backgroundColor: primary
             ? RecruiterButtonStyle.blue
-            : _edge,
+            : context.themeSurface(Colors.white),
+        side: BorderSide(
+          color: danger
+              ? context.themeOutline(const Color(0xFFF3C8C8))
+              : primary
+              ? RecruiterButtonStyle.blue
+              : context.themeOutline(_edge),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+      active: primary,
     ),
     child: Text(
       label,
@@ -928,7 +954,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                     Text(
                       job.title,
                       style: GoogleFonts.spaceGrotesk(
-                        color: _ink,
+                        color: context.themeForeground(_ink),
                         fontSize: mobile ? 23 : 27,
                         fontWeight: FontWeight.w700,
                       ),
@@ -939,7 +965,10 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
                 const SizedBox(height: 8),
                 Text(
                   meta.join(' · '),
-                  style: GoogleFonts.inter(color: _muted, fontSize: 12),
+                  style: GoogleFonts.inter(
+                    color: context.themeForeground(_muted),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -964,12 +993,16 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.work_off_outlined, size: 42, color: _muted),
+          Icon(
+            Icons.work_off_outlined,
+            size: 42,
+            color: context.themeForeground(_muted),
+          ),
           const SizedBox(height: 12),
           Text(
             title,
             style: GoogleFonts.spaceGrotesk(
-              color: _ink,
+              color: context.themeForeground(_ink),
               fontSize: 18,
               fontWeight: FontWeight.w700,
             ),
@@ -997,7 +1030,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
             width: width,
             height: width == 260 ? 32 : 124,
             decoration: BoxDecoration(
-              color: const Color(0xFFE6EBF4),
+              color: context.themeSurface(const Color(0xFFE6EBF4)),
               borderRadius: BorderRadius.circular(15),
             ),
           ),
@@ -1007,9 +1040,9 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
 
   Widget _mobileTopBar() => Container(
     height: 58,
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(bottom: BorderSide(color: _edge)),
+    decoration: BoxDecoration(
+      color: context.themeSurface(Colors.white),
+      border: Border(bottom: BorderSide(color: context.themeOutline(_edge))),
     ),
     padding: const EdgeInsets.symmetric(horizontal: 12),
     child: Row(
@@ -1028,7 +1061,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
             style: GoogleFonts.spaceGrotesk(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: _ink,
+              color: context.themeForeground(_ink),
             ),
           ),
         ),
@@ -1053,7 +1086,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     final mobile = MediaQuery.sizeOf(context).width < 900;
     final job = _job;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FC),
+      backgroundColor: context.themeCanvas(const Color(0xFFF5F7FC)),
       body: Column(
         children: [
           mobile
@@ -1145,7 +1178,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
             SafeArea(
               top: false,
               child: Container(
-                color: Colors.white,
+                color: context.themeSurface(Colors.white),
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: Row(
                   children: [

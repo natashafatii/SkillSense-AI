@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
@@ -169,11 +170,13 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     final bool isMobile = screenWidth < 900;
 
     // Both Web and Mobile viewport are Light Theme
-    final Color bgBase = const Color(0xFFF8FAFC);
-    final Color textPrimary = const Color(0xFF0F172A);
-    final Color textSecondary = const Color(0xFF64748B);
-    final Color cardBg = Colors.white;
-    final Color cardBorder = const Color(0xFFE2E8F0);
+    final Color bgBase = context.themeCanvas(const Color(0xFFF8FAFC));
+    final Color textPrimary = context.themeForeground(const Color(0xFF0F172A));
+    final Color textSecondary = context.themeForeground(
+      const Color(0xFF64748B),
+    );
+    final Color cardBg = context.themeSurface(Colors.white);
+    final Color cardBorder = context.themeOutline(const Color(0xFFE2E8F0));
 
     final processedJobs = _getProcessedJobs();
 
@@ -250,6 +253,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                                             onPressed: () => _loadJobs(),
                                             style:
                                                 CandidateButtonStyle.secondary(
+                                                  context,
                                                   TextButton.styleFrom(),
                                                 ),
                                             child: const Text('Retry'),
@@ -369,7 +373,10 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               Text('Could not load jobs: ${_error!}'),
               TextButton(
                 onPressed: _loadJobs,
-                style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+                style: CandidateButtonStyle.secondary(
+                  context,
+                  TextButton.styleFrom(),
+                ),
                 child: const Text('Retry'),
               ),
             ],
@@ -435,15 +442,19 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               width: isMobile ? 54 : 64,
               height: isMobile ? 54 : 64,
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9), // --field
+                color: context.themeSurface(const Color(0xFFF1F5F9)), // --field
                 borderRadius: BorderRadius.circular(isMobile ? 17 : 20),
-                border: Border.all(color: const Color(0xFFE2E8F0)), // --edge2
+                border: Border.all(
+                  color: context.themeOutline(const Color(0xFFE2E8F0)),
+                ), // --edge2
               ),
               child: Center(
                 child: Icon(
                   Icons.adjust_rounded, // target-in-circle icon
                   size: isMobile ? 20 : 24,
-                  color: const Color(0xFF64748B), // --tx2
+                  color: context.themeForeground(
+                    const Color(0xFF64748B),
+                  ), // --tx2
                 ),
               ),
             ),
@@ -451,7 +462,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
             Text(
               isMobile ? 'No jobs yet' : 'No jobs to show right now',
               style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A), // --tx
+                color: context.themeForeground(const Color(0xFF0F172A)), // --tx
                 fontSize: isMobile ? 15 : 18,
                 fontWeight: FontWeight.w700,
                 letterSpacing: isMobile ? -0.03 : -0.025,
@@ -466,7 +477,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                     ? 'New roles will appear here.'
                     : 'New roles appear here as recruiters post them. Complete your profile so the best matches rank first.',
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B), // --tx3
+                  color: context.themeForeground(
+                    const Color(0xFF64748B),
+                  ), // --tx3
                   fontSize: isMobile ? 11 : 12.5,
                   height: 1.65,
                 ),
@@ -515,7 +528,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               Text(
                 'We\'ll notify you when roles match',
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF94A3B8), // --tx4
+                  color: context.themeForeground(
+                    const Color(0xFF94A3B8),
+                  ), // --tx4
                   fontSize: 10.5,
                   fontWeight: FontWeight.w400,
                 ),
@@ -625,7 +640,8 @@ class GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant GridPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _HoverableFilterChip extends StatefulWidget {
@@ -665,9 +681,9 @@ class _HoverableFilterChipState extends State<_HoverableFilterChip> {
 
     final Color inactiveBg = _hovered
         ? const Color(0xFF14B584).withValues(alpha: 0.06)
-        : Colors.white;
+        : context.themeSurface(Colors.white);
 
-    final Color inactiveText = const Color(0xFF64748B);
+    final Color inactiveText = context.themeForeground(const Color(0xFF64748B));
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -684,10 +700,15 @@ class _HoverableFilterChipState extends State<_HoverableFilterChip> {
             borderRadius: BorderRadius.circular(12),
             border: isSelected
                 ? Border.all(
-                    color: Colors.white.withValues(alpha: 0.15),
+                    color: context
+                        .themeOutline(Colors.white)
+                        .withValues(alpha: 0.15),
                     width: 1.0,
                   )
-                : Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                : Border.all(
+                    color: context.themeOutline(const Color(0xFFE2E8F0)),
+                    width: 1.5,
+                  ),
             boxShadow: isSelected ? selectedShadow : [],
           ),
           child: Text(

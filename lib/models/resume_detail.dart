@@ -26,6 +26,7 @@ class ResumeDetail {
   final int? fileSize;
   final DateTime? uploadedAt;
   final ResumeStatus status;
+  final String? processingError;
   final List<String>? skills;
   final List<Map<String, dynamic>>? education;
   final List<Map<String, dynamic>>? experience;
@@ -42,6 +43,7 @@ class ResumeDetail {
     this.fileSize,
     this.uploadedAt,
     required this.status,
+    this.processingError,
     this.skills,
     this.education,
     this.experience,
@@ -64,6 +66,7 @@ class ResumeDetail {
       fileSize: (json['file_size'] as num?)?.toInt(),
       uploadedAt: DateTime.tryParse(json['uploaded_at']?.toString() ?? ''),
       status: ResumeStatus.fromString(json['status'] as String? ?? 'PENDING'),
+      processingError: json['processing_error'] as String?,
       skills: (json['skills'] as List<dynamic>?)
           ?.map((e) => e.toString())
           .toList(),

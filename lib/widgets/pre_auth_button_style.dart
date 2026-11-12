@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'candidate_button_style.dart';
 import 'recruiter_button_style.dart';
 import '../constants/app_colors.dart';
 
 /// Active pre-auth CTAs share recruiter blue; disabled styles remain local.
 class PreAuthButtonStyle {
   static const blue = RecruiterButtonStyle.blue;
+  static const primaryGradient = RecruiterButtonStyle.primaryGradient;
+  static LinearGradient roleGradient(String? role) => role == 'job_seeker'
+      ? CandidateButtonStyle.primaryGradient
+      : primaryGradient;
   static Color roleColor(String? role) =>
       role == 'job_seeker' ? AppColors.webRoleCandidate : blue;
 

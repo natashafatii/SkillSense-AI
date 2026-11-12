@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -120,7 +121,7 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
     final double centerTopPercent = 0.44;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) {
@@ -206,7 +207,9 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
                           Text(
                             'Still connecting…',
                             style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF94A3B8),
+                              color: context.themeForeground(
+                                const Color(0xFF94A3B8),
+                              ),
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
                             ),
@@ -333,7 +336,7 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
         child: Text(
           'SkillSense AI',
           style: GoogleFonts.inter(
-            color: const Color(0xFF1A3558),
+            color: context.themeForeground(const Color(0xFF1A3558)),
             fontSize: 21,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.02 * 21,
@@ -359,7 +362,7 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
       child: Text(
         'HIRING, UNDERSTOOD',
         style: GoogleFonts.spaceGrotesk(
-          color: const Color(0xFF64748B),
+          color: context.themeForeground(const Color(0xFF64748B)),
           fontSize: 9,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.24 * 9,
@@ -380,7 +383,7 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
       width: 112,
       height: 3,
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: context.themeSurface(const Color(0xFFF1F5F9)),
         borderRadius: BorderRadius.circular(2),
       ),
       child: Align(
@@ -407,7 +410,7 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
 
   Widget _buildFinalState() {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: Stack(
         children: [
           // Final Star position
@@ -434,7 +437,7 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
                   Text(
                     'SkillSense AI',
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF1A3558),
+                      color: context.themeForeground(const Color(0xFF1A3558)),
                       fontSize: 21,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.02 * 21,
@@ -444,7 +447,7 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
                   Text(
                     'HIRING, UNDERSTOOD',
                     style: GoogleFonts.spaceGrotesk(
-                      color: const Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                       fontSize: 9,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.24 * 9,
@@ -470,7 +473,7 @@ class _ApertureSplashScreenState extends State<ApertureSplashScreen>
                     Text(
                       'Still connecting…',
                       style: GoogleFonts.spaceGrotesk(
-                        color: const Color(0xFF94A3B8),
+                        color: context.themeForeground(const Color(0xFF94A3B8)),
                         fontSize: 9,
                         fontWeight: FontWeight.w600,
                       ),

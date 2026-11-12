@@ -1,3 +1,4 @@
+import '../../widgets/theme_switcher.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -57,11 +58,11 @@ class _Palette {
   Color get surface2 =>
       dark ? const Color(0xFF111A2E) : const Color(0xFFF7F9FD);
   Color get field => dark ? const Color(0xFF0A1120) : Colors.white;
-  Color get border => dark ? const Color(0x243A4A70) : const Color(0xFFE0E5F0);
+  Color get border => dark ? const Color(0x4894AADC) : const Color(0xFFE0E5F0);
   Color get strong => dark ? const Color(0x47566B98) : const Color(0xFFC8D0E3);
   Color get text => dark ? const Color(0xFFE8EDF8) : const Color(0xFF16213A);
   Color get text2 => dark ? const Color(0xFFA3AFC8) : const Color(0xFF4A5875);
-  Color get text3 => dark ? const Color(0xFF8593B0) : const Color(0xFF66748F);
+  Color get text3 => dark ? const Color(0xFF9FACC6) : const Color(0xFF66748F);
   Color get accent => dark ? const Color(0xFF6C9BFF) : const Color(0xFF3A68E8);
   Color get accentSoft =>
       dark ? const Color(0x246C9BFF) : const Color(0x173A68E8);
@@ -70,15 +71,8 @@ class _Palette {
 }
 
 class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
-  static const _keys = ['name', 'title', 'email', 'phone', 'tz', 'shown'];
-  static const _labels = [
-    'Full name',
-    'Job title',
-    'Work email',
-    'Phone',
-    'Time zone',
-    'Shown to candidates as',
-  ];
+  static const _keys = ['name', 'email', 'phone'];
+  static const _labels = ['Full name', 'Work email', 'Phone'];
   static const _notificationTitles = [
     'New applicants',
     'Report ready',
@@ -93,14 +87,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     'Email 10 minutes after start',
     'Mondays at 8:00',
   ];
-  final _values = <String, String>{
-    'name': '',
-    'title': '',
-    'email': '',
-    'phone': '',
-    'tz': '',
-    'shown': '',
-  };
+  final _values = <String, String>{'name': '', 'email': '', 'phone': ''};
   final _notifications = [true, true, true, false, true];
   final _setupLink = LayerLink();
   final _editController = TextEditingController();
@@ -117,7 +104,6 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
   Offset? _avatarTapPosition;
   bool _photoSaving = false;
   String? _editing;
-  String _theme = 'Light';
   bool _calendarConnected = false;
   bool _setupOpen = false;
   bool _loading = true;
@@ -207,11 +193,8 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         nested['last_name'],
       ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
     }
-    _values['title'] = read('job_title');
     _values['email'] = (profile['email'] ?? nested['email'])?.toString() ?? '';
     _values['phone'] = read('phone');
-    _values['tz'] = read('time_zone');
-    _values['shown'] = read('display_name');
     _company = read('company_name');
     _firstName = nested['first_name']?.toString() ?? '';
     _lastName = nested['last_name']?.toString() ?? '';
@@ -717,13 +700,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       _validatePhone();
       return;
     }
-    const apiFields = {
-      'name': 'full_name',
-      'title': 'job_title',
-      'phone': 'phone',
-      'tz': 'time_zone',
-      'shown': 'display_name',
-    };
+    const apiFields = {'name': 'full_name', 'phone': 'phone'};
     final apiField = apiFields[key]!;
     final value = key == 'phone'
         ? '+${_phoneCountry.dial}${_editController.text}'
@@ -806,11 +783,8 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     }
   }
 
-  _Palette _palette(BuildContext context) => _Palette(
-    _theme == 'Dark' ||
-        (_theme == 'System' &&
-            MediaQuery.platformBrightnessOf(context) == Brightness.dark),
-  );
+  _Palette _palette(BuildContext context) =>
+      _Palette(Theme.of(context).brightness == Brightness.dark);
   TextStyle _style(
     _Palette c,
     double size, {
@@ -835,26 +809,29 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     child: OutlinedButton(
       key: key,
       onPressed: action,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        backgroundColor: primary ? RecruiterButtonStyle.blue : c.surface,
-        foregroundColor: primary
-            ? Colors.white
-            : danger
-            ? c.error
-            : c.text,
-        side: BorderSide(
-          color: primary
-              ? RecruiterButtonStyle.blue
+      style: RecruiterButtonStyle.primary(
+        OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          backgroundColor: primary ? RecruiterButtonStyle.blue : c.surface,
+          foregroundColor: primary
+              ? Colors.white
               : danger
-              ? c.error.withValues(alpha: .4)
-              : c.strong,
+              ? c.error
+              : c.text,
+          side: BorderSide(
+            color: primary
+                ? RecruiterButtonStyle.blue
+                : danger
+                ? c.error.withValues(alpha: .4)
+                : c.strong,
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          textStyle: GoogleFonts.inter(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        textStyle: GoogleFonts.inter(
-          fontSize: 13.5,
-          fontWeight: FontWeight.w600,
-        ),
+        active: primary,
       ),
       child: Text(text),
     ),
@@ -1038,9 +1015,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          key == 'shown'
-                              ? 'Appears on interview invites.'
-                              : 'Visible on your account.',
+                          'Visible on your account.',
                           style: _style(c, 14, color: c.text3),
                         ),
                         const SizedBox(height: 14),
@@ -1155,7 +1130,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     decoration: primary
         ? BoxDecoration(
             borderRadius: BorderRadius.circular(height == 50 ? 14 : 12),
-            color: RecruiterButtonStyle.blue,
+            gradient: RecruiterButtonStyle.primaryGradient,
           )
         : null,
     child: OutlinedButton(
@@ -1246,11 +1221,6 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                         color: c.text,
                       ),
                     ),
-                    if ((_values['title'] ?? '').isNotEmpty)
-                      Text(
-                        _values['title']!,
-                        style: _style(c, 14, color: c.text2),
-                      ),
                     if (_company.isNotEmpty)
                       Text(_company, style: _style(c, 13, color: c.text3)),
                   ],
@@ -1301,7 +1271,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       children: [
         _mobileHeading(c, 'Personal details', 'Your account'),
         if (_loading)
-          for (var i = 0; i < 6; i++)
+          for (var i = 0; i < _keys.length; i++)
             Container(
               height: 62,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -1368,11 +1338,6 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                         color: value.isEmpty ? c.text3 : c.text,
                       ),
                     ),
-                    if (key == 'shown')
-                      Text(
-                        'Appears on interview invites.',
-                        style: _style(c, 12.5, color: c.text3),
-                      ),
                   ],
                 ),
               ),
@@ -1431,49 +1396,6 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         ),
         const SizedBox(width: 10),
         action,
-      ],
-    ),
-  );
-
-  Widget _mobileSegment(
-    _Palette c,
-    List<String> choices,
-    String selected,
-    ValueChanged<String> select,
-  ) => Container(
-    padding: const EdgeInsets.all(3),
-    decoration: BoxDecoration(
-      color: c.surface2,
-      border: Border.all(color: c.border),
-      borderRadius: BorderRadius.circular(11),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final choice in choices)
-          InkWell(
-            onTap: () => select(choice),
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              height: 34,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 9),
-              decoration: BoxDecoration(
-                color: choice == selected ? c.surface : null,
-                borderRadius: BorderRadius.circular(8),
-                border: choice == selected ? Border.all(color: c.border) : null,
-              ),
-              child: Text(
-                choice,
-                style: _style(
-                  c,
-                  13.5,
-                  weight: FontWeight.w500,
-                  color: choice == selected ? c.text : c.text2,
-                ),
-              ),
-            ),
-          ),
       ],
     ),
   );
@@ -1542,17 +1464,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         Column(
           children: [
             _mobileHeading(c, 'Security and appearance'),
-            _mobileSettingRow(
-              c,
-              'Theme',
-              '',
-              _mobileSegment(
-                c,
-                const ['Light', 'Dark', 'System'],
-                _theme,
-                (value) => setState(() => _theme = value),
-              ),
-            ),
+            _mobileSettingRow(c, 'Theme', '', _segment(c, mobile: true)),
             _mobileSettingRow(
               c,
               'Signed in with Google',
@@ -1759,63 +1671,21 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                 ],
               ],
             ),
-            if (key == 'shown')
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  'Appears on interview invites',
-                  style: _style(c, 12.5, color: c.text3),
-                ),
-              ),
           ],
         ],
       ),
     );
   }
 
-  Widget _segment(
-    _Palette c,
-    List<String> options,
-    String selected,
-    ValueChanged<String> select,
-  ) => Container(
-    padding: const EdgeInsets.all(3),
-    decoration: BoxDecoration(
-      color: c.surface2,
-      border: Border.all(color: c.border),
-      borderRadius: BorderRadius.circular(9),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final option in options)
-          InkWell(
-            onTap: () => select(option),
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              height: 28,
-              padding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.sizeOf(context).width < 640 ? 10 : 12,
-              ),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: selected == option ? c.surface : null,
-                borderRadius: BorderRadius.circular(6),
-                border: selected == option ? Border.all(color: c.border) : null,
-              ),
-              child: Text(
-                option,
-                style: _style(
-                  c,
-                  13,
-                  weight: FontWeight.w500,
-                  color: selected == option ? c.text : c.text2,
-                ),
-              ),
-            ),
-          ),
-      ],
-    ),
+  Widget _segment(_Palette c, {bool mobile = false}) => ThemeSwitcher(
+    surface: c.surface,
+    track: c.surface2,
+    border: c.border,
+    foreground: c.text,
+    inactiveForeground: c.text2,
+    labelStyle: _style(c, mobile ? 13.5 : 13, weight: FontWeight.w500),
+    mobile: mobile,
+    horizontalPadding: mobile ? 9 : 12,
   );
 
   Widget _row(_Palette c, String title, String subtitle, Widget action) =>
@@ -1893,23 +1763,30 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         _heading(c, 'Personal details', 'Your account'),
         const SizedBox(height: 18),
         if (_loading)
-          for (var i = 0; i < 3; i++)
+          for (var i = 0; i < _keys.length; i += narrow ? 1 : 2)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 14),
               child: Row(
                 children: [
                   for (var j = 0; j < (narrow ? 1 : 2); j++) ...[
                     if (j > 0) const SizedBox(width: 48),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(height: 12, width: 82, color: c.surface2),
-                          const SizedBox(height: 12),
-                          Container(height: 17, width: 150, color: c.surface2),
-                        ],
-                      ),
-                    ),
+                    if (i + j < _keys.length)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(height: 12, width: 82, color: c.surface2),
+                            const SizedBox(height: 12),
+                            Container(
+                              height: 17,
+                              width: 150,
+                              color: c.surface2,
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      const Spacer(),
                   ],
                 ],
               ),
@@ -1928,7 +1805,10 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
               children: [
                 Expanded(child: _field(c, i)),
                 const SizedBox(width: 48),
-                Expanded(child: _field(c, i + 1)),
+                if (i + 1 < _keys.length)
+                  Expanded(child: _field(c, i + 1))
+                else
+                  const Spacer(),
               ],
             ),
       ],
@@ -1963,17 +1843,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       children: [
         _heading(c, 'Security and appearance'),
         const SizedBox(height: 10),
-        _row(
-          c,
-          'Theme',
-          '',
-          _segment(
-            c,
-            const ['Light', 'Dark', 'System'],
-            _theme,
-            (value) => setState(() => _theme = value),
-          ),
-        ),
+        _row(c, 'Theme', '', _segment(c)),
         _row(
           c,
           'Signed in with Google',
@@ -2110,11 +1980,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     final name = (_values['name'] ?? '').isEmpty
         ? 'Recruiter'
         : _values['name']!;
-    final title = _values['title'] ?? '';
-    final description = [
-      title,
-      if (_company.isNotEmpty) 'at $_company',
-    ].join(' ').trim();
+    final description = _company.isEmpty ? '' : 'at $_company';
     final avatar = _profileAvatar(c, narrow ? 68 : 88, narrow ? 24 : 30);
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,

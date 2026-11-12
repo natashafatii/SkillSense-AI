@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
+import '../../widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,7 +8,6 @@ import '../../constants/app_constants.dart';
 import '../../services/auth_service.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/web_auth_left_panel.dart';
-
 
 class SetNewPasswordScreenWeb extends StatefulWidget {
   final String email;
@@ -39,17 +40,15 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
 
   // Live rule states
   bool get _has8Chars => _newPasswordCtrl.text.length >= 8;
-  bool get _hasNumber =>
-      RegExp(r'\d').hasMatch(_newPasswordCtrl.text);
-  bool get _hasSymbol =>
-      RegExp(r'[!@#\$&*~%^()_\-+=\[\]{}|;:,.<>?]')
-          .hasMatch(_newPasswordCtrl.text);
+  bool get _hasNumber => RegExp(r'\d').hasMatch(_newPasswordCtrl.text);
+  bool get _hasSymbol => RegExp(
+    r'[!@#\$&*~%^()_\-+=\[\]{}|;:,.<>?]',
+  ).hasMatch(_newPasswordCtrl.text);
   bool get _passwordsMatch =>
       _newPasswordCtrl.text.isNotEmpty &&
       _newPasswordCtrl.text == _confirmPasswordCtrl.text;
 
-  bool get _canSubmit =>
-      _has8Chars && _hasNumber && _passwordsMatch;
+  bool get _canSubmit => _has8Chars && _hasNumber && _passwordsMatch;
 
   @override
   void initState() {
@@ -95,7 +94,7 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double horizontalPadding = Responsive.getSpacing(
@@ -125,8 +124,7 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                               eyebrow: AppConstants.setPasswordWebEyebrow,
                               headline: AppConstants.setPasswordWebHeadline,
                               body: AppConstants.setPasswordWebBody,
-                              point1:
-                                  'Signing in as ${widget.email}',
+                              point1: 'Signing in as ${widget.email}',
                               point2: AppConstants.setPasswordWebPoint2,
                               point3: AppConstants.setPasswordWebPoint3,
                             ),
@@ -144,8 +142,8 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                     ),
                                     child: ConstrainedBox(
                                       constraints: const BoxConstraints(
-                                        maxWidth:
-                                            Responsive.rightPanelContentMaxWidth,
+                                        maxWidth: Responsive
+                                            .rightPanelContentMaxWidth,
                                       ),
                                       child: Column(
                                         mainAxisAlignment:
@@ -160,7 +158,9 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                             style: GoogleFonts.inter(
                                               fontSize: 32,
                                               fontWeight: FontWeight.w800,
-                                              color: const Color(0xFF0F172A),
+                                              color: context.themeForeground(
+                                                const Color(0xFF0F172A),
+                                              ),
                                               letterSpacing: -0.01,
                                             ),
                                           ),
@@ -170,7 +170,9 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                                 .setPasswordWebRightSubtitle,
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
-                                              color: const Color(0xFF64748B),
+                                              color: context.themeForeground(
+                                                const Color(0xFF64748B),
+                                              ),
                                               height: 1.5,
                                             ),
                                           ),
@@ -180,18 +182,25 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                               width: double.infinity,
                                               padding: const EdgeInsets.all(12),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFFFEF2F2),
+                                                color: context.themeSurface(
+                                                  const Color(0xFFFEF2F2),
+                                                ),
                                                 borderRadius:
                                                     BorderRadius.circular(10),
                                                 border: Border.all(
-                                                  color: const Color(0xFFFCA5A5),
+                                                  color: const Color(
+                                                    0xFFFCA5A5,
+                                                  ),
                                                 ),
                                               ),
                                               child: Text(
                                                 _errorMessage!,
                                                 style: GoogleFonts.inter(
                                                   fontSize: 13,
-                                                  color: const Color(0xFFB91C1C),
+                                                  color: context
+                                                      .themeForeground(
+                                                        const Color(0xFFB91C1C),
+                                                      ),
                                                 ),
                                               ),
                                             ),
@@ -239,10 +248,13 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                           ),
 
                                           // Match indicator
-                                          if (_confirmPasswordCtrl.text.isNotEmpty)
+                                          if (_confirmPasswordCtrl
+                                              .text
+                                              .isNotEmpty)
                                             Padding(
                                               padding: const EdgeInsets.only(
-                                                  top: 8),
+                                                top: 8,
+                                              ),
                                               child: Row(
                                                 children: [
                                                   Icon(
@@ -251,26 +263,36 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                                         : Icons.close,
                                                     size: 13,
                                                     color: _passwordsMatch
-                                                        ? const Color(
-                                                            0xFF10B981)
+                                                        ? context
+                                                              .themeForeground(
+                                                                const Color(
+                                                                  0xFF10B981,
+                                                                ),
+                                                              )
                                                         : const Color(
-                                                            0xFFEF4444),
+                                                            0xFFEF4444,
+                                                          ),
                                                   ),
                                                   const SizedBox(width: 5),
                                                   Text(
                                                     _passwordsMatch
                                                         ? AppConstants
-                                                            .setPasswordWebMatch
+                                                              .setPasswordWebMatch
                                                         : 'Passwords do not match.',
                                                     style: GoogleFonts.inter(
                                                       fontSize: 12.5,
                                                       fontWeight:
                                                           FontWeight.w500,
                                                       color: _passwordsMatch
-                                                          ? const Color(
-                                                              0xFF10B981)
+                                                          ? context
+                                                                .themeForeground(
+                                                                  const Color(
+                                                                    0xFF10B981,
+                                                                  ),
+                                                                )
                                                           : const Color(
-                                                              0xFFEF4444),
+                                                              0xFFEF4444,
+                                                            ),
                                                     ),
                                                   ),
                                                 ],
@@ -283,20 +305,27 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                             width: double.infinity,
                                             height: 50,
                                             child: ElevatedButton(
-                                              onPressed: _canSubmit && !_isLoading
+                                              onPressed:
+                                                  _canSubmit && !_isLoading
                                                   ? _submit
                                                   : null,
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    AppColors.webLoginButton,
-                                                foregroundColor: Colors.white,
-                                                disabledBackgroundColor:
-                                                    AppColors.webLoginButton
-                                                        .withValues(alpha: 0.4),
-                                                elevation: 0,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(25),
+                                              style: PreAuthButtonStyle.active(
+                                                ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      AppColors.webLoginButton,
+                                                  foregroundColor: Colors.white,
+                                                  disabledBackgroundColor:
+                                                      AppColors.webLoginButton
+                                                          .withValues(
+                                                            alpha: 0.4,
+                                                          ),
+                                                  elevation: 0,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          25,
+                                                        ),
+                                                  ),
                                                 ),
                                               ),
                                               child: _isLoading
@@ -305,9 +334,9 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                                       height: 20,
                                                       child:
                                                           CircularProgressIndicator(
-                                                        color: Colors.white,
-                                                        strokeWidth: 2,
-                                                      ),
+                                                            color: Colors.white,
+                                                            strokeWidth: 2,
+                                                          ),
                                                     )
                                                   : Text(
                                                       AppConstants
@@ -331,13 +360,18 @@ class _SetNewPasswordScreenWebState extends State<SetNewPasswordScreenWeb> {
                                                 text: TextSpan(
                                                   style: GoogleFonts.inter(
                                                     fontSize: 13,
-                                                    color:
-                                                        const Color(0xFF64748B),
+                                                    color: context
+                                                        .themeForeground(
+                                                          const Color(
+                                                            0xFF64748B,
+                                                          ),
+                                                        ),
                                                   ),
                                                   children: [
                                                     const TextSpan(
-                                                        text:
-                                                            'Did not request this? '),
+                                                      text:
+                                                          'Did not request this? ',
+                                                    ),
                                                     TextSpan(
                                                       text:
                                                           'Ignore the email — nothing changed',
@@ -395,19 +429,28 @@ class _PasswordField extends StatelessWidget {
       controller: controller,
       focusNode: focusNode,
       obscureText: obscure,
-      style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF0F172A)),
+      style: GoogleFonts.inter(
+        fontSize: 14,
+        color: context.themeForeground(const Color(0xFF0F172A)),
+      ),
       decoration: InputDecoration(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: context.themeSurface(const Color(0xFFF8FAFC)),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderSide: BorderSide(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderSide: BorderSide(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -426,7 +469,7 @@ class _PasswordField extends StatelessWidget {
               child: Text(
                 obscure ? 'Show' : 'Hide',
                 style: GoogleFonts.inter(
-                  color: AppColors.webLoginButton,
+                  color: context.themeForeground(AppColors.webLoginButton),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -457,14 +500,8 @@ class _LiveChecklist extends StatelessWidget {
       spacing: 16,
       runSpacing: 6,
       children: [
-        _RuleChip(
-          label: AppConstants.setPasswordWebRule8Chars,
-          met: has8Chars,
-        ),
-        _RuleChip(
-          label: AppConstants.setPasswordWebRuleNumber,
-          met: hasNumber,
-        ),
+        _RuleChip(label: AppConstants.setPasswordWebRule8Chars, met: has8Chars),
+        _RuleChip(label: AppConstants.setPasswordWebRuleNumber, met: hasNumber),
         _RuleChip(
           label: AppConstants.setPasswordWebRuleSymbol,
           met: hasSymbol,
@@ -491,17 +528,13 @@ class _RuleChip extends StatelessWidget {
     final Color color = met
         ? const Color(0xFF10B981)
         : optional
-            ? const Color(0xFF94A3B8)
-            : const Color(0xFF94A3B8);
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF94A3B8);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          met ? Icons.check : Icons.circle_outlined,
-          size: 13,
-          color: color,
-        ),
+        Icon(met ? Icons.check : Icons.circle_outlined, size: 13, color: color),
         const SizedBox(width: 5),
         Text(
           label,

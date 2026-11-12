@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../models/interview.dart';
@@ -100,7 +101,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
     bottomNavigationBar: MediaQuery.sizeOf(context).width < 900
         ? const RecruiterMobileNav(currentRoute: '/recruiter/interview-review')
         : null,
-    backgroundColor: const Color(0xfff5f7fc),
+    backgroundColor: context.themeCanvas(const Color(0xfff5f7fc)),
     body: Column(
       children: [
         const RecruiterTopBar(
@@ -117,7 +118,10 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                     child: Text(
                       'Interview evidence and decisions',
                       style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(color: _ink, fontWeight: FontWeight.w700),
+                          ?.copyWith(
+                            color: context.themeForeground(_ink),
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                   ),
                   IconButton(
@@ -130,16 +134,21 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
               if (loading) const LinearProgressIndicator(),
               if (error != null) Text(error!),
               if (!loading && error == null && interviews.isEmpty)
-                const Text(
+                Text(
                   'No interviews available. Open an application in the pipeline to review screening or record a deliberate early decision.',
+                  style: context.isDarkTheme
+                      ? TextStyle(color: context.themeForeground(_muted))
+                      : null,
                 ),
               for (final i in interviews)
                 Card(
                   margin: const EdgeInsets.only(top: 12),
-                  color: const Color(0xFFFAFBFD),
+                  color: context.themeSurface(const Color(0xFFFAFBFD)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: const BorderSide(color: Color(0xFFE5EAF3)),
+                    side: BorderSide(
+                      color: context.themeOutline(const Color(0xFFE5EAF3)),
+                    ),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(
@@ -148,14 +157,14 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                     ),
                     title: Text(
                       'Interview ${i.id}',
-                      style: const TextStyle(
-                        color: _ink,
+                      style: TextStyle(
+                        color: context.themeForeground(_ink),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     subtitle: Text(
                       'Application ${i.applicationId}\n${i.completionOutcome} · ${_createdAt(i)}',
-                      style: const TextStyle(color: _muted),
+                      style: TextStyle(color: context.themeForeground(_muted)),
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {

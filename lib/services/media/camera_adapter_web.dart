@@ -225,6 +225,7 @@ class WebCameraAdapter extends CameraAdapter {
       ..width = '100%'
       ..height = '100%'
       ..objectFit = 'contain'
+      ..pointerEvents = 'none'
       ..transform = 'scaleX(-1)';
     preview.setAttribute('aria-label', 'Local mirrored camera preview');
     // Muted autoplay may still be blocked; reflect this as unavailable.

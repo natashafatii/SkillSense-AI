@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
 /// Mirrors the notification list's card corners, row insets, and dividers.
@@ -46,7 +47,7 @@ class _NotificationListSkeletonState extends State<NotificationListSkeleton>
         width: width,
         height: height,
         decoration: BoxDecoration(
-          color: const Color(0xFFE9EDF3),
+          color: context.themeSurface(const Color(0xFFE9EDF3)),
           shape: circle ? BoxShape.circle : BoxShape.rectangle,
           borderRadius: circle ? null : BorderRadius.circular(4),
         ),
@@ -65,9 +66,12 @@ class _NotificationListSkeletonState extends State<NotificationListSkeleton>
         child: RepaintBoundary(
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.themeSurface(Colors.white),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+              border: Border.all(
+                color: context.themeOutline(const Color(0xFFE2E8F0)),
+                width: 1.5,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.025),
@@ -90,8 +94,8 @@ class _NotificationListSkeletonState extends State<NotificationListSkeleton>
                 ),
                 for (var index = 0; index < 3; index++) ...[
                   if (index > 0)
-                    const Divider(
-                      color: Color(0xFFF1F5F9),
+                    Divider(
+                      color: context.themeOutline(const Color(0xFFF1F5F9)),
                       height: 1,
                       thickness: 1,
                       indent: 20,

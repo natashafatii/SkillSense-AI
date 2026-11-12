@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,13 @@ class CountryData {
     this.name,
     this.maxLength,
   );
+
+  String normalizeNationalNumber(String input) {
+    final digits = input
+        .replaceAll(RegExp(r'\D'), '')
+        .replaceFirst(RegExp(r'^0+'), '');
+    return digits.length > maxLength ? digits.substring(0, maxLength) : digits;
+  }
 }
 
 const List<CountryData> kSupportedCountries = [
@@ -50,6 +58,18 @@ class CountryCodePhoneField extends StatefulWidget {
   final ValueChanged<bool>? onValidityChanged;
   final Color focusColor;
   final bool anchoredMobilePicker;
+  final CountryData? initialCountry;
+  final bool enabled;
+  final Iterable<String>? autofillHints;
+  final ({
+    Color fill,
+    Color border,
+    Color text,
+    Color hint,
+    Color error,
+    Color cursor,
+  })?
+  fieldColors;
 
   const CountryCodePhoneField({
     super.key,
@@ -60,6 +80,10 @@ class CountryCodePhoneField extends StatefulWidget {
     this.onValidityChanged,
     this.focusColor = const Color(0xFF0F172A),
     this.anchoredMobilePicker = false,
+    this.initialCountry,
+    this.enabled = true,
+    this.autofillHints,
+    this.fieldColors,
   });
 
   @override
@@ -80,27 +104,22 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
   @override
   void initState() {
     super.initState();
-    _selectedCountry = kSupportedCountries.firstWhere((c) => c.code == 'PK');
-
-    try {
-      final WidgetsBinding binding = WidgetsBinding.instance;
-      final locale = binding.platformDispatcher.locale;
-      final countryCode = locale.countryCode;
-      if (countryCode != null) {
-        final match = kSupportedCountries.firstWhere(
-          (c) => c.code == countryCode.toUpperCase(),
-          orElse: () => _selectedCountry,
-        );
-        _selectedCountry = match;
-      }
-    } catch (_) {}
+    _selectedCountry = widget.initialCountry ?? _countryForLocale();
 
     widget.controller.addListener(_onTextChanged);
     widget.focusNode.addListener(_onFocusChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _onTextChanged();
+      if (mounted) _onTextChanged();
     });
+  }
+
+  CountryData _countryForLocale() {
+    final code = WidgetsBinding.instance.platformDispatcher.locale.countryCode;
+    return kSupportedCountries.firstWhere(
+      (country) => country.code == code?.toUpperCase(),
+      orElse: () => kSupportedCountries.first,
+    );
   }
 
   @override
@@ -122,31 +141,14 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
   }
 
   void _onTextChanged() {
-    String text = widget.controller.text;
-    bool modified = false;
-
-    if (text.startsWith('0') || text.startsWith('+')) {
-      text = text.replaceFirst(RegExp(r'^[0+]+'), '');
-      modified = true;
-    }
-
-    final nonNumeric = RegExp(r'\D');
-    if (text.contains(nonNumeric)) {
-      text = text.replaceAll(nonNumeric, '');
-      modified = true;
-    }
-
-    // Also strip if it somehow exceeds length
-    if (text.length > _selectedCountry.maxLength) {
-      text = text.substring(0, _selectedCountry.maxLength);
-      modified = true;
-    }
-
-    if (modified) {
+    final raw = widget.controller.text;
+    final text = _selectedCountry.normalizeNationalNumber(raw);
+    if (text != raw) {
       widget.controller.value = TextEditingValue(
         text: text,
         selection: TextSelection.collapsed(offset: text.length),
       );
+      return; // The controller listener reports the normalized value.
     }
 
     _formFieldKey.currentState?.didChange(text);
@@ -176,7 +178,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
     child: Container(
       constraints: const BoxConstraints(minHeight: 44),
       color: country.code == _selectedCountry.code
-          ? const Color(0xFFEAF8F5)
+          ? context.themeSurface(const Color(0xFFEAF8F5))
           : Colors.transparent,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
@@ -190,7 +192,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
               style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w400,
-                color: const Color(0xFF0F172A),
+                color: context.themeForeground(const Color(0xFF0F172A)),
               ),
             ),
           ),
@@ -199,7 +201,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
             style: GoogleFonts.jetBrainsMono(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: const Color(0xFF64748B),
+              color: context.themeForeground(const Color(0xFF64748B)),
             ),
           ),
         ],
@@ -222,15 +224,17 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
             prefixIcon: const Icon(Icons.search, size: 18),
             isDense: true,
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
+            fillColor: context.themeSurface(const Color(0xFFF8FAFC)),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderSide: BorderSide(
+                color: context.themeOutline(const Color(0xFFE2E8F0)),
+              ),
             ),
           ),
         ),
       ),
-      const Divider(height: 1, color: Color(0xFFE2E8F0)),
+      Divider(height: 1, color: context.themeOutline(const Color(0xFFE2E8F0))),
       Expanded(
         child: ValueListenableBuilder<TextEditingValue>(
           valueListenable: _countrySearchController,
@@ -242,7 +246,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                   'No countries found',
                   style: GoogleFonts.inter(
                     fontSize: 12,
-                    color: const Color(0xFF64748B),
+                    color: context.themeForeground(const Color(0xFF64748B)),
                   ),
                 ),
               );
@@ -368,7 +372,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                 child: Material(
                   key: const Key('country-dropdown'),
                   elevation: 12,
-                  color: Colors.white,
+                  color: context.themeSurface(Colors.white),
                   borderRadius: BorderRadius.circular(11),
                   child: SizedBox(
                     width: anchoredMobilePicker ? fieldWidth : 320,
@@ -388,13 +392,20 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = widget.fieldColors;
+    final borderColor =
+        colors?.border ?? context.themeOutline(const Color(0xFFE2E8F0));
+    final textColor =
+        colors?.text ?? context.themeForeground(const Color(0xFF0F172A));
+    final hintColor = colors?.hint ?? const Color(0xFF94A3B8);
+    final errorColor = colors?.error ?? const Color(0xFFE85D5B);
     return FormField<String>(
       key: _formFieldKey,
       initialValue: widget.controller.text,
       validator: (value) {
         final text = widget.controller.text;
         if (text.isEmpty) return 'Phone number is required';
-        if (text.length < _selectedCountry.maxLength) {
+        if (text.length != _selectedCountry.maxLength) {
           return 'Enter a valid ${_selectedCountry.name} number.';
         }
         return null;
@@ -409,14 +420,16 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                 key: const Key('phone-field-box'),
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color:
+                      colors?.fill ??
+                      context.themeSurface(const Color(0xFFF8FAFC)),
                   borderRadius: BorderRadius.circular(11),
                   border: Border.all(
                     color: field.hasError && !widget.focusNode.hasFocus
-                        ? const Color(0xFFE85D5B)
+                        ? errorColor
                         : (widget.focusNode.hasFocus
                               ? widget.focusColor
-                              : const Color(0xFFE2E8F0)),
+                              : borderColor),
                     width: widget.focusNode.hasFocus || field.hasError
                         ? 1.5
                         : 1.0,
@@ -424,9 +437,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                   boxShadow: field.hasError && !widget.focusNode.hasFocus
                       ? [
                           BoxShadow(
-                            color: const Color(
-                              0xFFE85D5B,
-                            ).withValues(alpha: 0.12),
+                            color: errorColor.withValues(alpha: 0.12),
                             spreadRadius: 3,
                           ),
                         ]
@@ -447,7 +458,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                       Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          onTap: _showCountryPicker,
+                          onTap: widget.enabled ? _showCountryPicker : null,
                           borderRadius: const BorderRadius.horizontal(
                             left: Radius.circular(10),
                           ),
@@ -466,7 +477,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                                   _selectedCountry.dialCode,
                                   style: GoogleFonts.inter(
                                     fontSize: 13,
-                                    color: const Color(0xFF0F172A),
+                                    color: textColor,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -474,9 +485,13 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                                 AnimatedRotation(
                                   turns: _pickerOpen ? .5 : 0,
                                   duration: const Duration(milliseconds: 200),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.keyboard_arrow_down_rounded,
-                                    color: Color(0xFF64748B),
+                                    color:
+                                        colors?.hint ??
+                                        context.themeForeground(
+                                          const Color(0xFF64748B),
+                                        ),
                                     size: 10,
                                   ),
                                 ),
@@ -490,7 +505,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                         child: Container(
                           width: 1,
                           height: 26,
-                          color: const Color(0xFFE2E8F0),
+                          color: borderColor,
                         ),
                       ),
 
@@ -500,6 +515,9 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                           child: TextField(
                             controller: widget.controller,
                             focusNode: widget.focusNode,
+                            enabled: widget.enabled,
+                            autofillHints: widget.autofillHints,
+                            cursorColor: colors?.cursor,
                             keyboardType: TextInputType.number,
                             textAlignVertical: TextAlignVertical.center,
                             inputFormatters: [
@@ -511,12 +529,12 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                             style: GoogleFonts.inter(
                               fontSize: 13,
                               fontWeight: FontWeight.w400,
-                              color: const Color(0xFF0F172A),
+                              color: textColor,
                             ),
                             decoration: InputDecoration(
                               hintText: widget.hintText,
                               hintStyle: GoogleFonts.inter(
-                                color: const Color(0xFF94A3B8),
+                                color: hintColor,
                                 fontSize: 13,
                               ),
                               border: InputBorder.none,
@@ -541,10 +559,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                 padding: const EdgeInsets.only(top: 6, left: 4),
                 child: Text(
                   '${widget.controller.text.length} / ${_selectedCountry.maxLength} digits',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFF94A3B8),
-                  ),
+                  style: GoogleFonts.inter(fontSize: 12, color: hintColor),
                 ),
               )
             else if (field.hasError)
@@ -552,10 +567,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                 padding: const EdgeInsets.only(top: 6, left: 4),
                 child: Text(
                   field.errorText ?? '',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFFE85D5B),
-                  ),
+                  style: GoogleFonts.inter(fontSize: 12, color: errorColor),
                 ),
               ),
           ],

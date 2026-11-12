@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_scope.dart';
+import '../../widgets/pre_auth_button_style.dart';
 import '../login/login_error_message.dart';
 import '../signup/email_verification_screen.dart';
 import 'admin_portal.dart';
@@ -178,7 +179,11 @@ class _AdminEntryState extends State<AdminEntry> {
       children: [
         const Text('Check your connection and try again.'),
         const SizedBox(height: 20),
-        FilledButton(onPressed: _verify, child: const Text('Retry')),
+        FilledButton(
+          style: PreAuthButtonStyle.active(FilledButton.styleFrom()),
+          onPressed: _verify,
+          child: const Text('Retry'),
+        ),
         TextButton(
           onPressed: _signingOut ? null : _signOut,
           child: const Text('Sign out'),
@@ -310,6 +315,7 @@ class _AdminSignInState extends State<_AdminSignIn> {
       ],
       const SizedBox(height: 24),
       FilledButton(
+        style: PreAuthButtonStyle.active(FilledButton.styleFrom()),
         onPressed: _submitting ? null : _submit,
         child: Text(_submitting ? 'Signing in…' : 'Sign in'),
       ),

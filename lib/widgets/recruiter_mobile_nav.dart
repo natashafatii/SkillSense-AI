@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
 import 'recruiter_side_nav.dart';
@@ -102,12 +103,14 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
             ),
             child: Material(
               key: const Key('recruiter-mobile-subcategories'),
-              color: Colors.white,
+              color: context.themeSurface(Colors.white),
               elevation: 6,
               shadowColor: Colors.black.withValues(alpha: 0.12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(26),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                side: BorderSide(
+                  color: context.themeOutline(const Color(0xFFE2E8F0)),
+                ),
               ),
               clipBehavior: Clip.antiAlias,
               child: SizedBox(
@@ -153,7 +156,7 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
                     IconButton(
                       tooltip: 'Close subcategories',
                       onPressed: _close,
-                      color: const Color(0xFF475569),
+                      color: context.themeForeground(const Color(0xFF475569)),
                       icon: const Icon(Icons.close_rounded, size: 18),
                     ),
                   ],
@@ -183,9 +186,11 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
               key: const Key('recruiter-mobile-main-nav'),
               height: widget.height,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.themeSurface(Colors.white),
                 borderRadius: BorderRadius.circular(widget.radius),
-                border: Border.all(color: widget.borderColor),
+                border: Border.all(
+                  color: context.themeOutline(widget.borderColor),
+                ),
               ),
               child: Row(
                 children: [

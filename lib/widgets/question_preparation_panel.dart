@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../services/api_client.dart';
@@ -461,8 +462,8 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
         regenerate: canRegenerate ? _regenerate : null,
       );
     }
-    const ink = Color(0xFF17233B);
-    const muted = Color(0xFF64748B);
+    final ink = context.themeForeground(const Color(0xFF17233B));
+    final muted = context.themeForeground(const Color(0xFF64748B));
     const teal = Color(0xFF087F72);
     return Theme(
       data: ThemeData(
@@ -470,17 +471,19 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
         fontFamily: 'Inter',
         colorScheme: ColorScheme.fromSeed(
           seedColor: teal,
-          brightness: Brightness.light,
+          brightness: Theme.of(context).brightness,
         ),
       ),
       child: DefaultTextStyle.merge(
-        style: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: ink),
+        style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: ink),
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.themeSurface(Colors.white),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFE4EAF3)),
+            border: Border.all(
+              color: context.themeOutline(const Color(0xFFE4EAF3)),
+            ),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x060F172A),
@@ -501,7 +504,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE9F6F3),
+                          color: context.themeSurface(const Color(0xFFE9F6F3)),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
@@ -511,7 +514,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -583,12 +586,12 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                   if (_data?['revision'] != null)
                     Text(
                       'Revision ${_data!['revision']}',
-                      style: const TextStyle(fontSize: 12, color: muted),
+                      style: TextStyle(fontSize: 12, color: muted),
                     ),
                 ],
               ),
               const SizedBox(height: 10),
-              Text(label, style: const TextStyle(fontSize: 13, color: muted)),
+              Text(label, style: TextStyle(fontSize: 13, color: muted)),
               if (approved)
                 const Padding(
                   padding: EdgeInsets.only(top: 6),
@@ -598,7 +601,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                   ),
                 ),
               if (frozen)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(top: 6),
                   child: Text(
                     'Frozen for the scheduled interview',
@@ -611,9 +614,9 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     'Fallback reason: ${_data!['fallback_reason']}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: Color(0xFF9A6700),
+                      color: context.themeForeground(const Color(0xFF9A6700)),
                     ),
                   ),
                 ),
@@ -684,13 +687,13 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                   margin: const EdgeInsets.only(top: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF1F2),
+                    color: context.themeSurface(const Color(0xFFFFF1F2)),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     _error!,
-                    style: const TextStyle(
-                      color: Color(0xFFB42338),
+                    style: TextStyle(
+                      color: context.themeForeground(const Color(0xFFB42338)),
                       fontSize: 13,
                     ),
                   ),
@@ -715,18 +718,18 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: context.themeSurface(const Color(0xFFF8FAFC)),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     editable
                         ? 'No questions in this draft. Add a question to get started.'
                         : 'Your questions will appear here when preparation is complete.',
-                    style: const TextStyle(color: muted, height: 1.5),
+                    style: TextStyle(color: muted, height: 1.5),
                   ),
                 ),
               const SizedBox(height: 8),
-              const Divider(color: Color(0xFFE4EAF3)),
+              Divider(color: context.themeOutline(const Color(0xFFE4EAF3))),
               const SizedBox(height: 12),
               Text(
                 frozen
@@ -734,7 +737,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                     : approved
                     ? 'Adding or removing a question will require approval again.'
                     : 'Review every question, then approve this set to continue scheduling.',
-                style: const TextStyle(color: muted, fontSize: 12, height: 1.5),
+                style: TextStyle(color: muted, fontSize: 12, height: 1.5),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -840,9 +843,11 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
       key: ValueKey('question-${question['id']}'),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFCFDFE),
+        color: context.themeSurface(const Color(0xFFFCFDFE)),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE4EAF3)),
+        border: Border.all(
+          color: context.themeOutline(const Color(0xFFE4EAF3)),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -880,9 +885,9 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                     ),
                     Text(
                       'Source: ${question['source']}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFF718096),
+                        color: context.themeForeground(const Color(0xFF718096)),
                       ),
                     ),
                   ],
@@ -890,10 +895,10 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                 const SizedBox(height: 10),
                 Text(
                   '${question['text']}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     height: 1.6,
-                    color: Color(0xFF17233B),
+                    color: context.themeForeground(const Color(0xFF17233B)),
                   ),
                 ),
               ],
@@ -934,7 +939,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
               icon: const Icon(Icons.delete_outline_rounded, size: 19),
               color: const Color(0xFFB45060),
               style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFFFFF5F5),
+                backgroundColor: context.themeSurface(const Color(0xFFFFF5F5)),
               ),
             ),
           ],
@@ -974,11 +979,11 @@ class _AddQuestionDialogState extends State<_AddQuestionDialog> {
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFF087F72),
-        brightness: Brightness.light,
+        brightness: Theme.of(context).brightness,
       ),
     ),
     child: AlertDialog(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeSurface(Colors.white),
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       title: Text(
@@ -993,9 +998,12 @@ class _AddQuestionDialogState extends State<_AddQuestionDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Ask about a skill or experience you want to explore.',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: context.themeForeground(const Color(0xFF64748B)),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 DropdownButtonFormField<String>(

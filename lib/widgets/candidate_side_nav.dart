@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -336,9 +337,12 @@ class _CandidateSideNavState extends State<CandidateSideNav>
           width: targetWidth,
           height: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: const Border(
-              right: BorderSide(color: Color(0xFFE2E8F0), width: 1.0),
+            color: context.themeSurface(Colors.white),
+            border: Border(
+              right: BorderSide(
+                color: context.themeOutline(const Color(0xFFE2E8F0)),
+                width: 1.0,
+              ),
             ),
             boxShadow: [
               BoxShadow(
@@ -422,14 +426,16 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
+                      color: context.themeSurface(const Color(0xFFF1F5F9)),
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(
+                        color: context.themeOutline(const Color(0xFFE2E8F0)),
+                      ),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.chevron_left_rounded,
                       size: 16,
-                      color: Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                     ),
                   ),
                 ),
@@ -456,7 +462,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF0F172A),
+                  color: context.themeForeground(const Color(0xFF0F172A)),
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
                   height: 1.1,
@@ -467,7 +473,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF66748F),
+                  color: context.themeForeground(const Color(0xFF66748F)),
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.6,
@@ -542,7 +548,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                               width: 38,
                               height: 38,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE2F9F3),
+                                color: context.themeSurface(
+                                  const Color(0xFFE2F9F3),
+                                ),
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: const Color(0xFFA7F3D0),
@@ -551,7 +559,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                               child: CandidateAvatarImage(
                                 profile: profile,
                                 initialsStyle: GoogleFonts.spaceGrotesk(
-                                  color: const Color(0xFF047857),
+                                  color: context.themeForeground(
+                                    const Color(0xFF047857),
+                                  ),
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -601,7 +611,11 @@ class _CandidateSideNavState extends State<CandidateSideNav>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+          Divider(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+            height: 1,
+            thickness: 1,
+          ),
           const SizedBox(height: 10),
 
           // User Card Row
@@ -653,14 +667,18 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE2F9F3),
+                            color: context.themeSurface(
+                              const Color(0xFFE2F9F3),
+                            ),
                             shape: BoxShape.circle,
                             border: Border.all(color: const Color(0xFFA7F3D0)),
                           ),
                           child: CandidateAvatarImage(
                             profile: profile,
                             initialsStyle: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF047857),
+                              color: context.themeForeground(
+                                const Color(0xFF047857),
+                              ),
                               fontSize: 12.5,
                               fontWeight: FontWeight.bold,
                             ),
@@ -674,7 +692,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                               Text(
                                 displayName,
                                 style: GoogleFonts.spaceGrotesk(
-                                  color: const Color(0xFF0F172A),
+                                  color: context.themeForeground(
+                                    const Color(0xFF0F172A),
+                                  ),
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
                                   height: 1.1,
@@ -686,7 +706,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                                 Text(
                                   email,
                                   style: GoogleFonts.inter(
-                                    color: const Color(0xFF64748B),
+                                    color: context.themeForeground(
+                                      const Color(0xFF64748B),
+                                    ),
                                     fontSize: 10.5,
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -751,7 +773,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                       color: isParentActive
                           ? tealAccent.withValues(alpha: 0.12)
                           : (_hoveredIndex == index
-                                ? const Color(0xFFF1F5F9)
+                                ? context.themeSurface(const Color(0xFFF1F5F9))
                                 : Colors.transparent),
                       boxShadow: isParentActive
                           ? [
@@ -767,8 +789,8 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                       dest['icon'] as IconData,
                       size: 20,
                       color: isParentActive
-                          ? const Color(0xFF0F172A)
-                          : const Color(0xFF64748B),
+                          ? context.themeForeground(const Color(0xFF0F172A))
+                          : context.themeForeground(const Color(0xFF64748B)),
                     ),
                   ),
 
@@ -794,7 +816,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                         ),
                       ),
                     ),
-
                 ],
               ),
             ),
@@ -845,8 +866,10 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                           dest['icon'] as IconData,
                           size: 18,
                           color: isParentActive
-                              ? const Color(0xFF0F172A)
-                              : const Color(0xFF64748B),
+                              ? context.themeForeground(const Color(0xFF0F172A))
+                              : context.themeForeground(
+                                  const Color(0xFF64748B),
+                                ),
                         ),
                         if (badgeCount > 0)
                           Positioned(
@@ -868,7 +891,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                       child: Text(
                         dest['label'],
                         style: GoogleFonts.spaceGrotesk(
-                          color: const Color(0xFF0F172A),
+                          color: context.themeForeground(
+                            const Color(0xFF0F172A),
+                          ),
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.46,
@@ -880,7 +905,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                           ? Icons.keyboard_arrow_down_rounded
                           : Icons.keyboard_arrow_right_rounded,
                       size: 16,
-                      color: const Color(0xFF94A3B8),
+                      color: context.themeForeground(const Color(0xFF94A3B8)),
                     ),
                   ],
                 ),
@@ -932,8 +957,12 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                               _subItemIcons[subRoute],
                               size: 18,
                               color: isSubActive
-                                  ? const Color(0xFF0F172A)
-                                  : const Color(0xFF64748B),
+                                  ? context.themeForeground(
+                                      const Color(0xFF0F172A),
+                                    )
+                                  : context.themeForeground(
+                                      const Color(0xFF64748B),
+                                    ),
                             ),
                             const SizedBox(width: 8),
                             Flexible(
@@ -943,8 +972,12 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.inter(
                                   color: isSubActive
-                                      ? const Color(0xFF0F172A)
-                                      : const Color(0xFF64748B),
+                                      ? context.themeForeground(
+                                          const Color(0xFF0F172A),
+                                        )
+                                      : context.themeForeground(
+                                          const Color(0xFF64748B),
+                                        ),
                                   fontSize: 12.5,
                                   fontWeight: isSubActive
                                       ? FontWeight.bold

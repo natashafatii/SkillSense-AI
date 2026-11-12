@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../application_screening_screen.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -371,7 +372,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
         Offset.zero & overlay.size,
       ),
       constraints: const BoxConstraints(maxWidth: 360),
-      color: Colors.white,
+      color: context.themeSurface(Colors.white),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       items: activeJobs.isEmpty
           ? [
@@ -393,7 +394,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                       ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
                       : const EdgeInsets.symmetric(vertical: 5),
                   decoration: BoxDecoration(
-                    color: current ? const Color(0xFFEAF0FF) : null,
+                    color: current
+                        ? context.themeSurface(const Color(0xFFEAF0FF))
+                        : null,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -409,7 +412,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.spaceGrotesk(
-                                color: const Color(0xFF17233B),
+                                color: context.themeForeground(
+                                  const Color(0xFF17233B),
+                                ),
                                 fontSize: 13,
                                 fontWeight: current
                                     ? FontWeight.w700
@@ -422,7 +427,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
-                                color: const Color(0xFF8290AB),
+                                color: context.themeForeground(
+                                  const Color(0xFF8290AB),
+                                ),
                                 fontSize: 11,
                               ),
                             ),
@@ -484,24 +491,27 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.spaceGrotesk(
-                  color: const Color(0xFF17233B),
+                  color: context.themeForeground(const Color(0xFF17233B)),
                   fontSize: 25,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ),
             const SizedBox(width: 5),
-            const Icon(
+            Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 20,
-              color: Color(0xFF17233B),
+              color: context.themeForeground(const Color(0xFF17233B)),
             ),
           ],
         ),
       ),
       Text(
         '${_applications.length} applicants',
-        style: GoogleFonts.inter(color: const Color(0xFF8290AB), fontSize: 12),
+        style: GoogleFonts.inter(
+          color: context.themeForeground(const Color(0xFF8290AB)),
+          fontSize: 12,
+        ),
       ),
     ],
   );
@@ -546,17 +556,20 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
     final hasJobs = _jobs.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: Stack(
         children: [
           // Background gradient
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+                  colors: [
+                    context.themeSurface(const Color(0xFFF8FAFC)),
+                    context.themeSurface(const Color(0xFFF1F5F9)),
+                  ],
                 ),
               ),
             ),
@@ -564,7 +577,13 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
 
           // Grid pattern overlay (Web Only)
           if (!compact)
-            Positioned.fill(child: CustomPaint(painter: GridPainter())),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: GridPainter(
+                  color: context.themeOutline(const Color(0xFFE2E8F0)),
+                ),
+              ),
+            ),
 
           // Main workspace content
           SafeArea(
@@ -646,15 +665,17 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                     width: compact ? 54 : 64,
                     height: compact ? 54 : 64,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
+                      color: context.themeSurface(const Color(0xFFF1F5F9)),
                       borderRadius: BorderRadius.circular(compact ? 17 : 20),
-                      border: Border.all(color: const Color(0xFFE3EAF4)),
+                      border: Border.all(
+                        color: context.themeOutline(const Color(0xFFE3EAF4)),
+                      ),
                     ),
                     child: Center(
                       child: Icon(
                         Icons.view_kanban_outlined,
                         size: compact ? 20 : 24,
-                        color: const Color(0xFF8190A8),
+                        color: context.themeForeground(const Color(0xFF8190A8)),
                       ),
                     ),
                   ),
@@ -665,7 +686,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                     compact ? 'No candidates yet' : 'No candidates in pipeline',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF17233B),
+                      color: context.themeForeground(const Color(0xFF17233B)),
                       fontSize: compact ? 15 : 18,
                       fontWeight: FontWeight.w700,
                       letterSpacing: compact ? -0.02 : -0.025,
@@ -682,7 +703,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                           : 'Create a role or post a job listing to start receiving applicants and tracking them across interview stages.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF8190A8),
+                        color: context.themeForeground(const Color(0xFF8190A8)),
                         fontSize: compact ? 11 : 12.5,
                         height: 1.65,
                       ),
@@ -694,7 +715,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                   Container(
                     height: compact ? 38 : 40,
                     decoration: BoxDecoration(
-                      color: RecruiterButtonStyle.blue,
+                      gradient: RecruiterButtonStyle.primaryGradient,
                       borderRadius: BorderRadius.circular(11),
                       boxShadow: [
                         BoxShadow(
@@ -741,7 +762,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                       'Active job listings automatically populate the applicant pipeline',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
+                        color: context.themeForeground(const Color(0xFF94A3B8)),
                         fontSize: 10.5,
                       ),
                     ),
@@ -828,7 +849,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF27344C),
+                    color: context.themeForeground(const Color(0xFF27344C)),
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -841,10 +862,12 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
           child: apps.isEmpty
               ? Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.5),
+                    color: context
+                        .themeSurface(Colors.white)
+                        .withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: const Color(0xFFE2E8F0),
+                      color: context.themeOutline(const Color(0xFFE2E8F0)),
                       strokeAlign: BorderSide.strokeAlignInside,
                     ),
                   ),
@@ -852,7 +875,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                     child: Text(
                       'No candidates yet',
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
+                        color: context.themeForeground(const Color(0xFF94A3B8)),
                         fontSize: 11,
                       ),
                     ),
@@ -884,7 +907,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
             child: Text(
               '+ $more more',
               style: GoogleFonts.inter(
-                color: const Color(0xFF7D8BA6),
+                color: context.themeForeground(const Color(0xFF7D8BA6)),
                 fontSize: 12,
               ),
             ),
@@ -901,7 +924,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
     final date = (scored ? (app.updatedAt ?? app.createdAt) : app.createdAt)
         .toLocal();
     return Material(
-      color: Colors.white,
+      color: context.themeSurface(Colors.white),
       borderRadius: BorderRadius.circular(20),
       elevation: 0,
       child: InkWell(
@@ -911,7 +934,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFE9EDF5)),
+            border: Border.all(
+              color: context.themeOutline(const Color(0xFFE9EDF5)),
+            ),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0A1C315B),
@@ -927,7 +952,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor: const Color(0xFFE8EEFF),
+                    backgroundColor: context.themeSurface(
+                      const Color(0xFFE8EEFF),
+                    ),
                     child: ApplicantAvatarImage(
                       imageUrl: app.candidateProfileImageUrl,
                       initials: initials,
@@ -950,14 +977,18 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: const Color(0xFF27344C),
+                            color: context.themeForeground(
+                              const Color(0xFF27344C),
+                            ),
                           ),
                         ),
                         Text(
                           '${scored ? 'Scored' : 'Applied'} ${_timeAgo(date)}',
                           style: GoogleFonts.inter(
                             fontSize: 10,
-                            color: const Color(0xFF8290AB),
+                            color: context.themeForeground(
+                              const Color(0xFF8290AB),
+                            ),
                           ),
                         ),
                       ],
@@ -995,7 +1026,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
             child: CircularProgressIndicator(
               value: (score / 100).clamp(0.0, 1.0),
               strokeWidth: 3,
-              backgroundColor: const Color(0xFFE5E9F1),
+              backgroundColor: context.themeSurface(const Color(0xFFE5E9F1)),
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
@@ -1004,7 +1035,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
             style: GoogleFonts.inter(
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFF27344C),
+              color: context.themeForeground(const Color(0xFF27344C)),
             ),
           ),
         ],

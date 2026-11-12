@@ -1,5 +1,8 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
+
 import '../../../models/application.dart';
+import '../../../widgets/candidate_button_style.dart';
 
 /// Candidate-facing progress follows the application's current workflow stage.
 /// Screening recommendations can predate a recruiter's decision.
@@ -68,9 +71,11 @@ class CandidateApplicationSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: context.themeOutline(const Color(0xFFE2E8F0)),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,7 +104,9 @@ class CandidateApplicationSummary extends StatelessWidget {
                 ApplicationStatus.decision,
               }.contains(app.status))
                 FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: teal),
+                  style: CandidateButtonStyle.primaryColors(
+                    FilledButton.styleFrom(backgroundColor: teal),
+                  ),
                   onPressed: () =>
                       Navigator.of(context).pushNamed('/candidate/interviews'),
                   icon: const Icon(Icons.event_outlined),

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
 /// Role-themed capsule used only by the mobile subcategory menus.
@@ -23,12 +24,14 @@ class MobileSubcategoryPill extends StatelessWidget {
       style: TextButton.styleFrom(
         backgroundColor: selected
             ? accent.withValues(alpha: 0.09)
-            : Colors.white,
-        foregroundColor: selected ? accent : const Color(0xFF64748B),
+            : context.themeSurface(Colors.white),
+        foregroundColor: selected
+            ? accent
+            : context.themeForeground(const Color(0xFF64748B)),
         side: BorderSide(
           color: selected
               ? accent.withValues(alpha: 0.55)
-              : const Color(0xFFE2E8F0),
+              : context.themeOutline(const Color(0xFFE2E8F0)),
         ),
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
