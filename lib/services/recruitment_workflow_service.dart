@@ -2,11 +2,13 @@ import 'package:dio/dio.dart';
 import '../models/api_contract.dart';
 import '../models/application.dart';
 import '../models/interview.dart';
+import '../models/interview_analysis_contract.dart';
 import '../models/paginated_response.dart';
 import '../models/recruitment_evidence.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
 import 'auth_service.dart';
+import 'interview_analysis_service.dart';
 import 'session_scope.dart';
 
 class RecruitmentReview {
@@ -62,6 +64,32 @@ class RecruitmentWorkflowService {
        _role = role ?? AuthService.getUserRole;
   final Future<Dio> Function() _client;
   final String Function() _role;
+
+  Future<InterviewRecording> interviewRecording(
+    String interviewId, {
+    CancelToken? cancelToken,
+  }) async => InterviewRecording.fromJson(
+    await request(
+      '/interviews/${requireInterviewIdentity(interviewId)}/voice-session/',
+      cancelToken: cancelToken,
+    ),
+  );
+
+  Future<RecruiterReportResult> interviewBehavior(
+    InterviewSessionIdentity identity, {
+    CancelToken? cancelToken,
+  }) async {
+    if (_role() != 'RECRUITER') throw StateError('Recruiter access required.');
+    final generation = SessionScope.generation;
+    final result = await InterviewAnalysisService(
+      client: _client,
+    ).recruiterReport(identity, cancelToken: cancelToken);
+    if (generation != SessionScope.generation || _role() != 'RECRUITER') {
+      throw StateError('Session changed.');
+    }
+    return result;
+  }
+
   Future<Json> request(
     String path, {
     Json? data,
@@ -168,6 +196,7 @@ class RecruitmentWorkflowService {
         ),
         request(
           '/interviews/${interview.id}/feedback-review/',
+          query: {'contract': 'feedback-v2'},
           cancelToken: cancelToken,
         ),
       ],
@@ -365,10 +394,11 @@ class RecruitmentWorkflowService {
     String jobId,
     int page, {
     CancelToken? cancelToken,
+    int? pageSize,
   }) async => PaginatedResponse.fromJson(
     await request(
       '/jobs/$jobId/ranking/',
-      query: {'page': page},
+      query: {'page': page, if (pageSize != null) 'page_size': pageSize},
       cancelToken: cancelToken,
     ),
     RankingRow.fromJson,

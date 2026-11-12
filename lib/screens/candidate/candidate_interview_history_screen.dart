@@ -85,21 +85,28 @@ class _CandidateInterviewHistoryScreenState
     body: Column(
       children: [
         const RecruiterTopBar(pageTitle: 'Interview history', candidate: true),
-        Align(
-          alignment: Alignment.centerRight,
-          child: IconButton(
-            tooltip: 'Refresh interview history',
-            onPressed: _loading ? null : _load,
-            icon: const Icon(Icons.refresh),
+        if (_loading || _error != null || _items.isNotEmpty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              tooltip: 'Refresh interview history',
+              onPressed: _loading ? null : _load,
+              icon: const Icon(Icons.refresh),
+            ),
           ),
-        ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
               ? Center(child: Text(_error!))
               : _items.isEmpty
-              ? const Center(child: Text('No completed interviews yet.'))
+              ? const Center(
+                  child: Text(
+                    'No completed interviews yet.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF64748B)),
+                  ),
+                )
               : ListView(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                   children: [

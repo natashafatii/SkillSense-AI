@@ -4,7 +4,6 @@ import '../../widgets/recruiter_mobile_nav.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../constants/app_colors.dart';
 import '../../services/scoring_model_service.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter;
 
@@ -29,151 +28,82 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final TextEditingController _searchController = TextEditingController();
-
-  // Model and workspace state
-  bool _loading = true;
-  int _scoredCandidatesCount = 0;
-  bool _isDefaultModel = true;
+  static const _defaults = [45, 30, 25];
+  List<int> _weights = List.of(_defaults);
+  ScoringModelStatus? _model;
+  bool _loading = false;
   bool _reviewingWeights = false;
 
-  // Sliders State (must always sum to 100)
-  double _techWeight = 45.0;
-  double _commWeight = 30.0;
-  double _fitWeight = 25.0;
-
-  // Band thresholds: No (<40), Maybe (40-54), Yes (55-69), Strong Yes (70-84), Exceptional (85+)
-  double _thresholdNo = 40.0;
-  double _thresholdMaybe = 55.0;
-  double _thresholdYes = 70.0;
-  double _thresholdStrong = 85.0;
-
-  // Model metrics for live view
-  double _auc = 0.89;
-  double _drift = 0.012;
-  String _modelVersion = 'v2.4';
-
-  static const Color _tx = Color(0xFF0F172A);
-  static const Color _tx2 = Color(0xFF475569);
-  static const Color _tx3 = Color(0xFF64748B);
-  static const Color _tx4 = Color(0xFF94A3B8);
-  static const Color _edge2 = Color(0xFFE2E8F0);
-  static const Color _field = Color(0xFFF1F5F9);
+  static const _tx = Color(0xFF1B2740);
+  static const _tx2 = Color(0xFF475569);
+  static const _tx3 = Color(0xFF64748B);
+  static const _tx4 = Color(0xFF8290AD);
+  static const _edge2 = Color(0xFFE7EBF2);
+  static const _field = Color(0xFFF1F5F9);
+  static const _blue = Color(0xFF3E6FF0);
+  static const _teal = Color(0xFF10B58A);
+  static const _amber = Color(0xFFEBA738);
+  static const _track = Color(0xFFE6E8EC);
 
   @override
   void initState() {
     super.initState();
-    _initModelData();
+    if (widget.loadModelStatus != null) _loadModel();
   }
 
-  Future<void> _initModelData() async {
-    if (widget.scoredCount != null || widget.isDefault != null) {
-      setState(() {
-        _scoredCandidatesCount = widget.scoredCount ?? 0;
-        _isDefaultModel = widget.isDefault ?? true;
-        _loading = false;
-      });
-      return;
-    }
-
+  Future<void> _loadModel() async {
+    _loading = true;
     try {
-      // Use defaults until the scoring-model GET endpoint exists.
-      final status = widget.loadModelStatus == null
-          ? const ScoringModelStatus()
-          : await widget.loadModelStatus!();
+      final model = await widget.loadModelStatus!();
       if (!mounted) return;
+      final weights = [model.techWeight, model.commWeight, model.fitWeight];
       setState(() {
-        _scoredCandidatesCount = status.scoredCandidatesCount;
-        _isDefaultModel = status.isDefault;
-        _techWeight = status.techWeight;
-        _commWeight = status.commWeight;
-        _fitWeight = status.fitWeight;
-        _auc = status.auc;
-        _drift = status.drift;
-        _modelVersion = status.version;
-        _loading = false;
+        _model = model;
+        final sum = weights.fold(0.0, (total, weight) => total + weight);
+        if (sum.isFinite && sum > 0 && weights.every((weight) => weight >= 0)) {
+          final technical = (100 * weights[0] / sum).round();
+          final behavioral = (100 * weights[1] / sum).round().clamp(
+            0,
+            100 - technical,
+          );
+          _weights = [technical, behavioral, 100 - technical - behavioral];
+        }
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _scoredCandidatesCount = 0;
-        _isDefaultModel = true;
-        _loading = false;
-      });
+      // The reference layout stays available if model metadata cannot be loaded.
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   bool get _showEmptyState {
+    if (_reviewingWeights || _loading) return false;
     if (widget.forceEmptyState == true) return true;
-    if (_reviewingWeights) return false;
-    if (_loading) return false;
-    // Empty state triggers only when workspace has < 20 scored candidates OR model is on defaults
-    return _scoredCandidatesCount < 20 || _isDefaultModel;
+    final scoredCount = widget.scoredCount ?? _model?.scoredCandidatesCount;
+    final isDefault = widget.isDefault ?? _model?.isDefault;
+    return (scoredCount != null && scoredCount < 20) || isDefault == true;
   }
 
-  // Single rebalancing slider group logic
-  void _updateWeight(String target, double newValue) {
+  void _updateWeight(int index, double value) {
+    final target = value.round();
+    final first = (index + 1) % _weights.length;
+    final second = (index + 2) % _weights.length;
+    final previousRemainder = _weights[first] + _weights[second];
+    final remainder = 100 - target;
+    final share = previousRemainder == 0
+        ? .5
+        : _weights[first] / previousRemainder;
     setState(() {
-      newValue = newValue.clamp(0.0, 100.0);
-      double diff = 0.0;
-
-      if (target == 'tech') {
-        diff = newValue - _techWeight;
-        _techWeight = newValue;
-        final sumOthers = _commWeight + _fitWeight;
-        if (sumOthers > 0) {
-          _commWeight -= diff * (_commWeight / sumOthers);
-          _fitWeight -= diff * (_fitWeight / sumOthers);
-        } else {
-          _commWeight -= diff / 2;
-          _fitWeight -= diff / 2;
-        }
-      } else if (target == 'comm') {
-        diff = newValue - _commWeight;
-        _commWeight = newValue;
-        final sumOthers = _techWeight + _fitWeight;
-        if (sumOthers > 0) {
-          _techWeight -= diff * (_techWeight / sumOthers);
-          _fitWeight -= diff * (_fitWeight / sumOthers);
-        } else {
-          _techWeight -= diff / 2;
-          _fitWeight -= diff / 2;
-        }
-      } else if (target == 'fit') {
-        diff = newValue - _fitWeight;
-        _fitWeight = newValue;
-        final sumOthers = _techWeight + _commWeight;
-        if (sumOthers > 0) {
-          _techWeight -= diff * (_techWeight / sumOthers);
-          _commWeight -= diff * (_commWeight / sumOthers);
-        } else {
-          _techWeight -= diff / 2;
-          _commWeight -= diff / 2;
-        }
-      }
-
-      // Clamp all strictly to 0..100
-      _techWeight = _techWeight.clamp(0.0, 100.0);
-      _commWeight = _commWeight.clamp(0.0, 100.0);
-      _fitWeight = _fitWeight.clamp(0.0, 100.0);
-
-      // Force sum to equal exactly 100
-      final currentSum = _techWeight + _commWeight + _fitWeight;
-      final error = 100.0 - currentSum;
-      if (error != 0.0) {
-        if (target == 'tech') {
-          _commWeight += error;
-        } else {
-          _techWeight += error;
-        }
-      }
+      _weights[index] = target;
+      _weights[first] = (remainder * share).round();
+      _weights[second] = remainder - _weights[first];
     });
+  }
+
+  void _unavailable(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -192,7 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+                  colors: [Color(0xFFF2F5FE), Color(0xFFF5F7FC)],
                 ),
               ),
             ),
@@ -207,26 +137,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             bottom: false,
             child: Column(
               children: [
-                // Top Bar (Web: 58px / Mobile: 56px)
-                const RecruiterTopBar(
-                  pageTitle: 'Scoring model',
-                  breadcrumbSegments: ['Scoring model'],
+                SizedBox(
+                  height: isMobile ? 58 : 49,
+                  child: RecruiterTopBar(
+                    pageTitle: 'Scoring model',
+                    mobileTitle: 'Scoring',
+                    showWorkspacePrefix: false,
+                    showTrailingButton: !isMobile,
+                    breadcrumbSegments: const ['Scoring model'],
+                  ),
                 ),
 
                 // Center area: Empty State or Live RD-10 layout
                 Expanded(
                   child: MobileEdgeShadowWrapper(
-                    child: _showEmptyState
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _showEmptyState
                         ? _buildEmptyState(isMobile: isMobile)
-                        : SingleChildScrollView(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isMobile ? 16 : 24,
-                              vertical: isMobile ? 12 : 16,
-                            ),
-                            child: isMobile
-                                ? _buildMobileLayout()
-                                : _buildWebLayout(),
-                          ),
+                        : _dashboard(isMobile),
                   ),
                 ),
               ],
@@ -322,14 +251,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
               child: ElevatedButton(
-                style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 22 : 26),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(11),
+                style: RecruiterButtonStyle.primary(
+                  ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 22 : 26,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(11),
+                    ),
                   ),
-                )),
+                ),
                 onPressed: () {
                   setState(() {
                     _reviewingWeights = true;
@@ -365,763 +298,508 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── WEB LAYOUT (LIVE RD-10 CONFIGURATION VIEW) ──────────────────────────────
-  Widget _buildWebLayout() {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1080),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _dashboard(bool isMobile) => SingleChildScrollView(
+    padding: EdgeInsets.fromLTRB(
+      16,
+      isMobile ? 16 : 21,
+      isMobile ? 16 : 20,
+      isMobile ? 110 : 60,
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final weights = _weightsCard();
+        final modelInfo = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeaderArea(),
-            if (_reviewingWeights &&
-                (_scoredCandidatesCount < 20 || _isDefaultModel))
-              _buildReviewBanner(),
-            _buildConfigurationForm(isMobile: false),
-            const SizedBox(height: 24),
-            _buildShapImportanceCard(isMobile: false),
-            const SizedBox(height: 24),
-            _buildModelCard(isMobile: false),
-            const SizedBox(height: 60),
+            _importanceCard(),
+            const SizedBox(height: 13),
+            _modelCard(),
           ],
-        ),
-      ),
-    );
-  }
-
-  // ── MOBILE LAYOUT (LIVE RD-10 CONFIGURATION VIEW) ───────────────────────────
-  Widget _buildMobileLayout() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_reviewingWeights &&
-            (_scoredCandidatesCount < 20 || _isDefaultModel))
-          _buildReviewBanner(),
-        _buildConfigurationForm(isMobile: true),
-        const SizedBox(height: 16),
-        _buildShapImportanceCard(isMobile: true),
-        const SizedBox(height: 16),
-        _buildModelCard(isMobile: true),
-        const SizedBox(height: 110), // Safe space above bottom dock
-      ],
-    );
-  }
-
-  Widget _buildReviewBanner() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEEF2FF),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFC7D2FE)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.tune_rounded, color: Color(0xFF4338CA), size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Reviewing default model configuration. Changes apply to newly generated reports only.',
-              style: GoogleFonts.inter(
-                color: const Color(0xFF3730A3),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+        );
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1160),
+            child: constraints.maxWidth < 660
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [weights, const SizedBox(height: 13), modelInfo],
+                  )
+                : ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 344),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(flex: 7, child: weights),
+                          const SizedBox(width: 13),
+                          Expanded(flex: 5, child: modelInfo),
+                        ],
+                      ),
+                    ),
+                  ),
           ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _reviewingWeights = false;
-              });
-            },
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              '‹ Back to overview',
-              style: GoogleFonts.inter(
-                color: const Color(0xFF4338CA),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        );
+      },
+    ),
+  );
 
-  // ── CONFIGURATION FORM CARD ────────────────────────────────────────────────
-  Widget _buildConfigurationForm({required bool isMobile}) {
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 18 : 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _edge2, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+  Widget _weightsCard() => _surface(
+    'Score weights',
+    accent: true,
+    badge: _badge('XGBOOST V$_version'),
+    action: TextButton(
+      onPressed: () => setState(() => _weights = List.of(_defaults)),
+      style: TextButton.styleFrom(
+        foregroundColor: _tx4,
+        minimumSize: Size.zero,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: _text(10, weight: FontWeight.w500),
       ),
+      child: const Text('Reset defaults'),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
+          _weightRow('Technical', _blue, 0),
+          _weightRow('Behavioral', _teal, 1),
+          _weightRow('Communication', _amber, 2),
+          const SizedBox(height: 6),
+          Text(
+            'Weights must total 100%. Changes apply to future interviews only — historical scores are never rewritten.',
+            style: _text(10, color: _tx4, weight: FontWeight.w500, height: 1.4),
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 1, thickness: 1, color: _edge2),
+          const SizedBox(height: 10),
+          Text('RECOMMENDATION BANDS', style: _eyebrow()),
+          const SizedBox(height: 8),
+          _recommendationBands(),
+          const SizedBox(height: 13),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Scoring preview',
-                style: GoogleFonts.spaceGrotesk(
-                  color: _tx,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+              Expanded(
+                child: _action(
+                  'Preview on last cohort',
+                  primary: false,
+                  onPressed: () => _unavailable(
+                    'Cohort preview is unavailable. No cohort data was loaded.',
+                  ),
                 ),
               ),
-              _buildVersionBadge(
-                _isDefaultModel ? 'DEFAULT WEIGHTS' : 'CUSTOM WEIGHTS',
+              const SizedBox(width: 10),
+              Expanded(
+                child: _action(
+                  'Save weights',
+                  primary: true,
+                  onPressed: () => _unavailable(
+                    'Saving weights is unavailable. Your changes are only a preview.',
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Local preview only. Changes are not saved to the server.',
-          ),
-          const SizedBox(height: 12),
-          // Technical Weight Slider
-          _buildRebalancingSliderRow(
-            label: 'TECHNICAL SKILLS',
-            value: _techWeight,
-            color: Colors.blue,
-            isMobile: isMobile,
-            onChanged: (val) => _updateWeight('tech', val),
-          ),
-          const SizedBox(height: 16),
+        ],
+      ),
+    ),
+  );
 
-          // Behavioral Weight Slider
-          _buildRebalancingSliderRow(
-            label: 'BEHAVIORAL FIT',
-            value: _commWeight,
-            color: AppColors.dashboardTeal,
-            isMobile: isMobile,
-            onChanged: (val) => _updateWeight('comm', val),
-          ),
-          const SizedBox(height: 16),
-
-          // Role Fit Weight Slider
-          _buildRebalancingSliderRow(
-            label: 'ROLE FIT',
-            value: _fitWeight,
-            color: AppColors.dashboardAmber,
-            isMobile: isMobile,
-            onChanged: (val) => _updateWeight('fit', val),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Forward-only rule notice
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _edge2),
+  Widget _weightRow(String label, Color color, int index) => SizedBox(
+    height: 25,
+    child: Row(
+      children: [
+        SizedBox(
+          width: 97,
+          child: Text(label.toUpperCase(), style: _eyebrow()),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 8,
+              trackShape: const RoundedRectSliderTrackShape(),
+              activeTrackColor: color,
+              inactiveTrackColor: _track,
+              thumbShape: _ScoringThumb(color),
+              overlayColor: color.withValues(alpha: .13),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 13),
+              showValueIndicator: ShowValueIndicator.never,
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded, size: 16, color: _tx3),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Changes apply to new candidate reports only. Previously generated scores remain untouched.',
-                    style: GoogleFonts.inter(
-                      color: _tx3,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
+            child: Semantics(
+              label: label,
+              child: Slider(
+                padding: const EdgeInsets.symmetric(horizontal: 1),
+                value: _weights[index].toDouble(),
+                max: 100,
+                semanticFormatterCallback: (value) =>
+                    '${value.round()} percent',
+                onChanged: (value) => _updateWeight(index, value),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 45,
+          child: Text(
+            '${_weights[index]}%',
+            textAlign: TextAlign.right,
+            style: _text(11, family: 'JetBrains Mono', weight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _recommendationBands() {
+    const segments = [
+      (40, 'NO <40', Color(0xFFEC5C5A)),
+      (15, '40–54', Color(0xFFEBA738)),
+      (15, '55–69', Color(0xFF3E6FF0)),
+      (15, '70–84', Color(0xFF10B58A)),
+      (15, '85+', Color(0xFF0B8967)),
+    ];
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Row(
+        children: [
+          for (final (width, label, color) in segments)
+            Expanded(
+              flex: width,
+              child: ColoredBox(
+                color: color,
+                child: SizedBox(
+                  height: 24,
+                  child: Center(
+                    child: Text(
+                      label,
+                      style: _text(
+                        8,
+                        family: 'JetBrains Mono',
+                        color: Colors.white,
+                        weight: FontWeight.w700,
+                      ),
                     ),
                   ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _action(
+    String label, {
+    required bool primary,
+    required VoidCallback onPressed,
+  }) {
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(10),
+    );
+    final style = _text(
+      11,
+      weight: primary ? FontWeight.w700 : FontWeight.w500,
+    );
+    return primary
+        ? DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4B75F4), Color(0xFF3152E4)],
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x40315BE5),
+                  blurRadius: 20,
+                  offset: Offset(0, 9),
                 ),
               ],
             ),
-          ),
-
-          const SizedBox(height: 32),
-          const Divider(color: Color(0xFFF1F5F9), height: 1),
-          const SizedBox(height: 20),
-
-          // Recommendation Band Threshold Controls
-          Text(
-            'Recommendation Thresholds',
-            style: GoogleFonts.spaceGrotesk(
-              color: _tx,
-              fontSize: 14.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Configure scoring cutoff points for AI candidate recommendations.',
-            style: GoogleFonts.inter(color: _tx3, fontSize: 12),
-          ),
-          const SizedBox(height: 20),
-
-          _buildThresholdControlSlider(
-            label: 'No recommendation limit',
-            value: _thresholdNo,
-            onChanged: (val) {
-              setState(() {
-                _thresholdNo = val.clamp(0.0, _thresholdMaybe - 1.0);
-              });
-            },
-          ),
-          _buildThresholdControlSlider(
-            label: 'Maybe recommendation limit',
-            value: _thresholdMaybe,
-            onChanged: (val) {
-              setState(() {
-                _thresholdMaybe = val.clamp(
-                  _thresholdNo + 1.0,
-                  _thresholdYes - 1.0,
-                );
-              });
-            },
-          ),
-          _buildThresholdControlSlider(
-            label: 'Yes recommendation limit',
-            value: _thresholdYes,
-            onChanged: (val) {
-              setState(() {
-                _thresholdYes = val.clamp(
-                  _thresholdMaybe + 1.0,
-                  _thresholdStrong - 1.0,
-                );
-              });
-            },
-          ),
-          _buildThresholdControlSlider(
-            label: 'Strong Yes recommendation limit',
-            value: _thresholdStrong,
-            onChanged: (val) {
-              setState(() {
-                _thresholdStrong = val.clamp(_thresholdYes + 1.0, 99.0);
-              });
-            },
-          ),
-
-          const SizedBox(height: 24),
-
-          // Live Band Proportional Strip
-          Text(
-            'RECOMMENDATION BANDS',
-            style: GoogleFonts.inter(
-              color: const Color(0xFF94A3B8),
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _buildBandProportionalStrip(isMobile: isMobile),
-
-          const SizedBox(height: 28),
-
-          // Actions
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: () {
-                  setState(() {
-                    _techWeight = 45.0;
-                    _commWeight = 30.0;
-                    _fitWeight = 25.0;
-                    _thresholdNo = 40.0;
-                    _thresholdMaybe = 55.0;
-                    _thresholdYes = 70.0;
-                    _thresholdStrong = 85.0;
-                  });
-                },
-                child: Text(
-                  'Reset defaults',
-                  style: GoogleFonts.inter(
-                    color: _tx3,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+            child: TextButton(
+              onPressed: onPressed,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 31),
+                shape: shape,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: style,
               ),
-            ],
-          ),
-        ],
-      ),
-    );
+              child: Text(label, textAlign: TextAlign.center),
+            ),
+          )
+        : OutlinedButton(
+            onPressed: onPressed,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _tx2,
+              minimumSize: const Size(0, 31),
+              side: const BorderSide(color: _edge2),
+              shape: shape,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: style,
+            ),
+            child: Text(label, textAlign: TextAlign.center),
+          );
   }
 
-  // ── SHAP FEATURE IMPORTANCE CARD ───────────────────────────────────────────
-  Widget _buildShapImportanceCard({required bool isMobile}) {
-    final features = [
-      {
-        'label': 'Technical Interview Performance',
-        'share': 0.38,
-        'color': const Color(0xFF4D7BFA),
-      },
-      {
-        'label': 'Resume & Experience Match',
-        'share': 0.28,
-        'color': AppColors.dashboardTeal,
-      },
-      {
-        'label': 'Communication & Clarity',
-        'share': 0.20,
-        'color': AppColors.dashboardAmber,
-      },
-      {
-        'label': 'Problem Solving & Rigor',
-        'share': 0.14,
-        'color': const Color(0xFF8B5CF6),
-      },
+  Widget _importanceCard() {
+    const features = [
+      ('Skills overlap', .31, _blue),
+      ('Answer depth', .24, _blue),
+      ('Gaze stability', .14, _teal),
+      ('Speech pace', .11, _amber),
+      ('Filler rate', .08, _amber),
     ];
-
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 18 : 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _edge2, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return _surface(
+      'Global feature importance',
+      badge: Tooltip(message: 'Reference SHAP values', child: _badge('SHAP')),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Column(
+          children: [
+            for (final (label, value, color) in features)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
                   children: [
-                    Text(
-                      'Feature Importance (SHAP)',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: _tx,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                    SizedBox(
+                      width: 70,
+                      child: Text(label.toUpperCase(), style: _eyebrow()),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: value / .35,
+                          color: color,
+                          backgroundColor: _track,
+                          minHeight: 4,
+                          borderRadius: BorderRadius.circular(4),
+                          trackGap: 0,
+                          semanticsLabel: label,
+                          semanticsValue: value.toStringAsFixed(2),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Relative predictive influence of scoring features on candidate match rating.',
-                      style: GoogleFonts.inter(color: _tx3, fontSize: 12),
+                    SizedBox(
+                      width: 42,
+                      child: Text(
+                        value.toStringAsFixed(2).substring(1),
+                        textAlign: TextAlign.right,
+                        style: _text(10, family: 'JetBrains Mono', color: _tx2),
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              _buildVersionBadge('EXPLAINABILITY'),
-            ],
-          ),
-          const SizedBox(height: 20),
-          for (final f in features) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        f['label'] as String,
-                        style: GoogleFonts.inter(
-                          color: _tx,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        '+${((f['share'] as double) * 100).toInt()}%',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: _tx,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: f['share'] as double,
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        f['color'] as Color,
-                      ),
-                      minHeight: 7,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ── MODEL CARD (AUC, DRIFT, VERSION) ───────────────────────────────────────
-  Widget _buildModelCard({required bool isMobile}) {
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 18 : 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _edge2, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Active Model Card',
-                style: GoogleFonts.spaceGrotesk(
-                  color: _tx,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              _buildVersionBadge(_modelVersion),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            children: [
-              _buildModelMetricTile(
-                label: 'ROC-AUC SCORE',
-                value: _auc.toStringAsFixed(2),
-                sub: 'Discrimination quality',
-                color: const Color(0xFF16A34A),
-              ),
-              _buildModelMetricTile(
-                label: 'FEATURE DRIFT',
-                value: '< ${(_drift * 100).toStringAsFixed(1)}%',
-                sub: 'Stable distribution',
-                color: const Color(0xFF2563EB),
-              ),
-              _buildModelMetricTile(
-                label: 'CALIBRATION',
-                value: 'Platt Scaled',
-                sub: 'Probabilistic alignment',
-                color: const Color(0xFF7C3AED),
-              ),
-              _buildModelMetricTile(
-                label: 'WORKSPACE REPORTS',
-                value: '$_scoredCandidatesCount',
-                sub: _scoredCandidatesCount >= 20
-                    ? 'Tuned to dataset'
-                    : 'Running on defaults',
-                color: _scoredCandidatesCount >= 20
-                    ? const Color(0xFF0D9488)
-                    : _tx3,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModelMetricTile({
-    required String label,
-    required String value,
-    required String sub,
-    required Color color,
-  }) {
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _edge2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: _tx3,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: GoogleFonts.spaceGrotesk(
-              color: color,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(sub, style: GoogleFonts.inter(color: _tx4, fontSize: 11)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRebalancingSliderRow({
-    required String label,
-    required double value,
-    required Color color,
-    required bool isMobile,
-    required ValueChanged<double> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                color: const Color(0xFF475569),
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              '${value.toStringAsFixed(0)}%',
-              style: GoogleFonts.jetBrainsMono(
-                color: _tx,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
           ],
         ),
-        SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: color,
-            inactiveTrackColor: const Color(0xFFF1F5F9),
-            thumbColor: Colors.white,
-            overlayColor: color.withValues(alpha: 0.12),
-            trackHeight: 6,
-            thumbShape: RoundSliderThumbShape(
-              enabledThumbRadius: isMobile ? 12 : 8,
-              elevation: 4,
+      ),
+    );
+  }
+
+  String get _version =>
+      _model?.version.replaceFirst(RegExp('^[vV]'), '') ?? '2.3';
+
+  Widget _modelCard() {
+    final model = _model;
+    return _surface(
+      'Model card',
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 11),
+        child: Tooltip(
+          message: model == null
+              ? 'Reference model metadata'
+              : 'Model metadata',
+          child: Text.rich(
+            TextSpan(
+              children: [
+                const TextSpan(text: 'Version '),
+                TextSpan(text: _version, style: _metricStyle),
+                if (model == null)
+                  const TextSpan(text: ' · trained 02 May on 1,840 interviews'),
+                const TextSpan(text: ' · AUC '),
+                TextSpan(
+                  text: model?.auc.toStringAsFixed(2) ?? '0.87',
+                  style: _metricStyle,
+                ),
+                const TextSpan(text: ' · calibration drift '),
+                TextSpan(
+                  text: model == null || model.drift == 0
+                      ? 'none'
+                      : '${(model.drift * 100).toStringAsFixed(1)}%',
+                  style: _text(10, color: _teal, weight: FontWeight.w700),
+                ),
+                const TextSpan(
+                  text:
+                      '\nEvery candidate report stores the model version that scored it.',
+                ),
+              ],
+            ),
+            style: _text(
+              10,
+              color: _tx4,
+              weight: FontWeight.w500,
+              height: 1.85,
             ),
           ),
-          child: Slider(
-            value: value,
-            min: 0.0,
-            max: 100.0,
-            onChanged: onChanged,
-          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _surface(
+    String title, {
+    required Widget child,
+    Widget? badge,
+    Widget? action,
+    bool accent = false,
+  }) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: accent ? const Color(0xFFFCFDFE) : const Color(0xFFFAFBFD),
+      borderRadius: BorderRadius.circular(17),
+      boxShadow: [
+        BoxShadow(
+          color: accent ? const Color(0x403F62D7) : const Color(0x140F172A),
+          blurRadius: accent ? 30 : 17,
+          offset: Offset(0, accent ? 14 : 8),
         ),
       ],
-    );
-  }
-
-  Widget _buildThresholdControlSlider({
-    required String label,
-    required double value,
-    required ValueChanged<double> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(17),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            flex: 3,
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                color: const Color(0xFF475569),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: SliderTheme(
-              data: const SliderThemeData(
-                activeTrackColor: Color(0xFFCBD5E1),
-                inactiveTrackColor: Color(0xFFF1F5F9),
-                thumbColor: Colors.white,
-                trackHeight: 4,
-                thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
-              ),
-              child: Slider(
-                value: value,
-                min: 0.0,
-                max: 100.0,
-                onChanged: onChanged,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            value.toStringAsFixed(0),
-            style: GoogleFonts.jetBrainsMono(
-              color: _tx,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBandProportionalStrip({required bool isMobile}) {
-    final double shareNo = _thresholdNo;
-    final double shareMaybe = _thresholdMaybe - _thresholdNo;
-    final double shareYes = _thresholdYes - _thresholdMaybe;
-    final double shareStrong = _thresholdStrong - _thresholdYes;
-    final double shareExceptional = 100.0 - _thresholdStrong;
-
-    final List<Map<String, dynamic>> segments = [
-      {
-        'label': 'NO <${_thresholdNo.toInt()}',
-        'share': shareNo,
-        'color': AppColors.dashboardRed,
-      },
-      {
-        'label': 'MAYBE',
-        'share': shareMaybe,
-        'color': AppColors.dashboardAmber,
-      },
-      {'label': 'YES', 'share': shareYes, 'color': AppColors.dashboardBlue},
-      {
-        'label': 'STRONG YES',
-        'share': shareStrong,
-        'color': AppColors.dashboardTeal,
-      },
-      {
-        'label': 'EXCEPTIONAL',
-        'share': shareExceptional,
-        'color': const Color(0xFF22C55E),
-      },
-    ];
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        height: isMobile ? 32 : 38,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
-        child: Row(
-          children: segments.map((seg) {
-            final double share = seg['share'];
-            final Color color = seg['color'];
-            final String label = seg['label'];
-
-            return Expanded(
-              flex: (share * 100).toInt().clamp(1, 10000),
-              child: Container(
-                color: color,
-                alignment: Alignment.center,
-                child: Text(
-                  share > 8 ? label : '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.jetBrainsMono(
-                    color: Colors.white,
-                    fontSize: isMobile ? 9.5 : 10.5,
-                    fontWeight: FontWeight.w800,
-                  ),
+          if (accent)
+            Container(
+              height: 2,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    _blue,
+                    Color(0xFF8176F5),
+                    Colors.transparent,
+                  ],
                 ),
               ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVersionBadge(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: const Color(0xFFDBEAFE)),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.jetBrainsMono(
-          color: AppColors.dashboardBlue,
-          fontSize: 9.5,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  // ── WEB HEADER AREA (FOR LIVE CONFIGURATION VIEW) ──────────────────────────
-  Widget _buildHeaderArea() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Scoring model',
-            style: GoogleFonts.spaceGrotesk(
-              color: _tx,
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.5,
+            ),
+          Container(
+            constraints: BoxConstraints(minHeight: accent ? 40 : 42),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: _edge2)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          title,
+                          style: _text(12, weight: FontWeight.w700),
+                        ),
+                      ),
+                      if (badge != null) ...[const SizedBox(width: 8), badge],
+                    ],
+                  ),
+                ),
+                if (action != null) ...[const SizedBox(width: 8), action],
+              ],
             ),
           ),
+          child,
         ],
       ),
-    );
-  }
+    ),
+  );
 
-  // ── WEB TOP BAR (58px height, 1px bottom border --edge2) ───────────────────
-  // ── MOBILE HEADER (Small logomark 26px + "Scoring" title) ───────────────────
-  // ── MOBILE FLOATING BOTTOM DOCK (6 icons, Analytics active glowing indigo) ───
+  Widget _badge(String label) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    decoration: BoxDecoration(
+      color: const Color(0xFFE3EBFF),
+      border: Border.all(color: const Color(0xFFCCD9FF)),
+      borderRadius: BorderRadius.circular(5),
+    ),
+    child: Text(
+      label,
+      style: _eyebrow(color: const Color(0xFF3855C8), size: 8),
+    ),
+  );
+
+  static TextStyle get _metricStyle =>
+      _text(10, family: 'JetBrains Mono', weight: FontWeight.w700);
+
+  static TextStyle _eyebrow({Color color = _tx4, double size = 9}) => _text(
+    size,
+    color: color,
+    family: 'Space Grotesk',
+    weight: FontWeight.w700,
+    spacing: 1,
+  );
+
+  static TextStyle _text(
+    double size, {
+    String family = 'Inter',
+    Color color = _tx,
+    FontWeight weight = FontWeight.w400,
+    double? height,
+    double? spacing,
+  }) => TextStyle(
+    fontFamily: family,
+    color: color,
+    fontWeight: weight,
+    fontSize: size,
+    height: height,
+    letterSpacing: spacing,
+  );
+
   Widget _buildMobileBottomDock() => const RecruiterMobileNav(
     currentRoute: '/recruiter/scoring-model',
     key: Key('scoring-mobile-dock'),
   );
+}
+
+class _ScoringThumb extends SliderComponentShape {
+  const _ScoringThumb(this.color);
+  final Color color;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      const Size.fromRadius(7);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final canvas = context.canvas;
+    final outline = Path()..addOval(Rect.fromCircle(center: center, radius: 7));
+    canvas.drawShadow(outline, const Color(0x880F172A), 3, false);
+    canvas.drawCircle(center, 7, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      center,
+      6.5,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6,
+    );
+  }
 }

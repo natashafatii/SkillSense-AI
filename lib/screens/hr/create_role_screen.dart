@@ -2724,16 +2724,29 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         if (mounted) Navigator.of(context).pop(saved);
         return;
       }
-      if (publish) {
-        final published = await JobService.publishJob(saved.id, payload);
-        if (!published.isActive) {
-          throw StateError('The job API did not confirm publication.');
-        }
+      final published = publish
+          ? await JobService.publishJob(saved.id, payload)
+          : null;
+      if (published != null && !published.isActive) {
+        throw StateError('The job API did not confirm publication.');
       }
       if (!mounted) return;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_draftKey);
-      if (mounted) _toast(publish ? 'Role published' : 'Draft saved');
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_draftKey);
+      } catch (_) {
+        // A local cleanup failure cannot undo a confirmed publication.
+        if (published == null) rethrow;
+      }
+      if (!mounted) return;
+      if (published == null) {
+        _toast('Draft saved');
+        return;
+      }
+      _toast('Role published');
+      Navigator.of(context).pushReplacementNamed(
+        '/recruiter/jobs/${Uri.encodeComponent(published.id)}',
+      );
     } catch (error) {
       if (!mounted) return;
       if (error is ApiException && error.statusCode == 401) {

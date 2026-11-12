@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'recruiter_mobile_nav.dart';
 import 'recruiter_side_nav.dart';
 import 'recruiter_button_style.dart';
 
@@ -24,6 +25,9 @@ class RecruiterScaffold extends StatelessWidget {
       return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         body: SafeArea(bottom: false, child: themedBody),
+        bottomNavigationBar: currentRoute == '/recruiter/profile'
+            ? RecruiterMobileNav(currentRoute: currentRoute)
+            : null,
       );
     }
     return Scaffold(

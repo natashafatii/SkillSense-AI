@@ -40,9 +40,11 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
   static const _tabLabels = ['Overview', 'Pipeline', 'Interviews', 'Workspace'];
 
   int? get _active {
-    final route = widget.currentRoute == '/recruiter/job-detail'
-        ? '/recruiter/job-listings'
-        : widget.currentRoute;
+    final route = switch (widget.currentRoute) {
+      '/recruiter/job-detail' => '/recruiter/job-listings',
+      '/recruiter/profile' => '/recruiter/analytics',
+      final route => route,
+    };
     for (var index = 0; index < recruiterSections.length; index++) {
       if (recruiterSections[index].items.any((item) => item.route == route)) {
         return index;

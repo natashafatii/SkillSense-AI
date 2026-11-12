@@ -1,5 +1,6 @@
 import 'api_contract.dart';
 import 'candidate_feedback.dart';
+import 'interview.dart';
 
 typedef Json = Map<String, dynamic>;
 Json object(Object? value) => Map<String, dynamic>.from(value as Map);
@@ -15,6 +16,38 @@ double? bounded(Object? value, double maximum) {
     throw const FormatException('Evidence number outside its contract range.');
   }
   return number;
+}
+
+class InterviewRecording {
+  final String? sessionId, callId;
+  final DateTime? startedAt, endedAt;
+  final Uri? uri;
+
+  InterviewRecording.fromJson(Json json)
+    : sessionId = json['interview_session_id'] as String?,
+      callId = json['retell_session_id'] as String?,
+      startedAt = ApiValue.instant(json['started_at']),
+      endedAt = ApiValue.instant(json['audio_ended_at'] ?? json['ended_at']),
+      uri = _recordingUri(json['recording_url']);
+
+  Duration? get duration {
+    final start = startedAt;
+    final end = endedAt;
+    return start != null && end != null && end.isAfter(start)
+        ? end.difference(start)
+        : null;
+  }
+
+  static Uri? _recordingUri(Object? value) {
+    final uri = value is String ? Uri.tryParse(value) : null;
+    return uri != null &&
+            uri.scheme == 'https' &&
+            uri.hasAuthority &&
+            uri.host.isNotEmpty &&
+            uri.userInfo.isEmpty
+        ? uri
+        : null;
+  }
 }
 
 class TranscriptTurn {
@@ -146,6 +179,7 @@ class EvaluationRevision {
   final DateTime? publishedAt, nextAttemptAt;
   final bool feedbackReleased;
   final List<AnswerResult> answers;
+  final List<InterviewQuestion> questions;
   final AnswerExtraction? extraction;
   EvaluationRevision.fromJson(Json j)
     : id = j['id'].toString(),
@@ -170,6 +204,7 @@ class EvaluationRevision {
           : ApiValue.integer(j['run_number']),
       feedbackReleased = j['feedback_released'] == true,
       answers = records(j['answers'], AnswerResult.fromJson),
+      questions = records(j['questions'], InterviewQuestion.fromJson),
       extraction = j['extraction'] == null
           ? null
           : AnswerExtraction.fromJson(object(j['extraction']));
@@ -348,7 +383,7 @@ class FeedbackReviewRevision {
     : content =
           j['status'] == 'READY' &&
               j['content'] != null &&
-              j['contract_version'] == 'FEEDBACK_V1'
+              FeedbackContent.supportedContracts.contains(j['contract_version'])
           ? FeedbackContent.fromJson({
               ...object(j['content']),
               if (j['amendments'] is Map && (j['amendments'] as Map).isNotEmpty)
@@ -372,6 +407,8 @@ class FeedbackReviewRevision {
 class RankingRow {
   final String applicationId, candidateId, name, email, status;
   final double? finalScore;
+  final double? technical, behavioral, communication;
+  final String? topDriver;
   final int? rubricVersion;
   RankingRow.fromJson(Json j)
     : applicationId = j['id'].toString(),
@@ -380,5 +417,9 @@ class RankingRow {
       email = j['candidate_email']?.toString() ?? '',
       status = j['score_status']?.toString() ?? 'UNKNOWN',
       finalScore = bounded(j['final_score'], 100),
+      technical = bounded(j['technical_score'], 10),
+      behavioral = bounded(j['behavioral_score'], 10),
+      communication = bounded(j['communication_score'], 10),
+      topDriver = j['top_driver'] as String?,
       rubricVersion = _optionalInt(j['rubric_version']);
 }

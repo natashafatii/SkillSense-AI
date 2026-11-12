@@ -1,6 +1,6 @@
 import 'api_contract.dart';
 
-/// Candidate-safe feedback-v1 projection. Never parse recruiter evaluations here.
+/// Candidate-safe feedback projection.
 enum FeedbackState {
   unknown,
   pending,
@@ -60,13 +60,26 @@ class FeedbackFinding {
       text = _text(data[field]);
 }
 
+class FeedbackQuestion {
+  final String text, category;
+  final double percentage;
+
+  FeedbackQuestion.fromJson(Map<String, dynamic> data)
+    : text = _text(data['text']),
+      category = _text(data['category']),
+      percentage = _number(data['percentage'], 100);
+}
+
 class FeedbackContent {
+  static const supportedContracts = {'FEEDBACK_V1', 'FEEDBACK_V2'};
+
   final String summary;
   final int assessedQuestions, totalQuestions;
   final double? performance;
   final double coverage;
   final List<FeedbackDimension> dimensions;
   final List<FeedbackFinding> strengths, gaps, suggestions;
+  final List<FeedbackQuestion> questions;
   final List<String> limitations, publicSuggestions;
   final String? publicSummary;
 
@@ -97,6 +110,12 @@ class FeedbackContent {
         data['improvement_suggestions'],
         (v) => FeedbackFinding.fromJson(_object(v), 'action'),
       ),
+      questions = data['evaluated_questions'] == null
+          ? const []
+          : _items(
+              data['evaluated_questions'],
+              (value) => FeedbackQuestion.fromJson(_object(value)),
+            ),
       limitations = _items(data['limitations'], _text),
       publicSummary = guidance?['summary'] == null
           ? null
@@ -139,12 +158,19 @@ class CandidateFeedbackReport extends FeedbackContent {
             : _object(data['recruiter_public_guidance']),
       );
   factory CandidateFeedbackReport.fromJson(Map<String, dynamic> data) {
-    if (data['contract_version'] != 'FEEDBACK_V1') {
+    if (!FeedbackContent.supportedContracts.contains(
+      data['contract_version'],
+    )) {
       throw const FormatException('Unsupported feedback report contract.');
     }
     final row = CandidateFeedbackReport._(data);
     if (row.revision < 1 || row.assessedQuestions > row.totalQuestions) {
       throw const FormatException('Invalid feedback revision or coverage.');
+    }
+    if (data['contract_version'] == 'FEEDBACK_V2' &&
+        (data['evaluated_questions'] is! List ||
+            row.questions.length != row.assessedQuestions)) {
+      throw const FormatException('Invalid evaluated question coverage.');
     }
     return row;
   }

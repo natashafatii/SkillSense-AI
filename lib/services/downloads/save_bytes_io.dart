@@ -2,9 +2,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 
-Future<void> saveBytes(Uint8List bytes, String filename) async {
+Future<void> saveBytes(
+  Uint8List bytes,
+  String filename, {
+  String dialogTitle = 'Save resume',
+}) async {
   final path = await FilePicker.platform.saveFile(
-    dialogTitle: 'Save resume',
+    dialogTitle: dialogTitle,
     fileName: filename,
     bytes: bytes,
   );

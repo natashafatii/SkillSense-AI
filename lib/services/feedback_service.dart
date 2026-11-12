@@ -32,7 +32,10 @@ class FeedbackService {
   static Future<CandidateFeedback> detail(String id, {Dio? client}) async {
     try {
       final dio = client ?? await ApiClient.getInstance();
-      final response = await dio.get('/feedback/${Uri.encodeComponent(id)}/');
+      final response = await dio.get(
+        '/feedback/${Uri.encodeComponent(id)}/',
+        queryParameters: {'contract': 'feedback-v2'},
+      );
       return CandidateFeedback.fromJson(
         Map<String, dynamic>.from(response.data as Map),
       );
@@ -51,7 +54,7 @@ class FeedbackService {
         '/feedback/',
         queryParameters: {
           'candidate': 'me',
-          'contract': 'feedback-v1',
+          'contract': 'feedback-v2',
           'page': page,
         },
       );

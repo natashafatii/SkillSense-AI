@@ -5,6 +5,7 @@ import '../../services/recruitment_review_controller.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/feedback_review_panel.dart';
+import '../../widgets/recruiter_interview_dashboard.dart';
 
 String percent(double? value, {bool ratio = false}) => value == null
     ? 'Unavailable'
@@ -19,10 +20,12 @@ class RecruitmentReviewScreen extends StatefulWidget {
     required this.applicationId,
     this.interviewId,
     this.service,
+    this.showInterviewDashboard = false,
   });
   final String applicationId;
   final String? interviewId;
   final RecruitmentWorkflowService? service;
+  final bool showInterviewDashboard;
   @override
   State<RecruitmentReviewScreen> createState() =>
       _RecruitmentReviewScreenState();
@@ -35,6 +38,13 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       overrideReason = TextEditingController();
   String? transcriptId, compareTranscriptId, evaluationId, compareEvaluationId;
   DateTime? scheduledAt;
+  int _dashboardRefresh = 0;
+
+  void _refresh() {
+    if (widget.showInterviewDashboard) setState(() => _dashboardRefresh++);
+    controller.refresh();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -198,6 +208,8 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           builder: (_) => RecruitmentReviewScreen(
             applicationId: widget.applicationId,
             interviewId: controller.interviewId,
+            service: widget.service,
+            showInterviewDashboard: widget.showInterviewDashboard,
           ),
         ),
       );
@@ -705,22 +717,40 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
   @override
   Widget build(BuildContext context) {
     final r = controller.review;
+    final dashboard = widget.showInterviewDashboard;
+    final refreshAction = IconButton(
+      tooltip: 'Refresh review',
+      onPressed: controller.busy || controller.loading ? null : _refresh,
+      icon: const Icon(Icons.refresh),
+    );
     return Scaffold(
       backgroundColor: const Color(0xfff5f7fc),
-      appBar: AppBar(
-        title: const Text('Recruiter evidence and decisions'),
-        actions: [
-          IconButton(
-            onPressed: controller.busy || controller.loading
-                ? null
-                : () => controller.refresh(),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
+      appBar: dashboard
+          ? null
+          : AppBar(
+              title: const Text('Recruiter evidence and decisions'),
+              actions: [refreshAction],
+            ),
       body: Column(
         children: [
-          const RecruiterTopBar(pageTitle: 'Evidence review'),
+          if (dashboard)
+            SafeArea(
+              bottom: false,
+              child: Row(
+                children: [
+                  const BackButton(color: Color(0xFF475569)),
+                  const Expanded(
+                    child: RecruiterTopBar(
+                      pageTitle: 'Interview review',
+                      showWorkspacePrefix: false,
+                    ),
+                  ),
+                  refreshAction,
+                ],
+              ),
+            )
+          else
+            const RecruiterTopBar(pageTitle: 'Evidence review'),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(20),
@@ -752,6 +782,15 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                     'Retry permitted after ${localTime(controller.retryAt)}',
                   ),
                 if (r != null) ...[
+                  if (dashboard && r.interview != null) ...[
+                    RecruiterInterviewDashboard(
+                      key: ValueKey(r.interview!.id),
+                      review: r,
+                      service: controller.service,
+                      refreshVersion: _dashboardRefresh,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   section('Application and attempts', [
                     line(
                       '${r.application.candidateName ?? r.application.candidateEmail} · ${r.application.jobTitle}\nStage ${r.application.rawStatus} · Version ${r.application.version}',

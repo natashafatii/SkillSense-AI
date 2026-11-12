@@ -2,7 +2,11 @@ import 'dart:js_interop';
 import 'dart:typed_data';
 import 'package:web/web.dart' as web;
 
-Future<void> saveBytes(Uint8List bytes, String filename) async {
+Future<void> saveBytes(
+  Uint8List bytes,
+  String filename, {
+  String dialogTitle = 'Save resume',
+}) async {
   final blob = web.Blob(
     [bytes.toJS].toJS,
     web.BlobPropertyBag(type: 'application/octet-stream'),

@@ -35,6 +35,11 @@ class FeedbackContentView extends StatelessWidget {
         for (final f in c.gaps) Text('• ${f.text}'),
         if (c.suggestions.isNotEmpty) heading('Practice suggestions'),
         for (final f in c.suggestions) Text('• ${f.text}'),
+        if (c.questions.isNotEmpty) heading('Question by question'),
+        for (final q in c.questions)
+          Text(
+            '${q.category} · ${q.text} · ${q.percentage.toStringAsFixed(1)}%',
+          ),
         if (c.publicSummary != null || c.publicSuggestions.isNotEmpty)
           heading('Recruiter guidance'),
         if (c.publicSummary != null) Text(c.publicSummary!),
