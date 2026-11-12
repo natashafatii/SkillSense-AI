@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -227,7 +228,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     final isWeb = MediaQuery.of(context).size.width >= 900;
 
     return Scaffold(
-      backgroundColor: isWeb ? const Color(0xFFF8FAFC) : Colors.white,
+      backgroundColor: isWeb
+          ? context.themeCanvas(const Color(0xFFF8FAFC))
+          : context.themeCanvas(Colors.white),
       body: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: Center(
@@ -237,7 +240,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
               constraints: const BoxConstraints(maxWidth: 440),
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.themeSurface(Colors.white),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: isWeb
                     ? [
@@ -299,7 +302,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     text: TextSpan(
                       style: GoogleFonts.publicSans(
                         fontSize: 14,
-                        color: const Color(0xFF6B7280),
+                        color: context.themeForeground(const Color(0xFF6B7280)),
                         height: 1.5,
                       ),
                       children: [
@@ -344,22 +347,30 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                             style: GoogleFonts.publicSans(
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
-                              color: const Color(0xFF1A1A2E),
+                              color: context.themeForeground(
+                                const Color(0xFF1A1A2E),
+                              ),
                             ),
                             decoration: InputDecoration(
                               counterText: '',
                               filled: true,
-                              fillColor: const Color(0xFFF3F4F6),
+                              fillColor: context.themeSurface(
+                                const Color(0xFFF3F4F6),
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE5E7EB),
+                                borderSide: BorderSide(
+                                  color: context.themeOutline(
+                                    const Color(0xFFE5E7EB),
+                                  ),
                                 ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE5E7EB),
+                                borderSide: BorderSide(
+                                  color: context.themeOutline(
+                                    const Color(0xFFE5E7EB),
+                                  ),
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
@@ -389,7 +400,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEE2E2),
+                        color: context.themeSurface(const Color(0xFFFEE2E2)),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(

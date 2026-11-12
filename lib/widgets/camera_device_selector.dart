@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
 import '../services/media/interview_media_controller.dart';
@@ -49,8 +50,12 @@ class _CameraDeviceSelectorState extends State<CameraDeviceSelector> {
     final devices = List.of(media.adapter.cameras);
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    final ink = dark ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A);
-    final border = dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+    final ink = dark
+        ? const Color(0xFFF1F5F9)
+        : context.themeForeground(const Color(0xFF0F172A));
+    final border = dark
+        ? const Color(0xFF334155)
+        : context.themeOutline(const Color(0xFFE2E8F0));
     final selected = devices
         .where((d) => d.id == media.adapter.selectedCameraId)
         .firstOrNull;
@@ -63,7 +68,7 @@ class _CameraDeviceSelectorState extends State<CameraDeviceSelector> {
         consumeOutsideTap: true,
         style: MenuStyle(
           backgroundColor: WidgetStatePropertyAll(
-            dark ? const Color(0xFF172132) : Colors.white,
+            dark ? const Color(0xFF172132) : context.themeSurface(Colors.white),
           ),
           minimumSize: WidgetStatePropertyAll(Size(constraints.maxWidth, 0)),
           maximumSize: WidgetStatePropertyAll(Size(constraints.maxWidth, 240)),
@@ -128,7 +133,10 @@ class _CameraDeviceSelectorState extends State<CameraDeviceSelector> {
                       ),
                     ),
                   ),
-                  const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    color: context.themeForeground(const Color(0xFF64748B)),
+                  ),
                 ],
               ),
             ),

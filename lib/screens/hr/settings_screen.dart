@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
@@ -112,17 +113,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bool isMobile = screenWidth < 900;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: Stack(
         children: [
           // ── BASE GRADIENT ──────────────────────────────────────────────────
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFFF2F5FE), Color(0xFFF5F7FC)],
+                  colors: [
+                    context.themeSurface(const Color(0xFFF2F5FE)),
+                    context.themeSurface(const Color(0xFFF5F7FC)),
+                  ],
                 ),
               ),
             ),
@@ -130,7 +134,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── GRID PATTERN OVERLAY (Web Only) ─────────────────────────────────
           if (!isMobile)
-            Positioned.fill(child: CustomPaint(painter: GridPainter())),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: GridPainter(
+                  color: context.themeOutline(const Color(0xFFE2E8F0)),
+                ),
+              ),
+            ),
 
           // ── MAIN WORKSPACE CONTENT ──────────────────────────────────────────
           SafeArea(
@@ -188,15 +198,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: isMobile ? 54 : 64,
               height: isMobile ? 54 : 64,
               decoration: BoxDecoration(
-                color: _field,
+                color: context.themeSurface(_field),
                 borderRadius: BorderRadius.circular(isMobile ? 17 : 20),
-                border: Border.all(color: _edge2, width: 1),
+                border: Border.all(
+                  color: context.themeOutline(_edge2),
+                  width: 1,
+                ),
               ),
               child: Center(
                 child: Icon(
                   Icons.contrast_rounded,
                   size: isMobile ? 20 : 24,
-                  color: _tx2,
+                  color: context.themeForeground(_tx2),
                 ),
               ),
             ),
@@ -209,7 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : 'Using the default scoring model',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
-                color: _tx,
+                color: context.themeForeground(_tx),
                 fontSize: isMobile ? 15 : 18,
                 fontWeight: FontWeight.w700,
                 letterSpacing: isMobile ? -0.03 * 15 : -0.025 * 18,
@@ -226,7 +239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     : 'Weights start balanced across skills, experience and interview performance. You can tune them once you have a few scored candidates.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
-                  color: _tx3,
+                  color: context.themeForeground(_tx3),
                   fontSize: isMobile ? 11 : 12.5,
                   fontWeight: FontWeight.w400,
                   height: 1.65,
@@ -239,7 +252,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               height: isMobile ? 38 : 40,
               decoration: BoxDecoration(
-                color: RecruiterButtonStyle.blue,
+                gradient: RecruiterButtonStyle.primaryGradient,
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
@@ -286,7 +299,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Changes apply to new reports only',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
-                  color: _tx4,
+                  color: context.themeForeground(_tx4),
                   fontSize: 10.5,
                   fontWeight: FontWeight.w400,
                 ),
@@ -350,7 +363,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     action: TextButton(
       onPressed: () => setState(() => _weights = List.of(_defaults)),
       style: TextButton.styleFrom(
-        foregroundColor: _tx4,
+        foregroundColor: context.themeForeground(_tx4),
         minimumSize: Size.zero,
         padding: const EdgeInsets.symmetric(vertical: 8),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -373,7 +386,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: _text(10, color: _tx4, weight: FontWeight.w500, height: 1.4),
           ),
           const SizedBox(height: 10),
-          const Divider(height: 1, thickness: 1, color: _edge2),
+          Divider(height: 1, thickness: 1, color: context.themeOutline(_edge2)),
           const SizedBox(height: 10),
           Text('RECOMMENDATION BANDS', style: _eyebrow()),
           const SizedBox(height: 8),
@@ -421,9 +434,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             data: SliderThemeData(
               trackHeight: 8,
               trackShape: const RoundedRectSliderTrackShape(),
-              activeTrackColor: color,
-              inactiveTrackColor: _track,
-              thumbShape: _ScoringThumb(color),
+              activeTrackColor: context.themeForeground(color),
+              inactiveTrackColor: context.themeChartTrack(_track),
+              thumbShape: _ScoringThumb(context.themeForeground(color)),
               overlayColor: color.withValues(alpha: .13),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 13),
               showValueIndicator: ShowValueIndicator.never,
@@ -478,7 +491,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: _text(
                         8,
                         family: 'JetBrains Mono',
-                        color: Colors.white,
+                        color: context.themeOnFill(Colors.white, color),
                         weight: FontWeight.w700,
                       ),
                     ),
@@ -507,8 +520,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4B75F4), Color(0xFF3152E4)],
+              gradient: LinearGradient(
+                colors: context.isDarkTheme
+                    ? const [Color(0xFF3A59C8), Color(0xFF3152E4)]
+                    : const [Color(0xFF4B75F4), Color(0xFF3152E4)],
               ),
               boxShadow: const [
                 BoxShadow(
@@ -533,9 +548,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : OutlinedButton(
             onPressed: onPressed,
             style: OutlinedButton.styleFrom(
-              foregroundColor: _tx2,
+              foregroundColor: context.themeForeground(_tx2),
               minimumSize: const Size(0, 31),
-              side: const BorderSide(color: _edge2),
+              side: BorderSide(color: context.themeOutline(_edge2)),
               shape: shape,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               textStyle: style,
@@ -574,8 +589,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
                           value: value / .35,
-                          color: color,
-                          backgroundColor: _track,
+                          color: context.themeForeground(color),
+                          backgroundColor: context.themeChartTrack(_track),
                           minHeight: 4,
                           borderRadius: BorderRadius.circular(4),
                           trackGap: 0,
@@ -659,7 +674,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool accent = false,
   }) => DecoratedBox(
     decoration: BoxDecoration(
-      color: accent ? const Color(0xFFFCFDFE) : const Color(0xFFFAFBFD),
+      color: accent
+          ? context.themeSurface(const Color(0xFFFCFDFE))
+          : context.themeSurface(const Color(0xFFFAFBFD)),
       borderRadius: BorderRadius.circular(17),
       boxShadow: [
         BoxShadow(
@@ -692,8 +709,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Container(
             constraints: BoxConstraints(minHeight: accent ? 40 : 42),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: _edge2)),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: context.themeOutline(_edge2)),
+              ),
             ),
             child: Row(
               children: [
@@ -723,8 +742,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _badge(String label) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
     decoration: BoxDecoration(
-      color: const Color(0xFFE3EBFF),
-      border: Border.all(color: const Color(0xFFCCD9FF)),
+      color: context.themeSurface(const Color(0xFFE3EBFF)),
+      border: Border.all(color: context.themeOutline(const Color(0xFFCCD9FF))),
       borderRadius: BorderRadius.circular(5),
     ),
     child: Text(
@@ -733,10 +752,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ),
   );
 
-  static TextStyle get _metricStyle =>
+  TextStyle get _metricStyle =>
       _text(10, family: 'JetBrains Mono', weight: FontWeight.w700);
 
-  static TextStyle _eyebrow({Color color = _tx4, double size = 9}) => _text(
+  TextStyle _eyebrow({Color color = _tx4, double size = 9}) => _text(
     size,
     color: color,
     family: 'Space Grotesk',
@@ -744,7 +763,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     spacing: 1,
   );
 
-  static TextStyle _text(
+  TextStyle _text(
     double size, {
     String family = 'Inter',
     Color color = _tx,
@@ -753,7 +772,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     double? spacing,
   }) => TextStyle(
     fontFamily: family,
-    color: color,
+    color: color == Colors.black || color == Colors.white
+        ? color
+        : context.themeForeground(color),
     fontWeight: weight,
     fontSize: size,
     height: height,

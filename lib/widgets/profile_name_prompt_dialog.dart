@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
@@ -55,7 +56,7 @@ class _ProfileNamePromptDialogState extends State<ProfileNamePromptDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeSurface(Colors.white),
       child: Container(
         width: 400,
         padding: const EdgeInsets.all(24),
@@ -70,7 +71,7 @@ class _ProfileNamePromptDialogState extends State<ProfileNamePromptDialog> {
                 style: GoogleFonts.spaceGrotesk(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
+                  color: context.themeForeground(AppColors.textDark),
                 ),
               ),
               const SizedBox(height: 8),
@@ -78,7 +79,7 @@ class _ProfileNamePromptDialogState extends State<ProfileNamePromptDialog> {
                 'Please enter your name to continue.',
                 style: GoogleFonts.publicSans(
                   fontSize: 14,
-                  color: AppColors.textGrey,
+                  color: context.themeForeground(AppColors.textGrey),
                 ),
               ),
               const SizedBox(height: 24),
@@ -127,7 +128,9 @@ class _ProfileNamePromptDialogState extends State<ProfileNamePromptDialog> {
                         : () => Navigator.of(context).pop(),
                     child: Text(
                       'Skip for now',
-                      style: GoogleFonts.publicSans(color: AppColors.textGrey),
+                      style: GoogleFonts.publicSans(
+                        color: context.themeForeground(AppColors.textGrey),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
@@ -26,7 +27,6 @@ class CandidateResumeManagementScreen extends StatefulWidget {
 
 class _CandidateResumeManagementScreenState
     extends State<CandidateResumeManagementScreen> {
-
   // Right-panel list loading state
   bool _isLoadingList = true;
   String? _listError;
@@ -42,10 +42,19 @@ class _CandidateResumeManagementScreenState
   bool _parseCompleted = false;
   bool _isFailed = false;
   String _failureErrorMessage = '';
+  String? _statusCheckMessage;
   String _stagedFilename = '';
   String _stagedFilesize = '';
   String? _stagedResumeId;
   int _parsingElapsedSeconds = 0;
+
+  bool get _canUpload =>
+      _hasStagedFile &&
+      !_isUploading &&
+      !_isParsing &&
+      !_parseCompleted &&
+      !_isFailed &&
+      _statusCheckMessage == null;
 
   // Parsed Response Data (from API — no hardcoded values)
   Map<String, dynamic>? _stagedExtracted;
@@ -94,7 +103,7 @@ class _CandidateResumeManagementScreenState
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: context.themeSurface(Colors.white),
         title: Text(
           'Delete this resume?',
           style: GoogleFonts.inter(fontWeight: FontWeight.bold),
@@ -106,7 +115,10 @@ class _CandidateResumeManagementScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+            style: CandidateButtonStyle.secondary(
+              context,
+              TextButton.styleFrom(),
+            ),
             child: Text(
               'Cancel',
               style: GoogleFonts.inter(
@@ -116,7 +128,10 @@ class _CandidateResumeManagementScreenState
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: CandidateButtonStyle.destructive(TextButton.styleFrom()),
+            style: CandidateButtonStyle.destructive(
+              context,
+              TextButton.styleFrom(),
+            ),
             child: Text(
               'Yes, delete',
               style: GoogleFonts.inter(color: CandidateButtonStyle.error),
@@ -238,6 +253,7 @@ class _CandidateResumeManagementScreenState
   }
 
   void _triggerBrowseFiles() async {
+    if (_isUploading || _isParsing) return;
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -245,7 +261,7 @@ class _CandidateResumeManagementScreenState
         withData: true,
       );
 
-      if (result != null && result.files.isNotEmpty) {
+      if (mounted && result != null && result.files.isNotEmpty) {
         final platformFile = result.files.single;
         final sizeMb = (platformFile.size / (1024 * 1024)).toStringAsFixed(1);
         final List<int> bytes = platformFile.bytes != null
@@ -257,6 +273,8 @@ class _CandidateResumeManagementScreenState
           _stagedFilename = platformFile.name;
           _stagedFilesize = '$sizeMb MB';
           _stagedFileBytes = bytes;
+          _stagedResumeId = null;
+          _statusCheckMessage = null;
           _hasStagedFile = true;
           _isUploading = false;
           _uploadProgress = 0.0;
@@ -330,7 +348,11 @@ class _CandidateResumeManagementScreenState
         },
       );
 
-      final resumeId = uploadResult['id']?.toString() ?? '';
+      if (!mounted) return;
+      final resumeId = uploadResult['id']?.toString();
+      if (resumeId == null || resumeId.isEmpty) {
+        throw const ApiException(message: 'The upload could not be confirmed.');
+      }
       setState(() {
         _stagedResumeId = resumeId;
         _uploadProgress = 1.0;
@@ -346,17 +368,24 @@ class _CandidateResumeManagementScreenState
         _isUploading = false;
         _isParsing = false;
         _isFailed = true;
-        _failureErrorMessage = e.toString().replaceAll('Exception: ', '');
+        _failureErrorMessage = e is ApiException
+            ? e.message
+            : 'The resume could not be uploaded.';
       });
     }
   }
 
   void _pollParsingStatus(String resumeId) async {
+    setState(() {
+      _isParsing = true;
+      _statusCheckMessage = null;
+      _parsingElapsedSeconds = 0;
+    });
     try {
       final detail = await ResumeService.pollResumeUntilReady(
         resumeId,
         onTick: (elapsed) {
-          if (mounted) {
+          if (mounted && _stagedResumeId == resumeId) {
             setState(() {
               _parsingElapsedSeconds = elapsed;
             });
@@ -364,7 +393,7 @@ class _CandidateResumeManagementScreenState
         },
       );
 
-      if (!mounted) return;
+      if (!mounted || _stagedResumeId != resumeId) return;
 
       if (detail.isFailed) {
         setState(() {
@@ -409,11 +438,17 @@ class _CandidateResumeManagementScreenState
         }
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || _stagedResumeId != resumeId) return;
       setState(() {
         _isParsing = false;
-        _isFailed = true;
-        _failureErrorMessage = e.toString().replaceAll('Exception: ', '');
+        if (e is ApiException && e.statusCode == 422) {
+          _isFailed = true;
+          _failureErrorMessage = e.message;
+        } else {
+          _statusCheckMessage = e is ApiException
+              ? e.message
+              : 'The resume status could not be checked.';
+        }
       });
     }
   }
@@ -454,6 +489,7 @@ class _CandidateResumeManagementScreenState
       _parseCompleted = false;
       _hasStagedFile = false;
       _stagedFileBytes = null;
+      _stagedResumeId = null;
       _isParsing = false;
       _isUploading = false;
       _isFailed = false;
@@ -472,7 +508,7 @@ class _CandidateResumeManagementScreenState
     final bool hasResumes = _resumes.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: context.themeCanvas(const Color(0xFFF4F6FA)),
       body: Stack(
         children: [
           // Background subtle grid & aurora
@@ -640,7 +676,7 @@ class _CandidateResumeManagementScreenState
                 Text(
                   'Add a resume',
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF1B2740),
+                    color: context.themeForeground(const Color(0xFF1B2740)),
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -0.125,
@@ -676,7 +712,9 @@ class _CandidateResumeManagementScreenState
                               .solid, // Using sleek dashed visual style
                         ),
                         borderRadius: BorderRadius.circular(16),
-                        color: Colors.white.withValues(alpha: 0.4),
+                        color: context
+                            .themeSurface(Colors.white)
+                            .withValues(alpha: 0.4),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -687,7 +725,7 @@ class _CandidateResumeManagementScreenState
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: context.themeSurface(Colors.white),
                               borderRadius: BorderRadius.circular(14),
                               boxShadow: const [
                                 BoxShadow(
@@ -697,13 +735,15 @@ class _CandidateResumeManagementScreenState
                                 ),
                               ],
                             ),
-                            child: const Center(
+                            child: Center(
                               child: Text(
                                 '⇪',
                                 style: TextStyle(
                                   fontFamily: 'Inter',
                                   fontSize: 18,
-                                  color: Color(0xFF4A5875),
+                                  color: context.themeForeground(
+                                    const Color(0xFF4A5875),
+                                  ),
                                   fontWeight: FontWeight.w400,
                                 ),
                               ),
@@ -719,7 +759,9 @@ class _CandidateResumeManagementScreenState
                               textAlign: TextAlign.center,
                               softWrap: true,
                               style: GoogleFonts.inter(
-                                color: const Color(0xFF1B2740),
+                                color: context.themeForeground(
+                                  const Color(0xFF1B2740),
+                                ),
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -735,7 +777,9 @@ class _CandidateResumeManagementScreenState
                               textAlign: TextAlign.center,
                               softWrap: true,
                               style: GoogleFonts.spaceGrotesk(
-                                color: const Color(0xFF7A88A3),
+                                color: context.themeForeground(
+                                  const Color(0xFF7A88A3),
+                                ),
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -793,7 +837,9 @@ class _CandidateResumeManagementScreenState
                       Text(
                         'UPLOADING',
                         style: GoogleFonts.spaceGrotesk(
-                          color: const Color(0xFF7A88A3),
+                          color: context.themeForeground(
+                            const Color(0xFF7A88A3),
+                          ),
                           fontSize: 9.5,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 1.425,
@@ -809,14 +855,18 @@ class _CandidateResumeManagementScreenState
                             width: 34,
                             height: 34,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE9E4FB),
+                              color: context.themeSurface(
+                                const Color(0xFFE9E4FB),
+                              ),
                               borderRadius: BorderRadius.circular(11),
                             ),
                             child: Center(
                               child: Text(
                                 'PDF',
                                 style: GoogleFonts.inter(
-                                  color: const Color(0xFF4B3AB8),
+                                  color: context.themeForeground(
+                                    const Color(0xFF4B3AB8),
+                                  ),
                                   fontSize: 9,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -835,7 +885,9 @@ class _CandidateResumeManagementScreenState
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.inter(
-                                    color: const Color(0xFF1B2740),
+                                    color: context.themeForeground(
+                                      const Color(0xFF1B2740),
+                                    ),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -845,7 +897,9 @@ class _CandidateResumeManagementScreenState
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.spaceGrotesk(
-                                    color: const Color(0xFF7A88A3),
+                                    color: context.themeForeground(
+                                      const Color(0xFF7A88A3),
+                                    ),
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -856,15 +910,13 @@ class _CandidateResumeManagementScreenState
 
                           // Progress percentage text: 62%
                           Text(
-                            (_hasStagedFile &&
-                                    !_isUploading &&
-                                    !_isParsing &&
-                                    !_parseCompleted &&
-                                    !_isFailed)
+                            _canUpload
                                 ? 'READY'
                                 : '${(_uploadProgress * 100).toInt()}%',
                             style: GoogleFonts.jetBrainsMono(
-                              color: const Color(0xFF4A5875),
+                              color: context.themeForeground(
+                                const Color(0xFF4A5875),
+                              ),
                               fontSize: 11,
                               fontWeight: FontWeight.w400,
                             ),
@@ -903,8 +955,8 @@ class _CandidateResumeManagementScreenState
                         ),
                         decoration: BoxDecoration(
                           color: _isFailed
-                              ? const Color(0xFFFEF2F2)
-                              : Colors.white,
+                              ? context.themeSurface(const Color(0xFFFEF2F2))
+                              : context.themeSurface(Colors.white),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: _isFailed
@@ -954,11 +1006,10 @@ class _CandidateResumeManagementScreenState
                                 children: [
                                   Text(
                                     _isFailed
-                                        ? "Couldn't read this file — try a text-based PDF."
-                                        : (_hasStagedFile &&
-                                                  !_isUploading &&
-                                                  !_isParsing &&
-                                                  !_parseCompleted
+                                        ? 'Resume processing failed'
+                                        : _statusCheckMessage != null
+                                        ? 'Processing status'
+                                        : (_canUpload
                                               ? 'Ready to upload and parse'
                                               : (_isParsing
                                                     ? (_parsingElapsedSeconds >
@@ -970,8 +1021,12 @@ class _CandidateResumeManagementScreenState
                                                     : 'Uploading resume…')),
                                     style: GoogleFonts.inter(
                                       color: _isFailed
-                                          ? const Color(0xFF991B1B)
-                                          : const Color(0xFF1B2740),
+                                          ? context.themeForeground(
+                                              const Color(0xFF991B1B),
+                                            )
+                                          : context.themeForeground(
+                                              const Color(0xFF1B2740),
+                                            ),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -981,19 +1036,21 @@ class _CandidateResumeManagementScreenState
                                         ? (_failureErrorMessage.isNotEmpty
                                               ? _failureErrorMessage
                                               : 'Text extraction or AI parsing failed')
-                                        : (_hasStagedFile &&
-                                                  !_isUploading &&
-                                                  !_isParsing &&
-                                                  !_parseCompleted
-                                              ? 'Click "Use this resume" to begin extraction'
-                                              : (_stagedExtracted != null &&
-                                                        _parseCompleted
-                                                    ? '${(_stagedExtracted!['skills'] as List?)?.length ?? 0} skills · ${(_stagedExtracted!['roles'] as List?)?.length ?? 0} roles · ${_stagedExtracted!['years_experience'] ?? 4} yrs experience'
-                                                    : 'Extracting skills, roles & experience')),
+                                        : _statusCheckMessage ??
+                                              (_canUpload
+                                                  ? 'Click "Use this resume" to begin extraction'
+                                                  : (_stagedExtracted != null &&
+                                                            _parseCompleted
+                                                        ? '${(_stagedExtracted!['skills'] as List?)?.length ?? 0} skills · ${(_stagedExtracted!['roles'] as List?)?.length ?? 0} roles · ${_stagedExtracted!['years_experience'] ?? 4} yrs experience'
+                                                        : 'Extracting skills, roles & experience')),
                                     style: GoogleFonts.spaceGrotesk(
                                       color: _isFailed
-                                          ? const Color(0xFFB91C1C)
-                                          : const Color(0xFF7A88A3),
+                                          ? context.themeForeground(
+                                              const Color(0xFFB91C1C),
+                                            )
+                                          : context.themeForeground(
+                                              const Color(0xFF7A88A3),
+                                            ),
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -1003,12 +1060,16 @@ class _CandidateResumeManagementScreenState
                             ),
 
                             // Badge: PARSING… / COMPLETED / FAILED
-                            if (_isFailed)
+                            if (_isFailed || _statusCheckMessage != null)
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   InkWell(
-                                    onTap: _triggerBrowseFiles,
+                                    onTap: _statusCheckMessage != null
+                                        ? () => _pollParsingStatus(
+                                            _stagedResumeId!,
+                                          )
+                                        : _triggerBrowseFiles,
                                     borderRadius: BorderRadius.circular(6),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
@@ -1016,7 +1077,9 @@ class _CandidateResumeManagementScreenState
                                         vertical: 3,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFFEE2E2),
+                                        color: context.themeSurface(
+                                          const Color(0xFFFEE2E2),
+                                        ),
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
                                           color: const Color(0xFFFCA5A5),
@@ -1024,9 +1087,13 @@ class _CandidateResumeManagementScreenState
                                         ),
                                       ),
                                       child: Text(
-                                        'Retry',
+                                        _statusCheckMessage != null
+                                            ? 'Check status'
+                                            : 'Choose file',
                                         style: GoogleFonts.jetBrainsMono(
-                                          color: const Color(0xFF991B1B),
+                                          color: context.themeForeground(
+                                            const Color(0xFF991B1B),
+                                          ),
                                           fontSize: 8.5,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -1038,15 +1105,19 @@ class _CandidateResumeManagementScreenState
                                     onTap: () {
                                       setState(() {
                                         _hasStagedFile = false;
+                                        _stagedResumeId = null;
+                                        _statusCheckMessage = null;
                                         _isFailed = false;
                                         _isUploading = false;
                                         _isParsing = false;
                                       });
                                     },
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.close_rounded,
                                       size: 14,
-                                      color: Color(0xFF991B1B),
+                                      color: context.themeForeground(
+                                        const Color(0xFF991B1B),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1059,8 +1130,12 @@ class _CandidateResumeManagementScreenState
                                 ),
                                 decoration: BoxDecoration(
                                   color: _parseCompleted
-                                      ? const Color(0xFFECFDF5)
-                                      : const Color(0xFFEDF0F7),
+                                      ? context.themeSurface(
+                                          const Color(0xFFECFDF5),
+                                        )
+                                      : context.themeSurface(
+                                          const Color(0xFFEDF0F7),
+                                        ),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
                                     color: const Color.fromRGBO(
@@ -1083,8 +1158,12 @@ class _CandidateResumeManagementScreenState
                                             : 'PARSING…'),
                                   style: GoogleFonts.jetBrainsMono(
                                     color: _parseCompleted
-                                        ? const Color(0xFF0B6B4A)
-                                        : const Color(0xFF7A88A3),
+                                        ? context.themeForeground(
+                                            const Color(0xFF0B6B4A),
+                                          )
+                                        : context.themeForeground(
+                                            const Color(0xFF7A88A3),
+                                          ),
                                     fontSize: 8.5,
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: 0.68,
@@ -1098,11 +1177,7 @@ class _CandidateResumeManagementScreenState
 
                       // Button: Use this resume
                       InkWell(
-                        onTap:
-                            (_hasStagedFile &&
-                                !_isUploading &&
-                                !_isParsing &&
-                                !_parseCompleted)
+                        onTap: _canUpload
                             ? _startUploadFlowFromButton
                             : (_parseCompleted ? _commitStagedResume : null),
                         borderRadius: BorderRadius.circular(11),
@@ -1113,12 +1188,7 @@ class _CandidateResumeManagementScreenState
                           decoration: BoxDecoration(
                             gradient: CandidateButtonStyle.primaryGradient,
                             borderRadius: BorderRadius.circular(11),
-                            boxShadow:
-                                (_parseCompleted ||
-                                    (_hasStagedFile &&
-                                        !_isUploading &&
-                                        !_isParsing &&
-                                        !_isFailed))
+                            boxShadow: (_parseCompleted || _canUpload)
                                 ? const [
                                     BoxShadow(
                                       color: Color.fromRGBO(20, 181, 132, 0.22),
@@ -1129,12 +1199,7 @@ class _CandidateResumeManagementScreenState
                                 : [],
                           ),
                           child: Opacity(
-                            opacity:
-                                (_parseCompleted ||
-                                    (_hasStagedFile &&
-                                        !_isUploading &&
-                                        !_isParsing &&
-                                        !_isFailed))
+                            opacity: (_parseCompleted || _canUpload)
                                 ? 1.0
                                 : 0.45,
                             child: Center(
@@ -1155,12 +1220,9 @@ class _CandidateResumeManagementScreenState
                       // Subtext
                       Center(
                         child: Text(
-                          _isFailed
-                              ? 'Parsing failed — please re-upload a clean text PDF or DOCX'
-                              : (_hasStagedFile &&
-                                        !_isUploading &&
-                                        !_isParsing &&
-                                        !_parseCompleted
+                          _isFailed || _statusCheckMessage != null
+                              ? ''
+                              : (_canUpload
                                     ? 'Click to upload and use this resume'
                                     : (_parseCompleted
                                           ? 'Parsing complete — resume ready for applications!'
@@ -1171,7 +1233,9 @@ class _CandidateResumeManagementScreenState
                           style: GoogleFonts.spaceGrotesk(
                             color: _isFailed
                                 ? const Color(0xFFDC2626)
-                                : const Color(0xFF7A88A3),
+                                : context.themeForeground(
+                                    const Color(0xFF7A88A3),
+                                  ),
                             fontSize: 10.5,
                             fontWeight: FontWeight.w500,
                           ),
@@ -1234,7 +1298,7 @@ class _CandidateResumeManagementScreenState
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF1B2740),
+                      color: context.themeForeground(const Color(0xFF1B2740)),
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.125,
@@ -1246,7 +1310,7 @@ class _CandidateResumeManagementScreenState
                   Text(
                     '${_resumes.length} saved',
                     style: GoogleFonts.spaceGrotesk(
-                      color: const Color(0xFF7A88A3),
+                      color: context.themeForeground(const Color(0xFF7A88A3)),
                       fontSize: 10.5,
                       fontWeight: FontWeight.w500,
                     ),
@@ -1260,7 +1324,10 @@ class _CandidateResumeManagementScreenState
             Text('Could not load resumes: ${_listError!}'),
             TextButton(
               onPressed: _loadResumeList,
-              style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+              style: CandidateButtonStyle.secondary(
+                context,
+                TextButton.styleFrom(),
+              ),
               child: const Text('Retry'),
             ),
           ],
@@ -1290,8 +1357,8 @@ class _CandidateResumeManagementScreenState
                 final Color badgeBg = (r['badgeColorBg'] is Color)
                     ? r['badgeColorBg'] as Color
                     : (isActive
-                          ? const Color(0xFFD9F4E7)
-                          : const Color(0xFFF1F5F9));
+                          ? context.themeSurface(const Color(0xFFD9F4E7))
+                          : context.themeSurface(const Color(0xFFF1F5F9)));
                 final Color badgeFg = (r['badgeColorFg'] is Color)
                     ? r['badgeColorFg'] as Color
                     : (isActive
@@ -1352,7 +1419,9 @@ class _CandidateResumeManagementScreenState
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
-                                color: const Color(0xFF1B2740),
+                                color: context.themeForeground(
+                                  const Color(0xFF1B2740),
+                                ),
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1363,7 +1432,9 @@ class _CandidateResumeManagementScreenState
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.spaceGrotesk(
-                                color: const Color(0xFF7A88A3),
+                                color: context.themeForeground(
+                                  const Color(0xFF7A88A3),
+                                ),
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -1381,7 +1452,9 @@ class _CandidateResumeManagementScreenState
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFD9F4E7),
+                            color: context.themeSurface(
+                              const Color(0xFFD9F4E7),
+                            ),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
                               color: const Color(0xFFA9E5CB),
@@ -1391,7 +1464,9 @@ class _CandidateResumeManagementScreenState
                           child: Text(
                             'ACTIVE',
                             style: GoogleFonts.jetBrainsMono(
-                              color: const Color(0xFF0B6B4A),
+                              color: context.themeForeground(
+                                const Color(0xFF0B6B4A),
+                              ),
                               fontSize: 8.5,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.68,
@@ -1404,6 +1479,7 @@ class _CandidateResumeManagementScreenState
                               ? null
                               : () => _useResume(r),
                           style: CandidateButtonStyle.secondary(
+                            context,
                             TextButton.styleFrom(
                               minimumSize: const Size(42, 32),
                               padding: const EdgeInsets.symmetric(
@@ -1419,12 +1495,14 @@ class _CandidateResumeManagementScreenState
                       InkWell(
                         onTap: () => _removeResume(r),
                         borderRadius: BorderRadius.circular(6),
-                        child: const Padding(
+                        child: Padding(
                           padding: EdgeInsets.all(4.0),
                           child: Icon(
                             Icons.close_rounded,
                             size: 14,
-                            color: Color(0xFF94A3B8),
+                            color: context.themeForeground(
+                              const Color(0xFF94A3B8),
+                            ),
                           ),
                         ),
                       ),
@@ -1454,17 +1532,21 @@ class _CandidateResumeManagementScreenState
                             width: 56,
                             height: 56,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
+                              color: context.themeSurface(
+                                const Color(0xFFF1F5F9),
+                              ),
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: const Color.fromRGBO(38, 51, 77, 0.08),
                                 width: 0.88,
                               ),
                             ),
-                            child: const Center(
+                            child: Center(
                               child: Icon(
                                 Icons.note_add_outlined,
-                                color: Color(0xFF7A88A3),
+                                color: context.themeForeground(
+                                  const Color(0xFF7A88A3),
+                                ),
                                 size: 26,
                               ),
                             ),
@@ -1475,7 +1557,9 @@ class _CandidateResumeManagementScreenState
                             'No resumes uploaded yet',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.inter(
-                              color: const Color(0xFF1B2740),
+                              color: context.themeForeground(
+                                const Color(0xFF1B2740),
+                              ),
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1489,7 +1573,9 @@ class _CandidateResumeManagementScreenState
                               textAlign: TextAlign.center,
                               softWrap: true,
                               style: GoogleFonts.spaceGrotesk(
-                                color: const Color(0xFF7A88A3),
+                                color: context.themeForeground(
+                                  const Color(0xFF7A88A3),
+                                ),
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w500,
                                 height: 1.45,
@@ -1505,7 +1591,9 @@ class _CandidateResumeManagementScreenState
                               vertical: 5,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE6F7F5),
+                              color: context.themeSurface(
+                                const Color(0xFFE6F7F5),
+                              ),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
@@ -1533,10 +1621,8 @@ class _CandidateResumeManagementScreenState
 
   // ── LEFT RAIL NAVIGATION (Web Navigation Sidebar) ─────────────────────────
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() => const CandidateMobileNav(
-    currentRoute: '/candidate/resumes',
-  );
-
+  Widget _buildMobileBottomDock() =>
+      const CandidateMobileNav(currentRoute: '/candidate/resumes');
 }
 
 class GridPainter extends CustomPainter {
@@ -1559,5 +1645,6 @@ class GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant GridPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

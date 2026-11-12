@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
@@ -68,7 +69,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           return const WelcomeScreenWeb();
         }
         return Scaffold(
-          backgroundColor: const Color(0xFFF0F2FF),
+          backgroundColor: context.themeCanvas(const Color(0xFFF0F2FF)),
           body: SafeArea(
             child: SingleChildScrollView(
               physics: const ClampingScrollPhysics(),
@@ -103,15 +104,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
                           // ── App name ────────────────────────────────────
                           ShaderMask(
-                            shaderCallback:
-                                (bounds) => const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF3A5AF5),
-                                    Color(0xFF1D35B4),
-                                  ],
-                                ).createShader(bounds),
+                            shaderCallback: (bounds) => const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFF3A5AF5), Color(0xFF1D35B4)],
+                            ).createShader(bounds),
                             child: Text(
                               'SkillSense AI',
                               style: GoogleFonts.inter(
@@ -130,7 +127,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
-                              color: const Color(0xFF64748B),
+                              color: context.themeForeground(
+                                const Color(0xFF64748B),
+                              ),
                             ),
                           ),
 
@@ -143,10 +142,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: context.themeSurface(Colors.white),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: const Color(0xFFDDE3FF),
+                                color: context.themeOutline(
+                                  const Color(0xFFDDE3FF),
+                                ),
                               ),
                               boxShadow: [
                                 BoxShadow(
@@ -191,7 +192,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 style: GoogleFonts.inter(
                                   fontSize: 34,
                                   fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF0F172A),
+                                  color: context.themeForeground(
+                                    const Color(0xFF0F172A),
+                                  ),
                                   height: 1.18,
                                   letterSpacing: -0.5,
                                 ),
@@ -205,14 +208,22 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                       height: 1.18,
                                       letterSpacing: -0.5,
                                       foreground: Paint()
-                                        ..shader = const LinearGradient(
-                                          colors: [
-                                            Color(0xFF4376F8),
-                                            Color(0xFF6C63FF),
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ).createShader(const Rect.fromLTWH(0, 0, 300, 60)),
+                                        ..shader =
+                                            const LinearGradient(
+                                              colors: [
+                                                Color(0xFF4376F8),
+                                                Color(0xFF6C63FF),
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ).createShader(
+                                              const Rect.fromLTWH(
+                                                0,
+                                                0,
+                                                300,
+                                                60,
+                                              ),
+                                            ),
                                     ),
                                   ),
                                   const TextSpan(text: ', faster'),
@@ -229,7 +240,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             style: GoogleFonts.inter(
                               fontSize: 15,
                               fontWeight: FontWeight.w400,
-                              color: const Color(0xFF64748B),
+                              color: context.themeForeground(
+                                const Color(0xFF64748B),
+                              ),
                               height: 1.6,
                             ),
                           ),
@@ -242,19 +255,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             height: 54,
                             child: ElevatedButton.icon(
                               onPressed: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  '/signup/role',
-                                );
+                                Navigator.pushNamed(context, '/signup/role');
                               },
-                              style: PreAuthButtonStyle.active(ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.webRoleHr,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                              style: PreAuthButtonStyle.active(
+                                ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.webRoleHr,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
                                 ),
-                              )),
+                              ),
                               icon: const SizedBox.shrink(),
                               label: Text(
                                 'Create an account',
@@ -272,33 +284,32 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             cursor: SystemMouseCursors.click,
                             child: PointerGestureDetector(
                               onTap: () {
-                              Navigator.pushNamed(
-                                context,
-                                '/login/role',
-                              );
-                            },
-                            child: RichText(
-                              text: TextSpan(
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: const Color(0xFF64748B),
-                                ),
-                                children: [
-                                  const TextSpan(
-                                    text: 'Already have an account? ',
-                                  ),
-                                  TextSpan(
-                                    text: 'Log in',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: PreAuthButtonStyle.blue,
+                                Navigator.pushNamed(context, '/login/role');
+                              },
+                              child: RichText(
+                                text: TextSpan(
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: context.themeForeground(
+                                      const Color(0xFF64748B),
                                     ),
                                   ),
-                                ],
+                                  children: [
+                                    const TextSpan(
+                                      text: 'Already have an account? ',
+                                    ),
+                                    TextSpan(
+                                      text: 'Log in',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: PreAuthButtonStyle.blue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
                           ),
 
                           const Spacer(),
@@ -311,7 +322,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               text: TextSpan(
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
-                                  color: const Color(0xFF94A3B8),
+                                  color: context.themeForeground(
+                                    const Color(0xFF94A3B8),
+                                  ),
                                 ),
                                 children: [
                                   const TextSpan(text: 'Trusted by '),
@@ -320,7 +333,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                     style: GoogleFonts.inter(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF64748B),
+                                      color: context.themeForeground(
+                                        const Color(0xFF64748B),
+                                      ),
                                     ),
                                   ),
                                   const TextSpan(text: ' and '),
@@ -329,7 +344,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                     style: GoogleFonts.inter(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF64748B),
+                                      color: context.themeForeground(
+                                        const Color(0xFF64748B),
+                                      ),
                                     ),
                                   ),
                                 ],

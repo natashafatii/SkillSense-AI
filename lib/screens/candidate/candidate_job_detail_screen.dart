@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/candidate_mobile_nav.dart';
@@ -239,7 +240,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     Widget buildModal(BuildContext dialogContext) => _ApplyModalWidget(
       jobTitle: _job!.title,
       companyInfo:
-          '${_job!.recruiterCompany} · ${_job!.location} · ${_job!.salary.trim().isEmpty ? 'Salary not specified' : _job!.salary}',
+          '${_job!.recruiterCompany} · ${_job!.location} · ${_job!.salaryLabel}',
       loadResumes: widget.loadApplyResumes,
       loadResumeDetail: widget.loadApplyResumeDetail,
       isMobile: isMobile,
@@ -367,11 +368,15 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: context.themeSurface(Colors.white),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
+            Icon(
+              Icons.check_circle,
+              color: context.themeForeground(const Color(0xFF10B981)),
+              size: 28,
+            ),
             const SizedBox(width: 10),
             Text(
               'Resume parsing complete',
@@ -390,14 +395,14 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               'Your resume was parsed. Any displayed match data came from the API.',
               style: GoogleFonts.inter(
                 fontSize: 13,
-                color: const Color(0xFF64748B),
+                color: context.themeForeground(const Color(0xFF64748B)),
               ),
             ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: context.themeSurface(const Color(0xFFF1F5F9)),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -440,7 +445,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                           'Matched ${matchedSkills.length} required skills.',
                           style: GoogleFonts.inter(
                             fontSize: 12,
-                            color: const Color(0xFF64748B),
+                            color: context.themeForeground(
+                              const Color(0xFF64748B),
+                            ),
                           ),
                         ),
                       ],
@@ -490,7 +497,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               TextButton(
                 onPressed: () =>
                     Navigator.of(context).pushNamed('/candidate/jobs'),
-                style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+                style: CandidateButtonStyle.secondary(
+                  context,
+                  TextButton.styleFrom(),
+                ),
                 child: const Text('Back to jobs'),
               ),
             ],
@@ -501,11 +511,13 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 900;
 
-    final Color bgBase = const Color(0xFFF8FAFC);
-    final Color textPrimary = const Color(0xFF0F172A);
-    final Color textSecondary = const Color(0xFF64748B);
-    final Color cardBg = Colors.white;
-    final Color cardBorder = const Color(0xFFE2E8F0);
+    final Color bgBase = context.themeCanvas(const Color(0xFFF8FAFC));
+    final Color textPrimary = context.themeForeground(const Color(0xFF0F172A));
+    final Color textSecondary = context.themeForeground(
+      const Color(0xFF64748B),
+    );
+    final Color cardBg = context.themeSurface(Colors.white);
+    final Color cardBorder = context.themeOutline(const Color(0xFFE2E8F0));
 
     return Scaffold(
       backgroundColor: bgBase,
@@ -741,9 +753,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         ? 0
         : DateTime.now().difference(_job!.createdAt).inDays;
     final String timeAgo = daysAgo == 0 ? 'today' : '${daysAgo}d ago';
-    final String salary = _job?.salary.trim().isNotEmpty == true
-        ? _job!.salary
-        : 'Salary not specified';
+    final salary = _job?.salaryLabel ?? 'Salary not specified';
 
     String initials = '??';
     if (_job?.recruiterCompany.isNotEmpty == true) {
@@ -836,14 +846,16 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: context.themeOutline(const Color(0xFFE2E8F0)),
+        ),
       ),
       child: Text(
         text,
         style: GoogleFonts.inter(
-          color: const Color(0xFF64748B),
+          color: context.themeForeground(const Color(0xFF64748B)),
           fontSize: 11.5,
           fontWeight: FontWeight.w500,
         ),
@@ -858,7 +870,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         Text(
           'ABOUT THE ROLE',
           style: GoogleFonts.spaceGrotesk(
-            color: const Color(0xFF64748B),
+            color: context.themeForeground(const Color(0xFF64748B)),
             fontSize: 12,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.5,
@@ -868,7 +880,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         Text(
           _job?.description ?? _jobError ?? 'Job unavailable.',
           style: GoogleFonts.inter(
-            color: const Color(0xFF475569),
+            color: context.themeForeground(const Color(0xFF475569)),
             fontSize: 14,
             height: 1.6,
             fontWeight: FontWeight.w400,
@@ -900,7 +912,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           Text(
             'REQUIREMENTS',
             style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF64748B),
+              color: context.themeForeground(const Color(0xFF64748B)),
               fontSize: 12,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.5,
@@ -917,7 +929,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                     Text(
                       '•  ',
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
+                        color: context.themeForeground(const Color(0xFF94A3B8)),
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
@@ -926,7 +938,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       child: Text(
                         req,
                         style: GoogleFonts.inter(
-                          color: const Color(0xFF475569),
+                          color: context.themeForeground(
+                            const Color(0xFF475569),
+                          ),
                           fontSize: 14,
                           height: 1.5,
                           fontWeight: FontWeight.w400,
@@ -944,7 +958,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           Text(
             'SKILLS REQUIRED',
             style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF64748B),
+              color: context.themeForeground(const Color(0xFF64748B)),
               fontSize: 12,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.5,
@@ -965,14 +979,20 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: context.themeSurface(const Color(0xFFF8FAFC)),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(
+                            color: context.themeOutline(
+                              const Color(0xFFE2E8F0),
+                            ),
+                          ),
                         ),
                         child: Text(
                           skill,
                           style: GoogleFonts.inter(
-                            color: const Color(0xFF334155),
+                            color: context.themeForeground(
+                              const Color(0xFF334155),
+                            ),
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1051,7 +1071,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                         painter: _RingPainter(
                           progress: hasScore ? (score / 100) * value : 0,
                           ringColor: ringColor,
-                          trackColor: const Color(0xFFF1F5F9),
+                          trackColor: context.themeSurface(
+                            const Color(0xFFF1F5F9),
+                          ),
                         ),
                       ),
                     ),
@@ -1065,7 +1087,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                             fontWeight: FontWeight.bold,
                             color: hasScore
                                 ? textPrimary
-                                : const Color(0xFF94A3B8),
+                                : context.themeForeground(
+                                    const Color(0xFF94A3B8),
+                                  ),
                             height: 1.0,
                           ),
                         ),
@@ -1074,7 +1098,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                           style: GoogleFonts.inter(
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
-                            color: const Color(0xFF94A3B8),
+                            color: context.themeForeground(
+                              const Color(0xFF94A3B8),
+                            ),
                             letterSpacing: 1.0,
                           ),
                         ),
@@ -1158,7 +1184,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               Text(
                 'Applying starts AI screening immediately',
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
+                  color: context.themeForeground(const Color(0xFF64748B)),
                   fontSize: 11.5,
                   fontWeight: FontWeight.w500,
                 ),
@@ -1254,7 +1280,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   Icon(
                     Icons.upload_file_rounded,
                     size: 48,
-                    color: const Color(0xFF94A3B8).withValues(alpha: 0.5),
+                    color: context
+                        .themeForeground(const Color(0xFF94A3B8))
+                        .withValues(alpha: 0.5),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -1451,7 +1479,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           Text(
             'MATCHED · ${matched.length}',
             style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF94A3B8),
+              color: context.themeForeground(const Color(0xFF94A3B8)),
               fontSize: 11.5,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.5,
@@ -1475,12 +1503,14 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                     label: Text(
                       '$m ✓',
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF10B981),
+                        color: context.themeForeground(const Color(0xFF10B981)),
                         fontWeight: FontWeight.bold,
                         fontSize: 11.5,
                       ),
                     ),
-                    backgroundColor: const Color(0xFFECFDF5),
+                    backgroundColor: context.themeSurface(
+                      const Color(0xFFECFDF5),
+                    ),
                     side: BorderSide(
                       color: const Color(0xFF10B981).withValues(alpha: 0.2),
                     ),
@@ -1496,7 +1526,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           Text(
             'MISSING · ${missing.length}',
             style: GoogleFonts.spaceGrotesk(
-              color: const Color(0xFF94A3B8),
+              color: context.themeForeground(const Color(0xFF94A3B8)),
               fontSize: 11.5,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.5,
@@ -1522,12 +1552,14 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                     label: Text(
                       m,
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF64748B),
+                        color: context.themeForeground(const Color(0xFF64748B)),
                         fontWeight: FontWeight.w600,
                         fontSize: 11.5,
                       ),
                     ),
-                    backgroundColor: const Color(0xFFF1F5F9),
+                    backgroundColor: context.themeSurface(
+                      const Color(0xFFF1F5F9),
+                    ),
                     side: BorderSide(color: cardBorder),
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                   ),
@@ -1543,7 +1575,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           Text(
             'Missing skills lower your match by ~5 points — worth naming in your first answer.',
             style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
+              color: context.themeForeground(const Color(0xFF64748B)),
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -1566,7 +1598,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+            style: CandidateButtonStyle.secondary(
+              context,
+              TextButton.styleFrom(),
+            ),
             child: const Text('Close'),
           ),
         ],
@@ -1591,9 +1626,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
 
   // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
   // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() => const CandidateMobileNav(
-    currentRoute: '/candidate/job-detail',
-  );
+  Widget _buildMobileBottomDock() =>
+      const CandidateMobileNav(currentRoute: '/candidate/job-detail');
 
   // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
   Color _getRingColor(double score) {
@@ -1671,7 +1705,8 @@ class GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant GridPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _ApplyModalWidget extends StatefulWidget {
@@ -1873,7 +1908,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
             Text(
               'Parsing your resume...',
               style: GoogleFonts.inter(
-                color: const Color(0xFF64748B),
+                color: context.themeForeground(const Color(0xFF64748B)),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1929,7 +1964,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
         style: GoogleFonts.spaceGrotesk(
           fontSize: 12,
           fontWeight: FontWeight.bold,
-          color: const Color(0xFF64748B),
+          color: context.themeForeground(const Color(0xFF64748B)),
           letterSpacing: 0.5,
         ),
       ),
@@ -1953,7 +1988,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    backgroundColor: const Color(0xFFF1F5F9),
+                    backgroundColor: context.themeSurface(
+                      const Color(0xFFF1F5F9),
+                    ),
                     side: BorderSide.none,
                   ),
                 )
@@ -1980,7 +2017,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                       '${e['duration']}',
                       style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: const Color(0xFF64748B),
+                        color: context.themeForeground(const Color(0xFF64748B)),
                       ),
                     ),
                   if (e['description'] != null)
@@ -2015,7 +2052,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     '${e['institution']} ${e['year'] != null ? '(${e['year']})' : ''}',
                     style: GoogleFonts.inter(
                       fontSize: 13,
-                      color: const Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                     ),
                   ),
                 ],
@@ -2038,7 +2075,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    backgroundColor: const Color(0xFFF1F5F9),
+                    backgroundColor: context.themeSurface(
+                      const Color(0xFFF1F5F9),
+                    ),
                     side: BorderSide.none,
                   ),
                 )
@@ -2056,7 +2095,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
         maxHeight: MediaQuery.of(context).size.height * 0.9,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: widget.isMobile
             ? const BorderRadius.vertical(top: Radius.circular(24))
             : BorderRadius.circular(20),
@@ -2085,7 +2124,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                         widget.companyInfo,
                         style: GoogleFonts.inter(
                           fontSize: 14,
-                          color: const Color(0xFF64748B),
+                          color: context.themeForeground(
+                            const Color(0xFF64748B),
+                          ),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -2093,7 +2134,10 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Color(0xFF94A3B8)),
+                  icon: Icon(
+                    Icons.close,
+                    color: context.themeForeground(const Color(0xFF94A3B8)),
+                  ),
                   onPressed: () =>
                       Navigator.of(context, rootNavigator: true).pop(),
                 ),
@@ -2112,7 +2156,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     style: GoogleFonts.spaceGrotesk(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -2140,14 +2184,14 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                           border: Border.all(
                             color: _selectedResumeId == r['id'].toString()
                                 ? const Color(0xFF10B981)
-                                : const Color(0xFFE2E8F0),
+                                : context.themeOutline(const Color(0xFFE2E8F0)),
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Material(
                           color: _selectedResumeId == r['id'].toString()
-                              ? const Color(0xFFF0FDF4)
-                              : Colors.white,
+                              ? context.themeSurface(const Color(0xFFF0FDF4))
+                              : context.themeSurface(Colors.white),
                           borderRadius: BorderRadius.circular(12),
                           clipBehavior: Clip.antiAlias,
                           child: RadioGroup<String>(
@@ -2169,7 +2213,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                                     : '$cov% coverage',
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
-                                  color: const Color(0xFF64748B),
+                                  color: context.themeForeground(
+                                    const Color(0xFF64748B),
+                                  ),
                                 ),
                               ),
                             ),
@@ -2184,7 +2230,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     style: GoogleFonts.spaceGrotesk(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -2195,16 +2241,20 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     decoration: InputDecoration(
                       hintText: 'Add a short note for the recruiter...',
                       hintStyle: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
+                        color: context.themeForeground(const Color(0xFF94A3B8)),
                         fontSize: 14,
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: BorderSide(
+                          color: context.themeOutline(const Color(0xFFE2E8F0)),
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: BorderSide(
+                          color: context.themeOutline(const Color(0xFFE2E8F0)),
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -2235,19 +2285,23 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                   ? MediaQuery.of(context).padding.bottom + 16
                   : 24,
             ),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+            decoration: BoxDecoration(
+              color: context.themeSurface(Colors.white),
+              border: Border(
+                top: BorderSide(
+                  color: context.themeOutline(const Color(0xFFF1F5F9)),
+                ),
+              ),
             ),
             child: Column(
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.info_outline,
                       size: 16,
-                      color: Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -2255,7 +2309,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                         'Applying starts automated screening immediately — no surprise steps after this.',
                         style: GoogleFonts.inter(
                           fontSize: 12,
-                          color: const Color(0xFF64748B),
+                          color: context.themeForeground(
+                            const Color(0xFF64748B),
+                          ),
                           height: 1.4,
                         ),
                       ),
@@ -2270,9 +2326,12 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                         onPressed: () =>
                             Navigator.of(context, rootNavigator: true).pop(),
                         style: CandidateButtonStyle.secondary(
+                          context,
                           TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            backgroundColor: const Color(0xFFF1F5F9),
+                            backgroundColor: context.themeSurface(
+                              const Color(0xFFF1F5F9),
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(24),
                             ),

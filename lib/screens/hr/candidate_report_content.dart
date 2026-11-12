@@ -11,12 +11,13 @@ const _positive = Color(0xFF087A59);
 const _warning = Color(0xFF925C12);
 const _negative = Color(0xFFC43737);
 const _gap = 20.0;
-const _mutedStyle = TextStyle(color: _muted, fontSize: 13);
+TextStyle _mutedStyle(BuildContext context) =>
+    TextStyle(color: context.themeForeground(_muted), fontSize: 13);
 const _headingStyle = TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
-const _labelStyle = TextStyle(
+TextStyle _labelStyle(BuildContext context) => TextStyle(
   fontSize: 12,
   fontWeight: FontWeight.w600,
-  color: _muted,
+  color: context.themeForeground(_muted),
 );
 
 String _candidateName(Application app) {
@@ -66,8 +67,8 @@ class _ReportPanel extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      color: _surface,
-      border: Border.all(color: _border),
+      color: context.themeSurface(_surface),
+      border: Border.all(color: context.themeOutline(_border)),
       borderRadius: BorderRadius.circular(14),
     ),
     child: Column(
@@ -96,7 +97,7 @@ class _SectionHeading extends StatelessWidget {
     alignment: WrapAlignment.spaceBetween,
     children: [
       Text(title, style: _headingStyle, semanticsLabel: title),
-      if (detail case final detail?) Text(detail, style: _mutedStyle),
+      if (detail case final detail?) Text(detail, style: _mutedStyle(context)),
     ],
   );
 }
@@ -137,13 +138,13 @@ class _ReportMessage extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: _surfaceTint,
+      color: context.themeSurface(_surfaceTint),
       borderRadius: BorderRadius.circular(10),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(message, style: _mutedStyle),
+        Text(message, style: _mutedStyle(context)),
         if (loading)
           const Padding(
             padding: EdgeInsets.only(top: 10),
@@ -169,16 +170,22 @@ class _Tag extends StatelessWidget {
       vertical: pill ? 4 : 5,
     ),
     decoration: BoxDecoration(
-      color: outline ? _surface : color?.withValues(alpha: .09) ?? _surfaceTint,
+      color: outline
+          ? context.themeSurface(_surface)
+          : color?.withValues(alpha: .09) ?? context.themeSurface(_surfaceTint),
       border: !pill && (outline || color == null)
-          ? Border.all(color: color?.withValues(alpha: .45) ?? _border)
+          ? Border.all(
+              color:
+                  color?.withValues(alpha: .45) ??
+                  context.themeOutline(_border),
+            )
           : null,
       borderRadius: BorderRadius.circular(pill ? 99 : 8),
     ),
     child: Text(
       text,
       style: TextStyle(
-        color: color ?? _muted,
+        color: color ?? context.themeForeground(_muted),
         fontSize: 12,
         fontWeight: FontWeight.w600,
       ),
@@ -239,7 +246,10 @@ class _CandidateHeading extends StatelessWidget {
                 ),
               ),
               if (application.jobTitle.isNotEmpty)
-                Text('Applied for ${application.jobTitle}', style: _mutedStyle),
+                Text(
+                  'Applied for ${application.jobTitle}',
+                  style: _mutedStyle(context),
+                ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
@@ -411,9 +421,9 @@ class _MatchCard extends StatelessWidget {
                 nonSkills.where((criterion) => criterion.kind == kind).length,
               ),
           if (fit.total == 0 && nonSkills.isEmpty)
-            const Text(
+            Text(
               'No criteria breakdown was returned.',
-              style: _mutedStyle,
+              style: _mutedStyle(context),
             ),
         ] else
           Text(
@@ -422,21 +432,21 @@ class _MatchCard extends StatelessWidget {
                 : assessment?.status == 'FAILED'
                 ? 'Screening could not be completed.'
                 : 'Screening evidence is unavailable.',
-            style: _mutedStyle,
+            style: _mutedStyle(context),
           ),
         if (assessment?.threshold case final threshold?)
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
               'Screening threshold · ${_percent(threshold)}',
-              style: _mutedStyle,
+              style: _mutedStyle(context),
             ),
           ),
         if (assessment?.errorMessage case final message?
             when message.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text(message, style: _mutedStyle),
+            child: Text(message, style: _mutedStyle(context)),
           ),
       ],
     );
@@ -540,7 +550,7 @@ class _ScoreGauge extends StatelessWidget {
                     value: (value ?? 0) / 100,
                     strokeWidth: 8,
                     strokeCap: StrokeCap.round,
-                    backgroundColor: _border,
+                    backgroundColor: context.themeSurface(_border),
                     color: color,
                     semanticsLabel: 'Match score',
                   ),
@@ -566,9 +576,9 @@ class _ScoreGauge extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const Text(
+                      Text(
                         'MATCH SCORE',
-                        style: _labelStyle,
+                        style: _labelStyle(context),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -624,7 +634,7 @@ class _ScoreGauge extends StatelessWidget {
                                 width: 14,
                                 height: 14,
                                 decoration: BoxDecoration(
-                                  color: _surface,
+                                  color: context.themeSurface(_surface),
                                   shape: BoxShape.circle,
                                   border: Border.all(color: _ink, width: 2),
                                 ),
@@ -633,12 +643,18 @@ class _ScoreGauge extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const Row(
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Flexible(child: Text('Weak', style: _labelStyle)),
-                          Flexible(child: Text('Partial', style: _labelStyle)),
-                          Flexible(child: Text('Strong', style: _labelStyle)),
+                          Flexible(
+                            child: Text('Weak', style: _labelStyle(context)),
+                          ),
+                          Flexible(
+                            child: Text('Partial', style: _labelStyle(context)),
+                          ),
+                          Flexible(
+                            child: Text('Strong', style: _labelStyle(context)),
+                          ),
                         ],
                       ),
                     ],
@@ -648,10 +664,10 @@ class _ScoreGauge extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'Screening guidance for your review.',
           textAlign: TextAlign.center,
-          style: _mutedStyle,
+          style: _mutedStyle(context),
         ),
       ],
     );
@@ -674,7 +690,7 @@ class _EvidenceBar extends StatelessWidget {
           spacing: 8,
           children: [
             Text(label),
-            Text('$confirmed / $total confirmed', style: _mutedStyle),
+            Text('$confirmed / $total confirmed', style: _mutedStyle(context)),
           ],
         ),
         const SizedBox(height: 5),
@@ -682,7 +698,7 @@ class _EvidenceBar extends StatelessWidget {
           value: confirmed / total,
           minHeight: 7,
           borderRadius: BorderRadius.circular(99),
-          backgroundColor: _border,
+          backgroundColor: context.themeSurface(_border),
           color: _accent,
           semanticsLabel: '$label, $confirmed of $total confirmed',
         ),
@@ -715,10 +731,10 @@ class _EvidenceNote extends StatelessWidget {
       children: [
         Text(
           title.toUpperCase(),
-          style: _labelStyle.copyWith(color: color, letterSpacing: .5),
+          style: _labelStyle(context).copyWith(color: color, letterSpacing: .5),
         ),
         const SizedBox(height: 4),
-        if (lines.isEmpty) Text(empty, style: _mutedStyle),
+        if (lines.isEmpty) Text(empty, style: _mutedStyle(context)),
         for (final line in lines.where((line) => line.isNotEmpty))
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),

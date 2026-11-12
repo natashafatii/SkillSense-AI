@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
@@ -34,7 +35,7 @@ class RoleSelectionScreenMobile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double horizontalPadding = Responsive.getSpacing(
@@ -52,13 +53,13 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                   children: [
                     // --- HERO HEADER ---
                     Container(
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            AppColors.mobileHeaderBgStart,
-                            AppColors.mobileHeaderBgEnd,
+                            context.themeSurface(AppColors.mobileHeaderBgStart),
+                            context.themeSurface(AppColors.mobileHeaderBgEnd),
                           ],
                         ),
                         borderRadius: BorderRadius.only(
@@ -88,7 +89,9 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                                   Text(
                                     'SkillSense AI',
                                     style: GoogleFonts.inter(
-                                      color: AppColors.textDark,
+                                      color: context.themeForeground(
+                                        AppColors.textDark,
+                                      ),
                                       fontSize: 16,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: -0.01,
@@ -117,9 +120,11 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                               Text(
                                 AppConstants.roleTitle,
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Space Grotesk',
-                                  color: AppColors.hrTextDark,
+                                  color: context.themeForeground(
+                                    AppColors.hrTextDark,
+                                  ),
                                   fontSize: 28,
                                   fontWeight: FontWeight.w700,
                                   height: 1.15,
@@ -132,7 +137,9 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                                 AppConstants.roleSubtitle,
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
-                                  color: AppColors.hrTextGrey,
+                                  color: context.themeForeground(
+                                    AppColors.hrTextGrey,
+                                  ),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w400,
                                   height: 1.5,
@@ -159,9 +166,11 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                               const SizedBox(height: 32),
                               Text(
                                 AppConstants.selectRoleLabel,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Space Grotesk',
-                                  color: AppColors.hrTextLight,
+                                  color: context.themeForeground(
+                                    AppColors.hrTextLight,
+                                  ),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 0.8,
@@ -195,18 +204,22 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                                   vertical: 14,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.mobileInfoBg,
+                                  color: context.themeSurface(
+                                    AppColors.mobileInfoBg,
+                                  ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Padding(
+                                    Padding(
                                       padding: EdgeInsets.only(top: 2),
                                       child: Icon(
                                         Icons.info_outline,
                                         size: 16,
-                                        color: Color(0xFF94A3B8),
+                                        color: context.themeForeground(
+                                          const Color(0xFF94A3B8),
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -215,7 +228,9 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                                         'One account can hold both roles — recruiters who also apply to jobs switch from the workspace menu.',
                                         style: GoogleFonts.inter(
                                           fontSize: 12,
-                                          color: AppColors.hrTextGrey,
+                                          color: context.themeForeground(
+                                            AppColors.hrTextGrey,
+                                          ),
                                           height: 1.4,
                                         ),
                                       ),
@@ -248,9 +263,14 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                               duration: const Duration(milliseconds: 250),
                               curve: Curves.easeOut,
                               decoration: BoxDecoration(
-                                color: selectedRole != null
-                                    ? PreAuthButtonStyle.roleColor(selectedRole)
-                                    : AppColors.primary.withValues(alpha: 0.4),
+                                color: selectedRole == null
+                                    ? AppColors.primary.withValues(alpha: 0.4)
+                                    : null,
+                                gradient: selectedRole == null
+                                    ? null
+                                    : PreAuthButtonStyle.roleGradient(
+                                        selectedRole,
+                                      ),
                                 boxShadow: selectedRole != null
                                     ? PreAuthButtonStyle.roleGlow(selectedRole)
                                     : null,
@@ -286,7 +306,9 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                             child: RichText(
                               text: TextSpan(
                                 style: GoogleFonts.inter(
-                                  color: AppColors.hrTextGrey,
+                                  color: context.themeForeground(
+                                    AppColors.hrTextGrey,
+                                  ),
                                   fontSize: 13,
                                 ),
                                 children: [
@@ -305,8 +327,7 @@ class RoleSelectionScreenMobile extends StatelessWidget {
                                                   .trim()
                                             : AppConstants.signUp),
                                     style: GoogleFonts.inter(
-                                      color:
-                                          PreAuthButtonStyle.blue,
+                                      color: PreAuthButtonStyle.blue,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -353,14 +374,14 @@ class _MobileRoleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color iconBg = isHr
-        ? AppColors.mobileIconBgHr
-        : AppColors.mobileIconBgCandidate;
+        ? context.themeSurface(AppColors.mobileIconBgHr)
+        : context.themeSurface(AppColors.mobileIconBgCandidate);
     final Color iconColor = isHr
         ? AppColors.mobileIconHr
         : AppColors.mobileIconCandidate;
     final Color borderColor = isSelected
         ? (isHr ? AppColors.mobileIconHr : AppColors.webRoleCandidate)
-        : AppColors.webCardBorderUnselected;
+        : context.themeOutline(AppColors.webCardBorderUnselected);
 
     return PointerGestureDetector(
       onTap: onTap,
@@ -370,7 +391,7 @@ class _MobileRoleCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.themeSurface(Colors.white),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: borderColor, width: isSelected ? 1.5 : 1),
           boxShadow: isSelected
@@ -408,7 +429,7 @@ class _MobileRoleCard extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.hrTextDark,
+                      color: context.themeForeground(AppColors.hrTextDark),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -417,7 +438,7 @@ class _MobileRoleCard extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w400,
-                      color: AppColors.hrTextGrey,
+                      color: context.themeForeground(AppColors.hrTextGrey),
                       height: 1.4,
                     ),
                   ),
@@ -434,8 +455,10 @@ class _MobileRoleCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: isSelected
-                      ? (isHr ? AppColors.mobileIconHr : AppColors.webRoleCandidate)
-                      : AppColors.webCardBorderUnselected,
+                      ? (isHr
+                            ? AppColors.mobileIconHr
+                            : AppColors.webRoleCandidate)
+                      : context.themeOutline(AppColors.webCardBorderUnselected),
                   width: isSelected ? 6 : 1.5,
                 ),
               ),

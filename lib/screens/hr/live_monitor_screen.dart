@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
@@ -229,7 +230,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
     }
     final mobile = _mobile;
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: context.themeCanvas(_background),
       body: SafeArea(
         bottom: false,
         child: Stack(
@@ -278,15 +279,15 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
             width: mobile ? 54 : 64,
             height: mobile ? 54 : 64,
             decoration: BoxDecoration(
-              color: _field,
-              border: Border.all(color: _edge),
+              color: context.themeSurface(_field),
+              border: Border.all(color: context.themeOutline(_edge)),
               borderRadius: BorderRadius.circular(mobile ? 17 : 20),
             ),
             alignment: Alignment.center,
             child: Icon(
               Icons.radio_button_checked,
               size: mobile ? 20 : 24,
-              color: _text2,
+              color: context.themeForeground(_text2),
             ),
           ),
           const SizedBox(height: 16),
@@ -297,7 +298,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
               fontSize: mobile ? 15 : 18,
               fontWeight: FontWeight.w700,
               letterSpacing: mobile ? -.2 : -.45,
-              color: _text,
+              color: context.themeForeground(_text),
             ),
           ),
           const SizedBox(height: 8),
@@ -311,14 +312,14 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
               style: GoogleFonts.inter(
                 fontSize: mobile ? 11 : 12.5,
                 height: 1.65,
-                color: _text3,
+                color: context.themeForeground(_text3),
               ),
             ),
           ),
           const SizedBox(height: 16),
           DecoratedBox(
             decoration: BoxDecoration(
-              color: RecruiterButtonStyle.blue,
+              gradient: RecruiterButtonStyle.primaryGradient,
               borderRadius: BorderRadius.circular(11),
               boxShadow: [
                 BoxShadow(
@@ -357,7 +358,10 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
             Text(
               'Observations require authorized access',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(fontSize: 10.5, color: _text4),
+              style: GoogleFonts.inter(
+                fontSize: 10.5,
+                color: context.themeForeground(_text4),
+              ),
             ),
           ],
         ],
@@ -369,7 +373,10 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(_error!, style: GoogleFonts.inter(color: _text2)),
+        Text(
+          _error!,
+          style: GoogleFonts.inter(color: context.themeForeground(_text2)),
+        ),
         TextButton(onPressed: _load, child: const Text('Retry')),
       ],
     ),
@@ -401,7 +408,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
                 style: GoogleFonts.inter(
                   fontSize: mobile ? 20 : 26,
                   fontWeight: FontWeight.w700,
-                  color: _text,
+                  color: context.themeForeground(_text),
                 ),
               ),
               if (_sessions.length > 1)

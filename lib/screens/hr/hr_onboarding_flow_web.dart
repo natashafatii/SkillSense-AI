@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
@@ -94,7 +95,7 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
     final currentLeft = _leftPanelData[_currentPage];
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double horizontalPadding = Responsive.getSpacing(
@@ -169,7 +170,11 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                     ),
                   ),
                   // Right: light lavender/white
-                  Expanded(child: Container(color: const Color(0xFFF5F7FF))),
+                  Expanded(
+                    child: Container(
+                      color: context.themeSurface(const Color(0xFFF5F7FF)),
+                    ),
+                  ),
                 ],
               ),
 
@@ -229,9 +234,9 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                         Container(
                                           width: 18,
                                           height: 1,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.6,
-                                          ),
+                                          color: context
+                                              .themeSurface(Colors.white)
+                                              .withValues(alpha: 0.6),
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
@@ -271,7 +276,9 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                       child: Text(
                                         currentLeft['body'] as String,
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFF94A3B8),
+                                          color: context.themeForeground(
+                                            const Color(0xFF94A3B8),
+                                          ),
                                           fontSize: 14.5,
                                           fontWeight: FontWeight.w400,
                                           height: 1.6,
@@ -307,7 +314,9 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                 child: Text(
                                   '© 2026 SkillSense AI',
                                   style: GoogleFonts.inter(
-                                    color: const Color(0xFF64748B),
+                                    color: context.themeForeground(
+                                      const Color(0xFF64748B),
+                                    ),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w400,
                                   ),
@@ -371,7 +380,9 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                             width: 72,
                                             height: 72,
                                             decoration: BoxDecoration(
-                                              color: Colors.white,
+                                              color: context.themeSurface(
+                                                Colors.white,
+                                              ),
                                               borderRadius:
                                                   BorderRadius.circular(20),
                                               boxShadow: [
@@ -399,7 +410,9 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                             style: GoogleFonts.fraunces(
                                               fontSize: 26,
                                               fontWeight: FontWeight.w700,
-                                              color: const Color(0xFF0F172A),
+                                              color: context.themeForeground(
+                                                const Color(0xFF0F172A),
+                                              ),
                                               height: 1.2,
                                             ),
                                           ),
@@ -411,7 +424,9 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                             textAlign: TextAlign.center,
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
-                                              color: const Color(0xFF64748B),
+                                              color: context.themeForeground(
+                                                const Color(0xFF64748B),
+                                              ),
                                               height: 1.5,
                                             ),
                                           ),
@@ -447,8 +462,10 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                                   decoration: BoxDecoration(
                                                     color: isActive
                                                         ? AppColors.webRoleHr
-                                                        : const Color(
-                                                            0xFFCBD5E1,
+                                                        : context.themeSurface(
+                                                            const Color(
+                                                              0xFFCBD5E1,
+                                                            ),
                                                           ),
                                                     borderRadius:
                                                         BorderRadius.circular(
@@ -467,16 +484,20 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                                             height: 48,
                                             child: ElevatedButton(
                                               onPressed: _nextPage,
-                                              style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    AppColors.webRoleHr,
-                                                foregroundColor: Colors.white,
-                                                elevation: 0,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(24),
+                                              style: RecruiterButtonStyle.primary(
+                                                ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      AppColors.webRoleHr,
+                                                  foregroundColor: Colors.white,
+                                                  elevation: 0,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          24,
+                                                        ),
+                                                  ),
                                                 ),
-                                              )),
+                                              ),
                                               child: Text(
                                                 _currentPage == 3
                                                     ? AppConstants
@@ -643,7 +664,7 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -671,14 +692,14 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
+                    color: context.themeForeground(const Color(0xFF0F172A)),
                   ),
                 ),
                 Text(
                   '48 applicants',
                   style: GoogleFonts.inter(
                     fontSize: 11,
-                    color: const Color(0xFF64748B),
+                    color: context.themeForeground(const Color(0xFF64748B)),
                   ),
                 ),
               ],
@@ -699,7 +720,7 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
               text: TextSpan(
                 style: GoogleFonts.inter(
                   fontSize: 12,
-                  color: const Color(0xFF64748B),
+                  color: context.themeForeground(const Color(0xFF64748B)),
                 ),
                 children: [
                   const TextSpan(text: 'Auto-generated for: '),
@@ -707,7 +728,7 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                     text: 'Natasha F.',
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0F172A),
+                      color: context.themeForeground(const Color(0xFF0F172A)),
                     ),
                   ),
                 ],
@@ -720,9 +741,9 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
               text: 'Describe a time you led a difficult project to completion',
             ),
             const SizedBox(height: 10),
-            const _WebInterviewQuestion(
+            _WebInterviewQuestion(
               avatar: 'T',
-              color: Color(0xFF94A3B8),
+              color: context.themeForeground(const Color(0xFF94A3B8)),
               text:
                   'Walk me through your Django ORM and query optimisation experience',
             ),
@@ -744,7 +765,7 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
               style: GoogleFonts.inter(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF94A3B8),
+                color: context.themeForeground(const Color(0xFF94A3B8)),
                 letterSpacing: 0.8,
               ),
             ),
@@ -758,7 +779,11 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                     color: const Color(0xFF10B981),
                   ),
                 ),
-                Container(width: 1, height: 40, color: const Color(0xFFE2E8F0)),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: context.themeSurface(const Color(0xFFE2E8F0)),
+                ),
                 Expanded(
                   child: _WebStat(
                     value: '74%',
@@ -766,7 +791,11 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
                     color: AppColors.webRoleHr,
                   ),
                 ),
-                Container(width: 1, height: 40, color: const Color(0xFFE2E8F0)),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: context.themeSurface(const Color(0xFFE2E8F0)),
+                ),
                 Expanded(
                   child: _WebStat(
                     value: 'LOW',
@@ -788,7 +817,7 @@ class _HrOnboardingFlowWebState extends State<HrOnboardingFlowWeb> {
               style: GoogleFonts.inter(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF94A3B8),
+                color: context.themeForeground(const Color(0xFF94A3B8)),
                 letterSpacing: 0.8,
               ),
             ),
@@ -868,7 +897,7 @@ class _WebApplicantBar extends StatelessWidget {
           width: 28,
           height: 28,
           decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
+            color: context.themeSurface(const Color(0xFFF1F5F9)),
             borderRadius: BorderRadius.circular(6),
           ),
           child: const Icon(
@@ -883,7 +912,7 @@ class _WebApplicantBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: score / 100,
-              backgroundColor: const Color(0xFFE2E8F0),
+              backgroundColor: context.themeSurface(const Color(0xFFE2E8F0)),
               color: color,
               minHeight: 6,
             ),
@@ -942,7 +971,7 @@ class _WebInterviewQuestion extends StatelessWidget {
             text,
             style: GoogleFonts.inter(
               fontSize: 12,
-              color: const Color(0xFF334155),
+              color: context.themeForeground(const Color(0xFF334155)),
               height: 1.4,
             ),
           ),
@@ -982,7 +1011,7 @@ class _WebStat extends StatelessWidget {
           style: GoogleFonts.inter(
             fontSize: 9,
             fontWeight: FontWeight.w600,
-            color: const Color(0xFF94A3B8),
+            color: context.themeForeground(const Color(0xFF94A3B8)),
             height: 1.3,
           ),
         ),
@@ -1013,7 +1042,7 @@ class _WebRankingRow extends StatelessWidget {
           style: GoogleFonts.inter(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF64748B),
+            color: context.themeForeground(const Color(0xFF64748B)),
           ),
         ),
         const SizedBox(width: 10),
@@ -1023,7 +1052,7 @@ class _WebRankingRow extends StatelessWidget {
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF0F172A),
+              color: context.themeForeground(const Color(0xFF0F172A)),
             ),
           ),
         ),

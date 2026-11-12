@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../../models/interview.dart';
 import '../../services/interview_service.dart';
@@ -100,11 +101,13 @@ class _CandidateInterviewHistoryScreenState
               : _error != null
               ? Center(child: Text(_error!))
               : _items.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'No completed interviews yet.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF64748B)),
+                    style: TextStyle(
+                      color: context.themeForeground(const Color(0xFF64748B)),
+                    ),
                   ),
                 )
               : ListView(

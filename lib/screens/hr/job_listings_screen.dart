@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -338,7 +339,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
     final isMobile = MediaQuery.sizeOf(context).width < 900;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: Stack(
         children: [
           SafeArea(
@@ -387,7 +388,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                     fontSize: 19,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.48,
-                    color: const Color(0xFF0F172A),
+                    color: context.themeForeground(const Color(0xFF0F172A)),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -397,7 +398,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     fontSize: 10.5,
-                    color: const Color(0xFF64748B),
+                    color: context.themeForeground(const Color(0xFF64748B)),
                   ),
                 ),
               ],
@@ -412,7 +413,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
 
   Widget _buildNewRoleButton() => DecoratedBox(
     decoration: BoxDecoration(
-      color: RecruiterButtonStyle.blue,
+      gradient: RecruiterButtonStyle.primaryGradient,
       borderRadius: BorderRadius.circular(8),
     ),
     child: TextButton(
@@ -461,12 +462,14 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFEFF6FF) : Colors.white,
+          color: isActive
+              ? context.themeSurface(const Color(0xFFEFF6FF))
+              : context.themeSurface(Colors.white),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isActive
                 ? const Color(0xFF2563EB).withValues(alpha: 0.3)
-                : const Color(0xFFE2E8F0),
+                : context.themeOutline(const Color(0xFFE2E8F0)),
           ),
         ),
         child: Text(
@@ -474,7 +477,9 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
           style: GoogleFonts.inter(
             fontSize: 12,
             fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-            color: isActive ? const Color(0xFF2563EB) : const Color(0xFF64748B),
+            color: isActive
+                ? const Color(0xFF2563EB)
+                : context.themeForeground(const Color(0xFF64748B)),
           ),
         ),
       ),
@@ -512,9 +517,11 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
       ),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: context.themeOutline(const Color(0xFFE2E8F0)),
+        ),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF0F172A).withValues(alpha: 0.05),
@@ -536,7 +543,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: const Color(0xFF0F172A),
+                    color: context.themeForeground(const Color(0xFF0F172A)),
                   ),
                 ),
                 PopupMenuButton<_JobSort>(
@@ -557,21 +564,24 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                     'Sort: ${_sort.label}',
                     style: GoogleFonts.inter(
                       fontSize: 12,
-                      color: const Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          Divider(
+            height: 1,
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+          ),
           Expanded(
             child: filteredJobs.isEmpty
                 ? Center(
                     child: Text(
                       'No ${_activeFilter.value.toLowerCase()} roles yet',
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF64748B),
+                        color: context.themeForeground(const Color(0xFF64748B)),
                         fontSize: 13,
                       ),
                     ),
@@ -579,8 +589,10 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                 : ListView.separated(
                     padding: EdgeInsets.zero,
                     itemCount: filteredJobs.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color: context.themeOutline(const Color(0xFFE2E8F0)),
+                    ),
                     itemBuilder: (context, index) {
                       return _buildJobRow(filteredJobs[index], isMobile);
                     },
@@ -596,10 +608,10 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
         ? const Color(0xFF047857)
         : const Color(0xFF64748B);
     final badgeBackground = job.isActive
-        ? const Color(0xFFDDF7E9)
-        : const Color(0xFFF1F5F9);
+        ? context.themeSurface(const Color(0xFFDDF7E9))
+        : context.themeSurface(const Color(0xFFF1F5F9));
     return Material(
-      color: Colors.white,
+      color: context.themeSurface(Colors.white),
       child: InkWell(
         hoverColor: const Color(0xFFF8FAFF),
         onTap: _busyJobId != null
@@ -622,7 +634,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0F172A),
+                        color: context.themeForeground(const Color(0xFF0F172A)),
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -632,7 +644,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         fontSize: 10.5,
-                        color: const Color(0xFF64748B),
+                        color: context.themeForeground(const Color(0xFF64748B)),
                       ),
                     ),
                   ],
@@ -683,7 +695,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
             child: CircularProgressIndicator(
               value: hasScore ? (score / 100).clamp(0.0, 1.0) : 0,
               strokeWidth: 3.5,
-              backgroundColor: const Color(0xFFE2E8F0),
+              backgroundColor: context.themeSurface(const Color(0xFFE2E8F0)),
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
@@ -693,8 +705,8 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: hasScore
-                  ? const Color(0xFF0F172A)
-                  : const Color(0xFF94A3B8),
+                  ? context.themeForeground(const Color(0xFF0F172A))
+                  : context.themeForeground(const Color(0xFF94A3B8)),
             ),
           ),
         ],
@@ -706,7 +718,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
     '$count applicants',
     style: GoogleFonts.jetBrainsMono(
       fontSize: isMobile ? 10 : 12,
-      color: const Color(0xFF64748B),
+      color: context.themeForeground(const Color(0xFF64748B)),
     ),
   );
 
@@ -1053,7 +1065,7 @@ class _RecruiterNotificationsScreenState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFF8FAFC),
+    backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
     body: Column(
       children: [
         RecruiterTopBar(
@@ -1074,7 +1086,7 @@ class _RecruiterNotificationsScreenState
                     child: Text(
                       'Notifications',
                       style: GoogleFonts.spaceGrotesk(
-                        color: const Color(0xFF0F172A),
+                        color: context.themeForeground(const Color(0xFF0F172A)),
                         fontSize: 26,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1096,7 +1108,9 @@ class _RecruiterNotificationsScreenState
                           child: Text(
                             'Mark all read',
                             style: GoogleFonts.inter(
-                              color: const Color(0xFF0A8A76),
+                              color: context.themeForeground(
+                                const Color(0xFF0A8A76),
+                              ),
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1109,7 +1123,7 @@ class _RecruiterNotificationsScreenState
               Text(
                 '$_unread unread',
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
+                  color: context.themeForeground(const Color(0xFF64748B)),
                   fontSize: 13,
                 ),
               ),
@@ -1151,16 +1165,20 @@ class _RecruiterNotificationsScreenState
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.notifications_none_rounded,
                             size: 24,
-                            color: Color(0xFF292929),
+                            color: context.themeForeground(
+                              const Color(0xFF292929),
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             'You’re all caught up.',
                             style: GoogleFonts.inter(
-                              color: const Color(0xFF292929),
+                              color: context.themeForeground(
+                                const Color(0xFF292929),
+                              ),
                               fontSize: 14,
                             ),
                           ),
@@ -1211,9 +1229,12 @@ class _RecruiterNotificationsScreenState
       ? const SizedBox.shrink()
       : Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.themeSurface(Colors.white),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+            border: Border.all(
+              color: context.themeOutline(const Color(0xFFE2E8F0)),
+              width: 1.5,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: .025),
@@ -1230,7 +1251,7 @@ class _RecruiterNotificationsScreenState
                 child: Text(
                   label,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF94A3B8),
+                    color: context.themeForeground(const Color(0xFF94A3B8)),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1,
@@ -1252,8 +1273,8 @@ class _RecruiterNotificationsScreenState
                 ),
               for (var index = 0; index < items.length; index++) ...[
                 if (index > 0)
-                  const Divider(
-                    color: Color(0xFFF1F5F9),
+                  Divider(
+                    color: context.themeOutline(const Color(0xFFF1F5F9)),
                     height: 1,
                     thickness: 1,
                     indent: 20,
@@ -1269,7 +1290,9 @@ class _RecruiterNotificationsScreenState
   Widget _notificationRow(AppNotification item) => Opacity(
     opacity: item.isRead ? .75 : 1,
     child: Material(
-      color: item.isRead ? Colors.white : const Color(0xFFFAFCFF),
+      color: item.isRead
+          ? context.themeSurface(Colors.white)
+          : context.themeSurface(const Color(0xFFFAFCFF)),
       child: ListTile(
         key: ValueKey(item.id),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1279,7 +1302,7 @@ class _RecruiterNotificationsScreenState
         title: Text(
           item.displayType,
           style: GoogleFonts.inter(
-            color: const Color(0xFF0F172A),
+            color: context.themeForeground(const Color(0xFF0F172A)),
             fontSize: 13.5,
             height: 1.4,
             fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w700,
@@ -1303,7 +1326,7 @@ class _RecruiterNotificationsScreenState
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFDBEAFE),
+                    color: context.themeSurface(const Color(0xFFDBEAFE)),
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
@@ -1318,7 +1341,7 @@ class _RecruiterNotificationsScreenState
                 Text(
                   item.relativeTime,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF64748B),
+                    color: context.themeForeground(const Color(0xFF64748B)),
                     fontSize: 12,
                   ),
                 ),

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
 import '../models/candidate_feedback.dart';
@@ -16,27 +17,31 @@ class CandidateFeedbackDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final highlights = _findings(
+      context,
       'What worked',
       content.strengths,
       const Color(0xFF087C63),
       '▲',
     );
     final coaching = _findings(
+      context,
       'Work on next',
       content.suggestions,
       const Color(0xFFA36717),
       '◆',
     );
-    final questions = _section('Question by question', [
+    final questions = _section(context, 'Question by question', [
       if (content.questions.isEmpty)
         _row(
-          const Text(
+          context,
+          Text(
             'Question scores are unavailable.',
-            style: TextStyle(color: _muted),
+            style: TextStyle(color: context.themeForeground(_muted)),
           ),
         ),
       for (final question in content.questions)
         _row(
+          context,
           Row(
             children: [
               Tooltip(
@@ -47,13 +52,13 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD8F3ED),
+                    color: context.themeSurface(const Color(0xFFD8F3ED)),
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
                     question.category.characters.first.toUpperCase(),
-                    style: const TextStyle(
-                      color: Color(0xFF086D5D),
+                    style: TextStyle(
+                      color: context.themeForeground(const Color(0xFF086D5D)),
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                     ),
@@ -63,14 +68,14 @@ class CandidateFeedbackDashboard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(child: Text(question.text)),
               const SizedBox(width: 12),
-              _scoreRing(question.percentage, large: false),
+              _scoreRing(context, question.percentage, large: false),
             ],
           ),
         ),
     ]);
 
     return DefaultTextStyle.merge(
-      style: const TextStyle(color: _ink, fontSize: 13),
+      style: TextStyle(color: context.themeForeground(_ink), fontSize: 13),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -80,7 +85,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _overview(),
+                    _overview(context),
                     const SizedBox(height: 14),
                     highlights,
                     const SizedBox(height: 14),
@@ -95,7 +100,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(flex: 36, child: _overview()),
+                    Expanded(flex: 36, child: _overview(context)),
                     const SizedBox(width: 14),
                     Expanded(
                       flex: 64,
@@ -144,24 +149,25 @@ class CandidateFeedbackDashboard extends StatelessWidget {
     );
   }
 
-  Widget _overview() => _surface(
+  Widget _overview(BuildContext context) => _surface(
+    context,
     accent: true,
     child: Padding(
       padding: const EdgeInsets.all(22),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Text(
             'YOUR INTERVIEW',
             style: TextStyle(
-              color: _muted,
+              color: context.themeForeground(_muted),
               fontSize: 10,
               letterSpacing: 1.3,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 18),
-          _scoreRing(content.performance, large: true),
+          _scoreRing(context, content.performance, large: true),
           const SizedBox(height: 14),
           Text(
             content.summary,
@@ -170,7 +176,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
           ),
           if (content.dimensions.isNotEmpty) ...[
             const SizedBox(height: 10),
-            const Divider(color: _line),
+            Divider(color: context.themeOutline(_line)),
             const SizedBox(height: 4),
             Wrap(
               spacing: 16,
@@ -183,8 +189,8 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                     children: [
                       Text(
                         dimension.label.toUpperCase(),
-                        style: const TextStyle(
-                          color: _muted,
+                        style: TextStyle(
+                          color: context.themeForeground(_muted),
                           fontSize: 9,
                           letterSpacing: 1,
                           fontWeight: FontWeight.w700,
@@ -196,7 +202,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                             '${(dimension.percentage / 10).toStringAsFixed(1)} out of 10',
                         style: TextStyle(
                           color: dimension.id.startsWith('technical.')
-                              ? const Color(0xFF087C63)
+                              ? context.themeForeground(const Color(0xFF087C63))
                               : _blue,
                           fontSize: 15,
                           fontFamily: 'JetBrains Mono',
@@ -214,17 +220,23 @@ class CandidateFeedbackDashboard extends StatelessWidget {
   );
 
   Widget _findings(
+    BuildContext context,
     String title,
     List<FeedbackFinding> findings,
     Color color,
     String marker,
-  ) => _section(title, [
+  ) => _section(context, title, [
     if (findings.isEmpty)
       _row(
-        const Text('No items in this report.', style: TextStyle(color: _muted)),
+        context,
+        Text(
+          'No items in this report.',
+          style: TextStyle(color: context.themeForeground(_muted)),
+        ),
       ),
     for (final finding in findings)
       _row(
+        context,
         Row(
           children: [
             ExcludeSemantics(
@@ -237,33 +249,39 @@ class CandidateFeedbackDashboard extends StatelessWidget {
       ),
   ]);
 
-  Widget _section(String title, List<Widget> rows) => _surface(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          child: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
+  Widget _section(BuildContext context, String title, List<Widget> rows) =>
+      _surface(
+        context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            ...rows,
+          ],
         ),
-        ...rows,
-      ],
-    ),
-  );
+      );
 
-  Widget _row(Widget child) => Container(
+  Widget _row(BuildContext context, Widget child) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-    decoration: const BoxDecoration(
-      border: Border(top: BorderSide(color: _line)),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: context.themeOutline(_line))),
     ),
     child: child,
   );
 
-  Widget _surface({required Widget child, bool accent = false}) => DecoratedBox(
+  Widget _surface(
+    BuildContext context, {
+    required Widget child,
+    bool accent = false,
+  }) => DecoratedBox(
     decoration: BoxDecoration(
-      color: const Color(0xFFFAFBFC),
+      color: context.themeSurface(const Color(0xFFFAFBFC)),
       borderRadius: BorderRadius.circular(18),
       boxShadow: [
         BoxShadow(
@@ -294,7 +312,11 @@ class CandidateFeedbackDashboard extends StatelessWidget {
     ),
   );
 
-  Widget _scoreRing(double? score, {required bool large}) => SizedBox.square(
+  Widget _scoreRing(
+    BuildContext context,
+    double? score, {
+    required bool large,
+  }) => SizedBox.square(
     dimension: large ? 138 : 36,
     child: Stack(
       fit: StackFit.expand,
@@ -302,7 +324,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
         ExcludeSemantics(
           child: CircularProgressIndicator(
             value: (score ?? 0) / 100,
-            backgroundColor: const Color(0xFFE5E7EB),
+            backgroundColor: context.themeSurface(const Color(0xFFE5E7EB)),
             color: large || (score != null && score >= 75) ? _teal : _blue,
             strokeWidth: large ? 9 : 4,
             strokeAlign: BorderSide.strokeAlignInside,
@@ -325,10 +347,10 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                 ),
               ),
               if (large)
-                const Text(
+                Text(
                   'OVERALL',
                   style: TextStyle(
-                    color: _muted,
+                    color: context.themeForeground(_muted),
                     fontSize: 9,
                     letterSpacing: 1,
                     fontWeight: FontWeight.w700,

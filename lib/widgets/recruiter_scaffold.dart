@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'recruiter_mobile_nav.dart';
 import 'recruiter_side_nav.dart';
@@ -23,7 +24,7 @@ class RecruiterScaffold extends StatelessWidget {
     final themedBody = RecruiterButtonTheme(child: body);
     if (isMobile) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
         body: SafeArea(bottom: false, child: themedBody),
         bottomNavigationBar: currentRoute == '/recruiter/profile'
             ? RecruiterMobileNav(currentRoute: currentRoute)
@@ -31,7 +32,7 @@ class RecruiterScaffold extends StatelessWidget {
       );
     }
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: SafeArea(
         child: Row(
           children: [

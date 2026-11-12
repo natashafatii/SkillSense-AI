@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../../widgets/candidate_button_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -200,7 +201,7 @@ class _CandidateOnboardingFlowWebState
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -233,7 +234,7 @@ class _CandidateOnboardingFlowWebState
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -268,7 +269,7 @@ class _CandidateOnboardingFlowWebState
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textDark,
+                    color: context.themeForeground(AppColors.textDark),
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -281,7 +282,7 @@ class _CandidateOnboardingFlowWebState
             style: GoogleFonts.inter(
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: AppColors.hrTextLight,
+              color: context.themeForeground(AppColors.hrTextLight),
               letterSpacing: 1.2,
             ),
           ),
@@ -296,7 +297,10 @@ class _CandidateOnboardingFlowWebState
             ],
           ),
           const SizedBox(height: 16),
-          Container(height: 1, color: AppColors.dividerLight),
+          Container(
+            height: 1,
+            color: context.themeSurface(AppColors.dividerLight),
+          ),
           const SizedBox(height: 14),
           Row(
             children: [
@@ -312,7 +316,7 @@ class _CandidateOnboardingFlowWebState
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: AppColors.textDark,
+                    color: context.themeForeground(AppColors.textDark),
                     height: 1.4,
                   ),
                 ),
@@ -367,7 +371,7 @@ class _CandidateOnboardingFlowWebState
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.hrTextLight,
+                  color: context.themeForeground(AppColors.hrTextLight),
                 ),
               ),
             ],
@@ -410,7 +414,7 @@ class _CandidateOnboardingFlowWebState
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -428,7 +432,7 @@ class _CandidateOnboardingFlowWebState
             style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: AppColors.textDark,
+              color: context.themeForeground(AppColors.textDark),
             ),
           ),
           const SizedBox(height: 20),
@@ -444,14 +448,17 @@ class _CandidateOnboardingFlowWebState
             fraction: 0.71,
           ),
           const SizedBox(height: 20),
-          Container(height: 1, color: AppColors.dividerLight),
+          Container(
+            height: 1,
+            color: context.themeSurface(AppColors.dividerLight),
+          ),
           const SizedBox(height: 14),
           Text(
             '"Strong technical depth. Focus on structuring longer answers more concisely."',
             style: GoogleFonts.inter(
               fontSize: 13,
               fontWeight: FontWeight.w400,
-              color: AppColors.textGrey,
+              color: context.themeForeground(AppColors.textGrey),
               fontStyle: FontStyle.italic,
               height: 1.5,
             ),
@@ -513,7 +520,7 @@ class _CandidateOnboardingFlowWebState
     final currentLeft = _leftPanelData[_currentPage];
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double hPad = Responsive.getSpacing(
@@ -593,7 +600,11 @@ class _CandidateOnboardingFlowWebState
                     ),
                   ),
                   // Right: light green tint background
-                  Expanded(child: Container(color: const Color(0xFFF5FAF9))),
+                  Expanded(
+                    child: Container(
+                      color: context.themeSurface(const Color(0xFFF5FAF9)),
+                    ),
+                  ),
                 ],
               ),
 
@@ -653,9 +664,9 @@ class _CandidateOnboardingFlowWebState
                                         Container(
                                           width: 18,
                                           height: 1,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.6,
-                                          ),
+                                          color: context
+                                              .themeSurface(Colors.white)
+                                              .withValues(alpha: 0.6),
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
@@ -695,7 +706,9 @@ class _CandidateOnboardingFlowWebState
                                       child: Text(
                                         currentLeft['body'] as String,
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFF94A3B8),
+                                          color: context.themeForeground(
+                                            const Color(0xFF94A3B8),
+                                          ),
                                           fontSize: 14.5,
                                           fontWeight: FontWeight.w400,
                                           height: 1.6,
@@ -733,7 +746,9 @@ class _CandidateOnboardingFlowWebState
                                 child: Text(
                                   '© 2026 SkillSense AI',
                                   style: GoogleFonts.inter(
-                                    color: const Color(0xFF64748B),
+                                    color: context.themeForeground(
+                                      const Color(0xFF64748B),
+                                    ),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w400,
                                   ),
@@ -785,7 +800,8 @@ class _CandidateOnboardingFlowWebState
                                               borderRadius:
                                                   BorderRadius.circular(20),
                                               border: Border.all(
-                                                color: CandidateButtonStyle.deepTeal,
+                                                color: CandidateButtonStyle
+                                                    .deepTeal,
                                               ),
                                               color: Colors.transparent,
                                             ),
@@ -794,8 +810,8 @@ class _CandidateOnboardingFlowWebState
                                               style: GoogleFonts.inter(
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w500,
-                                                color:
-                                                    CandidateButtonStyle.deepTeal,
+                                                color: CandidateButtonStyle
+                                                    .deepTeal,
                                               ),
                                             ),
                                           ),
@@ -813,7 +829,8 @@ class _CandidateOnboardingFlowWebState
                                             ),
                                             child: Icon(
                                               _pageIcon(),
-                                              color: CandidateButtonStyle.deepTeal,
+                                              color:
+                                                  CandidateButtonStyle.deepTeal,
                                               size: 34,
                                             ),
                                           ),
@@ -826,7 +843,9 @@ class _CandidateOnboardingFlowWebState
                                             style: GoogleFonts.inter(
                                               fontSize: 24,
                                               fontWeight: FontWeight.w800,
-                                              color: AppColors.hrTextDark,
+                                              color: context.themeForeground(
+                                                AppColors.hrTextDark,
+                                              ),
                                               height: 1.25,
                                               letterSpacing: -0.3,
                                             ),
@@ -840,7 +859,9 @@ class _CandidateOnboardingFlowWebState
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w400,
-                                              color: AppColors.hrTextGrey,
+                                              color: context.themeForeground(
+                                                AppColors.hrTextGrey,
+                                              ),
                                               height: 1.55,
                                             ),
                                           ),
@@ -871,7 +892,8 @@ class _CandidateOnboardingFlowWebState
                                                   height: 8,
                                                   decoration: BoxDecoration(
                                                     color: _currentPage == i
-                                                        ? CandidateButtonStyle.deepTeal
+                                                        ? CandidateButtonStyle
+                                                              .deepTeal
                                                         : AppColors
                                                               .candidateDotInactive,
                                                     borderRadius:
@@ -891,16 +913,21 @@ class _CandidateOnboardingFlowWebState
                                             height: 54,
                                             child: ElevatedButton(
                                               onPressed: _nextPage,
-                                              style: CandidateButtonStyle.primary(ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    CandidateButtonStyle.deepTeal,
-                                                foregroundColor: Colors.white,
-                                                elevation: 0,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(28),
+                                              style: CandidateButtonStyle.primary(
+                                                ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      CandidateButtonStyle
+                                                          .deepTeal,
+                                                  foregroundColor: Colors.white,
+                                                  elevation: 0,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          28,
+                                                        ),
+                                                  ),
                                                 ),
-                                              )),
+                                              ),
                                               child: Text(
                                                 _currentPage == _totalPages - 1
                                                     ? AppConstants
@@ -976,11 +1003,11 @@ class _CandidateBulletPoint extends StatelessWidget {
             shape: BoxShape.circle,
             color: isActive
                 ? CandidateButtonStyle.deepTeal
-                : Colors.white.withValues(alpha: 0.08),
+                : context.themeSurface(Colors.white).withValues(alpha: 0.08),
             border: Border.all(
               color: isActive
                   ? CandidateButtonStyle.deepTeal
-                  : Colors.white.withValues(alpha: 0.2),
+                  : context.themeOutline(Colors.white).withValues(alpha: 0.2),
               width: 1.5,
             ),
           ),
@@ -1027,7 +1054,7 @@ class _WebJobMatchRow extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textDark,
+                color: context.themeForeground(AppColors.textDark),
               ),
             ),
             Text(
@@ -1044,7 +1071,7 @@ class _WebJobMatchRow extends StatelessWidget {
         Container(
           height: 8,
           decoration: BoxDecoration(
-            color: AppColors.candidateProgressBg,
+            color: context.themeSurface(AppColors.candidateProgressBg),
             borderRadius: BorderRadius.circular(8),
           ),
           child: FractionallySizedBox(
@@ -1110,7 +1137,7 @@ class _WebScoreRow extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textDark,
+                color: context.themeForeground(AppColors.textDark),
               ),
             ),
             Container(
@@ -1134,7 +1161,7 @@ class _WebScoreRow extends StatelessWidget {
         Container(
           height: 8,
           decoration: BoxDecoration(
-            color: AppColors.candidateProgressBg,
+            color: context.themeSurface(AppColors.candidateProgressBg),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
@@ -1169,7 +1196,7 @@ class _CandidatePrivacyRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -1201,7 +1228,7 @@ class _CandidatePrivacyRow extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textDark,
+                color: context.themeForeground(AppColors.textDark),
                 height: 1.35,
               ),
             ),

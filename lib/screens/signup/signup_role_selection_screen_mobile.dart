@@ -35,7 +35,7 @@ class SignupRoleSelectionScreenMobile extends StatelessWidget {
     final background = isDark ? const Color(0xFF0C1220) : Colors.white;
     final text = isDark ? const Color(0xFFE7ECF6) : AppColors.hrTextDark;
     final secondary = isDark ? const Color(0xFF9FACC6) : AppColors.hrTextGrey;
-    final muted = isDark ? const Color(0xFF7C89A6) : AppColors.hrTextLight;
+    final muted = isDark ? const Color(0xFFA8B5CF) : AppColors.hrTextLight;
     final card = isDark ? const Color(0xFF121A2C) : Colors.white;
     final edge = isDark
         ? const Color(0xFF2A3650)
@@ -252,7 +252,12 @@ class SignupRoleSelectionScreenMobile extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: selectedRole == null
                                   ? AppColors.primary.withValues(alpha: .4)
-                                  : PreAuthButtonStyle.roleColor(selectedRole),
+                                  : null,
+                              gradient: selectedRole == null
+                                  ? null
+                                  : PreAuthButtonStyle.roleGradient(
+                                      selectedRole,
+                                    ),
                               borderRadius: BorderRadius.circular(28),
                               boxShadow: selectedRole == null
                                   ? null

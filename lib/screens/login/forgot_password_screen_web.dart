@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
+import '../../widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -48,7 +50,9 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
   Future<void> _submit() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      setState(() => _errorMessage = 'Enter the email address on your account.');
+      setState(
+        () => _errorMessage = 'Enter the email address on your account.',
+      );
       return;
     }
     if (!_isValidEmail(email)) {
@@ -66,7 +70,8 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
     } catch (e) {
       if (mounted) {
         final error = e.toString().toLowerCase();
-        final accountNotFound = error.contains('form_identifier_not_found') ||
+        final accountNotFound =
+            error.contains('form_identifier_not_found') ||
             error.contains("couldn't find your account") ||
             error.contains("couldn't find an account");
         setState(() {
@@ -83,7 +88,7 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double horizontalPadding = Responsive.getSpacing(
@@ -134,8 +139,8 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
                                     ),
                                     child: ConstrainedBox(
                                       constraints: const BoxConstraints(
-                                        maxWidth:
-                                            Responsive.rightPanelContentMaxWidth,
+                                        maxWidth: Responsive
+                                            .rightPanelContentMaxWidth,
                                       ),
                                       child: Column(
                                         mainAxisAlignment:
@@ -148,7 +153,9 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
                                             style: GoogleFonts.inter(
                                               fontSize: 32,
                                               fontWeight: FontWeight.w800,
-                                              color: const Color(0xFF0F172A),
+                                              color: context.themeForeground(
+                                                const Color(0xFF0F172A),
+                                              ),
                                               letterSpacing: -0.01,
                                             ),
                                           ),
@@ -158,7 +165,9 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w400,
-                                              color: const Color(0xFF64748B),
+                                              color: context.themeForeground(
+                                                const Color(0xFF64748B),
+                                              ),
                                               height: 1.5,
                                             ),
                                           ),
@@ -197,16 +206,21 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
                                             width: double.infinity,
                                             height: 50,
                                             child: ElevatedButton(
-                                              onPressed:
-                                                  _isLoading ? null : _submit,
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    AppColors.webLoginButton,
-                                                foregroundColor: Colors.white,
-                                                elevation: 0,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(25),
+                                              onPressed: _isLoading
+                                                  ? null
+                                                  : _submit,
+                                              style: PreAuthButtonStyle.active(
+                                                ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      AppColors.webLoginButton,
+                                                  foregroundColor: Colors.white,
+                                                  elevation: 0,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          25,
+                                                        ),
+                                                  ),
                                                 ),
                                               ),
                                               child: _isLoading
@@ -215,12 +229,13 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
                                                       height: 20,
                                                       child:
                                                           CircularProgressIndicator(
-                                                        color: Colors.white,
-                                                        strokeWidth: 2,
-                                                      ),
+                                                            color: Colors.white,
+                                                            strokeWidth: 2,
+                                                          ),
                                                     )
                                                   : Text(
-                                                      AppConstants.forgotWebButton,
+                                                      AppConstants
+                                                          .forgotWebButton,
                                                       style: GoogleFonts.inter(
                                                         fontSize: 15,
                                                         fontWeight:
@@ -239,8 +254,12 @@ class _ForgotPasswordScreenWebState extends State<ForgotPasswordScreenWeb> {
                                                 text: TextSpan(
                                                   style: GoogleFonts.inter(
                                                     fontSize: 13,
-                                                    color: const Color(
-                                                        0xFF64748B),
+                                                    color: context
+                                                        .themeForeground(
+                                                          const Color(
+                                                            0xFF64748B,
+                                                          ),
+                                                        ),
                                                   ),
                                                   children: [
                                                     TextSpan(

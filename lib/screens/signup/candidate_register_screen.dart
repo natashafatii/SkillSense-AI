@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -241,7 +242,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
       labelText: label,
       labelStyle: GoogleFonts.publicSans(
         fontSize: 14,
-        color: focused ? _green : const Color(0xFF9E9E9E),
+        color: focused
+            ? _green
+            : context.themeForeground(const Color(0xFF9E9E9E)),
         fontWeight: focused ? FontWeight.w600 : FontWeight.w400,
       ),
       floatingLabelStyle: GoogleFonts.publicSans(
@@ -256,14 +259,20 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
       ),
       floatingLabelBehavior: FloatingLabelBehavior.auto,
       filled: true,
-      fillColor: focused ? Colors.white : const Color(0xFFF8F9FA),
+      fillColor: focused
+          ? context.themeSurface(Colors.white)
+          : context.themeSurface(const Color(0xFFF8F9FA)),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE8E8E8)),
+        borderSide: BorderSide(
+          color: context.themeOutline(const Color(0xFFE8E8E8)),
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE8E8E8)),
+        borderSide: BorderSide(
+          color: context.themeOutline(const Color(0xFFE8E8E8)),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -362,9 +371,12 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
         Expanded(
           child: Container(
             height: 1,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.transparent, Color(0xFFE0E0E0)],
+                colors: [
+                  Colors.transparent,
+                  context.themeSurface(const Color(0xFFE0E0E0)),
+                ],
               ),
             ),
           ),
@@ -382,9 +394,12 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
         Expanded(
           child: Container(
             height: 1,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFFE0E0E0), Colors.transparent],
+                colors: [
+                  context.themeSurface(const Color(0xFFE0E0E0)),
+                  Colors.transparent,
+                ],
               ),
             ),
           ),
@@ -394,8 +409,11 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
   );
 
   // ── Prefix icon helper ─────────────────────────────────────────────────────
-  Widget _icon(IconData data, {bool focused = false}) =>
-      Icon(data, size: 20, color: focused ? _green : const Color(0xFFBDBDBD));
+  Widget _icon(IconData data, {bool focused = false}) => Icon(
+    data,
+    size: 20,
+    color: focused ? _green : context.themeForeground(const Color(0xFFBDBDBD)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -444,7 +462,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
         }
 
         return Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: context.themeCanvas(Colors.white),
           body: Stack(
             children: [
               const GreenGradientBackground(),
@@ -467,7 +485,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                   width: 42,
                                   height: 42,
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.85),
+                                    color: context
+                                        .themeSurface(Colors.white)
+                                        .withValues(alpha: 0.85),
                                     borderRadius: BorderRadius.circular(13),
                                     border: Border.all(
                                       color: _green.withValues(alpha: .35),
@@ -554,7 +574,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                       child: Container(
                         transform: Matrix4.translationValues(0, -8, 0),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: context.themeSurface(Colors.white),
                           borderRadius: const BorderRadius.only(
                             topLeft: Radius.circular(32),
                             topRight: Radius.circular(32),
@@ -582,14 +602,20 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                         ? null
                                         : _googleSignUp,
                                     style: OutlinedButton.styleFrom(
-                                      side: const BorderSide(
-                                        color: Color(0xFFE2E8F0),
+                                      side: BorderSide(
+                                        color: context.themeOutline(
+                                          const Color(0xFFE2E8F0),
+                                        ),
                                       ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(24),
                                       ),
-                                      backgroundColor: Colors.white,
-                                      foregroundColor: const Color(0xFF0F172A),
+                                      backgroundColor: context.themeSurface(
+                                        Colors.white,
+                                      ),
+                                      foregroundColor: context.themeForeground(
+                                        const Color(0xFF0F172A),
+                                      ),
                                     ),
                                     child: Row(
                                       mainAxisAlignment:
@@ -605,7 +631,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                           style: GoogleFonts.inter(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
-                                            color: const Color(0xFF334155),
+                                            color: context.themeForeground(
+                                              const Color(0xFF334155),
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -633,7 +661,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                               TextCapitalization.words,
                                           style: GoogleFonts.publicSans(
                                             fontSize: 14,
-                                            color: const Color(0xFF212121),
+                                            color: context.themeForeground(
+                                              const Color(0xFF212121),
+                                            ),
                                           ),
                                           decoration: _decor(
                                             'First Name',
@@ -662,7 +692,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                               TextCapitalization.words,
                                           style: GoogleFonts.publicSans(
                                             fontSize: 14,
-                                            color: const Color(0xFF212121),
+                                            color: context.themeForeground(
+                                              const Color(0xFF212121),
+                                            ),
                                           ),
                                           decoration: _decor(
                                             'Last Name',
@@ -701,7 +733,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                     keyboardType: TextInputType.emailAddress,
                                     style: GoogleFonts.publicSans(
                                       fontSize: 14,
-                                      color: const Color(0xFF212121),
+                                      color: context.themeForeground(
+                                        const Color(0xFF212121),
+                                      ),
                                     ),
                                     decoration: _decor(
                                       'Email Address',
@@ -742,7 +776,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                           fontWeight: FontWeight.w700,
                                           color: _phoneFocus.hasFocus
                                               ? _green
-                                              : const Color(0xFF9E9E9E),
+                                              : context.themeForeground(
+                                                  const Color(0xFF9E9E9E),
+                                                ),
                                         ),
                                       ),
                                     ),
@@ -777,7 +813,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                     obscureText: _obscurePassword,
                                     style: GoogleFonts.publicSans(
                                       fontSize: 14,
-                                      color: const Color(0xFF212121),
+                                      color: context.themeForeground(
+                                        const Color(0xFF212121),
+                                      ),
                                     ),
                                     onChanged: (_) => setState(() {}),
                                     decoration: _decor(
@@ -794,7 +832,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                           _obscurePassword
                                               ? Icons.visibility_off_outlined
                                               : Icons.visibility_outlined,
-                                          color: const Color(0xFF9E9E9E),
+                                          color: context.themeForeground(
+                                            const Color(0xFF9E9E9E),
+                                          ),
                                           size: 20,
                                         ),
                                         onPressed: () => setState(
@@ -860,7 +900,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                     '8+ chars · uppercase · numbers · symbols',
                                     style: GoogleFonts.publicSans(
                                       fontSize: 11,
-                                      color: const Color(0xFFBDBDBD),
+                                      color: context.themeForeground(
+                                        const Color(0xFFBDBDBD),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -876,7 +918,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                     obscureText: _obscureConfirm,
                                     style: GoogleFonts.publicSans(
                                       fontSize: 14,
-                                      color: const Color(0xFF212121),
+                                      color: context.themeForeground(
+                                        const Color(0xFF212121),
+                                      ),
                                     ),
                                     decoration: _decor(
                                       'Confirm Password',
@@ -892,7 +936,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                           _obscureConfirm
                                               ? Icons.visibility_off_outlined
                                               : Icons.visibility_outlined,
-                                          color: const Color(0xFF9E9E9E),
+                                          color: context.themeForeground(
+                                            const Color(0xFF9E9E9E),
+                                          ),
                                           size: 20,
                                         ),
                                         onPressed: () => setState(
@@ -918,21 +964,26 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                 Container(
                                   height: 56,
                                   decoration: BoxDecoration(
-                                    gradient: _isLoading ? const LinearGradient(
-                                      colors: [
-                                        Color(0xFF81E291),
-                                        Color(0xFF34C759),
-                                        Color(0xFF248C3D),
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ) : CandidateButtonStyle.primaryGradient,
+                                    gradient: _isLoading
+                                        ? const LinearGradient(
+                                            colors: [
+                                              Color(0xFF81E291),
+                                              Color(0xFF34C759),
+                                              Color(0xFF248C3D),
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          )
+                                        : CandidateButtonStyle.primaryGradient,
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
                                         color: _isLoading
-                                            ? const Color(0xFF34C759).withValues(alpha: .45)
-                                            : CandidateButtonStyle.teal.withValues(alpha: .24),
+                                            ? const Color(
+                                                0xFF34C759,
+                                              ).withValues(alpha: .45)
+                                            : CandidateButtonStyle.teal
+                                                  .withValues(alpha: .24),
                                         blurRadius: 18,
                                         offset: const Offset(0, 7),
                                       ),
@@ -977,7 +1028,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                   text: TextSpan(
                                     style: GoogleFonts.publicSans(
                                       fontSize: 12,
-                                      color: const Color(0xFFAAAAAA),
+                                      color: context.themeForeground(
+                                        const Color(0xFFAAAAAA),
+                                      ),
                                       height: 1.6,
                                     ),
                                     children: [
@@ -1019,7 +1072,9 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                       AppConstants.alreadyAccountPrompt,
                                       style: GoogleFonts.publicSans(
                                         fontSize: 14,
-                                        color: const Color(0xFF757575),
+                                        color: context.themeForeground(
+                                          const Color(0xFF757575),
+                                        ),
                                       ),
                                     ),
                                     PointerGestureDetector(

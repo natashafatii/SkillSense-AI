@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/candidate_feedback_dashboard.dart';
@@ -7,6 +8,8 @@ import '../../services/feedback_service.dart';
 import '../../services/session_scope.dart';
 import '../../services/media/interview_media_route_observer.dart';
 import '../../widgets/candidate_scaffold.dart';
+import '../../widgets/candidate_button_style.dart';
+import '../../widgets/recruiter_top_bar.dart';
 
 class CandidateFeedbackReportScreen extends StatefulWidget {
   final Future<PaginatedResponse<CandidateFeedback>> Function(int page)?
@@ -163,10 +166,10 @@ class _CandidateFeedbackReportScreenState
     return Theme(
       data: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.light,
+        brightness: Theme.of(context).brightness,
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF059669),
-          brightness: Brightness.light,
+          brightness: Theme.of(context).brightness,
         ),
       ),
       child: CandidateScaffold(
@@ -174,27 +177,15 @@ class _CandidateFeedbackReportScreenState
         body: SafeArea(
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Interview feedback',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Refresh feedback',
-                      onPressed: _loading ? null : () => _load(),
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
-                ),
+              RecruiterTopBar(
+                pageTitle: 'Interview feedback',
+                candidate: true,
+                showTrailingButton: true,
+                trailingIcon: Icons.refresh,
+                trailingTooltip: 'Refresh feedback',
+                onTrailingTap: () {
+                  if (!_loading) _load();
+                },
               ),
               Expanded(child: _body()),
             ],
@@ -234,7 +225,11 @@ class _CandidateFeedbackReportScreenState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.rate_review_outlined, size: 48, color: _muted),
+                Icon(
+                  Icons.rate_review_outlined,
+                  size: 48,
+                  color: context.themeForeground(_muted),
+                ),
                 const SizedBox(height: 16),
                 const Text(
                   'No feedback yet.',
@@ -247,6 +242,7 @@ class _CandidateFeedbackReportScreenState
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
+                  style: CandidateButtonStyle.primary(FilledButton.styleFrom()),
                   onPressed: () => Navigator.of(
                     context,
                   ).pushNamed('/candidate/interview-lobby'),
@@ -259,7 +255,7 @@ class _CandidateFeedbackReportScreenState
       );
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
       children: [
         for (final row in data.results) _entry(row),
         Row(
@@ -292,7 +288,7 @@ class _CandidateFeedbackReportScreenState
     };
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
-      color: Colors.white,
+      color: context.themeSurface(Colors.white),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -300,16 +296,19 @@ class _CandidateFeedbackReportScreenState
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: _ink,
+                color: context.themeForeground(_ink),
               ),
             ),
             const SizedBox(height: 8),
             SelectableText(
               'Interview: ${row.interviewId}\nApplication: ${row.applicationId}',
-              style: const TextStyle(fontSize: 12, color: _muted),
+              style: TextStyle(
+                fontSize: 12,
+                color: context.themeForeground(_muted),
+              ),
             ),
             const SizedBox(height: 14),
             if (row.state == FeedbackState.released && row.report != null)
@@ -329,7 +328,7 @@ class _CandidateFeedbackReportScreenState
                 FeedbackState.unknown =>
                   'Refresh to check feedback availability.',
                 FeedbackState.released => 'Report content is unavailable.',
-              }, style: const TextStyle(color: _muted)),
+              }, style: TextStyle(color: context.themeForeground(_muted))),
           ],
         ),
       ),

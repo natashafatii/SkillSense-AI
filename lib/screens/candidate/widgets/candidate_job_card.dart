@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/candidate_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'dart:math';
@@ -84,18 +85,6 @@ class _CandidateJobCardState extends State<CandidateJobCard>
     return const Color(0xFFEF4444);
   }
 
-  // Generate a mock salary based on experience to match design
-  String _getSalaryStr() {
-    switch (widget.job.experienceLevel) {
-      case ExperienceLevel.senior:
-        return 'PKR 250–350k';
-      case ExperienceLevel.entry:
-        return 'PKR 120–180k';
-      case ExperienceLevel.mid:
-        return 'PKR 180–260k';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final title = widget.job.title;
@@ -167,7 +156,7 @@ class _CandidateJobCardState extends State<CandidateJobCard>
           duration: const Duration(milliseconds: 250),
           transform: Matrix4.translationValues(0, _isHovered ? -2.0 : 0.0, 0),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.themeSurface(Colors.white),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: const Color(0xFF26334D).withValues(alpha: 0.06),
@@ -249,7 +238,9 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: const Color(0xFF0F172A),
+                              color: context.themeForeground(
+                                const Color(0xFF0F172A),
+                              ),
                             ),
                           ),
                         ],
@@ -273,7 +264,9 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                       Text(
                                         title,
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFF0F172A),
+                                          color: context.themeForeground(
+                                            const Color(0xFF0F172A),
+                                          ),
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -282,9 +275,11 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '$company · $location · ${_getSalaryStr()}',
+                                        '$company · $location · ${widget.job.salaryLabel}',
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFF64748B),
+                                          color: context.themeForeground(
+                                            const Color(0xFF64748B),
+                                          ),
                                           fontSize: 10.5,
                                           fontWeight: FontWeight.w400,
                                         ),
@@ -301,15 +296,15 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                   ),
                               ],
                             ),
-                            if (score == null)
+                            if (score == null && widget.hasUploadedResume)
                               Text(
-                                !widget.hasUploadedResume
-                                    ? 'Upload a resume to see your match score.'
-                                    : 'Match score available after application screening.',
+                                'Match score available after application screening.',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.inter(
-                                  color: const Color(0xFF94A3B8),
+                                  color: context.themeForeground(
+                                    const Color(0xFF94A3B8),
+                                  ),
                                   fontSize: 9,
                                 ),
                               ),
@@ -317,10 +312,15 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Expanded(
-                                  child: Wrap(
-                                    spacing: 6,
-                                    runSpacing: 4,
-                                    children: _buildSkillChips(skills),
+                                  child: Padding(
+                                    padding: EdgeInsets.only(
+                                      top: skills.isEmpty ? 0 : 8,
+                                    ),
+                                    child: Wrap(
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      children: _buildSkillChips(skills),
+                                    ),
                                   ),
                                 ),
                                 if (widget.isMobile)
@@ -357,13 +357,15 @@ class _CandidateJobCardState extends State<CandidateJobCard>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9), // muted background
+            color: context.themeSurface(
+              const Color(0xFFF1F5F9),
+            ), // muted background
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
             '+$remaining',
             style: GoogleFonts.inter(
-              color: const Color(0xFF64748B),
+              color: context.themeForeground(const Color(0xFF64748B)),
               fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
@@ -395,14 +397,19 @@ class _SkillChipState extends State<_SkillChip> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
         decoration: BoxDecoration(
-          color: _hovered ? const Color(0xFFE2E8F0) : const Color(0xFFF8FAFC),
+          color: _hovered
+              ? context.themeSurface(const Color(0xFFE2E8F0))
+              : context.themeSurface(const Color(0xFFF8FAFC)),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          border: Border.all(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+            width: 1,
+          ),
         ),
         child: Text(
           widget.skill,
           style: GoogleFonts.inter(
-            color: const Color(0xFF475569),
+            color: context.themeForeground(const Color(0xFF475569)),
             fontSize: 10,
             fontWeight: FontWeight.w500,
           ),
@@ -451,7 +458,9 @@ class _ApplyButtonState extends State<_ApplyButton> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: widget.isApplied ? const Color(0xFFE2E8F0) : null,
+                color: widget.isApplied
+                    ? context.themeSurface(const Color(0xFFE2E8F0))
+                    : null,
                 gradient: widget.isApplied
                     ? null
                     : CandidateButtonStyle.primaryGradient,
@@ -480,7 +489,7 @@ class _ApplyButtonState extends State<_ApplyButton> {
                 widget.isApplied ? 'Applied' : 'Apply',
                 style: GoogleFonts.inter(
                   color: widget.isApplied
-                      ? const Color(0xFF64748B)
+                      ? context.themeForeground(const Color(0xFF64748B))
                       : Colors.white,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,

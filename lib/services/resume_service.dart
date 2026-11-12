@@ -133,6 +133,7 @@ class ResumeService {
     Future<ResumeDetail> Function(String)? fetchDetail,
   }) async {
     final stopWatch = Stopwatch()..start();
+    ApiException? lastRequestError;
 
     while (stopWatch.elapsed < timeout) {
       if (onTick != null) {
@@ -140,27 +141,36 @@ class ResumeService {
       }
       try {
         final detail =
-            await (fetchDetail?.call(resumeId) ?? getResumeDetail(resumeId));
+            await (fetchDetail?.call(resumeId) ??
+                getResumeDetail(resumeId, refresh: true));
+        lastRequestError = null;
         if (detail.isFailed) {
-          throw const ApiException(
+          final message = detail.processingError?.trim();
+          throw ApiException(
             statusCode: 422,
-            message: 'Resume parsing failed.',
+            message: message == null || message.isEmpty
+                ? 'Resume parsing failed.'
+                : message,
           );
         }
         if (detail.isParsed) {
           return detail;
         }
       } on ApiException catch (e) {
-        if (e.statusCode == 422) rethrow;
-        // Transient request errors may recover before the deadline.
+        final status = e.statusCode;
+        if (status != null && status != 408 && status != 429 && status < 500) {
+          rethrow;
+        }
+        lastRequestError = e;
       }
       await Future.delayed(interval);
     }
 
-    throw const ApiException(
-      statusCode: 408,
-      message: 'Still processing — this can take a moment.',
-    );
+    throw lastRequestError ??
+        const ApiException(
+          statusCode: 408,
+          message: 'Still processing — this can take a moment.',
+        );
   }
 
   // ── PATCH (partial update — set default, rename, etc.) ────────────────────

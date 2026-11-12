@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/adaptive_colors.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
@@ -69,7 +70,7 @@ class WebAuthBackground extends StatelessWidget {
             ],
           ),
         ),
-        Expanded(child: Container(color: Colors.white)),
+        Expanded(child: Container(color: context.themeSurface(Colors.white))),
       ],
     );
   }
@@ -87,7 +88,7 @@ class WebAuthFieldLabel extends StatelessWidget {
       style: GoogleFonts.inter(
         fontSize: 12.5,
         fontWeight: FontWeight.w500,
-        color: const Color(0xFF64748B),
+        color: context.themeForeground(const Color(0xFF64748B)),
       ),
     );
   }
@@ -121,11 +122,14 @@ class WebAuthTextField extends StatelessWidget {
       focusNode: focusNode,
       obscureText: obscureText,
       keyboardType: keyboardType,
-      style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF0F172A)),
+      style: GoogleFonts.inter(
+        fontSize: 14,
+        color: context.themeForeground(const Color(0xFF0F172A)),
+      ),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: GoogleFonts.inter(
-          color: const Color(0xFF94A3B8),
+          color: context.themeForeground(const Color(0xFF94A3B8)),
           fontSize: 14,
         ),
         contentPadding: const EdgeInsets.symmetric(
@@ -133,17 +137,21 @@ class WebAuthTextField extends StatelessWidget {
           vertical: 14,
         ),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: context.themeSurface(const Color(0xFFF8FAFC)),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(
-            color: hasError ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0),
+            color: hasError
+                ? const Color(0xFFEF4444)
+                : context.themeOutline(const Color(0xFFE2E8F0)),
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(
-            color: hasError ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0),
+            color: hasError
+                ? const Color(0xFFEF4444)
+                : context.themeOutline(const Color(0xFFE2E8F0)),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -151,7 +159,7 @@ class WebAuthTextField extends StatelessWidget {
           borderSide: BorderSide(
             color: hasError
                 ? const Color(0xFFEF4444)
-                : AppColors.webLoginButton,
+                : context.themeForeground(AppColors.webLoginButton),
             width: 1.5,
           ),
         ),
@@ -276,7 +284,7 @@ class WebAuthLeftPanel extends StatelessWidget {
                   child: Text(
                     body,
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF94A3B8),
+                      color: context.themeForeground(const Color(0xFF94A3B8)),
                       fontSize: 14.5,
                       fontWeight: FontWeight.w400,
                       height: 1.6,
@@ -306,7 +314,7 @@ class WebAuthLeftPanel extends StatelessWidget {
               child: Text(
                 '© 2026 SkillSense AI',
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B),
+                  color: context.themeForeground(const Color(0xFF64748B)),
                   fontSize: 12,
                   fontWeight: FontWeight.w400,
                 ),

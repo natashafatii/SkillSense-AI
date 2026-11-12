@@ -99,6 +99,8 @@ class Job {
   final List<String> skillsRequired;
   final String location;
   final String salary;
+  final num? minSalary;
+  final num? maxSalary;
   final JobType jobType;
   final ExperienceLevel experienceLevel;
   final JobStatus status;
@@ -126,6 +128,8 @@ class Job {
     required this.skillsRequired,
     required this.location,
     this.salary = '',
+    this.minSalary,
+    this.maxSalary,
     required this.jobType,
     required this.experienceLevel,
     required this.status,
@@ -138,6 +142,30 @@ class Job {
     this.matchScore,
     this.hasApplied = false,
   });
+
+  String get salaryLabel {
+    final min = minSalary;
+    final max = maxSalary;
+    if (min != null && max != null) {
+      return min == max
+          ? 'PKR ${_salaryAmount(min)}'
+          : 'PKR ${_salaryAmount(min)}–${_salaryAmount(max)}';
+    }
+    if (min != null) return 'From PKR ${_salaryAmount(min)}';
+    if (max != null) return 'Up to PKR ${_salaryAmount(max)}';
+    return salary.trim().isEmpty ? 'Salary not specified' : salary.trim();
+  }
+
+  static String _salaryAmount(num amount) => amount == amount.truncate()
+      ? amount.truncate().toString()
+      : amount.toString();
+
+  static num? _parseSalaryAmount(Object? value) {
+    final amount = value is num
+        ? value
+        : num.tryParse(value?.toString().trim() ?? '');
+    return amount != null && amount.isFinite ? amount : null;
+  }
 
   bool get isDraft => status == JobStatus.draft;
   bool get isActive => status == JobStatus.active;
@@ -173,6 +201,8 @@ class Job {
           const [],
       location: json['location'] as String,
       salary: json['salary'] as String? ?? '',
+      minSalary: _parseSalaryAmount(json['min_salary']),
+      maxSalary: _parseSalaryAmount(json['max_salary']),
       jobType: JobType.fromString(json['job_type'] as String? ?? 'REMOTE'),
       experienceLevel: ExperienceLevel.fromString(
         json['experience_level'] as String? ?? 'MID',

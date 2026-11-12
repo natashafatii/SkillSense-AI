@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -353,14 +354,14 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
         menuHeight: 360,
         inputDecorationTheme: InputDecorationThemeData(
           filled: true,
-          fillColor: _surface,
+          fillColor: context.themeSurface(_surface),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: _border),
+            borderSide: BorderSide(color: context.themeOutline(_border)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: _border),
+            borderSide: BorderSide(color: context.themeOutline(_border)),
           ),
         ),
         dropdownMenuEntries: [
@@ -493,13 +494,13 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
         colorScheme: Theme.of(context).colorScheme.copyWith(
           primary: _accent,
           onPrimary: Colors.white,
-          onSurface: _ink,
-          surface: _surface,
+          onSurface: context.themeForeground(_ink),
+          surface: context.themeSurface(_surface),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: _ink,
-            side: const BorderSide(color: _edge),
+            foregroundColor: context.themeForeground(_ink),
+            side: BorderSide(color: context.themeOutline(_edge)),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(9),
             ),
@@ -516,11 +517,11 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
         ),
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFFF4F6FB),
+        backgroundColor: context.themeCanvas(const Color(0xFFF4F6FB)),
         body: DefaultTextStyle.merge(
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Inter',
-            color: _ink,
+            color: context.themeForeground(_ink),
             fontSize: 14,
             height: 1.45,
           ),
@@ -568,11 +569,11 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
                     : () => _load(refreshCandidates: true),
               ),
               if (snapshot.hasError)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(top: 10),
                   child: Text(
                     'Candidate ranking and navigation are temporarily unavailable.',
-                    style: _mutedStyle,
+                    style: _mutedStyle(context),
                   ),
                 ),
             ],
@@ -583,7 +584,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
       if (_notice case final notice?)
         Padding(
           padding: const EdgeInsets.only(top: 10),
-          child: Text(notice, style: _mutedStyle),
+          child: Text(notice, style: _mutedStyle(context)),
         ),
       const SizedBox(height: _gap),
       _MatchCard(application: app, assessment: assessment, fit: fit),

@@ -154,7 +154,7 @@ class _InterviewPlan extends StatelessWidget {
             ),
           if (focusAreas.isNotEmpty) ...[
             const SizedBox(height: 12),
-            const Text('Focus areas from screening', style: _labelStyle),
+            Text('Focus areas from screening', style: _labelStyle(context)),
             const SizedBox(height: 6),
             _SkillChips(focusAreas, color: _warning, outline: true),
           ],
@@ -176,7 +176,7 @@ class _InterviewPlan extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          Text(note, style: _mutedStyle),
+          Text(note, style: _mutedStyle(context)),
         ],
       ),
     );

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'mobile_nav_tab.dart';
 import 'mobile_nav_tooltip.dart';
@@ -119,12 +120,14 @@ class _CandidateMobileNavState extends State<CandidateMobileNav> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Material(
                       key: ValueKey('candidate-mobile-submenu-$_expanded'),
-                      color: Colors.white,
+                      color: context.themeSurface(Colors.white),
                       elevation: 6,
                       shadowColor: Colors.black.withValues(alpha: 0.12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(26),
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        side: BorderSide(
+                          color: context.themeOutline(const Color(0xFFE2E8F0)),
+                        ),
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: SizedBox(
@@ -173,9 +176,11 @@ class _CandidateMobileNavState extends State<CandidateMobileNav> {
             key: const Key('candidate-mobile-main-nav'),
             height: 64,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.themeSurface(Colors.white),
               borderRadius: BorderRadius.circular(32),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(
+                color: context.themeOutline(const Color(0xFFE2E8F0)),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.06),

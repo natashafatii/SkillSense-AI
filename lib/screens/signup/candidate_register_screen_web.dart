@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/gestures.dart';
@@ -64,7 +65,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double horizontalPadding = Responsive.getSpacing(
@@ -148,7 +149,11 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                             ),
                           ),
                           // Right: pure white
-                          Expanded(child: Container(color: Colors.white)),
+                          Expanded(
+                            child: Container(
+                              color: context.themeSurface(Colors.white),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -213,9 +218,9 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             Container(
                                               width: 18,
                                               height: 1,
-                                              color: Colors.white.withValues(
-                                                alpha: 0.6,
-                                              ),
+                                              color: context
+                                                  .themeSurface(Colors.white)
+                                                  .withValues(alpha: 0.6),
                                             ),
                                             const SizedBox(width: 8),
                                             Flexible(
@@ -319,7 +324,9 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             AppConstants
                                                 .candidateRegisterLeftBody,
                                             style: GoogleFonts.inter(
-                                              color: const Color(0xFF94A3B8),
+                                              color: context.themeForeground(
+                                                const Color(0xFF94A3B8),
+                                              ),
                                               fontSize: 14.5,
                                               fontWeight: FontWeight.w400,
                                               height: 1.6,
@@ -355,7 +362,9 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                       child: Text(
                                         '© 2026 SkillSense AI',
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFF64748B),
+                                          color: context.themeForeground(
+                                            const Color(0xFF64748B),
+                                          ),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w400,
                                         ),
@@ -397,7 +406,9 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             style: GoogleFonts.inter(
                                               fontSize: 26,
                                               fontWeight: FontWeight.w800,
-                                              color: const Color(0xFF0F172A),
+                                              color: context.themeForeground(
+                                                const Color(0xFF0F172A),
+                                              ),
                                               letterSpacing: -0.01,
                                             ),
                                           ),
@@ -410,7 +421,9 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w400,
-                                              color: const Color(0xFF64748B),
+                                              color: context.themeForeground(
+                                                const Color(0xFF64748B),
+                                              ),
                                               height: 1.5,
                                             ),
                                           ),
@@ -521,7 +534,9 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                     ? Icons
                                                           .visibility_off_outlined
                                                     : Icons.visibility_outlined,
-                                                color: const Color(0xFF94A3B8),
+                                                color: context.themeForeground(
+                                                  const Color(0xFF94A3B8),
+                                                ),
                                                 size: 20,
                                               ),
                                             ),
@@ -541,9 +556,12 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                   'Use at least 8 characters with a number',
                                                   style: GoogleFonts.inter(
                                                     fontSize: 12,
-                                                    color: const Color(
-                                                      0xFF64748B,
-                                                    ),
+                                                    color: context
+                                                        .themeForeground(
+                                                          const Color(
+                                                            0xFF64748B,
+                                                          ),
+                                                        ),
                                                   ),
                                                 ),
                                               );
@@ -567,7 +585,9 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                     ? Icons
                                                           .visibility_off_outlined
                                                     : Icons.visibility_outlined,
-                                                color: const Color(0xFF94A3B8),
+                                                color: context.themeForeground(
+                                                  const Color(0xFF94A3B8),
+                                                ),
                                                 size: 20,
                                               ),
                                             ),
@@ -582,19 +602,25 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               onPressed: isLoading
                                                   ? null
                                                   : onRegister,
-                                              style: PreAuthButtonStyle.active(ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    AppColors.candidatePrimary,
-                                                foregroundColor: Colors.white,
-                                                disabledBackgroundColor:
-                                                    AppColors.candidatePrimary
-                                                        .withValues(alpha: 0.5),
-                                                elevation: 0,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(25),
+                                              style: PreAuthButtonStyle.active(
+                                                ElevatedButton.styleFrom(
+                                                  backgroundColor: AppColors
+                                                      .candidatePrimary,
+                                                  foregroundColor: Colors.white,
+                                                  disabledBackgroundColor:
+                                                      AppColors.candidatePrimary
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
+                                                  elevation: 0,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          25,
+                                                        ),
+                                                  ),
                                                 ),
-                                              )),
+                                              ),
                                               child: isLoading
                                                   ? const SizedBox(
                                                       width: 20,
@@ -625,9 +651,10 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               text: TextSpan(
                                                 style: GoogleFonts.inter(
                                                   fontSize: 12,
-                                                  color: const Color(
-                                                    0xFF64748B,
-                                                  ),
+                                                  color: context
+                                                      .themeForeground(
+                                                        const Color(0xFF64748B),
+                                                      ),
                                                   height: 1.5,
                                                 ),
                                                 children: [
@@ -639,7 +666,8 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                     text:
                                                         'Terms and Privacy Policy',
                                                     style: GoogleFonts.inter(
-                                                      color: PreAuthButtonStyle.blue,
+                                                      color: PreAuthButtonStyle
+                                                          .blue,
                                                       fontWeight:
                                                           FontWeight.w600,
                                                       decoration: TextDecoration
@@ -674,9 +702,12 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                   text: TextSpan(
                                                     style: GoogleFonts.inter(
                                                       fontSize: 13,
-                                                      color: const Color(
-                                                        0xFF64748B,
-                                                      ),
+                                                      color: context
+                                                          .themeForeground(
+                                                            const Color(
+                                                              0xFF64748B,
+                                                            ),
+                                                          ),
                                                     ),
                                                     children: [
                                                       TextSpan(
@@ -687,7 +718,9 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                         text: AppConstants
                                                             .loginLinkText,
                                                         style: GoogleFonts.inter(
-                                                          color: PreAuthButtonStyle.blue,
+                                                          color:
+                                                              PreAuthButtonStyle
+                                                                  .blue,
                                                           fontWeight:
                                                               FontWeight.w600,
                                                         ),
@@ -770,12 +803,14 @@ class _GoogleSignInButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFFE2E8F0)),
+          side: BorderSide(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF0F172A),
+          backgroundColor: context.themeSurface(Colors.white),
+          foregroundColor: context.themeForeground(const Color(0xFF0F172A)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -787,7 +822,7 @@ class _GoogleSignInButton extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF334155),
+                color: context.themeForeground(const Color(0xFF334155)),
               ),
             ),
           ],
@@ -802,17 +837,30 @@ class _WorkEmailDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
-        Expanded(child: Divider(color: Color(0xFFE2E8F0), thickness: 1)),
+        Expanded(
+          child: Divider(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+            thickness: 1,
+          ),
+        ),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             'or with work email',
-            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            style: TextStyle(
+              color: context.themeForeground(const Color(0xFF94A3B8)),
+              fontSize: 12,
+            ),
           ),
         ),
-        Expanded(child: Divider(color: Color(0xFFE2E8F0), thickness: 1)),
+        Expanded(
+          child: Divider(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+            thickness: 1,
+          ),
+        ),
       ],
     );
   }
@@ -830,7 +878,7 @@ class _FormFieldLabel extends StatelessWidget {
       style: GoogleFonts.inter(
         fontSize: 12.5,
         fontWeight: FontWeight.w500,
-        color: const Color(0xFF64748B),
+        color: context.themeForeground(const Color(0xFF64748B)),
       ),
     );
   }
@@ -857,7 +905,7 @@ class _CustomTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(10),
         boxShadow: focusNode.hasFocus
             ? [
@@ -874,11 +922,14 @@ class _CustomTextField extends StatelessWidget {
         focusNode: focusNode,
         obscureText: obscureText,
         keyboardType: keyboardType,
-        style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF0F172A)),
+        style: GoogleFonts.inter(
+          fontSize: 14,
+          color: context.themeForeground(const Color(0xFF0F172A)),
+        ),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: GoogleFonts.inter(
-            color: const Color(0xFF94A3B8),
+            color: context.themeForeground(const Color(0xFF94A3B8)),
             fontSize: 14,
           ),
           contentPadding: const EdgeInsets.symmetric(
@@ -886,14 +937,18 @@ class _CustomTextField extends StatelessWidget {
             vertical: 14,
           ),
           filled: true,
-          fillColor: const Color(0xFFF8FAFC),
+          fillColor: context.themeSurface(const Color(0xFFF8FAFC)),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            borderSide: BorderSide(
+              color: context.themeOutline(const Color(0xFFE2E8F0)),
+            ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            borderSide: BorderSide(
+              color: context.themeOutline(const Color(0xFFE2E8F0)),
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),

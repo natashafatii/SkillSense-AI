@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
+import '../../widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -47,7 +49,7 @@ class LoginScreenWeb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double horizontalPadding = Responsive.getSpacing(
@@ -130,7 +132,11 @@ class LoginScreenWeb extends StatelessWidget {
                             ),
                           ),
                           // Right: pure white
-                          Expanded(child: Container(color: Colors.white)),
+                          Expanded(
+                            child: Container(
+                              color: context.themeSurface(Colors.white),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -195,9 +201,9 @@ class LoginScreenWeb extends StatelessWidget {
                                             Container(
                                               width: 18,
                                               height: 1,
-                                              color: Colors.white.withValues(
-                                                alpha: 0.6,
-                                              ),
+                                              color: context
+                                                  .themeSurface(Colors.white)
+                                                  .withValues(alpha: 0.6),
                                             ),
                                             const SizedBox(width: 8),
                                             Flexible(
@@ -241,7 +247,9 @@ class LoginScreenWeb extends StatelessWidget {
                                           child: Text(
                                             AppConstants.loginWebBody,
                                             style: GoogleFonts.inter(
-                                              color: const Color(0xFF94A3B8),
+                                              color: context.themeForeground(
+                                                const Color(0xFF94A3B8),
+                                              ),
                                               fontSize: 14.5,
                                               fontWeight: FontWeight.w400,
                                               height: 1.6,
@@ -278,7 +286,9 @@ class LoginScreenWeb extends StatelessWidget {
                                       child: Text(
                                         '© 2026 SkillSense AI',
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFF64748B),
+                                          color: context.themeForeground(
+                                            const Color(0xFF64748B),
+                                          ),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w400,
                                         ),
@@ -317,7 +327,9 @@ class LoginScreenWeb extends StatelessWidget {
                                             style: GoogleFonts.inter(
                                               fontSize: 32,
                                               fontWeight: FontWeight.w800,
-                                              color: const Color(0xFF0F172A),
+                                              color: context.themeForeground(
+                                                const Color(0xFF0F172A),
+                                              ),
                                               letterSpacing: -0.01,
                                             ),
                                           ),
@@ -329,7 +341,9 @@ class LoginScreenWeb extends StatelessWidget {
                                             style: GoogleFonts.inter(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w400,
-                                              color: const Color(0xFF64748B),
+                                              color: context.themeForeground(
+                                                const Color(0xFF64748B),
+                                              ),
                                               height: 1.5,
                                             ),
                                           ),
@@ -344,7 +358,9 @@ class LoginScreenWeb extends StatelessWidget {
                                                     vertical: 12,
                                                   ),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFFFEF2F2),
+                                                color: context.themeSurface(
+                                                  const Color(0xFFFEF2F2),
+                                                ),
                                                 borderRadius:
                                                     BorderRadius.circular(10),
                                                 border: Border.all(
@@ -369,9 +385,12 @@ class LoginScreenWeb extends StatelessWidget {
                                                       errorMessage!,
                                                       style: GoogleFonts.inter(
                                                         fontSize: 12.5,
-                                                        color: const Color(
-                                                          0xFFB91C1C,
-                                                        ),
+                                                        color: context
+                                                            .themeForeground(
+                                                              const Color(
+                                                                0xFFB91C1C,
+                                                              ),
+                                                            ),
                                                         height: 1.4,
                                                       ),
                                                     ),
@@ -462,9 +481,12 @@ class LoginScreenWeb extends StatelessWidget {
                                                       fontSize: 13,
                                                       fontWeight:
                                                           FontWeight.w500,
-                                                      color: const Color(
-                                                        0xFF475569,
-                                                      ),
+                                                      color: context
+                                                          .themeForeground(
+                                                            const Color(
+                                                              0xFF475569,
+                                                            ),
+                                                          ),
                                                     ),
                                                   ),
                                                 ],
@@ -499,17 +521,23 @@ class LoginScreenWeb extends StatelessWidget {
                                               onPressed: isLoading
                                                   ? null
                                                   : onLogin,
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    AppColors.webLoginButton,
-                                                foregroundColor: Colors.white,
-                                                disabledBackgroundColor:
-                                                    AppColors.webLoginButton
-                                                        .withValues(alpha: 0.5),
-                                                elevation: 0,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(25),
+                                              style: PreAuthButtonStyle.active(
+                                                ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      AppColors.webLoginButton,
+                                                  foregroundColor: Colors.white,
+                                                  disabledBackgroundColor:
+                                                      AppColors.webLoginButton
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
+                                                  elevation: 0,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          25,
+                                                        ),
+                                                  ),
                                                 ),
                                               ),
                                               child: isLoading
@@ -540,8 +568,12 @@ class LoginScreenWeb extends StatelessWidget {
                                             height: 48,
                                             child: OutlinedButton.icon(
                                               style: OutlinedButton.styleFrom(
-                                                foregroundColor: Colors.black,
-                                                backgroundColor: Colors.white,
+                                                foregroundColor: context
+                                                    .themeForeground(
+                                                      Colors.black,
+                                                    ),
+                                                backgroundColor: context
+                                                    .themeSurface(Colors.white),
                                               ),
                                               onPressed: isLoading
                                                   ? null
@@ -567,9 +599,12 @@ class LoginScreenWeb extends StatelessWidget {
                                                   text: TextSpan(
                                                     style: GoogleFonts.inter(
                                                       fontSize: 13,
-                                                      color: const Color(
-                                                        0xFF64748B,
-                                                      ),
+                                                      color: context
+                                                          .themeForeground(
+                                                            const Color(
+                                                              0xFF64748B,
+                                                            ),
+                                                          ),
                                                     ),
                                                     children: [
                                                       const TextSpan(
@@ -718,7 +753,7 @@ class _FormFieldLabel extends StatelessWidget {
       style: GoogleFonts.inter(
         fontSize: 12.5,
         fontWeight: FontWeight.w500,
-        color: const Color(0xFF64748B),
+        color: context.themeForeground(const Color(0xFF64748B)),
       ),
     );
   }
@@ -745,7 +780,7 @@ class _CustomTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeSurface(Colors.white),
         borderRadius: BorderRadius.circular(10),
         boxShadow: focusNode.hasFocus
             ? [
@@ -762,11 +797,14 @@ class _CustomTextField extends StatelessWidget {
         focusNode: focusNode,
         obscureText: obscureText,
         keyboardType: keyboardType,
-        style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF0F172A)),
+        style: GoogleFonts.inter(
+          fontSize: 14,
+          color: context.themeForeground(const Color(0xFF0F172A)),
+        ),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: GoogleFonts.inter(
-            color: const Color(0xFF94A3B8),
+            color: context.themeForeground(const Color(0xFF94A3B8)),
             fontSize: 14,
           ),
           contentPadding: const EdgeInsets.symmetric(
@@ -774,14 +812,18 @@ class _CustomTextField extends StatelessWidget {
             vertical: 14,
           ),
           filled: true,
-          fillColor: const Color(0xFFF8FAFC),
+          fillColor: context.themeSurface(const Color(0xFFF8FAFC)),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            borderSide: BorderSide(
+              color: context.themeOutline(const Color(0xFFE2E8F0)),
+            ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            borderSide: BorderSide(
+              color: context.themeOutline(const Color(0xFFE2E8F0)),
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),

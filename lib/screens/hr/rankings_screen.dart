@@ -1,3 +1,5 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
+import '../../widgets/recruiter_button_style.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -299,7 +301,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
     bottomNavigationBar: MediaQuery.sizeOf(context).width < 900
         ? const RecruiterMobileNav(currentRoute: '/recruiter/rankings')
         : null,
-    backgroundColor: const Color(0xFFF4F6FC),
+    backgroundColor: context.themeCanvas(const Color(0xFFF4F6FC)),
     body: Column(
       children: [
         const RecruiterTopBar(pageTitle: 'Scores and rankings'),
@@ -346,9 +348,9 @@ class _RankingsScreenState extends State<RankingsScreen> {
         OutlinedButton(
           onPressed: _cohort.isEmpty || _exporting ? null : _export,
           style: OutlinedButton.styleFrom(
-            foregroundColor: _ink,
-            backgroundColor: Colors.white,
-            side: const BorderSide(color: _edge),
+            foregroundColor: context.themeForeground(_ink),
+            backgroundColor: context.themeSurface(Colors.white),
+            side: BorderSide(color: context.themeOutline(_edge)),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -357,10 +359,12 @@ class _RankingsScreenState extends State<RankingsScreen> {
         ),
         FilledButton(
           onPressed: _selected.length >= 2 && !_loading ? _compare : null,
-          style: FilledButton.styleFrom(
-            backgroundColor: _blue,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+          style: RecruiterButtonStyle.primary(
+            FilledButton.styleFrom(
+              backgroundColor: _blue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
           child: Text(
@@ -386,7 +390,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
             'Behavioral observations are separate.',
             if (rubric != null) 'Rubric $rubric.',
           ].join(' '),
-          style: _style(11, color: _muted),
+          style: _style(11, color: context.themeForeground(_muted)),
         ),
       ],
     );
@@ -421,19 +425,19 @@ class _RankingsScreenState extends State<RankingsScreen> {
               initialValue: _jobId,
               isExpanded: true,
               style: _style(13),
-              dropdownColor: Colors.white,
+              dropdownColor: context.themeSurface(Colors.white),
               decoration: InputDecoration(
                 labelText: 'Job (required)',
                 filled: true,
-                fillColor: _surface,
+                fillColor: context.themeSurface(_surface),
                 isDense: true,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: _edge),
+                  borderSide: BorderSide(color: context.themeOutline(_edge)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: _edge),
+                  borderSide: BorderSide(color: context.themeOutline(_edge)),
                 ),
               ),
               items: [
@@ -453,7 +457,10 @@ class _RankingsScreenState extends State<RankingsScreen> {
         if (_loading)
           const LinearProgressIndicator()
         else if (_error != null) ...[
-          Text(_error!, style: _style(13, color: _muted)),
+          Text(
+            _error!,
+            style: _style(13, color: context.themeForeground(_muted)),
+          ),
           if (_active)
             Align(
               alignment: Alignment.centerLeft,
@@ -497,13 +504,17 @@ class _RankingsScreenState extends State<RankingsScreen> {
   }
 
   Widget _podiumCard(RankingRow row, int rank) => Material(
-    color: rank == 1 ? Colors.white : _surface,
+    color: rank == 1
+        ? context.themeSurface(Colors.white)
+        : context.themeSurface(_surface),
     elevation: rank == 1 ? 4 : 2,
     shadowColor: rank == 1 ? const Color(0x403E6FF0) : const Color(0x200F172A),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(16),
       side: BorderSide(
-        color: rank == 1 ? const Color(0xFFD6E0FF) : Colors.transparent,
+        color: rank == 1
+            ? context.themeOutline(const Color(0xFFD6E0FF))
+            : Colors.transparent,
       ),
     ),
     clipBehavior: Clip.antiAlias,
@@ -532,7 +543,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
                   ),
                   Text(
                     'T ${_metric(row.technical)} · B ${_metric(row.behavioral)} · C ${_metric(row.communication)}',
-                    style: _style(10, color: _muted),
+                    style: _style(10, color: context.themeForeground(_muted)),
                   ),
                 ],
               ),
@@ -544,8 +555,8 @@ class _RankingsScreenState extends State<RankingsScreen> {
   );
 
   Widget _tableHeader(bool compact) => Container(
-    decoration: const BoxDecoration(
-      color: _surface,
+    decoration: BoxDecoration(
+      color: context.themeSurface(_surface),
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     padding: const EdgeInsets.fromLTRB(14, 7, 8, 7),
@@ -558,7 +569,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
               Text('Full cohort', style: _style(13, weight: FontWeight.w700)),
               Text(
                 '${_cohort.length} applications',
-                style: _style(10, color: _muted),
+                style: _style(10, color: context.themeForeground(_muted)),
               ),
             ],
           ),
@@ -593,17 +604,19 @@ class _RankingsScreenState extends State<RankingsScreen> {
         Text(_name(row), style: _style(12, weight: FontWeight.w700)),
         Text(
           'Top driver · ${row.topDriver ?? 'Unavailable'}',
-          style: _style(10, color: _muted),
+          style: _style(10, color: context.themeForeground(_muted)),
         ),
         if (compact)
           Text(
             'T ${_metric(row.technical)} · B ${_metric(row.behavioral)} · C ${_metric(row.communication)}',
-            style: _style(10, color: _muted),
+            style: _style(10, color: context.themeForeground(_muted)),
           ),
       ],
     );
     return Material(
-      color: checked ? const Color(0xFFF0F4FF) : _surface,
+      color: checked
+          ? context.themeSurface(const Color(0xFFF0F4FF))
+          : context.themeSurface(_surface),
       clipBehavior: Clip.antiAlias,
       borderRadius: last
           ? const BorderRadius.vertical(bottom: Radius.circular(16))
@@ -617,8 +630,8 @@ class _RankingsScreenState extends State<RankingsScreen> {
             compact ? 8 : 14,
             6,
           ),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: _edge)),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: context.themeOutline(_edge))),
           ),
           child: Row(
             children: [
@@ -741,7 +754,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
             padding: EdgeInsets.zero,
             trackGap: 0,
             color: _scoreColor(score),
-            backgroundColor: _edge,
+            backgroundColor: context.themeSurface(_edge),
           ),
           Center(
             child: Text(
@@ -778,7 +791,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
     );
   }
 
-  static TextStyle _style(
+  TextStyle _style(
     double size, {
     Color color = _ink,
     bool mono = false,
@@ -786,7 +799,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
   }) => TextStyle(
     fontFamily: mono ? 'JetBrains Mono' : 'Inter',
     fontSize: size,
-    color: color,
+    color: context.themeForeground(color),
     fontWeight: weight,
   );
 }

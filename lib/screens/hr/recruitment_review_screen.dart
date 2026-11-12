@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../../models/application.dart';
 import '../../models/recruitment_evidence.dart';
@@ -724,7 +725,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       icon: const Icon(Icons.refresh),
     );
     return Scaffold(
-      backgroundColor: const Color(0xfff5f7fc),
+      backgroundColor: context.themeCanvas(const Color(0xfff5f7fc)),
       appBar: dashboard
           ? null
           : AppBar(

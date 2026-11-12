@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/gestures.dart';
@@ -178,7 +179,8 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
           if (parts.length > 1) {
             lastName = parts.sublist(1).join(' ');
           } else {
-            lastName = parts.first; // Default to first name if single word entered
+            lastName =
+                parts.first; // Default to first name if single word entered
           }
         }
         if (firstName.isEmpty ||
@@ -238,7 +240,9 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
       labelText: label,
       labelStyle: GoogleFonts.publicSans(
         fontSize: 14,
-        color: focused ? _blue : const Color(0xFF9E9E9E),
+        color: focused
+            ? _blue
+            : context.themeForeground(const Color(0xFF9E9E9E)),
         fontWeight: focused ? FontWeight.w600 : FontWeight.w400,
       ),
       floatingLabelStyle: GoogleFonts.publicSans(
@@ -253,14 +257,20 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
       ),
       floatingLabelBehavior: FloatingLabelBehavior.auto,
       filled: true,
-      fillColor: focused ? Colors.white : const Color(0xFFF8F9FA),
+      fillColor: focused
+          ? context.themeSurface(Colors.white)
+          : context.themeSurface(const Color(0xFFF8F9FA)),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE8E8E8)),
+        borderSide: BorderSide(
+          color: context.themeOutline(const Color(0xFFE8E8E8)),
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE8E8E8)),
+        borderSide: BorderSide(
+          color: context.themeOutline(const Color(0xFFE8E8E8)),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -337,7 +347,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
               style: GoogleFonts.publicSans(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: const Color(0xFF1A1A2E),
+                color: context.themeForeground(const Color(0xFF1A1A2E)),
               ),
             ),
             const SizedBox(height: 3),
@@ -363,9 +373,12 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
         Expanded(
           child: Container(
             height: 1,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.transparent, Color(0xFFE0E0E0)],
+                colors: [
+                  Colors.transparent,
+                  context.themeSurface(const Color(0xFFE0E0E0)),
+                ],
               ),
             ),
           ),
@@ -383,9 +396,12 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
         Expanded(
           child: Container(
             height: 1,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFFE0E0E0), Colors.transparent],
+                colors: [
+                  context.themeSurface(const Color(0xFFE0E0E0)),
+                  Colors.transparent,
+                ],
               ),
             ),
           ),
@@ -394,11 +410,12 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
     ),
   );
 
-
-
   // ── Prefix icon helper ─────────────────────────────────────────────────────
-  Widget _icon(IconData data, {bool focused = false}) =>
-      Icon(data, size: 20, color: focused ? _blue : const Color(0xFFBDBDBD));
+  Widget _icon(IconData data, {bool focused = false}) => Icon(
+    data,
+    size: 20,
+    color: focused ? _blue : context.themeForeground(const Color(0xFFBDBDBD)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -419,563 +436,628 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
             confirmFocus: _confirmFocus,
             obscurePassword: _obscurePassword,
             obscureConfirm: _obscureConfirm,
-            onObscureToggle: () => setState(() => _obscurePassword = !_obscurePassword),
-            onObscureConfirmToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+            onObscureToggle: () =>
+                setState(() => _obscurePassword = !_obscurePassword),
+            onObscureConfirmToggle: () =>
+                setState(() => _obscureConfirm = !_obscureConfirm),
             onRegister: () => _register(isWeb: true),
             onGoogleSignIn: _googleSignUp,
             onLoginTap: () {
-              Navigator.pushReplacementNamed(context, '/login', arguments: 'RECRUITER');
+              Navigator.pushReplacementNamed(
+                context,
+                '/login',
+                arguments: 'RECRUITER',
+              );
             },
           );
         }
 
         return Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: context.themeCanvas(Colors.white),
           body: Stack(
             children: [
               const GradientBackground(),
               SafeArea(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ── Header on gradient ───────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Top row: back + badge
-                      Row(
+                  children: [
+                    // ── Header on gradient ───────────────────────────────────────
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          PointerGestureDetector(
-                            onTap: () => Navigator.pop(context),
-                            child: Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.85),
-                                borderRadius: BorderRadius.circular(13),
-                                border: Border.all(
-                                  color: const Color(0xFFBBCFEA),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.06),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
+                          // Top row: back + badge
+                          Row(
+                            children: [
+                              PointerGestureDetector(
+                                onTap: () => Navigator.pop(context),
+                                child: Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: context
+                                        .themeSurface(Colors.white)
+                                        .withValues(alpha: 0.85),
+                                    borderRadius: BorderRadius.circular(13),
+                                    border: Border.all(
+                                      color: const Color(0xFFBBCFEA),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.06,
+                                        ),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.arrow_back_ios_new_rounded,
-                                size: 17,
-                                color: Color(0xFF2D2D2D),
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          // Role badge pill
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 7,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _blue.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: _blue.withValues(alpha: 0.35),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.business_center_rounded,
-                                  size: 14,
-                                  color: _blue,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'HR / Recruiter',
-                                  style: GoogleFonts.publicSans(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: _blue,
+                                  child: Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                    size: 17,
+                                    color: context.themeForeground(
+                                      const Color(0xFF2D2D2D),
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      Text(
-                        'Create Account',
-                        style: GoogleFonts.publicSans(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF1A1A2E),
-                          letterSpacing: -0.5,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        'Fill in the details below to get started',
-                        style: GoogleFonts.publicSans(
-                          fontSize: 14,
-                          color: const Color(0xFF555577),
-                        ),
-                      ),
-                      const SizedBox(height: 26),
-                    ],
-                  ),
-                ),
-
-                // ── White card ───────────────────────────────────────────────
-                Expanded(
-                  child: Container(
-                    transform: Matrix4.translationValues(0, -8, 0),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(32),
-                        topRight: Radius.circular(32),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 28,
-                          offset: const Offset(0, -6),
-                        ),
-                      ],
-                    ),
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SizedBox(
-                              height: 48,
-                              child: OutlinedButton(
-                                onPressed: _isLoading ? null : _googleSignUp,
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Color(0xFFE2E8F0)),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(24),
+                              ),
+                              const Spacer(),
+                              // Role badge pill
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _blue.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: _blue.withValues(alpha: 0.35),
                                   ),
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: const Color(0xFF0F172A),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    SvgPicture.asset('assets/icons/google.svg', height: 18),
-                                    const SizedBox(width: 12),
+                                    const Icon(
+                                      Icons.business_center_rounded,
+                                      size: 14,
+                                      color: _blue,
+                                    ),
+                                    const SizedBox(width: 6),
                                     Text(
-                                      'Continue with Google',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF334155),
+                                      'HR / Recruiter',
+                                      style: GoogleFonts.publicSans(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: _blue,
                                       ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            // ── Personal Info ──────────────────────────────────
-                            _section(
-                              'Personal Information',
-                              Icons.person_outline_rounded,
-                            ),
-
-                            // Full name
-                            _glow(
-                              focused: _fullNameFocus.hasFocus,
-                              child: TextFormField(
-                                controller: _fullNameController,
-                                focusNode: _fullNameFocus,
-                                textCapitalization: TextCapitalization.words,
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 14,
-                                  color: const Color(0xFF212121),
-                                ),
-                                decoration: _decor(
-                                  'Full name',
-                                  'Enter your full name',
-                                  focused: _fullNameFocus.hasFocus,
-                                  prefix: _icon(
-                                    Icons.badge_outlined,
-                                    focused: _fullNameFocus.hasFocus,
-                                  ),
-                                ),
-                                validator: (v) =>
-                                    (v == null || v.trim().isEmpty)
-                                    ? 'Full name is required'
-                                    : null,
-                              ),
-                            ),
-
-                            _divider(),
-
-                            // ── Contact Details ────────────────────────────────
-                            _section(
-                              'Contact Details',
-                              Icons.contact_mail_outlined,
-                            ),
-
-                            // Email
-                            _glow(
-                              focused: _emailFocus.hasFocus,
-                              child: TextFormField(
-                                controller: _emailController,
-                                focusNode: _emailFocus,
-                                keyboardType: TextInputType.emailAddress,
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 14,
-                                  color: const Color(0xFF212121),
-                                ),
-                                decoration: _decor(
-                                  'Work email',
-                                  'Enter your work email address',
-                                  focused: _emailFocus.hasFocus,
-                                  prefix: _icon(
-                                    Icons.alternate_email_rounded,
-                                    focused: _emailFocus.hasFocus,
-                                  ),
-                                ),
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) {
-                                    return 'Email is required';
-                                  }
-                                  return RegExp(
-                                        r"^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}",
-                                      ).hasMatch(v)
-                                      ? null
-                                      : 'Enter a valid email';
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Company
-                            _glow(
-                              focused: _companyNameFocus.hasFocus,
-                              child: TextFormField(
-                                controller: _companyNameController,
-                                focusNode: _companyNameFocus,
-                                textCapitalization: TextCapitalization.words,
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 14,
-                                  color: const Color(0xFF212121),
-                                ),
-                                decoration: _decor(
-                                  'Company',
-                                  'Enter your company name',
-                                  focused: _companyNameFocus.hasFocus,
-                                  prefix: _icon(
-                                    Icons.business_rounded,
-                                    focused: _companyNameFocus.hasFocus,
-                                  ),
-                                ),
-                                validator: (v) =>
-                                    (v == null || v.trim().isEmpty)
-                                    ? 'Company is required'
-                                    : null,
-                              ),
-                            ),
-
-                            _divider(),
-
-                            // ── Security ───────────────────────────────────────
-                            _section('Security', Icons.shield_outlined),
-
-                            // Password
-                            _glow(
-                              focused: _passwordFocus.hasFocus,
-                              child: TextFormField(
-                                controller: _passwordController,
-                                focusNode: _passwordFocus,
-                                obscureText: _obscurePassword,
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 14,
-                                  color: const Color(0xFF212121),
-                                ),
-                                onChanged: (_) => setState(() {}),
-                                decoration: _decor(
-                                  'Password',
-                                  'Create a password (min 8 characters)',
-                                  focused: _passwordFocus.hasFocus,
-                                  prefix: _icon(
-                                    Icons.lock_outline_rounded,
-                                    focused: _passwordFocus.hasFocus,
-                                  ),
-                                  suffix: IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    icon: Icon(
-                                      _obscurePassword
-                                          ? Icons.visibility_off_outlined
-                                          : Icons.visibility_outlined,
-                                      color: const Color(0xFF9E9E9E),
-                                      size: 20,
-                                    ),
-                                    onPressed: () => setState(
-                                      () =>
-                                          _obscurePassword = !_obscurePassword,
-                                    ),
-                                  ),
-                                ),
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) {
-                                    return 'Password is required';
-                                  }
-                                  return v.length >= 8
-                                      ? null
-                                      : 'Minimum 8 characters';
-                                },
-                              ),
-                            ),
-
-                            // Segmented strength bar
-                            if (_passwordController.text.isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  ...List.generate(4, (i) {
-                                    final segFilled = _strength > i * 0.25;
-                                    final segColor = segFilled
-                                        ? _strengthColor
-                                        : const Color(0xFFEEEEEE);
-                                    return Expanded(
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 300,
-                                        ),
-                                        margin: EdgeInsets.only(
-                                          right: i < 3 ? 4 : 0,
-                                        ),
-                                        height: 4,
-                                        decoration: BoxDecoration(
-                                          color: segColor,
-                                          borderRadius: BorderRadius.circular(
-                                            2,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                  const SizedBox(width: 10),
-                                  AnimatedDefaultTextStyle(
-                                    duration: const Duration(milliseconds: 200),
-                                    style: GoogleFonts.publicSans(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: _strengthColor,
-                                    ),
-                                    child: Text(_strengthLabel),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                '8+ chars · uppercase · numbers · symbols',
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 11,
-                                  color: const Color(0xFFBDBDBD),
                                 ),
                               ),
                             ],
-
-                            const SizedBox(height: 16),
-
-                            // Confirm Password
-                            _glow(
-                              focused: _confirmFocus.hasFocus,
-                              child: TextFormField(
-                                controller: _confirmController,
-                                focusNode: _confirmFocus,
-                                obscureText: _obscureConfirm,
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 14,
-                                  color: const Color(0xFF212121),
-                                ),
-                                decoration: _decor(
-                                  'Confirm password',
-                                  'Re-enter your password',
-                                  focused: _confirmFocus.hasFocus,
-                                  prefix: _icon(
-                                    Icons.lock_reset_rounded,
-                                    focused: _confirmFocus.hasFocus,
-                                  ),
-                                  suffix: IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    icon: Icon(
-                                      _obscureConfirm
-                                          ? Icons.visibility_off_outlined
-                                          : Icons.visibility_outlined,
-                                      color: const Color(0xFF9E9E9E),
-                                      size: 20,
-                                    ),
-                                    onPressed: () => setState(
-                                      () => _obscureConfirm = !_obscureConfirm,
-                                    ),
-                                  ),
-                                ),
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) {
-                                    return 'Please confirm your password';
-                                  }
-                                  return v == _passwordController.text
-                                      ? null
-                                      : 'Passwords do not match';
-                                },
+                          ),
+                          const SizedBox(height: 22),
+                          Text(
+                            'Create Account',
+                            style: GoogleFonts.publicSans(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              color: context.themeForeground(
+                                const Color(0xFF1A1A2E),
+                              ),
+                              letterSpacing: -0.5,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            'Fill in the details below to get started',
+                            style: GoogleFonts.publicSans(
+                              fontSize: 14,
+                              color: context.themeForeground(
+                                const Color(0xFF555577),
                               ),
                             ),
+                          ),
+                          const SizedBox(height: 26),
+                        ],
+                      ),
+                    ),
 
-                            const SizedBox(height: 32),
-
-                            // ── Gradient Register button ───────────────────────
-                            Container(
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: _isLoading ? null : PreAuthButtonStyle.blue,
-                                    gradient: _isLoading ? const LinearGradient(
-                                  colors: [
-                                    Color(0xFF6B9FFF),
-                                    _blue,
-                                    Color(0xFF2E5BD8),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ) : null,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _isLoading ? _blue.withValues(alpha: 0.45) : PreAuthButtonStyle.blue.withValues(alpha: .24),
-                                    blurRadius: 18,
-                                    offset: const Offset(0, 7),
-                                  ),
-                                ],
-                              ),
-                              child: ElevatedButton(
-                                onPressed: _isLoading ? null : _registerMobile,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  shadowColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2.5,
-                                        ),
-                                      )
-                                    : Text(
-                                        AppConstants.registerButtonText,
-                                        style: GoogleFonts.publicSans(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.3,
+                    // ── White card ───────────────────────────────────────────────
+                    Expanded(
+                      child: Container(
+                        transform: Matrix4.translationValues(0, -8, 0),
+                        decoration: BoxDecoration(
+                          color: context.themeSurface(Colors.white),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(32),
+                            topRight: Radius.circular(32),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 28,
+                              offset: const Offset(0, -6),
+                            ),
+                          ],
+                        ),
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                SizedBox(
+                                  height: 48,
+                                  child: OutlinedButton(
+                                    onPressed: _isLoading
+                                        ? null
+                                        : _googleSignUp,
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(
+                                        color: context.themeOutline(
+                                          const Color(0xFFE2E8F0),
                                         ),
                                       ),
-                              ),
-                            ),
-
-                            const SizedBox(height: 18),
-
-                            // ── Tappable Terms & Privacy ───────────────────────
-                            RichText(
-                              textAlign: TextAlign.center,
-                              text: TextSpan(
-                                style: GoogleFonts.publicSans(
-                                  fontSize: 12,
-                                  color: const Color(0xFFAAAAAA),
-                                  height: 1.6,
-                                ),
-                                children: [
-                                  const TextSpan(
-                                    text: 'By registering you agree to our ',
-                                  ),
-                                  TextSpan(
-                                    text: 'Terms of Service',
-                                    style: GoogleFonts.publicSans(
-                                      fontSize: 12,
-                                      color: PreAuthButtonStyle.blue,
-                                      fontWeight: FontWeight.w700,
-                                      decoration: TextDecoration.underline,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                      backgroundColor: context.themeSurface(
+                                        Colors.white,
+                                      ),
+                                      foregroundColor: context.themeForeground(
+                                        const Color(0xFF0F172A),
+                                      ),
                                     ),
-                                    recognizer: TapGestureRecognizer()
-                                      ..onTap = () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => const TermsPrivacyScreen(),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        SvgPicture.asset(
+                                          'assets/icons/google.svg',
+                                          height: 18,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Continue with Google',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: context.themeForeground(
+                                              const Color(0xFF334155),
+                                            ),
                                           ),
-                                        );
-                                      },
-                                  ),
-                                  const TextSpan(text: '.'),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(height: 22),
-
-                            // Already have account
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  AppConstants.alreadyAccountPrompt,
-                                  style: GoogleFonts.publicSans(
-                                    fontSize: 14,
-                                    color: const Color(0xFF757575),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                PointerGestureDetector(
-                                  onTap: () => Navigator.pushReplacementNamed(
-                                    context,
-                                    '/login',
-                                    arguments: 'RECRUITER',
-                                  ),
-                                  child: Text(
-                                    AppConstants.loginLinkText,
+                                const SizedBox(height: 24),
+                                // ── Personal Info ──────────────────────────────────
+                                _section(
+                                  'Personal Information',
+                                  Icons.person_outline_rounded,
+                                ),
+
+                                // Full name
+                                _glow(
+                                  focused: _fullNameFocus.hasFocus,
+                                  child: TextFormField(
+                                    controller: _fullNameController,
+                                    focusNode: _fullNameFocus,
+                                    textCapitalization:
+                                        TextCapitalization.words,
                                     style: GoogleFonts.publicSans(
                                       fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: PreAuthButtonStyle.blue,
+                                      color: context.themeForeground(
+                                        const Color(0xFF212121),
+                                      ),
                                     ),
+                                    decoration: _decor(
+                                      'Full name',
+                                      'Enter your full name',
+                                      focused: _fullNameFocus.hasFocus,
+                                      prefix: _icon(
+                                        Icons.badge_outlined,
+                                        focused: _fullNameFocus.hasFocus,
+                                      ),
+                                    ),
+                                    validator: (v) =>
+                                        (v == null || v.trim().isEmpty)
+                                        ? 'Full name is required'
+                                        : null,
                                   ),
                                 ),
+
+                                _divider(),
+
+                                // ── Contact Details ────────────────────────────────
+                                _section(
+                                  'Contact Details',
+                                  Icons.contact_mail_outlined,
+                                ),
+
+                                // Email
+                                _glow(
+                                  focused: _emailFocus.hasFocus,
+                                  child: TextFormField(
+                                    controller: _emailController,
+                                    focusNode: _emailFocus,
+                                    keyboardType: TextInputType.emailAddress,
+                                    style: GoogleFonts.publicSans(
+                                      fontSize: 14,
+                                      color: context.themeForeground(
+                                        const Color(0xFF212121),
+                                      ),
+                                    ),
+                                    decoration: _decor(
+                                      'Work email',
+                                      'Enter your work email address',
+                                      focused: _emailFocus.hasFocus,
+                                      prefix: _icon(
+                                        Icons.alternate_email_rounded,
+                                        focused: _emailFocus.hasFocus,
+                                      ),
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.isEmpty) {
+                                        return 'Email is required';
+                                      }
+                                      return RegExp(
+                                            r"^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}",
+                                          ).hasMatch(v)
+                                          ? null
+                                          : 'Enter a valid email';
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Company
+                                _glow(
+                                  focused: _companyNameFocus.hasFocus,
+                                  child: TextFormField(
+                                    controller: _companyNameController,
+                                    focusNode: _companyNameFocus,
+                                    textCapitalization:
+                                        TextCapitalization.words,
+                                    style: GoogleFonts.publicSans(
+                                      fontSize: 14,
+                                      color: context.themeForeground(
+                                        const Color(0xFF212121),
+                                      ),
+                                    ),
+                                    decoration: _decor(
+                                      'Company',
+                                      'Enter your company name',
+                                      focused: _companyNameFocus.hasFocus,
+                                      prefix: _icon(
+                                        Icons.business_rounded,
+                                        focused: _companyNameFocus.hasFocus,
+                                      ),
+                                    ),
+                                    validator: (v) =>
+                                        (v == null || v.trim().isEmpty)
+                                        ? 'Company is required'
+                                        : null,
+                                  ),
+                                ),
+
+                                _divider(),
+
+                                // ── Security ───────────────────────────────────────
+                                _section('Security', Icons.shield_outlined),
+
+                                // Password
+                                _glow(
+                                  focused: _passwordFocus.hasFocus,
+                                  child: TextFormField(
+                                    controller: _passwordController,
+                                    focusNode: _passwordFocus,
+                                    obscureText: _obscurePassword,
+                                    style: GoogleFonts.publicSans(
+                                      fontSize: 14,
+                                      color: context.themeForeground(
+                                        const Color(0xFF212121),
+                                      ),
+                                    ),
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: _decor(
+                                      'Password',
+                                      'Create a password (min 8 characters)',
+                                      focused: _passwordFocus.hasFocus,
+                                      prefix: _icon(
+                                        Icons.lock_outline_rounded,
+                                        focused: _passwordFocus.hasFocus,
+                                      ),
+                                      suffix: IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        icon: Icon(
+                                          _obscurePassword
+                                              ? Icons.visibility_off_outlined
+                                              : Icons.visibility_outlined,
+                                          color: context.themeForeground(
+                                            const Color(0xFF9E9E9E),
+                                          ),
+                                          size: 20,
+                                        ),
+                                        onPressed: () => setState(
+                                          () => _obscurePassword =
+                                              !_obscurePassword,
+                                        ),
+                                      ),
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.isEmpty) {
+                                        return 'Password is required';
+                                      }
+                                      return v.length >= 8
+                                          ? null
+                                          : 'Minimum 8 characters';
+                                    },
+                                  ),
+                                ),
+
+                                // Segmented strength bar
+                                if (_passwordController.text.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      ...List.generate(4, (i) {
+                                        final segFilled = _strength > i * 0.25;
+                                        final segColor = segFilled
+                                            ? _strengthColor
+                                            : const Color(0xFFEEEEEE);
+                                        return Expanded(
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 300,
+                                            ),
+                                            margin: EdgeInsets.only(
+                                              right: i < 3 ? 4 : 0,
+                                            ),
+                                            height: 4,
+                                            decoration: BoxDecoration(
+                                              color: segColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(2),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                      const SizedBox(width: 10),
+                                      AnimatedDefaultTextStyle(
+                                        duration: const Duration(
+                                          milliseconds: 200,
+                                        ),
+                                        style: GoogleFonts.publicSans(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: _strengthColor,
+                                        ),
+                                        child: Text(_strengthLabel),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    '8+ chars · uppercase · numbers · symbols',
+                                    style: GoogleFonts.publicSans(
+                                      fontSize: 11,
+                                      color: context.themeForeground(
+                                        const Color(0xFFBDBDBD),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+
+                                const SizedBox(height: 16),
+
+                                // Confirm Password
+                                _glow(
+                                  focused: _confirmFocus.hasFocus,
+                                  child: TextFormField(
+                                    controller: _confirmController,
+                                    focusNode: _confirmFocus,
+                                    obscureText: _obscureConfirm,
+                                    style: GoogleFonts.publicSans(
+                                      fontSize: 14,
+                                      color: context.themeForeground(
+                                        const Color(0xFF212121),
+                                      ),
+                                    ),
+                                    decoration: _decor(
+                                      'Confirm password',
+                                      'Re-enter your password',
+                                      focused: _confirmFocus.hasFocus,
+                                      prefix: _icon(
+                                        Icons.lock_reset_rounded,
+                                        focused: _confirmFocus.hasFocus,
+                                      ),
+                                      suffix: IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        icon: Icon(
+                                          _obscureConfirm
+                                              ? Icons.visibility_off_outlined
+                                              : Icons.visibility_outlined,
+                                          color: context.themeForeground(
+                                            const Color(0xFF9E9E9E),
+                                          ),
+                                          size: 20,
+                                        ),
+                                        onPressed: () => setState(
+                                          () => _obscureConfirm =
+                                              !_obscureConfirm,
+                                        ),
+                                      ),
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.isEmpty) {
+                                        return 'Please confirm your password';
+                                      }
+                                      return v == _passwordController.text
+                                          ? null
+                                          : 'Passwords do not match';
+                                    },
+                                  ),
+                                ),
+
+                                const SizedBox(height: 32),
+
+                                // ── Gradient Register button ───────────────────────
+                                Container(
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    gradient: _isLoading
+                                        ? const LinearGradient(
+                                            colors: [
+                                              Color(0xFF6B9FFF),
+                                              _blue,
+                                              Color(0xFF2E5BD8),
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          )
+                                        : PreAuthButtonStyle.primaryGradient,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _isLoading
+                                            ? _blue.withValues(alpha: 0.45)
+                                            : PreAuthButtonStyle.blue
+                                                  .withValues(alpha: .24),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 7),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: _isLoading
+                                        ? null
+                                        : _registerMobile,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2.5,
+                                            ),
+                                          )
+                                        : Text(
+                                            AppConstants.registerButtonText,
+                                            style: GoogleFonts.publicSans(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.3,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 18),
+
+                                // ── Tappable Terms & Privacy ───────────────────────
+                                RichText(
+                                  textAlign: TextAlign.center,
+                                  text: TextSpan(
+                                    style: GoogleFonts.publicSans(
+                                      fontSize: 12,
+                                      color: context.themeForeground(
+                                        const Color(0xFFAAAAAA),
+                                      ),
+                                      height: 1.6,
+                                    ),
+                                    children: [
+                                      const TextSpan(
+                                        text:
+                                            'By registering you agree to our ',
+                                      ),
+                                      TextSpan(
+                                        text: 'Terms of Service',
+                                        style: GoogleFonts.publicSans(
+                                          fontSize: 12,
+                                          color: PreAuthButtonStyle.blue,
+                                          fontWeight: FontWeight.w700,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        recognizer: TapGestureRecognizer()
+                                          ..onTap = () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const TermsPrivacyScreen(),
+                                              ),
+                                            );
+                                          },
+                                      ),
+                                      const TextSpan(text: '.'),
+                                    ],
+                                  ),
+                                ),
+
+                                const SizedBox(height: 22),
+
+                                // Already have account
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      AppConstants.alreadyAccountPrompt,
+                                      style: GoogleFonts.publicSans(
+                                        fontSize: 14,
+                                        color: context.themeForeground(
+                                          const Color(0xFF757575),
+                                        ),
+                                      ),
+                                    ),
+                                    PointerGestureDetector(
+                                      onTap: () =>
+                                          Navigator.pushReplacementNamed(
+                                            context,
+                                            '/login',
+                                            arguments: 'RECRUITER',
+                                          ),
+                                      child: Text(
+                                        AppConstants.loginLinkText,
+                                        style: GoogleFonts.publicSans(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: PreAuthButtonStyle.blue,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
-        },
-      );
   }
 }

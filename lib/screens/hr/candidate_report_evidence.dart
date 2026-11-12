@@ -186,33 +186,36 @@ class _SkillsCardState extends State<_SkillsCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (fit.evaluated && fit.total > 0) ...[
-            const Text('MATCHES THE JOB', style: _labelStyle),
+            Text('MATCHES THE JOB', style: _labelStyle(context)),
             const SizedBox(height: 8),
             if (fit.matched.isEmpty)
-              const Text(
+              Text(
                 'No required skills were confirmed.',
-                style: _mutedStyle,
+                style: _mutedStyle(context),
               )
             else
               _SkillChips(fit.matched, color: _positive),
             const SizedBox(height: 14),
-            const Text('REQUIRED BUT NOT FOUND', style: _labelStyle),
+            Text('REQUIRED BUT NOT FOUND', style: _labelStyle(context)),
             const SizedBox(height: 8),
             if (fit.missing.isEmpty)
-              const Text('All required skills were found.', style: _mutedStyle)
+              Text(
+                'All required skills were found.',
+                style: _mutedStyle(context),
+              )
             else
               _SkillChips(fit.missing, color: _warning, outline: true),
             const SizedBox(height: 14),
           ],
           Text(
             fit.evaluated && fit.total > 0 ? 'OTHER SKILLS' : 'RESUME SKILLS',
-            style: _labelStyle,
+            style: _labelStyle(context),
           ),
           const SizedBox(height: 8),
           if (fit.other.isEmpty)
             Text(
               widget.resumeMessage ?? 'No additional skills were extracted.',
-              style: _mutedStyle,
+              style: _mutedStyle(context),
             )
           else
             _SkillChips(_expanded ? fit.other : fit.other.take(_visibleSkills)),
@@ -301,7 +304,7 @@ class _ResumeTimeline extends StatelessWidget {
                 for (final (index, entry) in entries.indexed)
                   _TimelineItem(
                     last: index == entries.length - 1,
-                    color: _edge,
+                    color: context.themeSurface(_edge),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -316,7 +319,7 @@ class _ResumeTimeline extends StatelessWidget {
                           children: [
                             for (final detail in [entry.subtitle, entry.period])
                               if (detail.isNotEmpty)
-                                Text(detail, style: _mutedStyle),
+                                Text(detail, style: _mutedStyle(context)),
                           ],
                         ),
                         if (entry.description.isNotEmpty)
@@ -380,7 +383,7 @@ class _ProjectsCard extends StatelessWidget {
                               padding: const EdgeInsets.only(top: 4),
                               child: Text(
                                 project.description,
-                                style: _mutedStyle,
+                                style: _mutedStyle(context),
                               ),
                             ),
                           if (project.skills.isNotEmpty) ...[
@@ -421,8 +424,8 @@ class _InsetCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: _surfaceTint,
-      border: Border.all(color: _border),
+      color: context.themeSurface(_surfaceTint),
+      border: Border.all(color: context.themeOutline(_border)),
       borderRadius: BorderRadius.circular(12),
     ),
     child: child,
@@ -560,7 +563,7 @@ class _ProgressItem extends StatelessWidget {
         ? _positive
         : active
         ? _accent
-        : _edge,
+        : context.themeSurface(_edge),
     icon: rejected
         ? Icons.close_rounded
         : done
@@ -574,12 +577,17 @@ class _ProgressItem extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: done || active || rejected ? _ink : _muted,
+            color: done || active || rejected
+                ? context.themeForeground(_ink)
+                : context.themeForeground(_muted),
             fontWeight: FontWeight.w600,
           ),
         ),
         if (date case final date?)
-          Text(_date(context, date, time: showTime), style: _mutedStyle),
+          Text(
+            _date(context, date, time: showTime),
+            style: _mutedStyle(context),
+          ),
         if (action case final action?)
           Padding(padding: const EdgeInsets.only(top: 5), child: action),
       ],
@@ -603,11 +611,14 @@ class _TimelineItem extends StatelessWidget {
   Widget build(BuildContext context) => Stack(
     children: [
       if (!last)
-        const Positioned(
+        Positioned(
           left: 8,
           top: 22,
           bottom: 0,
-          child: SizedBox(width: 2, child: ColoredBox(color: _border)),
+          child: SizedBox(
+            width: 2,
+            child: ColoredBox(color: context.themeSurface(_border)),
+          ),
         ),
       Padding(
         padding: EdgeInsets.only(bottom: last ? 0 : 16),
@@ -621,7 +632,9 @@ class _TimelineItem extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: icon == null ? _surface : color.withValues(alpha: .10),
+                color: icon == null
+                    ? context.themeSurface(_surface)
+                    : color.withValues(alpha: .10),
                 border: Border.all(color: color, width: 1.5),
               ),
               child: icon == null
@@ -664,22 +677,27 @@ class _CandidateDetails extends StatelessWidget {
                 : application.candidateEmail,
           ),
         ),
-        const Divider(color: _border),
+        Divider(color: context.themeOutline(_border)),
         _DetailRow('Applied', Text(_date(context, application.createdAt))),
-        const Divider(color: _border),
+        Divider(color: context.themeOutline(_border)),
         _DetailRow(
           'Resume',
           canDownload
               ? _DownloadResumeButton(resume!)
-              : Text(resume?.filename ?? 'Unavailable', style: _mutedStyle),
+              : Text(
+                  resume?.filename ?? 'Unavailable',
+                  style: _mutedStyle(context),
+                ),
         ),
         const SizedBox(height: 8),
         ExpansionTile(
           tilePadding: EdgeInsets.zero,
           childrenPadding: EdgeInsets.zero,
-          shape: const Border(top: BorderSide(color: _border)),
-          collapsedShape: const Border(top: BorderSide(color: _border)),
-          title: const Text('Technical IDs', style: _labelStyle),
+          shape: Border(top: BorderSide(color: context.themeOutline(_border))),
+          collapsedShape: Border(
+            top: BorderSide(color: context.themeOutline(_border)),
+          ),
+          title: Text('Technical IDs', style: _labelStyle(context)),
           children: [
             _CopyId('Application ID', application.id),
             if (application.resumeId case final id? when id.isNotEmpty)
@@ -700,7 +718,7 @@ class _DetailRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      SizedBox(width: 70, child: Text(label, style: _mutedStyle)),
+      SizedBox(width: 70, child: Text(label, style: _mutedStyle(context))),
       const SizedBox(width: 8),
       Expanded(
         child: Align(alignment: Alignment.centerLeft, child: value),
@@ -720,7 +738,7 @@ class _CopyId extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: _labelStyle),
+            Text(label, style: _labelStyle(context)),
             SelectableText(
               value,
               style: const TextStyle(

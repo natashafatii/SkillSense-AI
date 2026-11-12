@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -156,7 +157,11 @@ class _RecruiterInterviewDashboardState
 
   @override
   Widget build(BuildContext context) => DefaultTextStyle.merge(
-    style: const TextStyle(color: _ink, fontSize: 13, fontFamily: 'Inter'),
+    style: TextStyle(
+      color: context.themeForeground(_ink),
+      fontSize: 13,
+      fontFamily: 'Inter',
+    ),
     child: LayoutBuilder(
       builder: (context, size) {
         final recording = _surface(
@@ -242,7 +247,9 @@ class _RecruiterInterviewDashboardState
             Center(
               child: Text(
                 placeholder,
-                style: const TextStyle(color: Color(0xFF8090AE)),
+                style: TextStyle(
+                  color: context.themeForeground(const Color(0xFF8090AE)),
+                ),
               ),
             ),
           if (header.isNotEmpty)
@@ -394,7 +401,7 @@ class _RecruiterInterviewDashboardState
               height: 13,
               child: LayoutBuilder(
                 builder: (context, constraints) => ColoredBox(
-                  color: const Color(0xFFE3EAF4),
+                  color: context.themeSurface(const Color(0xFFE3EAF4)),
                   child: Row(
                     children: [
                       for (final (index, entry) in measurements.indexed)
@@ -412,7 +419,10 @@ class _RecruiterInterviewDashboardState
           if (measurements.isEmpty)
             Text(
               _behaviorMessage(expression: true),
-              style: const TextStyle(color: _muted, fontSize: 11),
+              style: TextStyle(
+                color: context.themeForeground(_muted),
+                fontSize: 11,
+              ),
             )
           else
             Wrap(
@@ -431,7 +441,10 @@ class _RecruiterInterviewDashboardState
                       const SizedBox(width: 4),
                       Text(
                         '${entry.key} ${entry.value.toStringAsFixed(0)}%',
-                        style: const TextStyle(color: _muted, fontSize: 11),
+                        style: TextStyle(
+                          color: context.themeForeground(_muted),
+                          fontSize: 11,
+                        ),
                       ),
                     ],
                   ),
@@ -475,9 +488,9 @@ class _RecruiterInterviewDashboardState
       children: [
         if (questions.isEmpty)
           _row(
-            const Text(
+            Text(
               'No interview questions available.',
-              style: TextStyle(color: _muted),
+              style: TextStyle(color: context.themeForeground(_muted)),
             ),
           ),
         for (final question in questions)
@@ -545,7 +558,9 @@ class _RecruiterInterviewDashboardState
                     child: Text(
                       '${_clock(timestamp)}${canSeek ? ' · jump to answer' : ''}',
                       style: TextStyle(
-                        color: canSeek ? _blue : _muted,
+                        color: canSeek
+                            ? _blue
+                            : context.themeForeground(_muted),
                         fontSize: 11,
                       ),
                     ),
@@ -561,9 +576,9 @@ class _RecruiterInterviewDashboardState
                 : '${score.toStringAsFixed(1)} out of 10',
             style: TextStyle(
               color: score == null
-                  ? _muted
+                  ? context.themeForeground(_muted)
                   : score >= 8
-                  ? _green
+                  ? context.themeForeground(_green)
                   : _blue,
               fontFamily: 'JetBrains Mono',
               fontWeight: FontWeight.w700,
@@ -587,7 +602,12 @@ class _RecruiterInterviewDashboardState
             ),
       children: [
         if (events.isEmpty)
-          _row(Text(_behaviorMessage(), style: const TextStyle(color: _muted))),
+          _row(
+            Text(
+              _behaviorMessage(),
+              style: TextStyle(color: context.themeForeground(_muted)),
+            ),
+          ),
         for (final event in events)
           _row(
             Row(
@@ -665,7 +685,9 @@ class _RecruiterInterviewDashboardState
     final badge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: warm ? const Color(0xFFFBEFD4) : const Color(0xFFE5EDFF),
+        color: warm
+            ? context.themeSurface(const Color(0xFFFBEFD4))
+            : context.themeSurface(const Color(0xFFE5EDFF)),
         borderRadius: BorderRadius.circular(5),
       ),
       child: Text(
@@ -680,8 +702,8 @@ class _RecruiterInterviewDashboardState
 
   Widget _row(Widget child) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-    decoration: const BoxDecoration(
-      border: Border(top: BorderSide(color: _line)),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: context.themeOutline(_line))),
     ),
     child: child,
   );
@@ -728,7 +750,7 @@ class _RecruiterInterviewDashboardState
 
   Widget _surface(Widget child, {bool accent = false}) => DecoratedBox(
     decoration: BoxDecoration(
-      color: const Color(0xFFFAFBFD),
+      color: context.themeSurface(const Color(0xFFFAFBFD)),
       borderRadius: BorderRadius.circular(17),
       boxShadow: [
         BoxShadow(

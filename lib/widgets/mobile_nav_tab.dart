@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
 /// Visual treatment only; the parent keeps ownership of navigation and taps.
@@ -35,14 +36,16 @@ class MobileNavTab extends StatelessWidget {
               icon,
               size: 20,
               color: selected
-                  ? const Color(0xFF0F172A)
-                  : const Color(0xFF71829C),
+                  ? context.themeForeground(const Color(0xFF0F172A))
+                  : context.themeForeground(const Color(0xFF71829C)),
             ),
           ),
         ),
       );
     }
-    final color = selected ? accent : const Color(0xFF7E8DAA);
+    final color = selected
+        ? accent
+        : context.themeForeground(const Color(0xFF7E8DAA));
     final tab = AnimatedContainer(
       height: double.infinity,
       duration: MediaQuery.disableAnimationsOf(context)

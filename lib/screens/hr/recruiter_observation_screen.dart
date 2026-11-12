@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import 'package:flutter/material.dart';
 import '../../models/interview_analysis_contract.dart';
@@ -12,7 +13,7 @@ class RecruiterObservationScreen extends StatelessWidget {
   final RecruiterObservationTarget target;
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFF5F7FC),
+    backgroundColor: context.themeCanvas(const Color(0xFFF5F7FC)),
     body: SafeArea(
       child: Column(
         children: [

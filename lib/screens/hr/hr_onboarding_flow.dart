@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
@@ -78,15 +79,17 @@ class _HrOnboardingFlowState extends State<HrOnboardingFlow> {
             height: 56,
             child: ElevatedButton(
               onPressed: _nextPage,
-              style: RecruiterButtonStyle.primary(ElevatedButton.styleFrom(
-                backgroundColor: AppColors.hrPrimary,
-                foregroundColor: AppColors.white,
-                elevation: 10,
-                shadowColor: AppColors.hrPrimary.withValues(alpha: 0.3),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(28),
+              style: RecruiterButtonStyle.primary(
+                ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.hrPrimary,
+                  foregroundColor: AppColors.white,
+                  elevation: 10,
+                  shadowColor: AppColors.hrPrimary.withValues(alpha: 0.3),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
                 ),
-              )),
+              ),
               child: Text(
                 _currentPage == 3
                     ? AppConstants.hrCreateAccount
@@ -111,50 +114,50 @@ class _HrOnboardingFlowState extends State<HrOnboardingFlow> {
           return const HrOnboardingFlowWeb();
         }
         return Scaffold(
-          backgroundColor: AppColors.hrBackground,
+          backgroundColor: context.themeCanvas(AppColors.hrBackground),
           body: Stack(
             children: [
-          const GradientBackground(),
-          SafeArea(
-            child: Column(
-              children: [
-                // Skip button
-                Align(
-                  alignment: Alignment.topRight,
-                  child: TextButton(
-                    onPressed: _skip,
-                    child: Text(
-                      'Skip',
-                      style: GoogleFonts.publicSans(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.hrPrimary,
+              const GradientBackground(),
+              SafeArea(
+                child: Column(
+                  children: [
+                    // Skip button
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: TextButton(
+                        onPressed: _skip,
+                        child: Text(
+                          'Skip',
+                          style: GoogleFonts.publicSans(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.hrPrimary,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Pages
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    onPageChanged: (index) {
-                      setState(() => _currentPage = index);
-                    },
-                    children: [
-                      _Page1(controls: _buildControls()),
-                      _Page2(controls: _buildControls()),
-                      _Page3(controls: _buildControls()),
-                      _Page4(controls: _buildControls()),
-                    ],
-                  ),
+                    // Pages
+                    Expanded(
+                      child: PageView(
+                        controller: _pageController,
+                        onPageChanged: (index) {
+                          setState(() => _currentPage = index);
+                        },
+                        children: [
+                          _Page1(controls: _buildControls()),
+                          _Page2(controls: _buildControls()),
+                          _Page3(controls: _buildControls()),
+                          _Page4(controls: _buildControls()),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
       },
     );
   }
@@ -174,7 +177,9 @@ class _InteractiveDot extends StatelessWidget {
       width: isActive ? 22 : 8,
       height: 8,
       decoration: BoxDecoration(
-        color: isActive ? AppColors.hrPrimary : AppColors.hrDotInactive,
+        color: isActive
+            ? AppColors.hrPrimary
+            : context.themeSurface(AppColors.hrDotInactive),
         borderRadius: BorderRadius.circular(4),
       ),
     );
@@ -194,7 +199,7 @@ class _HrBadge extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.hrPrimary.withValues(alpha: 0.5)),
-        color: AppColors.white.withValues(alpha: 0.6),
+        color: context.themeSurface(AppColors.white).withValues(alpha: 0.6),
       ),
       child: Text(
         AppConstants.hrBadge,
@@ -221,7 +226,7 @@ class _IconCard extends StatelessWidget {
       width: 100,
       height: 100,
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.themeSurface(AppColors.white),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -236,7 +241,7 @@ class _IconCard extends StatelessWidget {
         width: 60,
         height: 60,
         decoration: BoxDecoration(
-          color: AppColors.hrLightBlue,
+          color: context.themeSurface(AppColors.hrLightBlue),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Icon(icon, color: AppColors.hrPrimary, size: 36),
@@ -270,7 +275,7 @@ class _Page1 extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 26,
               fontWeight: FontWeight.w800,
-              color: AppColors.hrTextDark,
+              color: context.themeForeground(AppColors.hrTextDark),
               height: 1.25,
               letterSpacing: -0.4,
             ),
@@ -282,7 +287,7 @@ class _Page1 extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 14,
               fontWeight: FontWeight.w400,
-              color: AppColors.hrTextGrey,
+              color: context.themeForeground(AppColors.hrTextGrey),
               height: 1.5,
             ),
           ),
@@ -291,7 +296,7 @@ class _Page1 extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.themeSurface(Colors.white),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
@@ -312,14 +317,14 @@ class _Page1 extends StatelessWidget {
                       style: GoogleFonts.publicSans(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.hrTextDark,
+                        color: context.themeForeground(AppColors.hrTextDark),
                       ),
                     ),
                     Text(
                       '48 applicants',
                       style: GoogleFonts.publicSans(
                         fontSize: 12,
-                        color: AppColors.hrTextGrey,
+                        color: context.themeForeground(AppColors.hrTextGrey),
                       ),
                     ),
                   ],
@@ -355,7 +360,7 @@ class _ApplicantBar extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: AppColors.hrBackground,
+            color: context.themeSurface(AppColors.hrBackground),
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Icon(
@@ -370,7 +375,10 @@ class _ApplicantBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             child: Stack(
               children: [
-                Container(height: 1, color: AppColors.hrDivider),
+                Container(
+                  height: 1,
+                  color: context.themeSurface(AppColors.hrDivider),
+                ),
                 FractionallySizedBox(
                   widthFactor: score / 100,
                   child: Container(height: 8, color: color),
@@ -418,7 +426,7 @@ class _Page2 extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 26,
               fontWeight: FontWeight.w800,
-              color: AppColors.hrTextDark,
+              color: context.themeForeground(AppColors.hrTextDark),
               height: 1.25,
               letterSpacing: -0.4,
             ),
@@ -430,7 +438,7 @@ class _Page2 extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 14,
               fontWeight: FontWeight.w400,
-              color: AppColors.hrTextGrey,
+              color: context.themeForeground(AppColors.hrTextGrey),
               height: 1.5,
             ),
           ),
@@ -439,7 +447,7 @@ class _Page2 extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.themeSurface(Colors.white),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
@@ -456,7 +464,7 @@ class _Page2 extends StatelessWidget {
                   text: TextSpan(
                     style: GoogleFonts.publicSans(
                       fontSize: 13,
-                      color: AppColors.hrTextGrey,
+                      color: context.themeForeground(AppColors.hrTextGrey),
                     ),
                     children: [
                       const TextSpan(text: 'Auto-generated for: '),
@@ -464,7 +472,7 @@ class _Page2 extends StatelessWidget {
                         text: 'Natasha F.',
                         style: GoogleFonts.publicSans(
                           fontWeight: FontWeight.w700,
-                          color: AppColors.hrTextDark,
+                          color: context.themeForeground(AppColors.hrTextDark),
                         ),
                       ),
                     ],
@@ -478,9 +486,9 @@ class _Page2 extends StatelessWidget {
                       'Describe a time you led a difficult project to completion',
                 ),
                 const SizedBox(height: 12),
-                const _InterviewQuestion(
+                _InterviewQuestion(
                   avatar: 'T',
-                  color: AppColors.hrTextGrey,
+                  color: context.themeForeground(AppColors.hrTextGrey),
                   text:
                       'Walk me through your Django ORM and query optimisation experience',
                 ),
@@ -543,7 +551,7 @@ class _InterviewQuestion extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 13,
               fontWeight: FontWeight.w400,
-              color: AppColors.hrTextMedium,
+              color: context.themeForeground(AppColors.hrTextMedium),
               height: 1.4,
             ),
           ),
@@ -578,7 +586,7 @@ class _Page3 extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 26,
               fontWeight: FontWeight.w800,
-              color: AppColors.hrTextDark,
+              color: context.themeForeground(AppColors.hrTextDark),
               height: 1.25,
               letterSpacing: -0.4,
             ),
@@ -590,7 +598,7 @@ class _Page3 extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 14,
               fontWeight: FontWeight.w400,
-              color: AppColors.hrTextGrey,
+              color: context.themeForeground(AppColors.hrTextGrey),
               height: 1.5,
             ),
           ),
@@ -599,7 +607,7 @@ class _Page3 extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.themeSurface(Colors.white),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
@@ -617,7 +625,7 @@ class _Page3 extends StatelessWidget {
                   style: GoogleFonts.publicSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.hrTextLight,
+                    color: context.themeForeground(AppColors.hrTextLight),
                     letterSpacing: 0.8,
                   ),
                 ),
@@ -631,7 +639,11 @@ class _Page3 extends StatelessWidget {
                         valueColor: AppColors.hrGreen,
                       ),
                     ),
-                    Container(width: 1, height: 50, color: AppColors.hrDivider),
+                    Container(
+                      width: 1,
+                      height: 50,
+                      color: context.themeSurface(AppColors.hrDivider),
+                    ),
                     Expanded(
                       child: _AnalysisStat(
                         value: '74%',
@@ -639,7 +651,11 @@ class _Page3 extends StatelessWidget {
                         valueColor: AppColors.hrPrimary,
                       ),
                     ),
-                    Container(width: 1, height: 50, color: AppColors.hrDivider),
+                    Container(
+                      width: 1,
+                      height: 50,
+                      color: context.themeSurface(AppColors.hrDivider),
+                    ),
                     Expanded(
                       child: _AnalysisStat(
                         value: 'LOW',
@@ -691,7 +707,7 @@ class _AnalysisStat extends StatelessWidget {
           style: GoogleFonts.publicSans(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: AppColors.hrTextLight,
+            color: context.themeForeground(AppColors.hrTextLight),
             letterSpacing: 0.4,
             height: 1.4,
           ),
@@ -726,7 +742,7 @@ class _Page4 extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 26,
               fontWeight: FontWeight.w800,
-              color: AppColors.hrTextDark,
+              color: context.themeForeground(AppColors.hrTextDark),
               height: 1.25,
               letterSpacing: -0.4,
             ),
@@ -738,7 +754,7 @@ class _Page4 extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 14,
               fontWeight: FontWeight.w400,
-              color: AppColors.hrTextGrey,
+              color: context.themeForeground(AppColors.hrTextGrey),
               height: 1.5,
             ),
           ),
@@ -747,7 +763,7 @@ class _Page4 extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.themeSurface(Colors.white),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
@@ -765,7 +781,7 @@ class _Page4 extends StatelessWidget {
                   style: GoogleFonts.publicSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.hrTextLight,
+                    color: context.themeForeground(AppColors.hrTextLight),
                     letterSpacing: 0.8,
                     height: 1.4,
                   ),
@@ -778,7 +794,10 @@ class _Page4 extends StatelessWidget {
                   labelColor: AppColors.hrGreen,
                   labelBg: AppColors.hrLightGreen,
                 ),
-                const Divider(height: 24, color: AppColors.hrBackground),
+                Divider(
+                  height: 24,
+                  color: context.themeOutline(AppColors.hrBackground),
+                ),
                 const _RankingRow(
                   rank: 2,
                   name: 'Umar Z.',
@@ -786,7 +805,10 @@ class _Page4 extends StatelessWidget {
                   labelColor: AppColors.hrPrimary,
                   labelBg: AppColors.hrLightBlueAlt,
                 ),
-                const Divider(height: 24, color: AppColors.hrBackground),
+                Divider(
+                  height: 24,
+                  color: context.themeOutline(AppColors.hrBackground),
+                ),
                 const _RankingRow(
                   rank: 3,
                   name: 'Natasha F.',
@@ -830,7 +852,7 @@ class _RankingRow extends StatelessWidget {
           style: GoogleFonts.publicSans(
             fontSize: 14,
             fontWeight: FontWeight.w700,
-            color: AppColors.hrTextLight,
+            color: context.themeForeground(AppColors.hrTextLight),
           ),
         ),
         const SizedBox(width: 12),
@@ -838,7 +860,7 @@ class _RankingRow extends StatelessWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: AppColors.hrDivider,
+            color: context.themeSurface(AppColors.hrDivider),
             shape: BoxShape.circle,
           ),
         ),
@@ -849,7 +871,7 @@ class _RankingRow extends StatelessWidget {
             style: GoogleFonts.publicSans(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.hrTextDark,
+              color: context.themeForeground(AppColors.hrTextDark),
             ),
           ),
         ),

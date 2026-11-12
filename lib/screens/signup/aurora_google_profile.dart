@@ -1,9 +1,12 @@
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
+import '../../widgets/country_code_phone_field.dart';
+import '../../widgets/candidate_button_style.dart';
+import '../../widgets/recruiter_button_style.dart';
 
 class AuroraGoogleProfile extends StatelessWidget {
   const AuroraGoogleProfile({
@@ -15,7 +18,8 @@ class AuroraGoogleProfile extends StatelessWidget {
     required this.nameFocus,
     required this.phoneFocus,
     required this.country,
-    required this.onCountryChanged,
+    required this.onPhoneChanged,
+    required this.onPhoneValidityChanged,
     required this.onSubmit,
     required this.busy,
     this.company,
@@ -29,8 +33,9 @@ class AuroraGoogleProfile extends StatelessWidget {
   final TextEditingController? company;
   final FocusNode nameFocus;
   final FocusNode phoneFocus;
-  final String country;
-  final ValueChanged<String> onCountryChanged;
+  final CountryData? country;
+  final ValueChanged<String> onPhoneChanged;
+  final ValueChanged<bool> onPhoneValidityChanged;
   final VoidCallback onSubmit;
   final bool busy;
   final String? error;
@@ -41,27 +46,21 @@ class AuroraGoogleProfile extends StatelessWidget {
   static const _line = Color(0x2494aadc);
   static const _input = Color(0x0e94aadc);
   static const _green = Color(0xff34e3b0);
-  static const countries = {
-    '+92': '🇵🇰',
-    '+1': '🇺🇸',
-    '+44': '🇬🇧',
-    '+971': '🇦🇪',
-    '+91': '🇮🇳',
-    '+966': '🇸🇦',
-    '+61': '🇦🇺',
-  };
 
   Color get _accent =>
       recruiter ? const Color(0xff6c9bff) : const Color(0xff2ee6c8);
   Color get _main =>
       recruiter ? const Color(0xff5b8cff) : const Color(0xff19c9ab);
-  Color get _strong =>
-      recruiter ? const Color(0xff4055e8) : const Color(0xff0e9e8c);
   Color get _glow => recruiter ? _main : _accent;
+  Color _accentText(_ProfileColors colors) => colors.isDark
+      ? _accent
+      : recruiter
+      ? const Color(0xff315ac5)
+      : const Color(0xff087568);
 
   static TextStyle _style(
     double size, {
-    Color color = _text,
+    required Color color,
     FontWeight weight = FontWeight.w400,
     String family = 'Inter',
     double height = 1.2,
@@ -76,44 +75,31 @@ class AuroraGoogleProfile extends StatelessWidget {
   );
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xff0e1522),
-    body: SafeArea(
-      child: LayoutBuilder(
+  Widget build(BuildContext context) {
+    final colors = _ProfileColors(Theme.of(context).colorScheme);
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: LayoutBuilder(
         builder: (context, constraints) {
-          final width = constraints.maxWidth;
+          final width =
+              constraints.maxWidth - MediaQuery.paddingOf(context).horizontal;
           final mobile = width <= 760;
           final compact = width < 360;
-          final inset = mobile ? 17.0 : 24.0;
           return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(horizontal: inset, vertical: 12),
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                minHeight: math.max(0, constraints.maxHeight - 24),
+                minWidth: constraints.maxWidth,
+                minHeight: constraints.maxHeight,
               ),
-              child: Center(
-                child: Container(
-                  width: math.min(mobile ? 390.0 : 1160.0, width - 2 * inset),
-                  constraints: BoxConstraints(minHeight: mobile ? 765 : 655),
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    color: const Color(0xff070b14),
-                    border: Border.all(color: _line),
-                    borderRadius: BorderRadius.circular(mobile ? 32 : 18),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x59000000),
-                        blurRadius: 72,
-                        offset: Offset(0, 26),
-                      ),
-                    ],
-                  ),
-                  child: CustomPaint(
-                    painter: _AuroraBackdrop(_glow),
+              child: ColoredBox(
+                color: colors.surface,
+                child: CustomPaint(
+                  painter: _AuroraBackdrop(_glow),
+                  child: SafeArea(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _header(mobile, compact),
+                        _header(colors, mobile),
                         Padding(
                           padding: EdgeInsets.fromLTRB(
                             mobile ? (compact ? 16 : 24) : 0,
@@ -125,15 +111,9 @@ class AuroraGoogleProfile extends StatelessWidget {
                             constraints: const BoxConstraints(maxWidth: 455),
                             child: Column(
                               children: [
-                                _hero(mobile, width),
+                                _hero(colors, mobile),
                                 SizedBox(height: mobile ? 17 : 23),
-                                _card(mobile, compact),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 19,
-                                  ),
-                                  child: _progress(),
-                                ),
+                                _card(colors, mobile, compact),
                               ],
                             ),
                           ),
@@ -147,8 +127,8 @@ class AuroraGoogleProfile extends StatelessWidget {
           );
         },
       ),
-    ),
-  );
+    );
+  }
 
   Widget _star(double size) => SvgPicture.asset(
     'assets/icons/aurora_star.svg',
@@ -157,27 +137,12 @@ class AuroraGoogleProfile extends StatelessWidget {
     excludeFromSemantics: true,
   );
 
-  Widget _dot(Color color, {bool glowing = false}) => Container(
-    width: 6,
-    height: 6,
-    decoration: BoxDecoration(
-      color: color,
-      shape: BoxShape.circle,
-      boxShadow: glowing
-          ? [BoxShadow(color: color.withValues(alpha: .46), blurRadius: 9)]
-          : null,
-    ),
-  );
-
-  Widget _header(bool mobile, bool compact) {
-    final brandSize = mobile ? 15.0 : 17.0;
-    final metaSize = compact ? 8.0 : (mobile ? 9.0 : 10.0);
-    final gap = compact ? 5.0 : 9.0;
+  Widget _header(_ProfileColors colors, bool mobile) {
+    final brandSize = mobile ? 16.0 : 18.0;
     return Container(
       height: mobile ? 70 : 74,
       padding: EdgeInsets.symmetric(horizontal: mobile ? 22 : 46),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Flexible(
             child: FittedBox(
@@ -192,46 +157,15 @@ class AuroraGoogleProfile extends StatelessWidget {
                       children: [
                         TextSpan(
                           text: 'AI',
-                          style: TextStyle(color: _accent),
+                          style: TextStyle(color: _accentText(colors)),
                         ),
                       ],
                     ),
                     style: _style(
                       brandSize,
+                      color: colors.text,
                       weight: FontWeight.w700,
                       spacing: -.045 * brandSize,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _dot(_green, glowing: true),
-                  SizedBox(width: gap),
-                  Text(
-                    'SECURE ONBOARDING',
-                    style: _style(
-                      metaSize,
-                      family: 'Space Grotesk',
-                      color: _muted,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(width: gap),
-                  Text(
-                    '/ 02',
-                    style: _style(
-                      metaSize,
-                      family: 'JetBrains Mono',
-                      color: _muted,
-                      weight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -243,8 +177,7 @@ class AuroraGoogleProfile extends StatelessWidget {
     );
   }
 
-  Widget _hero(bool mobile, double width) {
-    final size = mobile ? 28.0 : (width * .03).clamp(30.0, 40.0);
+  Widget _hero(_ProfileColors colors, bool mobile) {
     return Column(
       children: [
         Container(
@@ -262,24 +195,20 @@ class AuroraGoogleProfile extends StatelessWidget {
           child: _star(mobile ? 30 : 39),
         ),
         SizedBox(height: mobile ? 10 : 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _dot(_accent),
-            const SizedBox(width: 8),
-            Text(
-              "YOU'RE ALMOST THERE",
-              style: _style(
-                10,
-                family: 'Space Grotesk',
-                color: recruiter
-                    ? const Color(0xffa7c1ff)
-                    : const Color(0xff82f1df),
-                weight: FontWeight.w600,
-                spacing: 1.2,
-              ),
-            ),
-          ],
+        Text(
+          "YOU'RE ALMOST THERE",
+          textAlign: TextAlign.center,
+          style: _style(
+            12,
+            family: 'Space Grotesk',
+            color: colors.isDark
+                ? (recruiter
+                      ? const Color(0xffa7c1ff)
+                      : const Color(0xff82f1df))
+                : _accentText(colors),
+            weight: FontWeight.w600,
+            spacing: 1.2,
+          ),
         ),
         const SizedBox(height: 10),
         Semantics(
@@ -290,40 +219,43 @@ class AuroraGoogleProfile extends StatelessWidget {
               children: [
                 TextSpan(
                   text: 'official.',
-                  style: TextStyle(color: _accent),
+                  style: TextStyle(color: _accentText(colors)),
                 ),
               ],
             ),
             style: _style(
-              size,
-              weight: FontWeight.w700,
-              height: 1.11,
-              spacing: -.055 * size,
-            ),
+              mobile ? 32 : 38,
+              color: colors.text,
+              weight: FontWeight.w600,
+              height: 1.15,
+              spacing: -.6,
+            ).copyWith(fontVariations: const [ui.FontVariation.weight(600)]),
             textAlign: TextAlign.center,
           ),
         ),
         const SizedBox(height: 10),
         Text(
           'Your Google account is connected. Just two more details before you enter your workspace.',
-          style: _style(mobile ? 12 : 13, color: _secondary, height: 1.72),
+          style: _style(mobile ? 14 : 16, color: colors.secondary, height: 1.5),
           textAlign: TextAlign.center,
         ),
       ],
     );
   }
 
-  Widget _card(bool mobile, bool compact) {
+  Widget _card(_ProfileColors colors, bool mobile, bool compact) {
     final horizontal = mobile ? (compact ? 16.0 : 19.0) : 26.0;
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: _line),
+        border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x47000000),
+            color: colors.isDark
+                ? const Color(0x47000000)
+                : const Color(0x1a000000),
             blurRadius: 90,
-            offset: Offset(0, 28),
+            offset: const Offset(0, 28),
           ),
         ],
       ),
@@ -331,7 +263,7 @@ class AuroraGoogleProfile extends StatelessWidget {
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
         child: ColoredBox(
-          color: const Color(0xb310192a),
+          color: colors.card,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -362,19 +294,21 @@ class AuroraGoogleProfile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _googleChip(compact),
+                      _googleChip(colors, compact),
                       const SizedBox(height: 20),
-                      _label('Full name'),
+                      _label(colors, 'Full name'),
                       _field(
-                        prefix: const Padding(
-                          padding: EdgeInsets.only(left: 14),
+                        colors,
+                        prefix: Padding(
+                          padding: const EdgeInsets.only(left: 14),
                           child: Icon(
                             Icons.person_outline,
-                            color: _muted,
+                            color: colors.muted,
                             size: 14,
                           ),
                         ),
                         input: _textField(
+                          colors,
                           'Full name',
                           name,
                           'Enter your full name',
@@ -384,28 +318,38 @@ class AuroraGoogleProfile extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 15),
-                      _label('Phone number'),
-                      _field(
-                        prefix: _countryPicker(),
-                        input: _textField(
-                          'Phone number',
-                          phone,
-                          '3XX XXXXXXX',
-                          focus: phoneFocus,
-                          autofill: AutofillHints.telephoneNumberNational,
-                          keyboard: TextInputType.phone,
+                      _label(colors, 'Phone number'),
+                      Semantics(
+                        label: 'Phone number',
+                        child: CountryCodePhoneField(
+                          controller: phone,
+                          focusNode: phoneFocus,
+                          initialCountry: country,
+                          enabled: !busy,
+                          anchoredMobilePicker: true,
+                          autofillHints: const [
+                            AutofillHints.telephoneNumberNational,
+                          ],
+                          onPhoneChanged: onPhoneChanged,
+                          onValidityChanged: onPhoneValidityChanged,
+                          focusColor: _main,
+                          fieldColors: (
+                            fill: colors.input,
+                            border: colors.line,
+                            text: colors.text,
+                            hint: colors.hint,
+                            error: colors.error,
+                            cursor: _accentText(colors),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 7),
-                      Text(
-                        'Only used for important account and interview updates.',
-                        style: _style(10, color: _muted, height: 1.5),
                       ),
                       if (company case final controller?) ...[
                         const SizedBox(height: 15),
-                        _label('Company name'),
+                        _label(colors, 'Company name'),
                         _field(
+                          colors,
                           input: _textField(
+                            colors,
                             'Company name',
                             controller,
                             'Enter your company name',
@@ -425,8 +369,8 @@ class AuroraGoogleProfile extends StatelessWidget {
                                 child: Text(
                                   error!,
                                   style: _style(
-                                    11,
-                                    color: const Color(0xffff9696),
+                                    13,
+                                    color: colors.error,
                                     weight: FontWeight.w500,
                                   ),
                                 ),
@@ -436,9 +380,9 @@ class AuroraGoogleProfile extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.lock_outline,
-                            color: _muted,
+                            color: colors.muted,
                             size: 12,
                           ),
                           const SizedBox(width: 7),
@@ -446,9 +390,9 @@ class AuroraGoogleProfile extends StatelessWidget {
                             child: Text(
                               'Your details stay private and secure',
                               style: _style(
-                                10,
+                                12,
                                 family: 'Space Grotesk',
-                                color: _muted,
+                                color: colors.muted,
                                 weight: FontWeight.w500,
                               ),
                             ),
@@ -466,13 +410,13 @@ class AuroraGoogleProfile extends StatelessWidget {
     );
   }
 
-  Widget _googleChip(bool compact) => Container(
+  Widget _googleChip(_ProfileColors colors, bool compact) => Container(
     padding: compact
         ? const EdgeInsets.all(9)
         : const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
-      color: _input,
-      border: Border.all(color: const Color(0x1794aadc)),
+      color: colors.input,
+      border: Border.all(color: colors.chipLine),
       borderRadius: BorderRadius.circular(10),
     ),
     child: Row(
@@ -490,12 +434,12 @@ class AuroraGoogleProfile extends StatelessWidget {
             children: [
               Text(
                 'Signed in with Google',
-                style: _style(11, weight: FontWeight.w600),
+                style: _style(14, color: colors.text, weight: FontWeight.w600),
               ),
               const SizedBox(height: 3),
               Text(
                 email,
-                style: _style(10, color: _muted),
+                style: _style(12, color: colors.muted),
                 overflow: TextOverflow.ellipsis,
               ),
             ],
@@ -508,18 +452,18 @@ class AuroraGoogleProfile extends StatelessWidget {
             width: 20,
             height: 20,
             decoration: BoxDecoration(
-              color: _green.withValues(alpha: .12),
+              color: colors.green.withValues(alpha: .12),
               shape: BoxShape.circle,
-              border: Border.all(color: _green.withValues(alpha: .2)),
+              border: Border.all(color: colors.green.withValues(alpha: .2)),
             ),
-            child: const Icon(Icons.check, size: 12, color: _green),
+            child: Icon(Icons.check, size: 12, color: colors.green),
           ),
         ),
       ],
     ),
   );
 
-  Widget _label(String label) => ExcludeSemantics(
+  Widget _label(_ProfileColors colors, String label) => ExcludeSemantics(
     child: Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -529,10 +473,9 @@ class AuroraGoogleProfile extends StatelessWidget {
             child: Text(
               label,
               style: _style(
-                11,
-                color: _secondary,
-                family: 'Space Grotesk',
-                weight: FontWeight.w600,
+                14,
+                color: colors.secondary,
+                weight: FontWeight.w500,
               ),
             ),
           ),
@@ -540,10 +483,9 @@ class AuroraGoogleProfile extends StatelessWidget {
           Text(
             'Required',
             style: _style(
-              11,
-              color: _accent,
-              family: 'Space Grotesk',
-              weight: FontWeight.w600,
+              14,
+              color: _accentText(colors),
+              weight: FontWeight.w500,
             ),
           ),
         ],
@@ -551,7 +493,11 @@ class AuroraGoogleProfile extends StatelessWidget {
     ),
   );
 
-  Widget _field({required Widget input, Widget? prefix}) => Focus(
+  Widget _field(
+    _ProfileColors colors, {
+    required Widget input,
+    Widget? prefix,
+  }) => Focus(
     canRequestFocus: false,
     skipTraversal: true,
     child: Builder(
@@ -560,9 +506,9 @@ class AuroraGoogleProfile extends StatelessWidget {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            color: _input,
+            color: colors.input,
             borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: focused ? _main : _line),
+            border: Border.all(color: focused ? _main : colors.line),
             boxShadow: focused
                 ? [
                     BoxShadow(
@@ -584,12 +530,12 @@ class AuroraGoogleProfile extends StatelessWidget {
   );
 
   Widget _textField(
+    _ProfileColors colors,
     String label,
     TextEditingController controller,
     String placeholder, {
     FocusNode? focus,
     required String autofill,
-    TextInputType? keyboard,
     int? maxLength,
   }) => Semantics(
     label: label,
@@ -597,16 +543,14 @@ class AuroraGoogleProfile extends StatelessWidget {
       focusNode: focus,
       controller: controller,
       enabled: !busy,
-      keyboardType: keyboard ?? TextInputType.name,
-      textCapitalization: keyboard == null
-          ? TextCapitalization.words
-          : TextCapitalization.none,
+      keyboardType: TextInputType.name,
+      textCapitalization: TextCapitalization.words,
       autofillHints: [autofill],
       inputFormatters: [
         if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
       ],
-      cursorColor: _accent,
-      style: _style(12, spacing: .06),
+      cursorColor: _accentText(colors),
+      style: _style(13, color: colors.text, spacing: .06),
       decoration: InputDecoration(
         isDense: true,
         filled: false,
@@ -619,63 +563,28 @@ class AuroraGoogleProfile extends StatelessWidget {
         focusedBorder: InputBorder.none,
         disabledBorder: InputBorder.none,
         hintText: placeholder,
-        hintStyle: _style(12, color: const Color(0xff64728c), spacing: .06),
-      ),
-    ),
-  );
-
-  Widget _countryPicker() => Container(
-    width: 79,
-    decoration: const BoxDecoration(
-      border: Border(right: BorderSide(color: _line)),
-    ),
-    child: Semantics(
-      label: 'Country code',
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          value: country,
-          onChanged: busy
-              ? null
-              : (value) {
-                  if (value != null) onCountryChanged(value);
-                },
-          iconSize: 14,
-          iconEnabledColor: _muted,
-          dropdownColor: const Color(0xff101929),
-          padding: const EdgeInsets.only(left: 14, right: 6),
-          isDense: true,
-          style: _style(11, color: _secondary, weight: FontWeight.w600),
-          items: [
-            for (final entry in countries.entries)
-              DropdownMenuItem(
-                value: entry.key,
-                child: Text('${entry.value} ${entry.key}'),
-              ),
-          ],
-        ),
+        hintStyle: _style(13, color: colors.hint, spacing: .06),
       ),
     ),
   );
 
   Widget _submitButton() {
     final ink = recruiter ? Colors.white : const Color(0xff07251f);
+    final shadowColor = recruiter ? RecruiterButtonStyle.blue : _glow;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(11),
         boxShadow: [
           BoxShadow(
-            color: _glow.withValues(alpha: .65),
+            color: shadowColor.withValues(alpha: .65),
             blurRadius: 25,
             spreadRadius: -12,
             offset: const Offset(0, 13),
           ),
         ],
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_main, _strong],
-        ),
+        gradient: recruiter
+            ? RecruiterButtonStyle.primaryGradient
+            : CandidateButtonStyle.primaryGradient,
       ),
       child: TextButton(
         onPressed: busy ? null : onSubmit,
@@ -703,7 +612,7 @@ class AuroraGoogleProfile extends StatelessWidget {
                   Flexible(
                     child: Text(
                       'Complete my profile',
-                      style: _style(12, color: ink, weight: FontWeight.w700),
+                      style: _style(14, color: ink, weight: FontWeight.w700),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -716,41 +625,31 @@ class AuroraGoogleProfile extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _progress() => Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      Container(
-        width: 18,
-        height: 3,
-        decoration: BoxDecoration(
-          color: _accent,
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
-      const SizedBox(width: 9),
-      Container(
-        width: 9,
-        height: 3,
-        decoration: BoxDecoration(
-          color: _line,
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
-      const SizedBox(width: 12),
-      Flexible(
-        child: Text(
-          '02 / 02 · FINAL STEP',
-          style: _style(
-            10,
-            family: 'JetBrains Mono',
-            color: _muted,
-            weight: FontWeight.w500,
-          ),
-        ),
-      ),
-    ],
-  );
+class _ProfileColors {
+  const _ProfileColors(this.scheme);
+
+  final ColorScheme scheme;
+
+  bool get isDark => scheme.brightness == Brightness.dark;
+  Color get background => isDark ? const Color(0xff0e1522) : Colors.white;
+  Color get surface => isDark ? const Color(0xff070b14) : Colors.white;
+  Color get card => isDark ? const Color(0xb310192a) : const Color(0xe6ffffff);
+  Color get text => isDark ? AuroraGoogleProfile._text : scheme.onSurface;
+  Color get secondary =>
+      isDark ? AuroraGoogleProfile._secondary : scheme.onSurfaceVariant;
+  Color get muted =>
+      isDark ? AuroraGoogleProfile._muted : scheme.onSurfaceVariant;
+  Color get hint => isDark ? const Color(0xff64728c) : scheme.onSurfaceVariant;
+  Color get line => isDark ? AuroraGoogleProfile._line : scheme.outlineVariant;
+  Color get chipLine =>
+      isDark ? const Color(0x1794aadc) : scheme.outlineVariant;
+  Color get input =>
+      isDark ? AuroraGoogleProfile._input : scheme.surfaceContainerLow;
+  Color get error => isDark ? const Color(0xffff9696) : scheme.error;
+  Color get green =>
+      isDark ? AuroraGoogleProfile._green : const Color(0xff087553);
 }
 
 class _AuroraBackdrop extends CustomPainter {

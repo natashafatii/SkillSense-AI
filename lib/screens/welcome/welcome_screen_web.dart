@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
@@ -14,7 +15,7 @@ class WelcomeScreenWeb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double horizontalPadding = Responsive.getSpacing(
@@ -26,9 +27,14 @@ class WelcomeScreenWeb extends StatelessWidget {
           final double verticalPadding = constraints.maxHeight * 0.05;
 
           // Split headline by 'skill' to apply gradient highlight while keeping it centered on the constant
-          final List<String> headlineParts = AppConstants.welcomeWebHeadline.split('skill');
-          final String beforeSkill = headlineParts.isNotEmpty ? headlineParts[0] : 'Interviews that\nreveal ';
-          final String afterSkill = headlineParts.length > 1 ? headlineParts[1] : ', not\nscript.';
+          final List<String> headlineParts = AppConstants.welcomeWebHeadline
+              .split('skill');
+          final String beforeSkill = headlineParts.isNotEmpty
+              ? headlineParts[0]
+              : 'Interviews that\nreveal ';
+          final String afterSkill = headlineParts.length > 1
+              ? headlineParts[1]
+              : ', not\nscript.';
 
           return Stack(
             children: [
@@ -65,10 +71,7 @@ class WelcomeScreenWeb extends StatelessWidget {
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
-                                colors: [
-                                  AppColors.webGlow,
-                                  Colors.transparent,
-                                ],
+                                colors: [AppColors.webGlow, Colors.transparent],
                                 stops: [0.0, 0.8],
                               ),
                             ),
@@ -98,7 +101,9 @@ class WelcomeScreenWeb extends StatelessWidget {
                     ),
                   ),
                   // Right: pure white
-                  Expanded(child: Container(color: Colors.white)),
+                  Expanded(
+                    child: Container(color: context.themeSurface(Colors.white)),
+                  ),
                 ],
               ),
 
@@ -150,7 +155,8 @@ class WelcomeScreenWeb extends StatelessWidget {
                                   Row(
                                     children: [
                                       Text(
-                                        AppConstants.welcomeWebEyebrow.toUpperCase(),
+                                        AppConstants.welcomeWebEyebrow
+                                            .toUpperCase(),
                                         style: GoogleFonts.jetBrainsMono(
                                           color: const Color(0xFF7BA5FF),
                                           fontSize: 10,
@@ -162,7 +168,9 @@ class WelcomeScreenWeb extends StatelessWidget {
                                       Expanded(
                                         child: Container(
                                           height: 1,
-                                          color: Colors.white.withValues(alpha: 0.12),
+                                          color: context
+                                              .themeSurface(Colors.white)
+                                              .withValues(alpha: 0.12),
                                         ),
                                       ),
                                     ],
@@ -172,7 +180,8 @@ class WelcomeScreenWeb extends StatelessWidget {
                                   // Main headline
                                   ConstrainedBox(
                                     constraints: const BoxConstraints(
-                                      maxWidth: Responsive.leftPanelContentMaxWidth,
+                                      maxWidth:
+                                          Responsive.leftPanelContentMaxWidth,
                                     ),
                                     child: RichText(
                                       text: TextSpan(
@@ -191,27 +200,32 @@ class WelcomeScreenWeb extends StatelessWidget {
                                         children: [
                                           TextSpan(text: beforeSkill),
                                           WidgetSpan(
-                                            alignment: PlaceholderAlignment.baseline,
+                                            alignment:
+                                                PlaceholderAlignment.baseline,
                                             baseline: TextBaseline.alphabetic,
                                             child: ShaderMask(
                                               blendMode: BlendMode.srcIn,
-                                              shaderCallback: (bounds) => const LinearGradient(
-                                                colors: [
-                                                  AppColors.webHeadlineFairlyStart,
-                                                  AppColors.webHeadlineFairlyEnd,
-                                                ],
-                                                begin: Alignment.centerLeft,
-                                                end: Alignment.centerRight,
-                                              ).createShader(bounds),
+                                              shaderCallback: (bounds) =>
+                                                  const LinearGradient(
+                                                    colors: [
+                                                      AppColors
+                                                          .webHeadlineFairlyStart,
+                                                      AppColors
+                                                          .webHeadlineFairlyEnd,
+                                                    ],
+                                                    begin: Alignment.centerLeft,
+                                                    end: Alignment.centerRight,
+                                                  ).createShader(bounds),
                                               child: Text(
                                                 'skill',
                                                 style: GoogleFonts.inter(
-                                                  fontSize: Responsive.getFontSize(
-                                                    context,
-                                                    mobile: 32,
-                                                    tablet: 36,
-                                                    desktop: 40,
-                                                  ),
+                                                  fontSize:
+                                                      Responsive.getFontSize(
+                                                        context,
+                                                        mobile: 32,
+                                                        tablet: 36,
+                                                        desktop: 40,
+                                                      ),
                                                   fontWeight: FontWeight.w700,
                                                   height: 1.18,
                                                   letterSpacing: -1.2,
@@ -229,12 +243,15 @@ class WelcomeScreenWeb extends StatelessWidget {
                                   // Body subcopy
                                   ConstrainedBox(
                                     constraints: const BoxConstraints(
-                                      maxWidth: Responsive.leftPanelContentMaxWidth,
+                                      maxWidth:
+                                          Responsive.leftPanelContentMaxWidth,
                                     ),
                                     child: Text(
                                       AppConstants.welcomeWebBody,
                                       style: GoogleFonts.inter(
-                                        color: const Color(0xFF94A3B8),
+                                        color: context.themeForeground(
+                                          const Color(0xFF94A3B8),
+                                        ),
                                         fontSize: 14.5,
                                         fontWeight: FontWeight.w400,
                                         height: 1.6,
@@ -264,7 +281,9 @@ class WelcomeScreenWeb extends StatelessWidget {
                                 child: Text(
                                   '© 2026 SkillSense AI',
                                   style: GoogleFonts.inter(
-                                    color: const Color(0xFF64748B),
+                                    color: context.themeForeground(
+                                      const Color(0xFF64748B),
+                                    ),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w400,
                                   ),
@@ -285,7 +304,8 @@ class WelcomeScreenWeb extends StatelessWidget {
                             ),
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(
-                                maxWidth: 450.0, // Match screenshot layout width perfectly
+                                maxWidth:
+                                    450.0, // Match screenshot layout width perfectly
                               ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -298,7 +318,9 @@ class WelcomeScreenWeb extends StatelessWidget {
                                     style: GoogleFonts.inter(
                                       fontSize: 32,
                                       fontWeight: FontWeight.w800,
-                                      color: const Color(0xFF0F172A),
+                                      color: context.themeForeground(
+                                        const Color(0xFF0F172A),
+                                      ),
                                       letterSpacing: -0.5,
                                     ),
                                   ),
@@ -310,7 +332,9 @@ class WelcomeScreenWeb extends StatelessWidget {
                                     style: GoogleFonts.inter(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w400,
-                                      color: const Color(0xFF64748B),
+                                      color: context.themeForeground(
+                                        const Color(0xFF64748B),
+                                      ),
                                       height: 1.5,
                                     ),
                                   ),
@@ -321,14 +345,20 @@ class WelcomeScreenWeb extends StatelessWidget {
                                     width: double.infinity,
                                     height: 52,
                                     child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 250),
+                                      duration: const Duration(
+                                        milliseconds: 250,
+                                      ),
                                       curve: Curves.easeOut,
                                       decoration: BoxDecoration(
-                                        color: PreAuthButtonStyle.blue,
-                                        borderRadius: BorderRadius.circular(26), // Pill shape
+                                        gradient:
+                                            PreAuthButtonStyle.primaryGradient,
+                                        borderRadius: BorderRadius.circular(
+                                          26,
+                                        ), // Pill shape
                                         boxShadow: [
                                           BoxShadow(
-                                            color: PreAuthButtonStyle.blue.withValues(alpha: 0.30),
+                                            color: PreAuthButtonStyle.blue
+                                                .withValues(alpha: 0.30),
                                             blurRadius: 18,
                                             offset: const Offset(0, 6),
                                           ),
@@ -337,7 +367,9 @@ class WelcomeScreenWeb extends StatelessWidget {
                                       child: Material(
                                         color: Colors.transparent,
                                         child: InkWell(
-                                          borderRadius: BorderRadius.circular(26),
+                                          borderRadius: BorderRadius.circular(
+                                            26,
+                                          ),
                                           onTap: () {
                                             Navigator.pushNamed(
                                               context,
@@ -346,7 +378,8 @@ class WelcomeScreenWeb extends StatelessWidget {
                                           },
                                           child: Center(
                                             child: Text(
-                                              AppConstants.welcomeWebCreateAccount,
+                                              AppConstants
+                                                  .welcomeWebCreateAccount,
                                               style: GoogleFonts.inter(
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.w600,
@@ -360,12 +393,15 @@ class WelcomeScreenWeb extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 20),
 
-
                                   // Divider Line
                                   Container(
                                     height: 1,
-                                    color: const Color(0xFFEFF3F8),
-                                    margin: const EdgeInsets.symmetric(vertical: 16),
+                                    color: context.themeSurface(
+                                      const Color(0xFFEFF3F8),
+                                    ),
+                                    margin: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
                                   ),
 
                                   // Already have an account? Log in
@@ -374,33 +410,39 @@ class WelcomeScreenWeb extends StatelessWidget {
                                       cursor: SystemMouseCursors.click,
                                       child: PointerGestureDetector(
                                         onTap: () {
-                                        Navigator.pushNamed(
-                                          context,
-                                          '/login/role',
-                                        );
-                                      },
-                                      child: RichText(
-                                        text: TextSpan(
-                                          style: GoogleFonts.inter(
-                                            fontSize: 13,
-                                            color: const Color(0xFF64748B),
-                                          ),
-                                          children: [
-                                            TextSpan(
-                                              text: '${AppConstants.welcomeWebHaveAccount} ',
-                                            ),
-                                            TextSpan(
-                                              text: AppConstants.welcomeWebLoginLink.trim(),
-                                              style: GoogleFonts.inter(
-                                                color: PreAuthButtonStyle.blue,
-                                                fontWeight: FontWeight.w600,
+                                          Navigator.pushNamed(
+                                            context,
+                                            '/login/role',
+                                          );
+                                        },
+                                        child: RichText(
+                                          text: TextSpan(
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13,
+                                              color: context.themeForeground(
+                                                const Color(0xFF64748B),
                                               ),
                                             ),
-                                          ],
+                                            children: [
+                                              TextSpan(
+                                                text:
+                                                    '${AppConstants.welcomeWebHaveAccount} ',
+                                              ),
+                                              TextSpan(
+                                                text: AppConstants
+                                                    .welcomeWebLoginLink
+                                                    .trim(),
+                                                style: GoogleFonts.inter(
+                                                  color:
+                                                      PreAuthButtonStyle.blue,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
                                   ),
                                 ],
                               ),
@@ -435,19 +477,15 @@ class _BulletPoint extends StatelessWidget {
           height: 20,
           margin: const EdgeInsets.only(top: 2),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
+            color: context.themeSurface(Colors.white).withValues(alpha: 0.06),
             shape: BoxShape.circle,
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.15),
+              color: context.themeOutline(Colors.white).withValues(alpha: 0.15),
               width: 1.0,
             ),
           ),
           child: const Center(
-            child: Icon(
-              Icons.check,
-              color: Colors.white,
-              size: 11,
-            ),
+            child: Icon(Icons.check, color: Colors.white, size: 11),
           ),
         ),
         const SizedBox(width: 14),

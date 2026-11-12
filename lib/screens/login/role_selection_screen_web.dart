@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
@@ -29,13 +30,15 @@ class RoleSelectionScreenWeb extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isRecruiter = selectedRole == 'recruiter';
     final bool isJobSeeker = selectedRole == 'job_seeker';
-    final Color ctaColor = selectedRole != null ? PreAuthButtonStyle.roleColor(selectedRole) : AppColors.primary.withValues(alpha: 0.4);
+    final Color ctaColor = selectedRole != null
+        ? PreAuthButtonStyle.roleColor(selectedRole)
+        : AppColors.primary.withValues(alpha: 0.4);
     final String ctaText = isRecruiter
         ? 'Continue as recruiter'
         : (isJobSeeker ? 'Continue as candidate' : 'Continue');
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.themeCanvas(Colors.white),
       body: LayoutBuilder(
         builder: (context, constraints) {
           // Calculate responsive values
@@ -122,7 +125,9 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                           ),
                           Expanded(
                             flex: 1,
-                            child: Container(color: Colors.white),
+                            child: Container(
+                              color: context.themeSurface(Colors.white),
+                            ),
                           ),
                         ],
                       ),
@@ -186,20 +191,25 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                             Container(
                                               width: 18,
                                               height: 1,
-                                              color: Colors.white.withValues(
-                                                alpha: 0.6,
-                                              ),
+                                              color: context
+                                                  .themeSurface(Colors.white)
+                                                  .withValues(alpha: 0.6),
                                             ),
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Text(
-                                                AppConstants.roleEyebrow.toUpperCase(),
-                                                style: GoogleFonts.jetBrainsMono(
-                                                  color: const Color(0xFF7BA5FF),
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 1.8,
-                                                ),
+                                                AppConstants.roleEyebrow
+                                                    .toUpperCase(),
+                                                style:
+                                                    GoogleFonts.jetBrainsMono(
+                                                      color: const Color(
+                                                        0xFF7BA5FF,
+                                                      ),
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      letterSpacing: 1.8,
+                                                    ),
                                               ),
                                             ),
                                           ],
@@ -208,14 +218,20 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                         // Headline
                                         ConstrainedBox(
                                           constraints: const BoxConstraints(
-                                            maxWidth:
-                                                Responsive.leftPanelContentMaxWidth,
+                                            maxWidth: Responsive
+                                                .leftPanelContentMaxWidth,
                                           ),
                                           child: RichText(
                                             text: TextSpan(
                                               style: GoogleFonts.inter(
                                                 color: Colors.white,
-                                                fontSize: Responsive.getFontSize(context, mobile: 30, tablet: 34, desktop: 40),
+                                                fontSize:
+                                                    Responsive.getFontSize(
+                                                      context,
+                                                      mobile: 30,
+                                                      tablet: 34,
+                                                      desktop: 40,
+                                                    ),
                                                 fontWeight: FontWeight.w700,
                                                 height: 1.18,
                                                 letterSpacing: -1.2,
@@ -226,12 +242,15 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                       'The same interview,\nseen ',
                                                 ),
                                                 WidgetSpan(
-                                                  alignment: PlaceholderAlignment.baseline,
-                                                  baseline: TextBaseline.alphabetic,
+                                                  alignment:
+                                                      PlaceholderAlignment
+                                                          .baseline,
+                                                  baseline:
+                                                      TextBaseline.alphabetic,
                                                   child: ShaderMask(
                                                     blendMode: BlendMode.srcIn,
-                                                    shaderCallback:
-                                                        (bounds) => const LinearGradient(
+                                                    shaderCallback: (bounds) =>
+                                                        const LinearGradient(
                                                           colors: [
                                                             AppColors
                                                                 .webHeadlineFairlyStart,
@@ -245,9 +264,14 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                         ).createShader(bounds),
                                                     child: Text(
                                                       'fairly',
-                                                      style:
-                                                          GoogleFonts.inter(
-                                                        fontSize: Responsive.getFontSize(context, mobile: 30, tablet: 34, desktop: 40),
+                                                      style: GoogleFonts.inter(
+                                                        fontSize:
+                                                            Responsive.getFontSize(
+                                                              context,
+                                                              mobile: 30,
+                                                              tablet: 34,
+                                                              desktop: 40,
+                                                            ),
                                                         fontWeight:
                                                             FontWeight.w700,
                                                         height: 1.18,
@@ -267,13 +291,15 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                         // Subcopy
                                         ConstrainedBox(
                                           constraints: const BoxConstraints(
-                                            maxWidth:
-                                                Responsive.leftPanelContentMaxWidth,
+                                            maxWidth: Responsive
+                                                .leftPanelContentMaxWidth,
                                           ),
                                           child: Text(
                                             AppConstants.webLeftPanelBody,
                                             style: GoogleFonts.inter(
-                                              color: const Color(0xFF94A3B8),
+                                              color: context.themeForeground(
+                                                const Color(0xFF94A3B8),
+                                              ),
                                               fontSize: 14.5,
                                               fontWeight: FontWeight.w400,
                                               height: 1.6,
@@ -310,7 +336,9 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                       child: Text(
                                         '© 2026 SkillSense AI',
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFF64748B),
+                                          color: context.themeForeground(
+                                            const Color(0xFF64748B),
+                                          ),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w400,
                                         ),
@@ -320,7 +348,7 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            
+
                             // RIGHT PANEL CONTENT
                             Expanded(
                               flex: 1,
@@ -334,7 +362,8 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                     ),
                                     child: ConstrainedBox(
                                       constraints: const BoxConstraints(
-                                        maxWidth: 450.0, // Limit width to match screenshot exactly
+                                        maxWidth:
+                                            450.0, // Limit width to match screenshot exactly
                                       ),
                                       child: FadeTransition(
                                         opacity: fadeAnimation,
@@ -351,7 +380,10 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                 style: GoogleFonts.inter(
                                                   fontSize: 32,
                                                   fontWeight: FontWeight.w800,
-                                                  color: const Color(0xFF0F172A),
+                                                  color: context
+                                                      .themeForeground(
+                                                        const Color(0xFF0F172A),
+                                                      ),
                                                   letterSpacing: -0.5,
                                                 ),
                                               ),
@@ -361,58 +393,78 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                 style: GoogleFonts.inter(
                                                   fontSize: 15,
                                                   fontWeight: FontWeight.w400,
-                                                  color: const Color(0xFF64748B),
+                                                  color: context
+                                                      .themeForeground(
+                                                        const Color(0xFF64748B),
+                                                      ),
                                                   height: 1.5,
                                                 ),
                                               ),
                                               const SizedBox(height: 32),
                                               _WebRoleCard(
-                                                title: AppConstants.recruiterTitle,
-                                                description: AppConstants.recruiterDescription,
-                                                icon: Icons.view_sidebar_outlined,
+                                                title:
+                                                    AppConstants.recruiterTitle,
+                                                description: AppConstants
+                                                    .recruiterDescription,
+                                                icon:
+                                                    Icons.view_sidebar_outlined,
                                                 roleColor: AppColors.webRoleHr,
                                                 isSelected: isRecruiter,
-                                                onTap:
-                                                    () => onRoleSelected(
-                                                      'recruiter',
-                                                    ),
+                                                onTap: () =>
+                                                    onRoleSelected('recruiter'),
                                               ),
                                               const SizedBox(height: 16),
                                               _WebRoleCard(
-                                                title: AppConstants.jobSeekerTitle,
-                                                description: AppConstants.jobSeekerDescription,
-                                                icon: Icons.track_changes, // Target/bullseye icon matching the screenshot
+                                                title:
+                                                    AppConstants.jobSeekerTitle,
+                                                description: AppConstants
+                                                    .jobSeekerDescription,
+                                                icon: Icons
+                                                    .track_changes, // Target/bullseye icon matching the screenshot
                                                 roleColor:
                                                     AppColors.webRoleCandidate,
                                                 isSelected: isJobSeeker,
-                                                onTap:
-                                                    () => onRoleSelected(
-                                                      'job_seeker',
-                                                    ),
+                                                onTap: () => onRoleSelected(
+                                                  'job_seeker',
+                                                ),
                                               ),
                                               const SizedBox(height: 24),
                                               Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 14,
-                                                  vertical: 12,
-                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 14,
+                                                      vertical: 12,
+                                                    ),
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFF8FAFC),
-                                                  borderRadius: BorderRadius.circular(10),
+                                                  color: context.themeSurface(
+                                                    const Color(0xFFF8FAFC),
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
                                                   border: Border.all(
-                                                    color: const Color(0xFFF1F5F9),
+                                                    color: context.themeOutline(
+                                                      const Color(0xFFF1F5F9),
+                                                    ),
                                                     width: 1.0,
                                                   ),
                                                 ),
                                                 child: Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
-                                                    const Padding(
-                                                      padding: EdgeInsets.only(top: 2),
+                                                    Padding(
+                                                      padding: EdgeInsets.only(
+                                                        top: 2,
+                                                      ),
                                                       child: Icon(
                                                         Icons.info_outline,
                                                         size: 15,
-                                                        color: Color(0xFF94A3B8),
+                                                        color: context
+                                                            .themeForeground(
+                                                              const Color(
+                                                                0xFF94A3B8,
+                                                              ),
+                                                            ),
                                                       ),
                                                     ),
                                                     const SizedBox(width: 10),
@@ -421,7 +473,12 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                         "One account can hold both roles — recruiters who also apply to jobs switch from the workspace menu.",
                                                         style: GoogleFonts.inter(
                                                           fontSize: 12,
-                                                          color: const Color(0xFF64748B),
+                                                          color: context
+                                                              .themeForeground(
+                                                                const Color(
+                                                                  0xFF64748B,
+                                                                ),
+                                                              ),
                                                           height: 1.4,
                                                         ),
                                                       ),
@@ -434,17 +491,38 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                 width: double.infinity,
                                                 height: 52,
                                                 child: AnimatedContainer(
-                                                  duration: const Duration(milliseconds: 250),
+                                                  duration: const Duration(
+                                                    milliseconds: 250,
+                                                  ),
                                                   curve: Curves.easeOut,
                                                   decoration: BoxDecoration(
-                                                    color: ctaColor,
-                                                    borderRadius: BorderRadius.circular(26), // Pilled rounded corners
-                                                    boxShadow: selectedRole != null
+                                                    color: selectedRole == null
+                                                        ? ctaColor
+                                                        : null,
+                                                    gradient:
+                                                        selectedRole == null
+                                                        ? null
+                                                        : PreAuthButtonStyle.roleGradient(
+                                                            selectedRole,
+                                                          ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          26,
+                                                        ), // Pilled rounded corners
+                                                    boxShadow:
+                                                        selectedRole != null
                                                         ? [
                                                             BoxShadow(
-                                                              color: ctaColor.withValues(alpha: 0.30),
+                                                              color: ctaColor
+                                                                  .withValues(
+                                                                    alpha: 0.30,
+                                                                  ),
                                                               blurRadius: 18,
-                                                              offset: const Offset(0, 6),
+                                                              offset:
+                                                                  const Offset(
+                                                                    0,
+                                                                    6,
+                                                                  ),
                                                             ),
                                                           ]
                                                         : [],
@@ -452,16 +530,26 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                   child: Material(
                                                     color: Colors.transparent,
                                                     child: InkWell(
-                                                      borderRadius: BorderRadius.circular(26),
-                                                      onTap: selectedRole != null ? onContinue : null,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            26,
+                                                          ),
+                                                      onTap:
+                                                          selectedRole != null
+                                                          ? onContinue
+                                                          : null,
                                                       child: Center(
                                                         child: Text(
                                                           ctaText,
-                                                          style: GoogleFonts.inter(
-                                                            fontSize: 15,
-                                                            fontWeight: FontWeight.w600,
-                                                            color: Colors.white,
-                                                          ),
+                                                          style:
+                                                              GoogleFonts.inter(
+                                                                fontSize: 15,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
                                                         ),
                                                       ),
                                                     ),
@@ -476,17 +564,27 @@ class RoleSelectionScreenWeb extends StatelessWidget {
                                                     text: TextSpan(
                                                       style: GoogleFonts.inter(
                                                         fontSize: 13,
-                                                        color: const Color(0xFF64748B),
+                                                        color: context
+                                                            .themeForeground(
+                                                              const Color(
+                                                                0xFF64748B,
+                                                              ),
+                                                            ),
                                                       ),
                                                       children: [
                                                         TextSpan(
-                                                          text: "${AppConstants.noAccount} ",
+                                                          text:
+                                                              "${AppConstants.noAccount} ",
                                                         ),
                                                         TextSpan(
-                                                          text: AppConstants.signUp,
+                                                          text: AppConstants
+                                                              .signUp,
                                                           style: GoogleFonts.inter(
-                                                            color: PreAuthButtonStyle.blue,
-                                                            fontWeight: FontWeight.w600,
+                                                            color:
+                                                                PreAuthButtonStyle
+                                                                    .blue,
+                                                            fontWeight:
+                                                                FontWeight.w600,
                                                           ),
                                                         ),
                                                       ],
@@ -592,10 +690,12 @@ class _WebRoleCard extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 88),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.themeSurface(Colors.white),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? roleColor : const Color(0xFFE2E8F0),
+            color: isSelected
+                ? roleColor
+                : context.themeOutline(const Color(0xFFE2E8F0)),
             width: isSelected ? 2.0 : 1.0,
           ),
           boxShadow: isSelected
@@ -626,11 +726,7 @@ class _WebRoleCard extends StatelessWidget {
                   width: 1.0,
                 ),
               ),
-              child: Icon(
-                icon,
-                color: roleColor,
-                size: 24,
-              ),
+              child: Icon(icon, color: roleColor, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -643,7 +739,7 @@ class _WebRoleCard extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0F172A),
+                      color: context.themeForeground(const Color(0xFF0F172A)),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -652,7 +748,7 @@ class _WebRoleCard extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w400,
-                      color: const Color(0xFF64748B),
+                      color: context.themeForeground(const Color(0xFF64748B)),
                       height: 1.4,
                     ),
                   ),
@@ -666,7 +762,9 @@ class _WebRoleCard extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? roleColor : const Color(0xFFCBD5E1),
+                  color: isSelected
+                      ? roleColor
+                      : context.themeOutline(const Color(0xFFCBD5E1)),
                   width: isSelected ? 2.0 : 1.5,
                 ),
               ),

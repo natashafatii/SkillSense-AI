@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../application_screening_screen.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -103,7 +104,7 @@ class _CandidateApplicationsScreenState
     final wide = MediaQuery.of(context).size.width >= 900;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: Stack(
         children: [
           SafeArea(
@@ -188,7 +189,7 @@ class _CandidateApplicationsScreenState
               style: GoogleFonts.spaceGrotesk(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: const Color(0xFF1E293B),
+                color: context.themeForeground(const Color(0xFF1E293B)),
               ),
             ),
             const SizedBox(height: 4),
@@ -196,7 +197,7 @@ class _CandidateApplicationsScreenState
               '$_activeCount active · $_closedCount closed',
               style: GoogleFonts.inter(
                 fontSize: 14,
-                color: const Color(0xFF64748B),
+                color: context.themeForeground(const Color(0xFF64748B)),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -244,12 +245,14 @@ class _CandidateApplicationsScreenState
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFECFDF5) : Colors.white,
+          color: isSelected
+              ? context.themeSurface(const Color(0xFFECFDF5))
+              : context.themeSurface(Colors.white),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
                 ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                : const Color(0xFFE2E8F0),
+                : context.themeOutline(const Color(0xFFE2E8F0)),
           ),
         ),
         child: Text(
@@ -258,8 +261,8 @@ class _CandidateApplicationsScreenState
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: isSelected
-                ? const Color(0xFF10B981)
-                : const Color(0xFF64748B),
+                ? context.themeForeground(const Color(0xFF10B981))
+                : context.themeForeground(const Color(0xFF64748B)),
           ),
         ),
       ),
@@ -298,7 +301,10 @@ class _CandidateApplicationsScreenState
         ),
         TextButton(
           onPressed: () => _load(page: _page),
-          style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+          style: CandidateButtonStyle.secondary(
+            context,
+            TextButton.styleFrom(),
+          ),
           child: const Text('Retry'),
         ),
       ],
@@ -318,15 +324,19 @@ class _CandidateApplicationsScreenState
               width: isMobile ? 54 : 64,
               height: isMobile ? 54 : 64,
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9), // --field
+                color: context.themeSurface(const Color(0xFFF1F5F9)), // --field
                 borderRadius: BorderRadius.circular(isMobile ? 17 : 20),
-                border: Border.all(color: const Color(0xFFE2E8F0)), // --edge2
+                border: Border.all(
+                  color: context.themeOutline(const Color(0xFFE2E8F0)),
+                ), // --edge2
               ),
               child: Center(
                 child: Icon(
                   Icons.grid_view_rounded, // table/grid icon
                   size: isMobile ? 20 : 24,
-                  color: const Color(0xFF64748B), // --tx2
+                  color: context.themeForeground(
+                    const Color(0xFF64748B),
+                  ), // --tx2
                 ),
               ),
             ),
@@ -334,7 +344,7 @@ class _CandidateApplicationsScreenState
             Text(
               isMobile ? 'Nothing applied yet' : 'No applications yet',
               style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A), // --tx
+                color: context.themeForeground(const Color(0xFF0F172A)), // --tx
                 fontSize: isMobile ? 15 : 18,
                 fontWeight: FontWeight.w700,
                 letterSpacing: isMobile ? -0.03 : -0.025,
@@ -349,7 +359,9 @@ class _CandidateApplicationsScreenState
                     ? 'Track your applications here.'
                     : 'Apply to a role and track every stage here, from screening to offer.',
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF64748B), // --tx3
+                  color: context.themeForeground(
+                    const Color(0xFF64748B),
+                  ), // --tx3
                   fontSize: isMobile ? 11 : 12.5,
                   height: 1.65,
                 ),
@@ -398,7 +410,9 @@ class _CandidateApplicationsScreenState
               Text(
                 'Applying takes about a minute',
                 style: GoogleFonts.inter(
-                  color: const Color(0xFF94A3B8), // --tx4
+                  color: context.themeForeground(
+                    const Color(0xFF94A3B8),
+                  ), // --tx4
                   fontSize: 10.5,
                   fontWeight: FontWeight.w400,
                 ),
@@ -418,7 +432,7 @@ class _CandidateApplicationsScreenState
         child: Text(
           'No applications found for this filter.',
           style: GoogleFonts.inter(
-            color: const Color(0xFF64748B),
+            color: context.themeForeground(const Color(0xFF64748B)),
             fontSize: 16,
           ),
         ),
@@ -484,9 +498,11 @@ class ApplicationCard extends StatelessWidget {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.themeSurface(Colors.white),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.03),
@@ -534,7 +550,9 @@ class ApplicationCard extends StatelessWidget {
                               style: GoogleFonts.inter(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: const Color(0xFF1E293B),
+                                color: context.themeForeground(
+                                  const Color(0xFF1E293B),
+                                ),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -544,7 +562,9 @@ class ApplicationCard extends StatelessWidget {
                               '$companyName · $subtext',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
-                                color: const Color(0xFF64748B),
+                                color: context.themeForeground(
+                                  const Color(0xFF64748B),
+                                ),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -662,7 +682,10 @@ class _ProgressBar extends StatelessWidget {
                 top: 8,
                 left: 9,
                 right: 9,
-                child: Container(height: 2, color: const Color(0xFFE2E8F0)),
+                child: Container(
+                  height: 2,
+                  color: context.themeSurface(const Color(0xFFE2E8F0)),
+                ),
               ),
               // Colored line
               Positioned(
@@ -681,6 +704,7 @@ class _ProgressBar extends StatelessWidget {
                   top: 0,
                   width: (i != 0 && i != stages.length - 1) ? 80 : null,
                   child: _buildNode(
+                    context,
                     label: stages[i],
                     isActive: i <= currentIndex,
                     isCurrent: i == currentIndex,
@@ -714,7 +738,8 @@ class _ProgressBar extends StatelessWidget {
     }
   }
 
-  Widget _buildNode({
+  Widget _buildNode(
+    BuildContext context, {
     required String label,
     required bool isActive,
     required bool isCurrent,
@@ -744,7 +769,9 @@ class _ProgressBar extends StatelessWidget {
               height: 8,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isActive ? themeColor : const Color(0xFFCBD5E1),
+                color: isActive
+                    ? themeColor
+                    : context.themeSurface(const Color(0xFFCBD5E1)),
               ),
             ),
           ),
@@ -756,7 +783,7 @@ class _ProgressBar extends StatelessWidget {
             fontSize: 10,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
-            color: const Color(0xFF94A3B8),
+            color: context.themeForeground(const Color(0xFF94A3B8)),
           ),
         ),
       ],
@@ -776,7 +803,7 @@ class CandidateApplicationJobLink extends StatelessWidget {
         : () => Navigator.of(
             context,
           ).pushNamed('/candidate/jobs/${Uri.encodeComponent(jobId.trim())}'),
-    style: CandidateButtonStyle.secondary(TextButton.styleFrom()),
+    style: CandidateButtonStyle.secondary(context, TextButton.styleFrom()),
     child: const Text('View Job Details'),
   );
 }
