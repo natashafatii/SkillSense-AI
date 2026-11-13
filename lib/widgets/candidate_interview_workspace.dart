@@ -1,9 +1,13 @@
+import 'dart:async';
+
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'mobile_edge_shadow_wrapper.dart';
 import 'candidate_button_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/interview_analysis_contract.dart';
+import '../screens/admin/aurora_tokens.dart';
 import '../services/media/interview_media_controller.dart';
 import '../services/publisher/candidate_publisher_controller.dart';
 import '../services/voice/interview_lifecycle_controller.dart';
@@ -12,6 +16,7 @@ const _ink = Color(0xFF172B3A);
 const _muted = Color(0xFF6D7E89);
 const _teal = Color(0xFF087F71);
 const _line = Color(0xFFE3EBED);
+const _night = AuroraTokens.auroraNight;
 
 /// Candidate-facing presentation. All state and actions remain controller-owned.
 class CandidateInterviewWorkspace extends StatefulWidget {
@@ -24,13 +29,14 @@ class CandidateInterviewWorkspace extends StatefulWidget {
     required this.onJoin,
     required this.onHome,
     required this.onHistory,
+    required this.onFeedback,
   });
 
   final String interviewId;
   final InterviewLifecycleController lifecycle;
   final InterviewMediaController media;
   final CandidatePublisherController publisher;
-  final VoidCallback onJoin, onHome, onHistory;
+  final VoidCallback onJoin, onHome, onHistory, onFeedback;
 
   @override
   State<CandidateInterviewWorkspace> createState() =>
@@ -46,6 +52,7 @@ class _CandidateInterviewWorkspaceState
   final _previewControlFocus = FocusNode();
   late final AnimationController _previewAnimation;
   Rect? _previewOrigin;
+  bool _hideSelfView = false;
 
   InterviewLifecycleController get lifecycle => widget.lifecycle;
   InterviewMediaController get media => widget.media;
@@ -147,11 +154,14 @@ class _CandidateInterviewWorkspaceState
 
   @override
   Widget build(BuildContext context) {
+    final darkRoom = context.isDarkTheme && _roomVisible;
     final theme = ThemeData(
       useMaterial3: true,
       brightness: Theme.of(context).brightness,
       fontFamily: 'Inter',
-      scaffoldBackgroundColor: context.themeSurface(const Color(0xFFF4F8F8)),
+      scaffoldBackgroundColor: darkRoom
+          ? _night.knob
+          : context.themeCanvas(const Color(0xFFF3F6FA)),
       colorScheme: ColorScheme.fromSeed(
         seedColor: _teal,
         brightness: Theme.of(context).brightness,
@@ -213,27 +223,56 @@ class _CandidateInterviewWorkspaceState
                         mobile ? 18 : 36,
                         28,
                       );
-                      final content = MobileEdgeShadowWrapper(
-                        child: SingleChildScrollView(
-                          padding: padding,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minHeight: centerCompletion
-                                  ? padding
-                                        .deflateSize(constraints.biggest)
-                                        .height
-                                  : 0,
-                            ),
-                            child: Center(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 1260,
+                      final content = DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            center: const Alignment(0, -.15),
+                            radius: .65,
+                            colors: darkRoom
+                                ? [
+                                    Color.alphaBlend(
+                                      _night.hi.withValues(alpha: .11),
+                                      Color.alphaBlend(
+                                        _night.gd.withValues(alpha: .17),
+                                        _night.knob,
+                                      ),
+                                    ),
+                                    Color.alphaBlend(
+                                      _night.gd.withValues(alpha: .08),
+                                      _night.knob,
+                                    ),
+                                    _night.knob,
+                                  ]
+                                : [
+                                    context.themeSurface(
+                                      const Color(0xFFDDEEF3),
+                                    ),
+                                    theme.scaffoldBackgroundColor,
+                                  ],
+                          ),
+                        ),
+                        child: MobileEdgeShadowWrapper(
+                          child: SingleChildScrollView(
+                            padding: padding,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: centerCompletion
+                                    ? padding
+                                          .deflateSize(constraints.biggest)
+                                          .height
+                                    : 0,
+                              ),
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 1260,
+                                  ),
+                                  child: !lifecycle.isCurrent
+                                      ? _signedOut(context)
+                                      : _wrapping
+                                      ? _completion(context, mobile)
+                                      : _room(context, mobile),
                                 ),
-                                child: !lifecycle.isCurrent
-                                    ? _signedOut(context)
-                                    : _wrapping
-                                    ? _completion(context, mobile)
-                                    : _room(context, mobile),
                               ),
                             ),
                           ),
@@ -267,7 +306,7 @@ class _CandidateInterviewWorkspaceState
                 ),
                 if (!_wrapping && lifecycle.isCurrent)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 22),
                     child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 1260),
@@ -289,178 +328,232 @@ class _CandidateInterviewWorkspaceState
     );
   }
 
-  Widget _header(BuildContext context, bool compact) => Container(
-    color: context.themeSurface(Colors.white),
-    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-    child: Row(
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: _teal,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(
-            Icons.graphic_eq_rounded,
-            color: Colors.white,
-            size: 21,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            'SkillSense',
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Space Grotesk',
-              color: context.themeForeground(_ink),
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        _tag(
-          Icons.lock_outline_rounded,
-          compact ? 'Private' : 'Private interview',
-          _muted,
-          const Color(0xFFF3F7F7),
-        ),
-      ],
-    ),
-  );
-
-  Widget _room(BuildContext context, bool mobile) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _eyebrow(context, 'YOUR INTERVIEW SPACE'),
-      const SizedBox(height: 10),
-      Text(
-        _live ? 'You’re in. Be yourself.' : 'Let’s get you connected.',
-        style: _title(context, mobile ? 28 : 34),
-      ),
-      const SizedBox(height: 8),
-      Text(
-        'A little preparation. A real conversation. An opportunity to show what you know.',
-        style: TextStyle(
-          color: context.themeForeground(_muted),
-          height: 1.6,
-          fontSize: 13,
-        ),
-      ),
-      const SizedBox(height: 24),
-      if (mobile) ...[
-        _camera(context, true),
-        const SizedBox(height: 18),
-        _interviewer(context),
-      ] else
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: 8, child: _camera(context, false)),
-            const SizedBox(width: 22),
-            Expanded(flex: 4, child: _interviewer(context)),
-          ],
-        ),
-      const SizedBox(height: 18),
-      _connectionNotice(context),
-      const SizedBox(height: 16),
-      _details(context),
-    ],
-  );
-
-  Widget _camera(BuildContext context, bool mobile) => _card(
-    context,
-    padding: const EdgeInsets.all(10),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LayoutBuilder(
-          builder: (context, box) {
-            final height =
-                (box.maxWidth * .59).clamp(220.0, 430.0).toDouble() +
-                ((MediaQuery.textScalerOf(context).scale(14) / 14 - 1).clamp(
-                      0.0,
-                      1.0,
-                    ) *
-                    140);
-            return SizedBox(
-              key: _cameraAnchor,
-              height: height,
-              child: _previewOrigin == null ? _videoPreview(context) : null,
-            );
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 14, 8, 6),
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.shield_outlined,
-                    size: 15,
-                    color: context.themeForeground(_muted),
-                  ),
-                  SizedBox(width: 7),
-                  Text(
-                    'Your local camera preview',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: context.themeForeground(_muted),
+  Widget _header(BuildContext context, bool compact) {
+    final snapshot = lifecycle.snapshot;
+    final count =
+        snapshot?.questionCount ??
+        lifecycle
+            .interview
+            ?.interview
+            .questionReadiness
+            .approvedQuestionCount ??
+        0;
+    final number = snapshot?.questionNumber;
+    final progress = count > 0
+        ? Semantics(
+            label: number == null
+                ? '$count interview questions'
+                : 'Question $number of $count',
+            child: Row(
+              children: [
+                for (var index = 0; index < count; index++)
+                  Expanded(
+                    child: AnimatedContainer(
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      height: 4,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        color: number != null && index < number
+                            ? context.isDarkTheme
+                                  ? _night.gd
+                                  : const Color(0xFF3C65ED)
+                            : context.themeOutline(const Color(0xFFE0E6EF)),
+                      ),
                     ),
                   ),
-                ],
-              ),
-              if (lifecycle.videoRequired)
-                OutlinedButton.icon(
-                  onPressed: media.busy || !lifecycle.canUseMedia || _live
-                      ? null
-                      : () {
-                          if (media.cameraReady) {
-                            media.stop();
-                          } else {
-                            media.requestCamera();
-                          }
-                        },
-                  icon: Icon(
-                    media.cameraReady
-                        ? Icons.videocam_off_outlined
-                        : Icons.videocam_outlined,
-                    size: 17,
-                  ),
-                  label: Text(
-                    _live
-                        ? 'Camera required'
-                        : media.cameraReady
-                        ? 'Turn camera off'
-                        : 'Turn camera on',
-                  ),
-                ),
-            ],
-          ),
-        ),
-        if (media.cameraError != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-            child: Text(
-              media.cameraError!.message,
-              style: TextStyle(
-                color: context.themeForeground(const Color(0xFFB24C37)),
-                fontSize: 12,
-                height: 1.5,
-              ),
+              ],
             ),
+          )
+        : null;
+    final logo = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SvgPicture.asset('assets/images/logo.svg', width: compact ? 20 : 26),
+        const SizedBox(width: 7),
+        Text('SkillSense', style: _title(context, compact ? 14 : 18)),
+      ],
+    );
+    final badges = Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      alignment: WrapAlignment.end,
+      children: [
+        _tag(context, Icons.lock_outline, 'Private', _muted, Colors.white),
+        if (snapshot?.startedAt case final startedAt?)
+          _RoomClock(
+            startedAt: startedAt,
+            stoppedAt: snapshot?.audioEndedAt,
+            builder: (value) =>
+                _tag(context, Icons.schedule, value, _muted, Colors.white),
           ),
       ],
-    ),
-  );
+    );
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 36,
+        vertical: 14,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: logo),
+              if (!compact && progress != null)
+                SizedBox(width: 176, child: progress),
+              Expanded(
+                flex: compact ? 2 : 1,
+                child: Align(alignment: Alignment.centerRight, child: badges),
+              ),
+            ],
+          ),
+          if (compact && progress != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(width: 176, child: progress),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _room(BuildContext context, bool mobile) {
+    final snapshot = lifecycle.snapshot;
+    final question = snapshot?.questionText?.trim();
+    final number = snapshot?.questionNumber;
+    final count = snapshot?.questionCount;
+    final talking = _live && lifecycle.agentTalking;
+    final listening = _live && !talking && !lifecycle.microphoneMuted;
+    final helper = !_live
+        ? 'Join the interview to connect your audio.'
+        : lifecycle.microphoneMuted
+        ? 'Turn on your microphone to answer.'
+        : talking
+        ? 'Listen to your interviewer.'
+        : 'Speak when you’re ready.';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              children: [
+                if (number != null && count != null)
+                  _eyebrow(context, 'QUESTION $number OF $count'),
+                const SizedBox(height: 12),
+                Semantics(
+                  header: true,
+                  liveRegion: true,
+                  child: Text(
+                    question != null && question.isNotEmpty
+                        ? question
+                        : (_live ? 'Your interview is live' : 'Ready to join?'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: mobile ? 28 : 36,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                      letterSpacing: -0.8,
+                      color: context.isDarkTheme
+                          ? _night.tx
+                          : const Color(0xFF17243A),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    AnimatedContainer(
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        border: Border.all(
+                          color: (context.isDarkTheme ? _night.hifd : _teal)
+                              .withValues(alpha: .18),
+                          width: 7,
+                        ),
+                      ),
+                      child: Icon(
+                        talking ? Icons.graphic_eq : Icons.mic_none,
+                        color: _teal,
+                      ),
+                    ),
+                    Semantics(
+                      liveRegion: true,
+                      child: _tag(
+                        context,
+                        Icons.circle,
+                        listening
+                            ? 'Listening'
+                            : talking
+                            ? 'Speaking'
+                            : lifecycle.microphoneMuted && _live
+                            ? 'Muted'
+                            : _voiceLabel,
+                        listening ? _teal : _muted,
+                        listening ? const Color(0xFFE1F4ED) : Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _eyebrow(context, 'YOUR ANSWER'),
+                const SizedBox(height: 10),
+                Text(
+                  helper,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: context.themeForeground(_muted),
+                  ),
+                ),
+                if (!_live) ...[const SizedBox(height: 16), _audioAction()],
+              ],
+            ),
+          ),
+        ),
+        if (lifecycle.videoRequired) ...[
+          const SizedBox(height: 20),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: SizedBox(
+              key: _cameraAnchor,
+              width: mobile ? 148 : 180,
+              height: mobile ? 106 : 134,
+              child: _previewOrigin == null ? _videoPreview(context) : null,
+            ),
+          ),
+        ],
+        if (media.cameraError case final failure?) ...[
+          const SizedBox(height: 12),
+          Text(
+            failure.message,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        if (!_live ||
+            (lifecycle.videoRequired &&
+                publisher.state != PublisherState.ready)) ...[
+          const SizedBox(height: 12),
+          _connectionNotice(context),
+        ],
+        const SizedBox(height: 12),
+        _details(context),
+      ],
+    );
+  }
 
   Widget _focusedPreview(BuildContext context, Size size, Rect origin) {
     final target = Offset.zero & size;
@@ -507,70 +600,22 @@ class _CandidateInterviewWorkspaceState
           ),
           // Keep the platform view mounted when camera readiness changes.
           media.adapter.buildPreview(),
-          if (!media.cameraReady)
+          if (!media.cameraReady || _hideSelfView)
             ColoredBox(
-              color: const Color(0xFF132832),
+              color: context.isDarkTheme
+                  ? Color.alphaBlend(
+                      _night.gd.withValues(alpha: .12),
+                      _night.knob,
+                    )
+                  : const Color(0xFFE3EAF5),
               child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(17),
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF233C46),
-                        ),
-                        child: Icon(
-                          lifecycle.videoRequired
-                              ? Icons.videocam_off_outlined
-                              : Icons.headset_mic_outlined,
-                          color: const Color(0xFFB7D7D3),
-                          size: 30,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        lifecycle.videoRequired
-                            ? 'Your space, on camera'
-                            : 'An audio conversation',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        lifecycle.videoRequired
-                            ? 'Turn on your camera when you’re ready.'
-                            : 'Connect your audio to get started.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: context.themeForeground(
-                            const Color(0xFF9DB6BE),
-                          ),
-                          fontSize: 12,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  foregroundColor: _ink,
+                  child: const Text('You'),
                 ),
               ),
             ),
-          Positioned(
-            top: 14,
-            left: 14,
-            child: _tag(
-              media.cameraReady ? Icons.circle : Icons.videocam_off_outlined,
-              media.cameraReady ? 'Camera on' : 'Camera off',
-              Colors.white,
-              const Color(0xB3243942),
-            ),
-          ),
           if (lifecycle.videoRequired || focused)
             Positioned(
               top: 10,
@@ -610,136 +655,6 @@ class _CandidateInterviewWorkspaceState
     ),
   );
 
-  Widget _interviewer(BuildContext context) {
-    final talking = _live && lifecycle.agentTalking;
-    return _card(
-      context,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Your interviewer',
-                  style: TextStyle(
-                    color: context.themeForeground(_ink),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-              _tag(
-                Icons.circle,
-                _live ? 'Connected' : 'Not connected',
-                _live ? _teal : _muted,
-                _live ? const Color(0xFFE9F5F0) : const Color(0xFFF2F5F5),
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          Center(
-            child: Container(
-              width: 116,
-              height: 116,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: talking
-                    ? context.themeSurface(const Color(0xFFE1F3ED))
-                    : context.themeSurface(const Color(0xFFF0F7F4)),
-                border: Border.all(
-                  color: context.themeOutline(const Color(0xFFE0EEE7)),
-                  width: 10,
-                ),
-              ),
-              child: Center(
-                child: Container(
-                  width: 66,
-                  height: 66,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF41B89B), Color(0xFF087F71)],
-                    ),
-                  ),
-                  child: Icon(
-                    talking
-                        ? Icons.graphic_eq_rounded
-                        : Icons.spatial_audio_off_rounded,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 17),
-          Text(
-            _live
-                ? talking
-                      ? 'Your interviewer is speaking'
-                      : 'The conversation is live'
-                : 'Ready when you are',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: context.themeForeground(_ink),
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            _live
-                ? 'Speak naturally and take your time.'
-                : 'Join the interview to connect your audio.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: context.themeForeground(_muted),
-              fontSize: 12,
-              height: 1.6,
-            ),
-          ),
-          const SizedBox(height: 22),
-          Divider(color: context.themeOutline(_line)),
-          const SizedBox(height: 14),
-          _statusRow(
-            context,
-            Icons.mic_none_rounded,
-            'Interview audio',
-            _live ? 'Connected' : _voiceLabel,
-          ),
-          const SizedBox(height: 15),
-          _statusRow(
-            context,
-            Icons.videocam_outlined,
-            'Camera',
-            media.cameraReady ? 'On' : 'Off',
-          ),
-          const SizedBox(height: 15),
-          _statusRow(
-            context,
-            Icons.wifi_rounded,
-            'Video connection',
-            _videoLabel,
-          ),
-          const SizedBox(height: 22),
-          if (_previewOrigin == null) _audioAction(),
-          const SizedBox(height: 16),
-          Text(
-            'A moment to think is always okay. Ask your interviewer to repeat a question if you need to.',
-            style: TextStyle(
-              color: context.themeForeground(_muted),
-              height: 1.7,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   String get _voiceLabel => switch (lifecycle.state) {
     InterviewLifecycleState.loading ||
     InterviewLifecycleState.joining => 'Connecting',
@@ -748,15 +663,6 @@ class _CandidateInterviewWorkspaceState
     InterviewLifecycleState.unavailable => 'Unavailable',
     _ => 'Not connected',
   };
-  String get _videoLabel => switch (publisher.state) {
-    PublisherState.ready => 'Connected',
-    PublisherState.ticket ||
-    PublisherState.connecting ||
-    PublisherState.reconnecting => 'Connecting',
-    PublisherState.unavailable || PublisherState.terminal => 'Unavailable',
-    _ => 'Paused',
-  };
-
   Widget _connectionNotice(BuildContext context) {
     final interrupted = lifecycle.state == InterviewLifecycleState.interrupted;
     final unavailable = lifecycle.state == InterviewLifecycleState.unavailable;
@@ -882,246 +788,289 @@ class _CandidateInterviewWorkspaceState
           label: Text(_busy ? 'Connecting…' : 'Join interview'),
         );
 
-  Widget _bottomBar(BuildContext context, bool mobile) => _card(
-    context,
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-    child: Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      runSpacing: 16,
-      spacing: 24,
-      children: [
-        if (_previewOrigin != null)
-          _audioAction()
-        else
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.tips_and_updates_outlined,
-                color: context.themeForeground(_teal),
-                size: 20,
+  Widget _bottomBar(BuildContext context, bool mobile) => Center(
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: context.isDarkTheme
+            ? Color.alphaBlend(_night.glass, _night.knob)
+            : Colors.white,
+        border: Border.all(color: context.themeOutline(_line)),
+        borderRadius: BorderRadius.circular(40),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .09),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(7),
+        child: Wrap(
+          spacing: mobile ? 6 : 10,
+          runSpacing: 6,
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            IconButton.filledTonal(
+              style: _roomDeviceStyle(context),
+              tooltip: lifecycle.microphoneMuted
+                  ? 'Unmute microphone'
+                  : 'Mute microphone',
+              onPressed: lifecycle.canToggleMicrophone
+                  ? lifecycle.toggleMicrophone
+                  : null,
+              icon: Icon(
+                lifecycle.microphoneMuted
+                    ? Icons.mic_off_outlined
+                    : Icons.mic_none,
               ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: mobile ? 180 : 340,
-                child: Text(
-                  'Focus on the conversation. We’ll handle the rest.',
-                  style: TextStyle(
-                    color: context.themeForeground(_muted),
-                    fontSize: 12,
-                    height: 1.5,
-                  ),
+            ),
+            if (lifecycle.videoRequired)
+              IconButton.filledTonal(
+                style: _roomDeviceStyle(context),
+                tooltip: _live && media.cameraReady
+                    ? (_hideSelfView ? 'Show self-view' : 'Hide self-view')
+                    : (media.cameraReady
+                          ? 'Turn camera off'
+                          : 'Turn camera on'),
+                onPressed: media.busy || !lifecycle.canUseMedia || _busy
+                    ? null
+                    : () {
+                        if (_live && media.cameraReady) {
+                          setState(() => _hideSelfView = !_hideSelfView);
+                        } else if (media.cameraReady) {
+                          media.stop();
+                        } else {
+                          media.requestCamera();
+                        }
+                      },
+                icon: Icon(
+                  media.cameraReady && !_hideSelfView
+                      ? Icons.videocam_outlined
+                      : Icons.videocam_off_outlined,
                 ),
               ),
-            ],
-          ),
-        OutlinedButton.icon(
-          key: const Key('session-finish'),
-          onPressed:
-              !lifecycle.isCurrent ||
-                  !lifecycle.backend.available ||
-                  lifecycle.finishing
-              ? null
-              : () => _confirmEnd(context),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: context.themeForeground(const Color(0xFFB34F49)),
-            side: BorderSide(
-              color: context.themeOutline(const Color(0xFFEED7D4)),
+            FilledButton.icon(
+              key: const Key('session-finish'),
+              onPressed: lifecycle.backend.available && !lifecycle.finishing
+                  ? () => _confirmEnd(context)
+                  : null,
+              style:
+                  FilledButton.styleFrom(
+                    backgroundColor: context.isDarkTheme
+                        ? Color.alphaBlend(
+                            _night.pr.withValues(alpha: .36),
+                            ThemeData.light().colorScheme.error,
+                          )
+                        : Theme.of(context).colorScheme.error,
+                    foregroundColor: context.isDarkTheme
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.onError,
+                    shape: const StadiumBorder(),
+                  ).copyWith(
+                    backgroundBuilder: (_, _, child) =>
+                        child ?? const SizedBox.shrink(),
+                  ),
+              icon: const Icon(Icons.logout, size: 18),
+              label: const Text('Leave'),
             ),
-          ),
-          icon: const Icon(Icons.call_end_outlined, size: 18),
-          label: const Text('End interview'),
+          ],
         ),
-      ],
+      ),
     ),
   );
 
+  ButtonStyle? _roomDeviceStyle(BuildContext context) => context.isDarkTheme
+      ? IconButton.styleFrom(
+          backgroundColor: Color.alphaBlend(_night.edge2, _night.knob),
+          foregroundColor: _night.tx,
+        )
+      : null;
+
   Widget _completion(BuildContext context, bool mobile) {
-    final primaryStyle = CandidateButtonStyle.primaryColors(
-      FilledButton.styleFrom(
-        backgroundColor: CandidateButtonStyle.deepTeal,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-    final outline = context.themeForeground(_teal);
+    final snapshot = lifecycle.snapshot;
     final pending = !_completed;
+    final early = !pending && snapshot?.conversationOutcome == 'ENDED_EARLY';
     final workflow =
-        lifecycle.snapshot?.workflowState ??
-        lifecycle.interview?.interview.workflowState ??
-        'UNKNOWN';
-    final outcome = lifecycle.snapshot?.conversationOutcome ?? 'UNVERIFIED';
-    final complete = !pending && workflow == 'EVALUATED';
-    final early = !pending && outcome == 'ENDED_EARLY';
-    final reportState = lifecycle.snapshot?.analysisStatus;
-    final failedReport = reportState == AnalysisState.failed;
+        snapshot?.workflowState ?? lifecycle.interview?.interview.workflowState;
+    final complete =
+        !pending &&
+        !early &&
+        (snapshot?.conversationOutcome == 'COMPLETED' ||
+            workflow == 'EVALUATED');
+    final feedbackUnavailable = const {
+      'FAILED',
+      'EVALUATION_FAILED',
+      'INSUFFICIENT_EVIDENCE',
+      'INTERRUPTED',
+    }.contains(workflow);
+    final preparingFeedback =
+        complete && workflow != 'EVALUATED' && !feedbackUnavailable;
+
+    final title = pending
+        ? 'Wrapping things up.'
+        : early
+        ? 'You left the interview.'
+        : complete
+        ? 'Interview complete.'
+        : 'Your interview session ended.';
+    final description = pending
+        ? 'We’re confirming that your interview has ended. Your camera and audio are off on this device.'
+        : early
+        ? 'Your session ended before the interview was complete. Check your feedback status for updates.'
+        : complete
+        ? 'Thank you for taking the time to interview. You can check for updates on the Feedback screen.'
+        : 'Your session has ended. Check your feedback status for updates.';
+    final muted = context.themeForeground(_muted);
+    final green = context.themeForeground(CandidateButtonStyle.deepTeal);
+    final refresh = TextButton.icon(
+      onPressed: lifecycle.finishing ? null : lifecycle.restore,
+      icon: const Icon(Icons.refresh_rounded, size: 16),
+      label: const Text('Refresh status'),
+    );
+
     return Center(
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: mobile ? 720 : 600),
-        child: _card(
-          context,
-          padding: EdgeInsets.all(mobile ? 24 : 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: mobile ? 88 : 64,
-                  height: mobile ? 88 : 64,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: context.themeSurface(const Color(0xFFE9F5F0)),
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Column(
+          children: [
+            Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                color: context.themeSurface(CandidateButtonStyle.paleTeal),
+                borderRadius: BorderRadius.circular(21),
+                border: Border.all(color: green.withValues(alpha: .28)),
+              ),
+              child: Icon(
+                pending
+                    ? Icons.hourglass_top_rounded
+                    : complete
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.info_outline_rounded,
+                size: 32,
+                color: green,
+              ),
+            ),
+            const SizedBox(height: 20),
+            _eyebrow(
+              context,
+              pending
+                  ? 'CONFIRMING SESSION'
+                  : complete
+                  ? 'SESSION SAVED'
+                  : 'SESSION ENDED',
+            ),
+            const SizedBox(height: 5),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: _title(context, mobile ? 30 : 38),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: muted, fontSize: 15, height: 1.55),
+            ),
+            const SizedBox(height: 22),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: context.themeSurface(Colors.white),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: context.themeOutline(_line)),
+              ),
+              child: _completionStep(
+                context,
+                pending
+                    ? 'Confirming session end'
+                    : preparingFeedback
+                    ? 'Feedback is being prepared'
+                    : 'Feedback status',
+                pending
+                    ? 'Refresh the status if confirmation takes longer.'
+                    : preparingFeedback
+                    ? 'Check back for updates as your interview is reviewed.'
+                    : feedbackUnavailable
+                    ? 'Feedback may be limited for this session.'
+                    : 'Check the Feedback screen for updates on this session.',
+                pending || preparingFeedback
+                    ? Icons.schedule_rounded
+                    : workflow == 'EVALUATED'
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.info_outline_rounded,
+                workflow == 'EVALUATED' && !pending,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                FilledButton(
+                  style: CandidateButtonStyle.primaryColors(
+                    FilledButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: CandidateButtonStyle.deepTeal,
+                      minimumSize: const Size(0, 44),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                    ),
                   ),
-                  child: Icon(
+                  onPressed: pending
+                      ? (lifecycle.finishing ? null : lifecycle.finish)
+                      : widget.onFeedback,
+                  child: Text(
                     pending
-                        ? Icons.hourglass_top_rounded
-                        : complete
-                        ? Icons.check_rounded
-                        : Icons.info_outline_rounded,
-                    size: mobile ? 40 : 32,
-                    color: context.themeForeground(_teal),
+                        ? (lifecycle.finishing ? 'Finishing…' : 'Retry finish')
+                        : 'View feedback status →',
                   ),
                 ),
-              ),
-              SizedBox(height: mobile ? 24 : 16),
-              Center(
-                child: _eyebrow(
-                  context,
-                  pending
-                      ? 'CONFIRMING SESSION'
-                      : complete
-                      ? 'EVIDENCE PROCESSED'
-                      : 'SESSION ENDED',
-                ),
-              ),
-              SizedBox(height: mobile ? 12 : 8),
-              Text(
-                pending
-                    ? 'Wrapping things up.'
-                    : complete
-                    ? 'Your interview evidence is ready for review.'
-                    : early
-                    ? 'Your interview ended early.'
-                    : 'Your interview session ended.',
-                textAlign: TextAlign.center,
-                style: _title(context, mobile ? 30 : 32),
-              ),
-              SizedBox(height: mobile ? 12 : 8),
-              Text(
-                pending
-                    ? 'We’re confirming that your interview has ended. Your camera and audio have been stopped on this device.'
-                    : complete
-                    ? 'Thank you for sharing your experience.\nYou can take a breath and get back to your day.'
-                    : 'The call has ended. Transcript and evaluation processing are confirmed separately. Your recruiter can review the available evidence and arrange another attempt if needed.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: context.themeForeground(_muted),
-                  fontSize: 14,
-                  height: mobile ? 1.8 : 1.5,
-                ),
-              ),
-              SizedBox(height: mobile ? 30 : 18),
-              Container(
-                padding: EdgeInsets.all(mobile ? 20 : 14),
-                decoration: BoxDecoration(
-                  color: context.themeSurface(const Color(0xFFF6F9F8)),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    _completionStep(
+                if (pending)
+                  refresh
+                else
+                  OutlinedButton(
+                    style: CandidateButtonStyle.secondary(
                       context,
-                      'Interview session',
-                      pending
-                          ? 'Waiting for confirmation'
-                          : 'Ended and confirmed',
-                      pending
-                          ? Icons.schedule_rounded
-                          : Icons.check_circle_rounded,
-                      !pending,
+                      OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                      radius: 11,
                     ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: mobile ? 16 : 10),
-                      child: Divider(
-                        height: 1,
-                        color: context.themeOutline(_line),
-                      ),
+                    onPressed: widget.onHistory,
+                    child: const Text('Interview history'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _details(
+              context,
+              completionActions: pending
+                  ? null
+                  : Wrap(
+                      spacing: 8,
+                      children: [
+                        TextButton(
+                          key: const Key('session-return-home'),
+                          onPressed: widget.onHome,
+                          child: const Text('Back to dashboard'),
+                        ),
+                        refresh,
+                      ],
                     ),
-                    Text('Interview status: ${workflow.replaceAll('_', ' ')}'),
-                    _completionStep(
-                      context,
-                      'Behavioral processing',
-                      failedReport
-                          ? 'Unavailable'
-                          : lifecycle.snapshot?.reportReady == true
-                          ? 'Available to your recruiter'
-                          : 'Processing or not yet available',
-                      failedReport
-                          ? Icons.info_outline_rounded
-                          : lifecycle.snapshot?.reportReady == true
-                          ? Icons.check_circle_rounded
-                          : Icons.schedule_rounded,
-                      !failedReport && lifecycle.snapshot?.reportReady == true,
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: mobile ? 24 : 16),
+            ),
+            if (!pending) ...[
+              const SizedBox(height: 12),
               Text(
-                pending
-                    ? 'If confirmation takes a little longer, refresh the status below.'
-                    : 'Your recruiter will review the available interview information. You can check your application for updates.',
+                'No scores or hiring decisions are shown while analysis is pending.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: context.themeForeground(_muted),
-                  height: 1.7,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: muted, fontSize: 11, height: 1.5),
               ),
-              SizedBox(height: mobile ? 26 : 16),
-              if (!pending)
-                FilledButton.icon(
-                  key: const Key('session-return-home'),
-                  style: primaryStyle,
-                  onPressed: widget.onHome,
-                  icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                  label: const Text('Back to dashboard'),
-                ),
-              if (pending)
-                FilledButton.icon(
-                  style: primaryStyle,
-                  onPressed: lifecycle.finishing ? null : lifecycle.finish,
-                  icon: const Icon(Icons.sync_rounded, size: 18),
-                  label: Text(
-                    lifecycle.finishing ? 'Finishing…' : 'Retry finish',
-                  ),
-                ),
-              const SizedBox(height: 10),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                children: [
-                  if (!pending)
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: outline,
-                        side: BorderSide(color: outline),
-                      ),
-                      onPressed: widget.onHistory,
-                      child: const Text('View my interviews'),
-                    ),
-                  TextButton.icon(
-                    onPressed: lifecycle.finishing ? null : lifecycle.restore,
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('Refresh status'),
-                  ),
-                ],
-              ),
-              SizedBox(height: mobile ? 20 : 12),
-              _details(context),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -1170,76 +1119,97 @@ class _CandidateInterviewWorkspaceState
     ],
   );
 
-  Widget _details(BuildContext context) => ExpansionTile(
-    key: const Key('session-connection-details'),
-    tilePadding: const EdgeInsets.symmetric(horizontal: 4),
-    shape: const Border(),
-    collapsedShape: const Border(),
-    title: Text(
-      _wrapping ? 'Session details' : 'Connection details',
-      style: TextStyle(color: context.themeForeground(_muted), fontSize: 12),
-    ),
-    children: [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SelectableText(
-              'Session reference: ${widget.interviewId}',
-              style: TextStyle(
-                color: context.themeForeground(_muted),
-                fontSize: 11,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              lifecycle.notice,
-              style: TextStyle(
-                color: context.themeForeground(_muted),
-                fontSize: 11,
-                height: 1.6,
-              ),
-            ),
-            if (!_wrapping) ...[
-              const SizedBox(height: 8),
-              Text(
-                publisher.notice,
-                style: TextStyle(
-                  color: context.themeForeground(_muted),
-                  fontSize: 11,
-                  height: 1.6,
-                ),
-              ),
-              Wrap(
-                spacing: 10,
-                children: [
-                  TextButton.icon(
-                    onPressed: lifecycle.restore,
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('Refresh connection'),
-                  ),
-                  TextButton(
-                    onPressed: media.cameraReady ? publisher.start : null,
-                    child: const Text('Reconnect video'),
-                  ),
-                  TextButton(
-                    onPressed: publisher.pause,
-                    child: const Text('Pause video connection'),
-                  ),
-                  if (!media.voiceOwnsMicrophone)
-                    TextButton(
-                      onPressed: media.busy ? null : media.checkMicrophone,
-                      child: const Text('Check microphone'),
-                    ),
-                ],
-              ),
-            ],
-          ],
+  Widget _details(BuildContext context, {Widget? completionActions}) =>
+      ExpansionTile(
+        key: const Key('session-connection-details'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        title: Text(
+          _wrapping ? 'Session details' : 'Connection details',
+          style: TextStyle(
+            color: context.themeForeground(_muted),
+            fontSize: 12,
+          ),
         ),
-      ),
-    ],
-  );
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SelectableText(
+                  'Session reference: ${widget.interviewId}',
+                  style: TextStyle(
+                    color: context.themeForeground(_muted),
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  lifecycle.notice,
+                  style: TextStyle(
+                    color: context.themeForeground(_muted),
+                    fontSize: 11,
+                    height: 1.6,
+                  ),
+                ),
+                if (completionActions != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    lifecycle.snapshot?.analysisStatus == AnalysisState.failed
+                        ? 'Behavioral processing is unavailable.'
+                        : lifecycle.snapshot?.reportReady == true
+                        ? 'Behavioral analysis is available to your recruiter.'
+                        : 'Behavioral analysis is processing or unavailable.',
+                    style: TextStyle(
+                      color: context.themeForeground(_muted),
+                      fontSize: 11,
+                      height: 1.6,
+                    ),
+                  ),
+                  completionActions,
+                ],
+                if (!_wrapping) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    publisher.notice,
+                    style: TextStyle(
+                      color: context.themeForeground(_muted),
+                      fontSize: 11,
+                      height: 1.6,
+                    ),
+                  ),
+                  Wrap(
+                    spacing: 10,
+                    children: [
+                      if (_live) _audioAction(),
+                      TextButton.icon(
+                        onPressed: lifecycle.restore,
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: const Text('Refresh connection'),
+                      ),
+                      TextButton(
+                        onPressed: media.cameraReady ? publisher.start : null,
+                        child: const Text('Reconnect video'),
+                      ),
+                      TextButton(
+                        onPressed: publisher.pause,
+                        child: const Text('Pause video connection'),
+                      ),
+                      if (!media.voiceOwnsMicrophone)
+                        TextButton(
+                          onPressed: media.busy ? null : media.checkMicrophone,
+                          child: const Text('Check microphone'),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
 
   Widget _signedOut(BuildContext context) => _card(
     context,
@@ -1295,7 +1265,7 @@ class _CandidateInterviewWorkspaceState
     child: child,
   );
   TextStyle _title(BuildContext context, double size) => TextStyle(
-    fontFamily: 'Space Grotesk',
+    fontFamily: 'Inter',
     color: context.themeForeground(_ink),
     fontSize: size,
     fontWeight: FontWeight.w700,
@@ -1305,64 +1275,88 @@ class _CandidateInterviewWorkspaceState
   Widget _eyebrow(BuildContext context, String text) => Text(
     text,
     style: TextStyle(
-      color: context.themeForeground(_teal),
+      color: context.themeForeground(_muted),
       fontSize: 10,
       letterSpacing: 1.9,
       fontWeight: FontWeight.w700,
     ),
   );
-  Widget _tag(IconData icon, String text, Color color, Color background) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(9),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 12),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                text,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-  Widget _statusRow(
+  Widget _tag(
     BuildContext context,
     IconData icon,
-    String label,
-    String value,
-  ) => Row(
-    children: [
-      Icon(icon, size: 17, color: context.themeForeground(_muted)),
-      const SizedBox(width: 9),
-      Expanded(
-        child: Text(
-          label,
-          style: TextStyle(
-            color: context.themeForeground(_muted),
-            fontSize: 12,
+    String text,
+    Color color,
+    Color background,
+  ) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: context.isDarkTheme && background == Colors.white
+          ? Color.alphaBlend(_night.glass, _night.knob)
+          : context.themeSurface(background),
+      border: Border.all(color: context.themeOutline(_line)),
+      borderRadius: BorderRadius.circular(30),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: context.themeForeground(color), size: 12),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            text,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: context.themeForeground(color),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-      ),
-      Text(
-        value,
-        style: TextStyle(
-          color: context.themeForeground(_ink),
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
+      ],
+    ),
   );
+}
+
+class _RoomClock extends StatefulWidget {
+  const _RoomClock({
+    required this.startedAt,
+    this.stoppedAt,
+    required this.builder,
+  });
+
+  final DateTime startedAt;
+  final DateTime? stoppedAt;
+  final Widget Function(String) builder;
+
+  @override
+  State<_RoomClock> createState() => _RoomClockState();
+}
+
+class _RoomClockState extends State<_RoomClock> {
+  late final Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (widget.stoppedAt == null) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = (widget.stoppedAt ?? DateTime.now()).difference(
+      widget.startedAt,
+    );
+    final seconds = duration.isNegative ? 0 : duration.inSeconds;
+    return widget.builder(
+      '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}',
+    );
+  }
 }

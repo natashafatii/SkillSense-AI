@@ -84,8 +84,11 @@ class Interview {
 
 /// Selected by the verified role, never by the presence of private JSON keys.
 class CandidateInterview extends Interview {
+  final bool? videoRequired;
+
   CandidateInterview.fromJson(Map<String, dynamic> json)
-    : super.copy(Interview.fromJson(json));
+    : videoRequired = json['video_required'] as bool?,
+      super.copy(Interview.fromJson(json));
 }
 
 class RecruiterInterview extends Interview {

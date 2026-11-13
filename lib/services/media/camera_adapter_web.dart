@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 import 'camera_adapter.dart';
 
-CameraAdapter createCameraAdapter() => WebCameraAdapter();
+CameraAdapter createCameraAdapter({bool coverPreview = false}) =>
+    WebCameraAdapter(coverPreview: coverPreview);
 
 /// Browser-only DOM code. Acquisition injection is reserved for browser tests.
 class WebCameraAdapter extends CameraAdapter {
@@ -13,7 +14,9 @@ class WebCameraAdapter extends CameraAdapter {
     Future<web.MediaStream> Function(web.MediaStreamConstraints)? acquire,
     Future<JSArray<web.MediaDeviceInfo>> Function()? enumerateDevices,
     bool Function()? pageHidden,
-  }) : _acquire =
+    bool coverPreview = false,
+  }) : _coverPreview = coverPreview,
+       _acquire =
            acquire ??
            ((constraints) => web.window.navigator.mediaDevices
                .getUserMedia(constraints)
@@ -34,6 +37,7 @@ class WebCameraAdapter extends CameraAdapter {
   final Future<web.MediaStream> Function(web.MediaStreamConstraints) _acquire;
   final Future<JSArray<web.MediaDeviceInfo>> Function() _enumerateDevices;
   final bool Function() _pageHidden;
+  final bool _coverPreview;
   late final JSFunction _visibility, _pageHide;
   web.MediaStream? _camera, _microphone;
   final web.HTMLVideoElement _video = web.HTMLVideoElement();
@@ -224,7 +228,7 @@ class WebCameraAdapter extends CameraAdapter {
     preview.style
       ..width = '100%'
       ..height = '100%'
-      ..objectFit = 'contain'
+      ..objectFit = _coverPreview ? 'cover' : 'contain'
       ..pointerEvents = 'none'
       ..transform = 'scaleX(-1)';
     preview.setAttribute('aria-label', 'Local mirrored camera preview');

@@ -14,7 +14,6 @@ import '../../constants/app_colors.dart';
 import '../../services/resume_manager.dart';
 import '../../services/resume_service.dart';
 import '../../services/api_exception.dart';
-import '../../services/session_scope.dart';
 import '../../widgets/candidate_side_nav.dart';
 
 class CandidateResumeManagementScreen extends StatefulWidget {
@@ -30,7 +29,6 @@ class _CandidateResumeManagementScreenState
   // Right-panel list loading state
   bool _isLoadingList = true;
   String? _listError;
-  bool _mutatingResume = false;
 
   // Uploading and Parsing State
   bool _hasStagedFile = false;
@@ -217,39 +215,6 @@ class _CandidateResumeManagementScreenState
         ),
       ),
     );
-  }
-
-  Future<void> _useResume(Map<String, dynamic> resume) async {
-    if (_mutatingResume || _isLoadingList) return;
-    final id = resume['id']?.toString() ?? '';
-    if (id.isEmpty) return;
-    final generation = SessionScope.generation;
-    setState(() => _mutatingResume = true);
-    try {
-      final confirmed = await ResumeService.patchResume(id, {
-        'is_default': true,
-      });
-      if (!mounted || generation != SessionScope.generation) return;
-      if (confirmed['id'] != id || confirmed['is_default'] != true) {
-        throw const FormatException('Default resume was not confirmed.');
-      }
-      await ResumeManager.loadFromApi();
-      if (!mounted || generation != SessionScope.generation) return;
-      if (ResumeManager.getActiveResume()['id'] != id) {
-        throw const FormatException('Default resume readback did not match.');
-      }
-      setState(() {});
-    } catch (_) {
-      if (mounted && generation == SessionScope.generation) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not change the default resume. Retry.'),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _mutatingResume = false);
-    }
   }
 
   void _triggerBrowseFiles() async {
@@ -1331,7 +1296,6 @@ class _CandidateResumeManagementScreenState
               child: const Text('Retry'),
             ),
           ],
-          if (_mutatingResume) const LinearProgressIndicator(),
           if (_isLoadingList)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
@@ -1444,7 +1408,7 @@ class _CandidateResumeManagementScreenState
                       ),
                       const SizedBox(width: 8),
 
-                      // Active Badge OR Use Button
+                      // Active Badge
                       if (isActive)
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -1472,22 +1436,6 @@ class _CandidateResumeManagementScreenState
                               letterSpacing: 0.68,
                             ),
                           ),
-                        )
-                      else
-                        TextButton(
-                          onPressed: _mutatingResume
-                              ? null
-                              : () => _useResume(r),
-                          style: CandidateButtonStyle.secondary(
-                            context,
-                            TextButton.styleFrom(
-                              minimumSize: const Size(42, 32),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                            ),
-                          ),
-                          child: const Text('Use'),
                         ),
                       const SizedBox(width: 6),
 

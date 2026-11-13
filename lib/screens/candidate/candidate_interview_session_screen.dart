@@ -192,6 +192,11 @@ class _CandidateInterviewSessionScreenState
       onHistory: () => Navigator.of(
         context,
       ).pushNamedAndRemoveUntil('/candidate/interviews', (_) => false),
+      onFeedback: () => Navigator.of(context).pushNamedAndRemoveUntil(
+        '/candidate/feedback-report',
+        (_) => false,
+        arguments: {'interviewId': widget.identity.interviewId},
+      ),
     ),
   );
 }

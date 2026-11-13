@@ -10,16 +10,21 @@ extension type _RetellModule._(JSObject _) implements JSObject {
 extension type _RetellBridge._(JSObject _) implements JSObject {
   external JSPromise<JSAny?> start(JSObject options);
   external JSPromise<JSAny?> resumeAudio();
+  external bool setMicrophoneMuted(bool muted);
   external void dispose();
 }
 RetellVoiceClient createRetellVoiceClient() => BrowserRetellVoiceClient();
 
-class BrowserRetellVoiceClient implements RetellVoiceClient {
+class BrowserRetellVoiceClient
+    implements RetellVoiceClient, RetellMicrophoneControl {
   _RetellBridge? _bridge;
   int _generation = 0;
   bool _disposed = false;
   @override
   bool get supported => !_disposed && _module != null;
+  @override
+  bool setMicrophoneMuted(bool muted) =>
+      _bridge?.setMicrophoneMuted(muted) ?? false;
   @override
   Future<void> start(
     RetellCredential credential,

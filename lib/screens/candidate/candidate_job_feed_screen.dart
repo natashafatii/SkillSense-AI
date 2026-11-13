@@ -407,11 +407,11 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               padding: EdgeInsets.zero,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 mainAxisSpacing: 14,
                 crossAxisSpacing: 14,
-                mainAxisExtent: 104,
+                mainAxisExtent: 62 + MediaQuery.textScalerOf(context).scale(42),
               ),
               itemCount: processedJobs.length,
               itemBuilder: (context, idx) {

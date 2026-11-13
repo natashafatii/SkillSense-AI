@@ -82,6 +82,25 @@ class InterviewLifecycleController extends ChangeNotifier {
   String get notice => _notice;
   String? get dataError => _dataError;
   bool get agentTalking => _agentTalking;
+  bool _microphoneMuted = false;
+  bool get microphoneMuted => _microphoneMuted;
+  bool get canToggleMicrophone =>
+      isCurrent &&
+      !_finishWanted &&
+      _state == InterviewLifecycleState.live &&
+      voice is RetellMicrophoneControl;
+
+  void toggleMicrophone() {
+    final client = voice;
+    if (!canToggleMicrophone || client is! RetellMicrophoneControl) return;
+    if ((client as RetellMicrophoneControl).setMicrophoneMuted(
+      !_microphoneMuted,
+    )) {
+      _microphoneMuted = !_microphoneMuted;
+      _emit();
+    }
+  }
+
   bool get finishRequested => _finishWanted;
   bool get finishing => _finishFlight != null;
   bool get audioStopAcknowledged => _audioStopConfirmed;
@@ -601,6 +620,14 @@ class InterviewLifecycleController extends ChangeNotifier {
             _processingTerminal(_snapshot!.workflowState))) {
       return;
     }
+    if (_state == InterviewLifecycleState.live && !_finishWanted) {
+      final retry = _retryPollAt?.difference(DateTime.now());
+      _pollTimer = Timer(
+        retry != null && retry > pollInterval ? retry : pollInterval,
+        () => unawaited(_poll()),
+      );
+      return;
+    }
     _pollDeadline ??= DateTime.now().add(const Duration(minutes: 2));
     if (_polls >= maxPolls || !DateTime.now().isBefore(_pollDeadline!)) {
       _notice = _snapshot?.completed == true
@@ -698,6 +725,7 @@ class InterviewLifecycleController extends ChangeNotifier {
   }
 
   void _localStop() {
+    _microphoneMuted = false;
     _voiceEpoch++;
     _joining = false;
     _agentTalking = false;

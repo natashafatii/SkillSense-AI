@@ -1173,10 +1173,15 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
         : hour < 17
         ? 'Afternoon'
         : 'Evening';
+    final readyForReview = _applications.where((application) {
+      return (application.status == ApplicationStatus.applied ||
+              application.status == ApplicationStatus.underReview) &&
+          application.screening?.status == 'SUCCEEDED';
+    }).length;
     final urgent = _todayInterviews.isNotEmpty
         ? '${_todayInterviews.length} interview${_todayInterviews.length == 1 ? '' : 's'} scheduled today.'
-        : _applications.isNotEmpty
-        ? '${_applications.length} application${_applications.length == 1 ? '' : 's'} ready to review.'
+        : readyForReview > 0
+        ? '$readyForReview application${readyForReview == 1 ? '' : 's'} ready to review.'
         : '${_activeJobs.length} open role${_activeJobs.length == 1 ? '' : 's'} accepting applications.';
     return _buildGlassCard(
       theme: theme,
@@ -1347,7 +1352,8 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
 
   // Top Applicants list card
   Widget _buildTopApplicantsCard(DeckTheme theme, bool isMobile) {
-    final applicants = [..._applications];
+    final applicants = [..._applications]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final ranked = applicants.take(5).toList();
 
     return _buildGlassCard(
@@ -1436,20 +1442,31 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                   : score >= 55
                   ? AppColors.dashboardAmber
                   : AppColors.dashboardRed;
-              final badge = item.screening?.outcome ?? 'UNAVAILABLE';
+              final badge = item.status.value.replaceAll('_', ' ');
+              final badgeColor = switch (item.status) {
+                ApplicationStatus.rejected ||
+                ApplicationStatus.interviewFailed => AppColors.dashboardRed,
+                ApplicationStatus.underReview => AppColors.dashboardAmber,
+                ApplicationStatus.screened ||
+                ApplicationStatus.decision => AppColors.dashboardTeal,
+                ApplicationStatus.applied ||
+                ApplicationStatus.unknown => theme.textSecondary,
+                _ => AppColors.dashboardBlue,
+              };
 
               return MouseRegion(
                 onEnter: (_) => setState(() => _hoveredApplicantIndex = index),
                 onExit: (_) => setState(() => _hoveredApplicantIndex = null),
                 cursor: SystemMouseCursors.click,
                 child: PointerGestureDetector(
-                  onTap: () {
-                    Navigator.of(context).push(
+                  onTap: () async {
+                    await Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) =>
                             ApplicationScreeningScreen(applicationId: item.id),
                       ),
                     );
+                    if (mounted) _refreshDashboard();
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
@@ -1530,14 +1547,14 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
                                 _buildSmallScoreRing(theme, score, scoreColor),
                                 const SizedBox(height: 6),
                               ],
-                              _buildStatusBadge(badge, scoreColor),
+                              _buildStatusBadge(badge, badgeColor),
                             ],
                           ),
                         ] else ...[
                           if (score != null)
                             _buildSmallScoreRing(theme, score, scoreColor),
                           const SizedBox(width: 16),
-                          _buildStatusBadge(badge, scoreColor),
+                          _buildStatusBadge(badge, badgeColor),
                         ],
                       ],
                     ),

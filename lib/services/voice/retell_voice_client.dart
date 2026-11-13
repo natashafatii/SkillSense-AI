@@ -19,3 +19,7 @@ abstract class RetellVoiceClient {
   void stop();
   void dispose();
 }
+
+abstract interface class RetellMicrophoneControl {
+  bool setMicrophoneMuted(bool muted);
+}
