@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'camera_adapter.dart';
 
-CameraAdapter createCameraAdapter() => UnsupportedCameraAdapter();
+CameraAdapter createCameraAdapter({bool coverPreview = false}) =>
+    UnsupportedCameraAdapter();
 
 class UnsupportedCameraAdapter extends CameraAdapter {
   @override

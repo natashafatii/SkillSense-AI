@@ -1,26 +1,27 @@
-import 'package:skillsense_ai/constants/adaptive_colors.dart';
-import '../../widgets/mobile_edge_shadow_wrapper.dart';
-import '../../widgets/candidate_mobile_nav.dart';
-import '../../widgets/candidate_button_style.dart';
-import 'dart:ui';
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import '../../utils/interview_testing.dart';
-import '../../widgets/recruiter_top_bar.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../../constants/app_colors.dart';
-import 'candidate_interview_session_screen.dart';
-import '../../widgets/candidate_side_nav.dart';
+import '../../services/application_service.dart';
+import '../../services/media/interview_media_route_observer.dart';
 import '../../services/interview_service.dart';
 import '../../services/api_exception.dart';
 import '../../services/session_scope.dart';
 import '../../models/interview.dart';
 import '../../models/interview_analysis_contract.dart';
 import '../../services/media/camera_adapter.dart';
+import '../../services/media/camera_adapter_factory.dart';
 import '../../services/media/interview_media_controller.dart';
-import '../../widgets/interview_media_panel.dart';
 import '../../services/voice/voice_lifecycle_backend.dart';
 import '../../models/voice/voice_contract.dart';
+import '../../utils/interview_testing.dart';
+import '../../widgets/camera_device_selector.dart';
+import '../../widgets/candidate_button_style.dart';
+import '../../widgets/candidate_scaffold.dart';
+import '../../widgets/recruiter_top_bar.dart';
+import 'candidate_interview_session_screen.dart';
 
 class CandidateInterviewLobbyScreen extends StatefulWidget {
   const CandidateInterviewLobbyScreen({
@@ -42,12 +43,35 @@ class CandidateInterviewLobbyScreen extends StatefulWidget {
 }
 
 class _CandidateInterviewLobbyScreenState
-    extends State<CandidateInterviewLobbyScreen> {
+    extends State<CandidateInterviewLobbyScreen>
+    with WidgetsBindingObserver, RouteAware {
   final int _account = SessionScope.generation;
   Interview? _interview;
+  String? _roleLabel;
   InterviewSessionIdentity? _identity;
   String? _loadError;
   late final InterviewMediaController _media;
+  ModalRoute<dynamic>? _route;
+  Timer? _joinWindowTimer;
+
+  DateTime? get _joinOpensAt => _interview?.status == 'SCHEDULED'
+      ? _interview?.scheduledAt?.subtract(const Duration(minutes: 15))
+      : null;
+
+  bool get _waitingForJoinWindow =>
+      _joinOpensAt?.isAfter(DateTime.now()) ?? false;
+
+  void _scheduleJoinWindowUpdate() {
+    _joinWindowTimer?.cancel();
+    final opensAt = _joinOpensAt;
+    if (opensAt == null) return;
+    final delay = opensAt.difference(DateTime.now());
+    if (delay <= Duration.zero) return;
+    _joinWindowTimer = Timer(delay, () {
+      setState(() {});
+      _scheduleJoinWindowUpdate();
+    });
+  }
 
   late final VoiceLifecycleBackend _voiceBackend;
   late final VoiceLifecycleBackend _immediateBackend;
@@ -66,8 +90,11 @@ class _CandidateInterviewLobbyScreenState
     _immediateBackend =
         widget.voiceBackend ??
         VoiceLifecycleBackend(contractConfirmed: _allowImmediateTesting);
-    _media = InterviewMediaController(adapter: widget.mediaAdapter);
+    _media = InterviewMediaController(
+      adapter: widget.mediaAdapter ?? createCameraAdapter(coverPreview: true),
+    );
     _media.addListener(_mediaChanged);
+    WidgetsBinding.instance.addObserver(this);
     SessionScope.invalidations.addListener(_clearSession);
     _identity = widget.identity;
     _checkInterviews();
@@ -90,13 +117,20 @@ class _CandidateInterviewLobbyScreenState
           )
           .toList();
       if (matches.isNotEmpty) {
-        _interview = matches.first;
+        final interview = matches.first;
+        if (_interview?.applicationId != interview.applicationId) {
+          _roleLabel = null;
+        }
+        _interview = interview;
+        _scheduleJoinWindowUpdate();
         if (mounted) {
           setState(() {
+            _loadError = null;
             _hasInterview = true;
             _isLoading = false;
           });
         }
+        if (_roleLabel == null) _loadRoleLabel(interview.applicationId);
       } else {
         if (mounted) {
           setState(() {
@@ -116,12 +150,61 @@ class _CandidateInterviewLobbyScreenState
     }
   }
 
+  Future<void> _loadRoleLabel(String applicationId) async {
+    if (applicationId.isEmpty) return;
+    try {
+      final application = await ApplicationService.getApplication(
+        applicationId,
+      );
+      if (!mounted ||
+          _account != SessionScope.generation ||
+          _interview?.applicationId != applicationId) {
+        return;
+      }
+      final parts = [
+        application.jobTitle.trim(),
+        application.jobCompany.trim(),
+      ].where((part) => part.isNotEmpty);
+      if (parts.isNotEmpty) setState(() => _roleLabel = parts.join(' · '));
+    } catch (_) {
+      // The lobby can still show the schedule if role details are unavailable.
+    }
+  }
+
+  Future<void> _startFromLobby() async {
+    if (_starting || _media.busy || _account != SessionScope.generation) {
+      return;
+    }
+    if ((_startUncertain || _interview?.status == 'LIVE') &&
+        (_voiceBackend.available || _allowImmediateTesting)) {
+      await _resumeInterview();
+      return;
+    }
+    if (_startUncertain) return;
+    if (_waitingForJoinWindow) return;
+    if (!_media.cameraReady || !_media.microphoneChecked) {
+      setState(() {
+        _startError = 'Check your camera and microphone before starting.';
+      });
+    } else if (_identity case final identity?) {
+      _media.stop();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => CandidateInterviewSessionScreen(identity: identity),
+        ),
+      );
+    } else if (_voiceBackend.available) {
+      await _startVideoInterview();
+    } else {
+      setState(() => _startError = 'Video interview access is unavailable.');
+    }
+  }
+
   Future<void> _startVideoInterview({bool immediately = false}) async {
     final interview = _interview;
     if (_starting ||
         _startUncertain ||
         interview == null ||
-        (!immediately && !interview.canJoinAt(DateTime.now())) ||
         !mounted ||
         _account != SessionScope.generation) {
       return;
@@ -147,7 +230,6 @@ class _CandidateInterviewLobbyScreenState
           return;
         }
       }
-      _media.stop(); // Release lobby tests before session/provider handoff.
       final snapshot = await backend
           .start(
             interview.id,
@@ -158,6 +240,7 @@ class _CandidateInterviewLobbyScreenState
           .timeout(const Duration(seconds: 20));
       if (!mounted || _account != SessionScope.generation) return;
       final safeSnapshot = VoiceSessionSnapshot.withoutCredential(snapshot);
+      _media.stop(); // Release the preview only once the room is ready.
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => CandidateInterviewSessionScreen(
@@ -170,7 +253,9 @@ class _CandidateInterviewLobbyScreenState
     } on ApiException catch (error) {
       if (mounted && _account == SessionScope.generation) {
         setState(() {
-          _startError = error.message;
+          _startError = error.fieldErrors?.containsKey('scheduled_at') == true
+              ? 'You can join from 15 minutes before the scheduled time.'
+              : error.message;
           _startUncertain = error.voiceStartNeedsRecovery;
         });
       }
@@ -186,7 +271,7 @@ class _CandidateInterviewLobbyScreenState
         setState(() {
           _startUncertain = true;
           _startError =
-              'Start was not confirmed. Check the existing session before retrying; no second provider call is created automatically.';
+              'Start was not confirmed. Select Resume interview to check for an existing session.';
         });
       }
     } finally {
@@ -259,11 +344,13 @@ class _CandidateInterviewLobbyScreenState
   }
 
   void _clearSession() {
+    _joinWindowTimer?.cancel();
     _voiceRequests.cancel('Account changed.');
     if (!mounted) return;
     setState(() {
       _identity = null;
       _interview = null;
+      _roleLabel = null;
       _hasInterview = false;
       _isLoading = false;
       _loadError = 'Your account session changed. Reopen the interview lobby.';
@@ -272,6 +359,9 @@ class _CandidateInterviewLobbyScreenState
 
   @override
   void dispose() {
+    _joinWindowTimer?.cancel();
+    interviewMediaRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _voiceRequests.cancel('Lobby disposed.');
     _media.removeListener(_mediaChanged);
     _media.dispose();
@@ -279,644 +369,714 @@ class _CandidateInterviewLobbyScreenState
     super.dispose();
   }
 
+  bool get _canResume =>
+      (_startUncertain || _interview?.status == 'LIVE') &&
+      (_voiceBackend.available || _allowImmediateTesting);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (_route == route) return;
+    interviewMediaRouteObserver.unsubscribe(this);
+    _route = route;
+    if (route != null) interviewMediaRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() => _media.stop();
+
+  @override
+  void didPop() => _media.stop();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _media.stop();
+      case AppLifecycleState.resumed:
+        _scheduleJoinWindowUpdate();
+        setState(() {});
+      case AppLifecycleState.inactive:
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 900;
-
-    final Color bgBase = context.themeCanvas(const Color(0xFFF8FAFC));
-    final Color textPrimary = context.themeForeground(const Color(0xFF0F172A));
-    final Color textSecondary = context.themeForeground(
-      const Color(0xFF64748B),
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final lobbyColors = theme.brightness == Brightness.light
+        ? colors.copyWith(
+            onSurface: const Color(0xFF17243A),
+            onSurfaceVariant: const Color(0xFF46566B),
+          )
+        : colors;
+    final interTextTheme = theme.textTheme.apply(fontFamily: 'Inter');
+    final bodyStyle = (interTextTheme.bodyMedium ?? const TextStyle()).copyWith(
+      fontSize: 15,
+      height: 1.5,
+      color: lobbyColors.onSurface,
     );
-    final Color cardBg = context.themeSurface(Colors.white);
-    final Color cardBorder = context.themeOutline(const Color(0xFFE2E8F0));
+    const contentPadding = EdgeInsets.all(46);
+    final interview = _hasInterview ? _interview : null;
+    final hasMobileDock = MediaQuery.sizeOf(context).width < 900;
 
-    return Scaffold(
-      backgroundColor: bgBase,
-      body: Stack(
+    return CandidateScaffold(
+      currentRoute: '/candidate/interview-lobby',
+      body: Column(
         children: [
-          // Grid Painter Background
-          Positioned.fill(
-            child: CustomPaint(
-              painter: GridPainter(
-                color: Colors.black.withValues(alpha: 0.015),
+          const RecruiterTopBar(pageTitle: 'Interview lobby', candidate: true),
+          Expanded(
+            child: Theme(
+              data: theme.copyWith(
+                colorScheme: lobbyColors,
+                textTheme: interTextTheme.copyWith(bodyMedium: bodyStyle),
               ),
-            ),
-          ),
-
-          // Teal Aurora Glow
-          Positioned(
-            top: isMobile ? -50 : -120,
-            left: isMobile ? 20 : 180,
-            child: Container(
-              width: isMobile ? 300 : 450,
-              height: isMobile ? 300 : 450,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.dashboardTeal.withValues(
-                  alpha: isMobile ? 0.06 : 0.04,
-                ),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-          ),
-
-          // Content Wrapper
-          SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      // Left Rail (Web Only)
-                      if (!isMobile)
-                        const CandidateSideNav(
-                          currentRoute: '/candidate/interview-lobby',
-                        ),
-
-                      // Main Canvas
-                      Expanded(
-                        child: Column(
-                          children: [
-                            RecruiterTopBar(
-                              pageTitle: 'Interview lobby',
-                              candidate: true,
-                            ),
-                            Expanded(
-                              child: MobileEdgeShadowWrapper(
-                                child: _isLoading
-                                    ? const Center(
-                                        child: CircularProgressIndicator(
-                                          color: AppColors.dashboardTeal,
-                                        ),
-                                      )
-                                    : !_hasInterview
-                                    ? _buildEmptyState(isMobile)
-                                    : SingleChildScrollView(
-                                        physics: const BouncingScrollPhysics(),
-                                        padding: EdgeInsets.only(
-                                          left: isMobile ? 16 : 24,
-                                          right: isMobile ? 16 : 24,
-                                          top: 16,
-                                          bottom: isMobile ? 164 : 32,
-                                        ),
-                                        child: isMobile
-                                            ? _buildMobileLayout(
-                                                textPrimary,
-                                                textSecondary,
-                                                cardBg,
-                                                cardBorder,
-                                              )
-                                            : _buildWebLayout(
-                                                textPrimary,
-                                                textSecondary,
-                                                cardBg,
-                                                cardBorder,
-                                              ),
-                                      ),
-                              ),
-                            ),
-                          ],
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide =
+                      constraints.maxWidth - contentPadding.horizontal >= 704;
+                  final colors = Theme.of(context).colorScheme;
+                  final padding = contentPadding.add(
+                    EdgeInsets.only(bottom: hasMobileDock ? 86 : 0),
+                  );
+                  return SingleChildScrollView(
+                    padding: padding,
+                    child: DefaultTextStyle(
+                      style: bodyStyle,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1440),
+                          child: _isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : interview == null
+                              ? ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: padding
+                                        .deflateSize(constraints.biggest)
+                                        .height,
+                                  ),
+                                  child: _buildEmptyState(colors),
+                                )
+                              : _buildLobby(context, interview, wide: wide),
                         ),
                       ),
-                    ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusPill(ColorScheme colors, String status) {
+    final scheduled = status == 'SCHEDULED';
+    final light = colors.brightness == Brightness.light;
+    final (label, background, foreground) = switch (status) {
+      'SCHEDULED' => (
+        'Scheduled',
+        light ? const Color(0xFFEAF6F2) : const Color(0xFF15382F),
+        light ? const Color(0xFF087F6C) : const Color(0xFF34D4AC),
+      ),
+      'LIVE' => ('Live', colors.primaryContainer, colors.onPrimaryContainer),
+      'COMPLETED' => (
+        'Completed',
+        colors.surfaceContainerHigh,
+        colors.onSurfaceVariant,
+      ),
+      'CANCELLED' || 'CANCELED' => (
+        'Cancelled',
+        colors.surfaceContainerHigh,
+        colors.onSurfaceVariant,
+      ),
+      _ => (
+        'Unavailable',
+        colors.surfaceContainerHigh,
+        colors.onSurfaceVariant,
+      ),
+    };
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        border: Border.all(
+          color: scheduled && light
+              ? const Color(0xFFA9DFCA)
+              : foreground.withValues(alpha: 0.24),
+        ),
+        borderRadius: BorderRadius.circular(50),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 7,
+              height: 7,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: foreground,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: foreground,
+                fontFamily: 'Inter',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ColorScheme colors) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.event_outlined,
+              size: 36,
+              color: colors.brightness == Brightness.dark
+                  ? CandidateButtonStyle.teal
+                  : CandidateButtonStyle.deepTeal,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _loadError ?? 'No interview scheduled',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            if (_loadError == null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Interview invitations appear here.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.onSurfaceVariant),
+              ),
+            ],
+            const SizedBox(height: 20),
+            FilledButton(
+              style: CandidateButtonStyle.primaryColors(
+                FilledButton.styleFrom(foregroundColor: Colors.white),
+              ),
+              onPressed: () =>
+                  Navigator.of(context).pushNamed('/candidate/applications'),
+              child: const Text('View applications'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLobby(
+    BuildContext context,
+    Interview interview, {
+    required bool wide,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final border = BorderSide(
+      color: colors.brightness == Brightness.light
+          ? const Color(0xFFD8E1EC)
+          : colors.outlineVariant,
+    );
+    final sectionPadding = wide ? 30.0 : 22.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 16,
+          runSpacing: 10,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'Ready for your interview?',
+                    style: TextStyle(
+                      color: colors.onSurface,
+                      fontFamily: 'Inter',
+                      fontSize: wide ? 27 : 26,
+                      height: 1.15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -1.15,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Check your devices before joining.',
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
-          ),
-
-          // Bottom Navigation Dock (Mobile Only)
-          if (isMobile)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildMobileBottomDock(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ── EMPTY STATE ────────────────────────────────────────────────────────────
-  Widget _buildEmptyState(bool isMobile) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: isMobile ? 54 : 64,
-              height: isMobile ? 54 : 64,
-              decoration: BoxDecoration(
-                color: context.themeSurface(const Color(0xFFF1F5F9)),
-                borderRadius: BorderRadius.circular(isMobile ? 17 : 20),
-                border: Border.all(
-                  color: context.themeOutline(const Color(0xFFE2E8F0)),
-                ),
-              ),
-              child: Center(
-                child: Icon(
-                  Icons.radio_button_checked_rounded,
-                  size: isMobile ? 20 : 24,
-                  color: context.themeForeground(const Color(0xFF64748B)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _loadError ??
-                  (isMobile ? 'Nothing scheduled' : 'No interview scheduled'),
-              style: GoogleFonts.inter(
-                color: context.themeForeground(const Color(0xFF0F172A)),
-                fontSize: isMobile ? 15 : 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: isMobile ? -0.03 : -0.025,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: isMobile ? 280 : 380),
-              child: Text(
-                isMobile
-                    ? 'Invites appear here with a countdown.'
-                    : 'When a recruiter invites you, your device check and countdown appear here.',
-                style: GoogleFonts.inter(
-                  color: context.themeForeground(const Color(0xFF64748B)),
-                  fontSize: isMobile ? 11 : 12.5,
-                  height: 1.65,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: CandidateButtonStyle.primaryGradient,
-                borderRadius: BorderRadius.circular(11),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF14B584).withValues(alpha: 0.25),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 22 : 26),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pushNamed('/candidate/applications');
-                },
-                child: Text(
-                  'View applications',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "You'll be notified when invited",
-              style: GoogleFonts.inter(
-                color: context.themeForeground(const Color(0xFF94A3B8)),
-                fontSize: 10.5,
-                fontWeight: FontWeight.w400,
-              ),
-              textAlign: TextAlign.center,
-            ),
+            _statusPill(colors, interview.status),
           ],
         ),
-      ),
-    );
-  }
-
-  // ── WEB LAYOUT ─────────────────────────────────────────────────────────────
-  Widget _buildWebLayout(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Left Column (Launch Gate) - 1.4fr
-        Expanded(
-          flex: 7,
-          child: _buildLaunchGatePanel(
-            textPrimary,
-            textSecondary,
-            cardBg,
-            cardBorder,
-            false,
+        const SizedBox(height: 22),
+        Material(
+          color: colors.brightness == Brightness.light
+              ? Colors.white
+              : colors.surface,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(wide ? 18 : 14),
+            side: border,
           ),
-        ),
-        const SizedBox(width: 24),
-
-        // Right Column (Checks + House Rules) - 1fr
-        Expanded(
-          flex: 5,
-          child: Column(
+          child: Stack(
             children: [
-              _buildDeviceCheckPanel(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-                false,
-              ),
-              const SizedBox(height: 24),
-              _buildHouseRulesPanel(
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
+              if (wide)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: FractionallySizedBox(
+                      alignment: AlignmentDirectional.centerStart,
+                      widthFactor: 5 / 12,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: BorderDirectional(end: border),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              Flex(
+                direction: wide ? Axis.horizontal : Axis.vertical,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: wide
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.stretch,
+                children: [
+                  Flexible(
+                    flex: 5,
+                    fit: wide ? FlexFit.tight : FlexFit.loose,
+                    child: Padding(
+                      padding: EdgeInsets.all(sectionPadding),
+                      child: _buildAppointment(
+                        context,
+                        interview,
+                        border.color,
+                      ),
+                    ),
+                  ),
+                  Flexible(
+                    flex: 7,
+                    fit: wide ? FlexFit.tight : FlexFit.loose,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: wide ? null : Border(top: border),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(sectionPadding),
+                        child: _buildDeviceSetup(context, border.color),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          children: [
+            Text(
+              'A quiet, well-lit space is recommended.',
+              style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
+            ),
+            TextButton(
+              onPressed: () => _showDeviceHelp(context),
+              child: const Text('Need help?'),
+            ),
+          ],
+        ),
       ],
     );
   }
 
-  // ── MOBILE LAYOUT ──────────────────────────────────────────────────────────
-  Widget _buildMobileLayout(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
+  Widget _buildAppointment(
+    BuildContext context,
+    Interview interview,
+    Color dividerColor,
   ) {
+    final colors = Theme.of(context).colorScheme;
+    final localizations = MaterialLocalizations.of(context);
+    final scheduledAt = interview.scheduledAt?.toLocal();
+    final opensAt = _joinOpensAt?.toLocal();
+    final waiting = opensAt != null && opensAt.isAfter(DateTime.now());
+    final devicesReady = _media.cameraReady && _media.microphoneChecked;
+    final busy = _starting || _media.busy;
+    final canJoin =
+        _canResume || (devicesReady && !_startUncertain && !waiting);
+    final use24HourTime = MediaQuery.alwaysUse24HourFormatOf(context);
+    final appointmentMetaStyle = TextStyle(
+      color: colors.onSurfaceVariant,
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+    );
+    String time(DateTime value) => localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(value),
+      alwaysUse24HourFormat: use24HourTime,
+    );
+
+    final joinNote = _canResume
+        ? 'Reconnect to your existing interview session.'
+        : waiting
+        ? 'Joining opens on ${localizations.formatMediumDate(opensAt)} at ${time(opensAt)} (${_utcOffset(opensAt)}). You can check your devices now.'
+        : !devicesReady
+        ? 'Check your camera and microphone to enable joining.'
+        : 'Your devices are ready.';
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildLaunchGatePanel(
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          true,
+        Text('Your appointment', style: appointmentMetaStyle),
+        const SizedBox(height: 12),
+        Text(
+          scheduledAt == null
+              ? 'Time to be confirmed'
+              : localizations.formatFullDate(scheduledAt),
+          style: TextStyle(
+            color: colors.onSurface,
+            fontSize: 24,
+            height: 1.24,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+          ),
         ),
-        const SizedBox(height: 16),
-        _buildDeviceCheckPanel(
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          true,
-        ),
-        const SizedBox(height: 16),
-        _buildHouseRulesPanel(textPrimary, textSecondary, cardBg, cardBorder),
-      ],
-    );
-  }
-
-  // ── LAUNCH GATE PANEL ──────────────────────────────────────────────────────
-  Widget _buildLaunchGatePanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isMobile,
-  ) {
-    final bool canEnter =
-        _interview?.canJoinAt(DateTime.now()) == true &&
-        _media.cameraReady &&
-        _media.microphoneChecked &&
-        _identity != null;
-
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 20 : 32),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+        if (scheduledAt != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            time(scheduledAt),
+            style: TextStyle(
+              color: colors.onSurface,
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+            ),
+          ),
+          Text(
+            'Local time (${_utcOffset(scheduledAt)})',
+            style: appointmentMetaStyle,
           ),
         ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Interview ${_interview?.id ?? ''}',
-            style: GoogleFonts.spaceGrotesk(
-              color: AppColors.dashboardTeal,
-              fontSize: isMobile ? 11 : 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
+        if (_roleLabel case final roleLabel?) ...[
+          const SizedBox(height: 10),
+          Text(roleLabel, style: appointmentMetaStyle),
+        ],
+        const SizedBox(height: 24),
+        Divider(height: 1, thickness: 1, color: dividerColor),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Icon(
+              Icons.videocam_outlined,
+              size: 20,
+              color: colors.brightness == Brightness.light
+                  ? const Color(0xFF087F6C)
+                  : AppColors.dashboardTeal,
             ),
-          ),
-          const SizedBox(height: 12),
-
-          Text(
-            'Interview preparation',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: isMobile ? 18 : 20,
-              fontWeight: FontWeight.bold,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'AI-guided video interview',
+                style: TextStyle(
+                  color: colors.onSurfaceVariant,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-
-          // Countdown Numbers
-          Text(
-            ('${_interview?.scheduledAt?.toLocal() ?? 'Time unavailable'} · ${_interview?.workflowState ?? 'UNKNOWN'} · Questions: ${_interview?.questionReadiness.state ?? 'UNKNOWN'}'),
-            style: GoogleFonts.jetBrainsMono(
-              color: textPrimary,
-              fontSize: isMobile ? 37 : 44,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          Text(
-            'Camera and microphone are required for every interview. Keep your camera on throughout the session.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              color: textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          if (_startError != null)
-            Semantics(liveRegion: true, child: Text(_startError!)),
-          if (_allowImmediateTesting) ...[
-            const SizedBox(height: 16),
-            FilledButton.icon(
+          ],
+        ),
+        const SizedBox(height: 30),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 330),
+            child: FilledButton(
               key: const ValueKey('start-interview-now'),
-              onPressed: !_starting && !_startUncertain && !_media.busy
-                  ? () => _startVideoInterview(immediately: true)
-                  : null,
+              onPressed: canJoin && !busy ? _startFromLobby : null,
               style: CandidateButtonStyle.primaryColors(
                 FilledButton.styleFrom(
-                  backgroundColor: AppColors.dashboardTeal,
-                  foregroundColor: context.themeForeground(
-                    const Color(0xFF0F172A),
-                  ),
+                  minimumSize: const Size(0, 52),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFF79BAAF),
+                  disabledForegroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
-              icon: _starting
-                  ? const SizedBox(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _starting
+                          ? 'Connecting…'
+                          : (_canResume
+                                ? 'Resume interview'
+                                : 'Join interview'),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_starting)
+                    const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.play_arrow_rounded),
-              label: Text(
-                _starting ? 'Starting interview…' : 'Start interview now',
+                  else
+                    const Icon(Icons.arrow_forward_rounded, size: 20),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Development-only immediate start. Production joining follows server readiness and the scheduled time.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: textSecondary, fontSize: 12),
-            ),
-            const SizedBox(height: 12),
-          ],
-          Text(
-            'Workflow: ${_interview?.workflowState ?? 'UNKNOWN'} · Questions: ${_interview?.questionReadiness.state ?? 'UNKNOWN'}',
-          ),
-          Text(
-            'Join opens 15 minutes before the appointment. Times shown in ${DateTime.now().timeZoneName}.',
-          ),
-          TextButton(
-            onPressed: _starting ? null : _checkInterviews,
-            child: const Text('Refresh joining availability'),
-          ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton(
-                onPressed:
-                    !_starting &&
-                        !_startUncertain &&
-                        _voiceBackend.available &&
-                        _interview?.canJoinAt(DateTime.now()) == true &&
-                        _media.cameraReady &&
-                        _media.microphoneChecked
-                    ? _startVideoInterview
-                    : null,
-                child: const Text('Start video-enabled interview'),
-              ),
-              OutlinedButton(
-                onPressed:
-                    !_starting &&
-                        (_voiceBackend.available || _allowImmediateTesting)
-                    ? _resumeInterview
-                    : null,
-                child: const Text('Find / resume existing session'),
-              ),
-            ],
-          ),
-          if (!_voiceBackend.available)
-            const Text(
-              'Candidate voice start/rejoin requires backend contract support. Local camera checks remain available.',
-            ),
-          const SizedBox(height: 24),
-
-          // Enter Button CTA
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: canEnter ? 1.0 : 0.45,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: canEnter
-                    ? [
-                        BoxShadow(
-                          color: CandidateButtonStyle.teal.withValues(
-                            alpha: 0.25,
-                          ),
-                          blurRadius: 12,
-                          spreadRadius: 2,
-                        ),
-                      ]
-                    : [],
-              ),
-              child: ElevatedButton(
-                style: CandidateButtonStyle.primary(
-                  ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.dashboardTeal,
-                    foregroundColor: context.themeForeground(
-                      const Color(0xFF0F172A),
-                    ),
-                    elevation: 0,
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                onPressed: canEnter
-                    ? () {
-                        _media
-                            .stop(); // Release all lobby test tracks before handoff.
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) => CandidateInterviewSessionScreen(
-                              identity: _identity!,
-                            ),
-                          ),
-                        );
-                      }
-                    : () {
-                        // Toast blocker explanation on tap when disabled
-                        _showBlockerToast();
-                      },
-                child: Text(
-                  'Enter interview room',
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          Text(
-            canEnter
-                ? 'Ready to enter'
-                : 'Requires session identity, camera preview and microphone check',
-            style: GoogleFonts.inter(
-              color: textSecondary,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showBlockerToast() {
-    final msg = _identity == null
-        ? 'A backend interview session identity is required. You can still check devices locally.'
-        : 'Start the camera preview and check microphone permission before continuing.';
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF334155),
-        behavior: SnackBarBehavior.floating,
-        content: Text(
-          msg,
-          style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-        ),
-      ),
-    );
-  }
-
-  // ── DEVICE CHECK PANEL ─────────────────────────────────────────────────────
-  Widget _buildDeviceCheckPanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool isMobile,
-  ) {
-    return InterviewMediaPanel(controller: _media);
-  }
-
-  // ── HOUSE RULES PANEL ──────────────────────────────────────────────────────
-  Widget _buildHouseRulesPanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'House rules',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          _buildRuleRow('Alone in a quiet room — extra faces are flagged'),
-          const SizedBox(height: 10),
-          _buildRuleRow('Stay in frame; camera stays on'),
-          const SizedBox(height: 10),
-          _buildRuleRow('Phones away — detected devices are logged'),
-          const SizedBox(height: 10),
-          _buildRuleRow('You can repeat any question once'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRuleRow(String rule) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '◆ ',
-          style: GoogleFonts.inter(
-            color: AppColors.dashboardTeal,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
           ),
         ),
-        Expanded(
+        const SizedBox(height: 12),
+        Semantics(
+          liveRegion: true,
           child: Text(
-            rule,
-            style: GoogleFonts.inter(
-              color: context.themeForeground(const Color(0xFF475569)),
+            joinNote,
+            style: TextStyle(
+              color: colors.onSurfaceVariant,
               fontSize: 13,
-              height: 1.4,
-              fontWeight: FontWeight.w500,
+              height: 1.5,
+            ),
+          ),
+        ),
+        if (_startError case final error?) ...[
+          const SizedBox(height: 8),
+          Semantics(
+            liveRegion: true,
+            child: Text(error, style: TextStyle(color: colors.error)),
+          ),
+        ],
+        if (_allowImmediateTesting &&
+            !_canResume &&
+            !_startUncertain &&
+            interview.status == 'SCHEDULED')
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton(
+              onPressed: busy
+                  ? null
+                  : () => _startVideoInterview(immediately: true),
+              child: const Text('Start test interview now'),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _utcOffset(DateTime value) {
+    final offset = value.timeZoneOffset;
+    final hours = offset.inHours.abs().toString().padLeft(2, '0');
+    final minutes = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
+    return 'UTC${offset.isNegative ? '−' : '+'}$hours:$minutes';
+  }
+
+  Widget _buildDeviceSetup(BuildContext context, Color borderColor) {
+    final colors = Theme.of(context).colorScheme;
+    final cameraReady = _media.cameraReady;
+    final micReady = _media.microphoneChecked;
+    final ready = cameraReady && micReady;
+    final enabled =
+        _media.isCurrent &&
+        _media.adapter.supported &&
+        !_media.busy &&
+        !_starting;
+    final errors = [
+      _media.cameraError?.message,
+      _media.microphoneError?.message,
+    ].whereType<String>().toSet();
+    final message = !_media.adapter.supported
+        ? const MediaFailure(MediaFailureCode.unsupported).message
+        : errors.isNotEmpty
+        ? errors.join('\n')
+        : _media.busy
+        ? 'Allow device access when prompted.'
+        : ready
+        ? 'Camera and microphone checks passed.'
+        : micReady
+        ? 'Microphone access confirmed. Check your camera next.'
+        : cameraReady
+        ? 'Camera is ready. Check your microphone next.'
+        : 'Allow device access to check your setup.';
+    const previewBackground = Color(0xFF111B2B);
+    const previewForeground = Color(0xFFD5E0F1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 4,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(
+                'Camera & microphone',
+                style: TextStyle(
+                  color: colors.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text(
+              ready
+                  ? 'Devices ready'
+                  : (cameraReady || micReady
+                        ? '1 of 2 checked'
+                        : 'Not checked'),
+              style: TextStyle(
+                color: ready ? colors.primary : colors.onSurfaceVariant,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: LayoutBuilder(
+            builder: (context, constraints) => SizedBox(
+              key: const Key('interview-camera-preview'),
+              height: (constraints.maxWidth * 0.36)
+                  .clamp(170.0, 235.0)
+                  .toDouble(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(color: previewBackground),
+                  if (_media.adapter.supported) _media.adapter.buildPreview(),
+                  if (!cameraReady)
+                    ColoredBox(
+                      color: previewBackground,
+                      child: Center(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.videocam_off_outlined,
+                                color: const Color(0xFFABB9CC),
+                                size: 32,
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                _media.camera == DeviceCheckState.checking
+                                    ? 'Waiting for camera access'
+                                    : 'Camera preview is off',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: previewForeground,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked =
+                constraints.maxWidth <
+                325 * MediaQuery.textScalerOf(context).scale(13) / 13;
+            final cameraButton = _deviceButton(
+              colors,
+              borderColor: borderColor,
+              icon: Icons.videocam_outlined,
+              label: cameraReady ? 'Camera ready' : 'Check camera',
+              ready: cameraReady,
+              onPressed: enabled ? _media.requestCamera : null,
+            );
+            final micButton = _deviceButton(
+              colors,
+              borderColor: borderColor,
+              icon: Icons.mic_none_rounded,
+              label: micReady ? 'Microphone ready' : 'Check microphone',
+              ready: micReady,
+              onPressed: enabled ? _media.checkMicrophone : null,
+            );
+            return stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      cameraButton,
+                      const SizedBox(height: 8),
+                      micButton,
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: cameraButton),
+                      const SizedBox(width: 10),
+                      Expanded(child: micButton),
+                    ],
+                  );
+          },
+        ),
+        if (cameraReady && _media.adapter.cameras.length > 1) ...[
+          const SizedBox(height: 12),
+          CameraDeviceSelector(media: _media),
+        ],
+        const SizedBox(height: 10),
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            message,
+            style: TextStyle(
+              color: errors.isEmpty ? colors.onSurfaceVariant : colors.error,
+              fontSize: 13,
+              height: 1.5,
             ),
           ),
         ),
@@ -924,34 +1084,56 @@ class _CandidateInterviewLobbyScreenState
     );
   }
 
-  // ── LEFT RAIL NAVIGATION (Web) ─────────────────────────────────────────────
-  // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() =>
-      const CandidateMobileNav(currentRoute: '/candidate/interview-lobby');
-
-  // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-}
-
-class GridPainter extends CustomPainter {
-  final Color color;
-  GridPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.0;
-
-    const double step = 30.0;
-    for (double i = 0; i < size.width; i += step) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-    for (double i = 0; i < size.height; i += step) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
+  Widget _deviceButton(
+    ColorScheme colors, {
+    required Color borderColor,
+    required IconData icon,
+    required String label,
+    required bool ready,
+    required VoidCallback? onPressed,
+  }) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: ready ? colors.onPrimaryContainer : colors.onSurface,
+        backgroundColor: ready ? colors.primaryContainer : Colors.transparent,
+        minimumSize: const Size(0, 46),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        side: BorderSide(color: ready ? colors.primary : borderColor),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(ready ? Icons.check_rounded : icon, size: 20),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant GridPainter oldDelegate) =>
-      oldDelegate.color != color;
+  void _showDeviceHelp(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Camera and microphone help'),
+        content: const Text(
+          'Allow camera and microphone access in your browser’s site settings. Close any apps or tabs using your devices, then return here and run both checks again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
 }

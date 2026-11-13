@@ -66,10 +66,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
 
   bool _isApplied = false;
   bool _isSubmitting = false;
-  String? _applicationId;
   String? _applicationStateMessage;
 
   ResumeDetail? _resumeDetail;
+  bool _isPollingResume = false;
   bool? _hasUploadedResume;
   bool _isLoadingResume = true;
   bool _isLoadingSkills = true;
@@ -98,13 +98,13 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     _skillsFailed = false;
     _isLoadingSkills = true;
     _resumeDetail = null;
+    _isPollingResume = false;
     _hasUploadedResume = null;
     _isLoadingResume = true;
     _jobError = null;
     _isLoadingJob = true;
     _isApplied = false;
     _isSubmitting = false;
-    _applicationId = null;
     _applicationStateMessage = null;
     _loadData();
   }
@@ -195,24 +195,31 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
   }
 
   Future<void> _pollActiveResume(String id, int request) async {
-    while (mounted &&
-        request == _jobRequest &&
-        _resumeDetail != null &&
-        _needsParsing(_resumeDetail!)) {
-      await Future.delayed(const Duration(seconds: 2));
-      if (!mounted || request != _jobRequest) return;
-      try {
-        final detail =
-            await (widget.pollResume?.call(id) ??
-                ResumeService.getResumeDetail(id));
-        if (mounted && request == _jobRequest && _resumeDetail?.id == id) {
-          setState(() {
-            _resumeDetail = detail;
-            _hasUploadedResume = true;
-          });
+    if (_isPollingResume) return;
+    setState(() => _isPollingResume = true);
+    final elapsed = Stopwatch()..start();
+    try {
+      while (mounted &&
+          request == _jobRequest &&
+          _resumeDetail?.id == id &&
+          _needsParsing(_resumeDetail!) &&
+          elapsed.elapsed < const Duration(seconds: 90)) {
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted || request != _jobRequest) return;
+        try {
+          final detail =
+              await (widget.pollResume?.call(id) ??
+                  ResumeService.getResumeDetail(id, refresh: true));
+          if (mounted && request == _jobRequest && _resumeDetail?.id == id) {
+            setState(() => _resumeDetail = detail);
+          }
+        } catch (_) {
+          // Transient request errors retry within the polling window.
         }
-      } catch (_) {
-        // Transient request errors retry on the next tick.
+      }
+    } finally {
+      if (mounted && request == _jobRequest) {
+        setState(() => _isPollingResume = false);
       }
     }
   }
@@ -295,30 +302,28 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         return;
       }
       setState(() {
-        _applicationId = submitted!.id;
         _isApplied = true;
+        _applicationStateMessage = null;
       });
-      if (submitted.resumeId == null || submitted.resumeId!.isEmpty) {
-        _showApplicationState(
-          'Application submitted',
-          'ID: ${submitted.id}. Resume parsing is pending; no resume ID was returned.',
-        );
-        return;
-      }
+      final submittedResumeId = submitted.resumeId;
+      final hasResume =
+          submittedResumeId != null && submittedResumeId.isNotEmpty;
       _showApplicationState(
-        'Application submitted',
-        'ID: ${submitted.id}. Resume parsing is pending.',
+        hasResume
+            ? 'Application submitted successfully! Your resume is being processed.'
+            : 'Application submitted successfully!',
+        success: true,
       );
+      if (!hasResume) return;
       final detail =
-          await (widget.pollResume?.call(submitted.resumeId!) ??
-              ResumeService.pollResumeUntilReady(submitted.resumeId!));
+          await (widget.pollResume?.call(submittedResumeId) ??
+              ResumeService.pollResumeUntilReady(submittedResumeId));
       if (!mounted || request != _submissionRequest || widget.jobId != jobId) {
         return;
       }
       if (detail.isParsed) {
         setState(() {
-          _applicationStateMessage =
-              'Resume parsing complete for application ${submitted!.id}.';
+          _applicationStateMessage = 'Resume processing complete.';
         });
         _showParsingSuccessDialog(detail);
       }
@@ -328,13 +333,12 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       }
       final message = e is ApiException ? e.message : e.toString();
       if (submitted == null) {
-        _showApplicationState('Application failed', message);
+        _showApplicationState('Application failed. $message');
       } else {
         _showApplicationState(
           e is ApiException && e.statusCode == 408
-              ? 'Resume parsing is still pending'
-              : 'Resume parsing failed',
-          'Application ID: ${submitted.id}. $message',
+              ? 'Your resume is still being processed.'
+              : 'Resume processing failed. $message',
         );
       }
     } finally {
@@ -344,13 +348,28 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     }
   }
 
-  void _showApplicationState(String title, String message) {
+  void _showApplicationState(String message, {bool success = false}) {
     if (!mounted) return;
-    setState(() => _applicationStateMessage = '$title. $message');
+    if (!success) setState(() => _applicationStateMessage = message);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        duration: const Duration(seconds: 8),
-        content: Text('$title. $message'),
+        duration: Duration(seconds: success ? 4 : 8),
+        behavior: success ? SnackBarBehavior.floating : null,
+        backgroundColor: success ? const Color(0xFF047857) : null,
+        content: success
+            ? Row(
+                children: [
+                  const Icon(Icons.check_circle_outline, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      message,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              )
+            : Text(message),
       ),
     );
   }
@@ -1156,9 +1175,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       : _applyJob,
                   child: Text(
                     _isApplied
-                        ? (_applicationId == null
-                              ? 'Applied'
-                              : 'Applied · $_applicationId')
+                        ? 'Applied'
                         : (_isSubmitting
                               ? 'Submitting...'
                               : (_hasUploadedResume == true
@@ -1333,6 +1350,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     }
 
     if (_needsParsing(_resumeDetail!)) {
+      final resumeId = _resumeDetail!.id;
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -1342,25 +1360,36 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         ),
         child: Row(
           children: [
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppColors.dashboardTeal,
+            if (_isPollingResume) ...[
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.dashboardTeal,
+                  ),
+                  strokeWidth: 2,
                 ),
-                strokeWidth: 2,
+              ),
+              const SizedBox(width: 16),
+            ],
+            Expanded(
+              child: Text(
+                _isPollingResume
+                    ? 'Parsing your resume…'
+                    : 'Resume parsing is taking longer than expected.',
+                style: GoogleFonts.inter(
+                  color: textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-            const SizedBox(width: 16),
-            Text(
-              'Parsing your resume…',
-              style: GoogleFonts.inter(
-                color: textSecondary,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+            if (!_isPollingResume)
+              TextButton(
+                onPressed: () => _pollActiveResume(resumeId, _jobRequest),
+                child: const Text('Check status'),
               ),
-            ),
           ],
         ),
       );

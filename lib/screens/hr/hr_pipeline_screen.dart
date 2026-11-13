@@ -52,7 +52,6 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
     with WidgetsBindingObserver {
   static const _stages = [
     'APPLIED',
-    'UNDER_REVIEW',
     'SHORTLISTED',
     'SCHEDULED',
     'IN_PROGRESS',
@@ -62,7 +61,6 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
   ];
   static const _stageColors = [
     Color(0xFF64748B),
-    Color(0xFF4F83FF),
     Color(0xFF22CDB1),
     Color(0xFF4268F0),
     Color(0xFF087F72),
@@ -119,7 +117,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
           ModalRoute.of(context)?.isCurrent == true &&
           !_loading &&
           _jobId != null &&
-          _applications.any((a) => a.status == ApplicationStatus.applied)) {
+          _applications.any((app) => _columnFor(app) == 'APPLIED')) {
         _selectJob(_jobId!, refresh: true);
       }
     });
@@ -238,7 +236,8 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
   }
 
   String? _columnFor(Application app) {
-    final status = (app.rawStatus ?? app.status.value).toUpperCase();
+    final status = app.status.value;
+    if (app.status == ApplicationStatus.underReview) return 'APPLIED';
     if (status == 'REJECTED' || status == 'DECISION') return 'DECIDED';
     return _stages.contains(status) ? status : null;
   }
@@ -1044,7 +1043,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
   }
 
   Widget _cardFooter(Application app, String stage) {
-    if (stage == 'APPLIED') {
+    if (stage == 'APPLIED' && app.status != ApplicationStatus.underReview) {
       final focusNode = _viewFocusNodes.putIfAbsent(app.id, FocusNode.new);
       return Align(
         alignment: Alignment.centerRight,
@@ -1055,7 +1054,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
         ),
       );
     }
-    if (stage == 'UNDER_REVIEW') {
+    if (stage == 'APPLIED') {
       return Align(
         alignment: Alignment.centerRight,
         child: OutlinedButton(
@@ -1090,8 +1089,8 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
       );
     }
     final outcome = app.outcome?.toUpperCase();
-    final label = app.rawStatus == 'REJECTED'
-        ? 'NO'
+    final label = app.status == ApplicationStatus.rejected
+        ? 'REJECTED'
         : outcome == 'NO' || outcome == 'HIRED'
         ? outcome!
         : 'DECIDED';
@@ -1099,7 +1098,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
       alignment: Alignment.centerRight,
       child: _badge(
         label,
-        label == 'NO' ? const Color(0xFFB45353) : const Color(0xFF0F9876),
+        label == 'NO' || label == 'REJECTED'
+            ? const Color(0xFFB45353)
+            : const Color(0xFF0F9876),
       ),
     );
   }

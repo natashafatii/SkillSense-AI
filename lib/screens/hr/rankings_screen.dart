@@ -190,7 +190,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
     setState(() => _exporting = true);
     try {
       final csv = [
-        'Rank,Application ID,Candidate,Top driver,Technical,Behavioral,Communication,Overall,Score band,Score status,Rubric version',
+        'Rank,Application ID,Candidate,Top driver (SHAP),Technical,Behavioral,Communication,Overall,Score band,Score status,Rubric version,Evaluation model',
         for (final (index, row) in rows.indexed)
           [
             if (_score(row) != null) '${index + 1}' else '',
@@ -204,6 +204,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
             _band(_score(row)),
             row.status,
             row.rubricVersion?.toString() ?? '',
+            row.modelVersion ?? '',
           ].map(_cell).join(','),
       ].join('\r\n');
       final filenameId = jobId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
@@ -304,7 +305,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
     backgroundColor: context.themeCanvas(const Color(0xFFF4F6FC)),
     body: Column(
       children: [
-        const RecruiterTopBar(pageTitle: 'Scores and rankings'),
+        const RecruiterTopBar(pageTitle: 'Rankings'),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -337,10 +338,13 @@ class _RankingsScreenState extends State<RankingsScreen> {
 
   Widget _overview(bool compact) {
     final title = _jobs.where((job) => job.id == _jobId).firstOrNull?.title;
-    final rubric = _cohort
-        .where((row) => _score(row) != null)
-        .firstOrNull
-        ?.rubricVersion;
+    final ranked = _cohort.indexed.where((entry) => _score(entry.$2) != null);
+    final models = ranked
+        .map((entry) => entry.$2.modelVersion?.trim())
+        .whereType<String>()
+        .where((model) => model.isNotEmpty)
+        .toSet();
+    final rubric = _cohort.firstOrNull?.rubricVersion;
     final actions = Wrap(
       spacing: 9,
       runSpacing: 8,
@@ -378,26 +382,43 @@ class _RankingsScreenState extends State<RankingsScreen> {
     final heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title == null ? 'Server ranking' : 'Server ranking — $title',
-          style: _style(21, weight: FontWeight.w700),
+        Row(
+          children: [
+            Flexible(
+              child: Text(
+                title == null ? 'Rankings' : 'Rankings — $title',
+                style: _style(21, weight: FontWeight.w700),
+              ),
+            ),
+            if (_jobs.length > 1)
+              PopupMenuButton<String>(
+                tooltip: 'Choose job',
+                icon: const Icon(Icons.expand_more, size: 19),
+                initialValue: _jobId,
+                onSelected: (id) {
+                  if (id != _jobId) _loadCohort(id);
+                },
+                itemBuilder: (_) => [
+                  for (final job in _jobs)
+                    PopupMenuItem(value: job.id, child: Text(job.title)),
+                ],
+              ),
+          ],
         ),
         const SizedBox(height: 4),
         Text(
           [
-            'Scores and order are supplied by the server.',
-            'Incomplete applications are unranked.',
-            'Behavioral observations are separate.',
-            if (rubric != null) 'Rubric $rubric.',
-          ].join(' '),
+            if (!_loading && _error == null)
+              '${ranked.length} ranked of ${_cohort.length} applications',
+            if (models.isNotEmpty) models.join(', '),
+            if (models.isEmpty && rubric != null) 'Rubric v$rubric',
+            '${_selected.length} selected for comparison',
+          ].join(' · '),
           style: _style(11, color: context.themeForeground(_muted)),
         ),
       ],
     );
-    final podium = _cohort.indexed
-        .where((entry) => _score(entry.$2) != null)
-        .take(3)
-        .toList();
+    final podium = ranked.take(3).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -415,44 +436,6 @@ class _RankingsScreenState extends State<RankingsScreen> {
               actions,
             ],
           ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: DropdownButtonFormField<String>(
-              key: ValueKey(_jobId),
-              initialValue: _jobId,
-              isExpanded: true,
-              style: _style(13),
-              dropdownColor: context.themeSurface(Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Job (required)',
-                filled: true,
-                fillColor: context.themeSurface(_surface),
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: context.themeOutline(_edge)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: context.themeOutline(_edge)),
-                ),
-              ),
-              items: [
-                for (final job in _jobs)
-                  DropdownMenuItem(
-                    value: job.id,
-                    child: Text(job.title, overflow: TextOverflow.ellipsis),
-                  ),
-              ],
-              onChanged: (id) {
-                if (id != null && id != _jobId) _loadCohort(id);
-              },
-            ),
-          ),
-        ),
         const SizedBox(height: 14),
         if (_loading)
           const LinearProgressIndicator()
@@ -563,15 +546,9 @@ class _RankingsScreenState extends State<RankingsScreen> {
     child: Row(
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Full cohort', style: _style(13, weight: FontWeight.w700)),
-              Text(
-                '${_cohort.length} applications',
-                style: _style(10, color: context.themeForeground(_muted)),
-              ),
-            ],
+          child: Text(
+            'Full cohort',
+            style: _style(13, weight: FontWeight.w700),
           ),
         ),
         if (!compact)
@@ -771,7 +748,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
     final color = switch (score) {
       null => _muted,
       >= 85 => const Color(0xFF087C63),
-      >= 70 => _blue,
+      >= 70 => const Color(0xFF087C63),
       >= 40 => const Color(0xFFA36618),
       _ => const Color(0xFFB83C3D),
     };

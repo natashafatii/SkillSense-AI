@@ -53,18 +53,22 @@ class ScheduleInterviewScreen extends StatefulWidget {
 }
 
 class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
+  final _openDropdown = ValueNotifier<Key?>(null);
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
-  Color get _ink => _dark ? const Color(0xFFE8EDF8) : const Color(0xFF17233B);
-  Color get _muted => _dark ? const Color(0xFFA3AFC8) : const Color(0xFF66748F);
-  Color get _edge => _dark ? const Color(0xFF33415B) : const Color(0xFFE1E6EF);
-  Color get _surface => _dark ? const Color(0xFF172237) : Colors.white;
-  Color get _background =>
-      _dark ? const Color(0xFF0D1424) : const Color(0xFFF6F8FD);
-  Color get _activeFill => _blue.withValues(alpha: _dark ? 0.22 : 0.10);
+  ColorScheme get _colors => Theme.of(context).colorScheme;
+  Color get _ink => _colors.onSurface;
+  Color get _muted => _colors.onSurfaceVariant;
+  Color get _edge => _dark
+      ? _colors.outlineVariant.withValues(alpha: .55)
+      : const Color(0xFFE0E5ED);
+  Color get _surface => _dark ? _colors.surface : Colors.white;
+  Color get _blue => _colors.primary;
+  Color get _activeFill => _colors.primaryContainer;
   final _message = TextEditingController();
+  bool _inAppInvitation = true;
+  bool _emailInvitation = true;
   final _reviewKey = GlobalKey();
   bool _reviewExpanded = false;
-  static const _blue = Color(0xFF4268F0);
   static const _slots = <(int, int)>[
     (9, 0),
     (10, 30),
@@ -74,7 +78,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     (15, 30),
     (17, 0),
   ];
-  static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   List<Job> _jobs = [];
   List<Application> _awaiting = [];
@@ -150,6 +154,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
 
   @override
   void dispose() {
+    _openDropdown.dispose();
     SessionScope.invalidations.removeListener(_clearSession);
     _message.dispose();
     for (final controller in _questionTexts.values) {
@@ -405,7 +410,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     }
     final setId = _approvedQuestionSet!, revision = _approvedQuestionRevision!;
     final slot = _selectedSlot;
-    if (slot == null || !slot.isAfter(DateTime.now())) {
+    if (slot == null ||
+        _booked == null ||
+        _taken(slot) ||
+        !slot.isAfter(DateTime.now())) {
       setState(() => _rowErrors[app.id] = 'Choose an available future slot.');
       return;
     }
@@ -547,7 +555,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 900;
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: _dark
+          ? Theme.of(context).scaffoldBackgroundColor
+          : const Color(0xFFF7F8FB),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -563,146 +573,16 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
               ),
             Expanded(
               child: _loading
-                  ? Center(child: CircularProgressIndicator(color: _blue))
-                  : SingleChildScrollView(
-                      key: const Key('schedule-scroll'),
-                      padding: EdgeInsets.all(compact ? 16 : 28),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1520),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _pageHeader(compact),
-                              const SizedBox(height: 24),
-                              if (!compact) ...[
-                                _progress(),
-                                const SizedBox(height: 24),
-                              ],
-                              if (_error != null) ...[
-                                _panel(
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          _error!,
-                                          style: TextStyle(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.error,
-                                          ),
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: _loadJobs,
-                                        child: const Text('Retry'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                              ],
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  if (compact) {
-                                    return Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        _candidatePanel(compact),
-                                        const SizedBox(height: 16),
-                                        _availabilityPanel(compact),
-                                        const SizedBox(height: 16),
-                                        _invitationPanel(compact),
-                                        const SizedBox(height: 16),
-                                        _safeguards(),
-                                      ],
-                                    );
-                                  }
-                                  final left = Column(
-                                    children: [
-                                      _candidatePanel(false),
-                                      const SizedBox(height: 16),
-                                      _availabilityPanel(false),
-                                    ],
-                                  );
-                                  if (constraints.maxWidth < 1180) {
-                                    return Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(flex: 6, child: left),
-                                        const SizedBox(width: 18),
-                                        Expanded(
-                                          flex: 5,
-                                          child: Column(
-                                            children: [
-                                              _invitationPanel(false),
-                                              const SizedBox(height: 16),
-                                              _safeguards(),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  }
-                                  return Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(flex: 46, child: left),
-                                      const SizedBox(width: 18),
-                                      Expanded(
-                                        flex: 34,
-                                        child: _invitationPanel(false),
-                                      ),
-                                      const SizedBox(width: 18),
-                                      Expanded(
-                                        flex: 24,
-                                        child: Column(
-                                          children: [_safeguards()],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              _questionReview(),
-                              if (_interview != null) ...[
-                                const SizedBox(height: 18),
-                                _questionPanel(),
-                              ],
-                              const SizedBox(height: 24),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                  ? const Center(child: CircularProgressIndicator())
+                  : _workspace(compact),
             ),
           ],
         ),
       ),
       bottomNavigationBar: compact
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                  decoration: BoxDecoration(
-                    color: _surface,
-                    border: Border(top: BorderSide(color: _edge)),
-                  ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: _sendButton(true),
-                  ),
-                ),
-                const RecruiterMobileNav(
-                  currentRoute: '/recruiter/schedule-interview',
-                  key: Key('schedule-mobile-dock'),
-                ),
-              ],
+          ? const RecruiterMobileNav(
+              currentRoute: '/recruiter/schedule-interview',
+              key: Key('schedule-mobile-dock'),
             )
           : null,
     );
@@ -749,188 +629,406 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     ),
   );
 
-  Widget _pageHeader(bool compact) => Column(
+  Widget _workspace(bool compact) {
+    final typography = Theme.of(context).textTheme.apply(fontFamily: 'Inter');
+    final bodyStyle = (typography.bodyMedium ?? const TextStyle()).copyWith(
+      fontSize: 14,
+      fontWeight: FontWeight.w500,
+      height: 1.52,
+      color: _ink,
+    );
+    return Theme(
+      data: Theme.of(
+        context,
+      ).copyWith(textTheme: typography.copyWith(bodyMedium: bodyStyle)),
+      child: DefaultTextStyle(
+        style: bodyStyle,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            compact ? 16 : 28,
+            compact ? 16 : 24,
+            compact ? 16 : 28,
+            0,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final split = constraints.maxWidth >= 720;
+              final narrowForm = !split || constraints.maxWidth < 950;
+              final form = _panel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _candidatePanel(),
+                    Divider(height: 36, color: _edge),
+                    _availabilityPanel(narrowForm),
+                  ],
+                ),
+              );
+              final review = Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _questionReview(),
+                  if (_interview != null) ...[
+                    const SizedBox(height: 16),
+                    _questionPanel(),
+                  ],
+                ],
+              );
+              return SingleChildScrollView(
+                key: const Key('schedule-scroll'),
+                primary: false,
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _pageHeader(),
+                    const SizedBox(height: 18),
+                    if (_error case final error?) ...[
+                      _panel(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                error,
+                                style: TextStyle(color: _colors.error),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _loadJobs,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (split)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 2, child: form),
+                          const SizedBox(width: 20),
+                          Expanded(child: _invitationPanel()),
+                        ],
+                      )
+                    else ...[
+                      form,
+                      const SizedBox(height: 16),
+                      _invitationPanel(),
+                    ],
+                    const SizedBox(height: 16),
+                    review,
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pageHeader() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        compact ? 'RECRUITER WORKSPACE' : 'RECRUITMENT / INTERVIEWS',
-        style: GoogleFonts.inter(
-          color: _blue,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
+      Semantics(
+        header: true,
+        child: Text(
+          'Schedule an interview',
+          style: TextStyle(
+            color: _ink,
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            height: 1.25,
+            letterSpacing: -.65,
+          ),
         ),
       ),
-      const SizedBox(height: 9),
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              'Schedule an interview',
-              style: GoogleFonts.inter(
-                color: _ink,
-                fontSize: compact ? 23 : 28,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.8,
-              ),
-            ),
-          ),
-          if (!compact) ...[
-            const SizedBox(width: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: _surface,
-                border: Border.all(color: _edge),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Text(
-                '• Retell AI · Voice Interview',
-                style: GoogleFonts.inter(color: _ink, fontSize: 11),
-              ),
-            ),
-          ],
-        ],
-      ),
-      const SizedBox(height: 8),
-      _body(
-        compact
-            ? 'Confirm a candidate and select a free slot.'
-            : 'Choose a shortlisted candidate, reserve a time, and send a professional invitation.',
-      ),
+      const SizedBox(height: 7),
+      _body('Choose a shortlisted candidate and reserve an interview time.'),
+      const SizedBox(height: 14),
+      Divider(height: 1, color: _edge),
     ],
   );
 
-  Widget _progress() => Row(
-    children: [
-      for (var i = 0; i < 3; i++) ...[
-        if (i > 0)
-          Expanded(child: Divider(color: _edge, indent: 10, endIndent: 10)),
-        Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: i < 2 ? _blue : _surface,
-          ),
-          child: Center(
-            child: Text(
-              '${i + 1}',
-              style: TextStyle(
-                color: i < 2 ? Colors.white : _muted,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          ['Candidate', 'Availability', 'Invitation'][i],
-          style: GoogleFonts.inter(
-            color: _muted,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    ],
-  );
-
-  Widget _candidatePanel(bool compact) => _panel(
+  Widget _candidatePanel() => Column(
     key: const Key('schedule-candidate-card'),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _heading(compact ? '01 · Candidate' : '01 · Candidate and role'),
-        if (!compact) ...[
-          const SizedBox(height: 6),
-          _body('Only shortlisted candidates are available for scheduling.'),
-        ],
-        const SizedBox(height: 18),
-        _label('Job opening'),
-        const SizedBox(height: 8),
-        _dropdown(
-          key: const Key('schedule-job-dropdown'),
-          value: _jobId,
-          hint: 'Select a job opening',
-          items: [
-            for (final job in _jobs)
-              DropdownMenuItem(
-                value: job.id,
-                child: Text(
-                  job.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _sectionHeading('01', 'Candidate & role'),
+      const SizedBox(height: 6),
+      _body('Only shortlisted candidates are available for scheduling.'),
+      const SizedBox(height: 18),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final job = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _label('Job opening'),
+              const SizedBox(height: 8),
+              _dropdown(
+                key: const Key('schedule-job-dropdown'),
+                value: _jobId,
+                hint: 'Select a job opening',
+                items: [
+                  for (final job in _jobs)
+                    (
+                      id: job.id,
+                      title: job.title,
+                      subtitle: job.id == _jobId && _booked != null
+                          ? _shortlistLabel
+                          : job.department.trim(),
+                    ),
+                ],
+                onChanged: _busyApplicationId == null ? _changeJob : null,
               ),
-          ],
-          onChanged: _busyApplicationId == null ? _changeJob : null,
-        ),
-        const SizedBox(height: 18),
-        _label('Candidate'),
-        const SizedBox(height: 8),
-        _dropdown(
-          key: const Key('schedule-candidate-dropdown'),
-          value: _selectedApplication?.id,
-          hint: _jobId == null
-              ? 'Select a job first'
-              : 'Select a shortlisted candidate',
-          items: [
-            for (final app in _awaiting)
-              DropdownMenuItem(
-                value: app.id,
-                child: Text(
-                  '${_candidateName(app)}${app.resumeScore == null ? '' : ' · ${_scoreText(app.resumeScore!)}% match'}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+            ],
+          );
+          final candidate = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _label('Candidate'),
+              const SizedBox(height: 8),
+              _dropdown(
+                key: const Key('schedule-candidate-dropdown'),
+                value: _selectedApplication?.id,
+                hint: _jobId == null
+                    ? 'Select a job first'
+                    : 'Select a shortlisted candidate',
+                items: [
+                  for (final app in _awaiting)
+                    (
+                      id: app.id,
+                      title: _candidateName(app),
+                      subtitle: app.resumeScore == null
+                          ? app.candidateEmail
+                          : '${_scoreText(app.resumeScore!)}% match',
+                    ),
+                ],
+                onChanged: _busyApplicationId != null
+                    ? null
+                    : (id) {
+                        final app = _awaiting
+                            .where((app) => app.id == id)
+                            .firstOrNull;
+                        if (app != null) _selectForReview(app);
+                      },
               ),
-          ],
-          onChanged: _busyApplicationId != null
-              ? null
-              : (id) {
-                  final app = _awaiting
-                      .where((app) => app.id == id)
-                      .firstOrNull;
-                  if (app != null) _selectForReview(app);
-                },
+            ],
+          );
+          return constraints.maxWidth >= 460
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: job),
+                    const SizedBox(width: 16),
+                    Expanded(child: candidate),
+                  ],
+                )
+              : Column(children: [job, const SizedBox(height: 16), candidate]);
+        },
+      ),
+      if (_jobId != null && _awaiting.isEmpty) ...[
+        const SizedBox(height: 12),
+        _body(
+          _jobs.isEmpty
+              ? 'Create an active role to begin scheduling.'
+              : 'No eligible shortlisted candidates for this role.',
         ),
-        if (_jobId != null && _awaiting.isEmpty) ...[
-          const SizedBox(height: 12),
-          _body(
-            _jobs.isEmpty
-                ? 'Create an active role to begin scheduling.'
-                : 'No eligible shortlisted candidates for this role.',
-          ),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(context).pushNamed('/recruiter/pipeline'),
-            child: const Text('Go to pipeline'),
-          ),
-        ],
+        TextButton(
+          onPressed: () =>
+              Navigator.of(context).pushNamed('/recruiter/pipeline'),
+          child: const Text('Go to pipeline'),
+        ),
       ],
-    ),
+    ],
   );
+
+  String get _shortlistLabel => switch (_awaiting.length) {
+    0 => 'No shortlisted candidates available',
+    1 => '1 shortlisted candidate',
+    final count => '$count shortlisted candidates',
+  };
 
   Widget _dropdown({
     required Key key,
     required String? value,
     required String hint,
-    required List<DropdownMenuItem<String>> items,
+    required List<({String id, String title, String subtitle})> items,
     required ValueChanged<String?>? onChanged,
-  }) => DropdownButtonFormField<String>(
-    key: key,
-    initialValue: value,
-    isExpanded: true,
-    dropdownColor: _surface,
-    icon: Icon(Icons.keyboard_arrow_down_rounded, color: _ink),
-    style: GoogleFonts.inter(color: _ink, fontSize: 12),
-    decoration: _inputDecoration(),
-    hint: Text(hint, style: GoogleFonts.inter(color: _muted, fontSize: 12)),
-    items: items,
-    onChanged: items.isEmpty ? null : onChanged,
+  }) => LayoutBuilder(
+    builder: (context, constraints) {
+      final enabled = items.isNotEmpty && onChanged != null;
+      final selected = items.where((item) => item.id == value).firstOrNull;
+      final activeInk = _dark
+          ? _colors.onPrimaryContainer
+          : const Color(0xFF2563EB);
+      final activeFill = _dark
+          ? _colors.primaryContainer
+          : const Color(0xFFF0F4FF);
+      final hoverFill = _dark
+          ? _colors.surfaceContainerHighest
+          : const Color(0xFFF5F7FA);
+      return MenuAnchor(
+        alignmentOffset: const Offset(0, 8),
+        onOpen: () => _openDropdown.value = key,
+        onClose: () {
+          if (_openDropdown.value == key) _openDropdown.value = null;
+        },
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(_surface),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shadowColor: WidgetStatePropertyAll(
+            _colors.shadow.withValues(alpha: .18),
+          ),
+          elevation: const WidgetStatePropertyAll(5),
+          padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
+          minimumSize: WidgetStatePropertyAll(Size(constraints.maxWidth, 0)),
+          maximumSize: WidgetStatePropertyAll(Size(constraints.maxWidth, 260)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: _edge),
+            ),
+          ),
+        ),
+        menuChildren: [
+          for (final item in items)
+            Semantics(
+              selected: item.id == value,
+              child: MenuItemButton(
+                onPressed: enabled ? () => onChanged(item.id) : null,
+                style: ButtonStyle(
+                  alignment: AlignmentDirectional.centerStart,
+                  minimumSize: WidgetStatePropertyAll(
+                    Size(
+                      (constraints.maxWidth - 12)
+                          .clamp(0.0, double.infinity)
+                          .toDouble(),
+                      44,
+                    ),
+                  ),
+                  padding: const WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  backgroundColor: WidgetStatePropertyAll(
+                    item.id == value ? activeFill : Colors.transparent,
+                  ),
+                  overlayColor: WidgetStateProperty.resolveWith(
+                    (states) =>
+                        item.id != value &&
+                            (states.contains(WidgetState.hovered) ||
+                                states.contains(WidgetState.focused))
+                        ? hoverFill
+                        : null,
+                  ),
+                  shape: WidgetStatePropertyAll(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                trailingIcon: item.id == value
+                    ? Icon(Icons.check, size: 18, color: activeInk)
+                    : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: item.id == value ? activeInk : _ink,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                    if (item.subtitle.trim().isNotEmpty)
+                      Text(
+                        item.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: item.id == value && !_dark
+                              ? const Color(0xFF43536E)
+                              : _muted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+        builder: (context, controller, _) => ValueListenableBuilder<Key?>(
+          valueListenable: _openDropdown,
+          builder: (context, openKey, _) {
+            final open = openKey == key;
+            final focusColor = _dark
+                ? _colors.primary
+                : const Color(0xFFB4C7FA);
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(9),
+                boxShadow: open
+                    ? [
+                        BoxShadow(
+                          color: focusColor.withValues(alpha: .7),
+                          spreadRadius: 3,
+                          blurRadius: 2,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: OutlinedButton(
+                key: key,
+                onPressed: enabled
+                    ? () => controller.isOpen
+                          ? controller.close()
+                          : controller.open()
+                    : null,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  side: BorderSide(color: open ? focusColor : _edge),
+                  foregroundColor: selected == null ? _muted : _ink,
+                  backgroundColor: _surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        selected?.title ?? hint,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      open
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    },
   );
 
   InputDecoration _inputDecoration() => InputDecoration(
@@ -948,7 +1046,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: _blue, width: 1.5),
+      borderSide: BorderSide(color: _blue, width: 1.5),
     ),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
@@ -956,62 +1054,61 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     ),
   );
 
-  Widget _availabilityPanel(bool compact) => _panel(
+  Widget _availabilityPanel(bool compact) => Column(
     key: const Key('schedule-availability-card'),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _heading(compact ? '02 · Date & time' : '02 · Choose date and time'),
-        const SizedBox(height: 7),
-        _body(_zone),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            for (var day = 0; day < 5; day++) ...[
-              if (day > 0) const SizedBox(width: 6),
-              Expanded(child: _dayCard(day, compact)),
-            ],
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _sectionHeading('02', 'Date & time'),
+      const SizedBox(height: 7),
+      _body(_zone),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          for (var day = 0; day < _days.length; day++) ...[
+            if (day > 0) const SizedBox(width: 6),
+            Expanded(child: _dayCard(day, compact)),
           ],
-        ),
-        const SizedBox(height: 16),
-        if (!compact) ...[
-          _label('Available starts · Voice interview'),
-          const SizedBox(height: 9),
         ],
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = compact ? 3 : 4;
-            final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
-            return Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final time in _slots)
-                  SizedBox(
-                    width: width,
-                    child: _slotChip(_slotFor(_selectedDay, time)),
-                  ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-        _body(
-          'Booked and past times remain visible but cannot be selected.',
-          size: 10,
-        ),
-      ],
-    ),
+      ),
+      const SizedBox(height: 16),
+      _label('Available times'),
+      const SizedBox(height: 9),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = compact ? 3 : 4;
+          final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final time in _slots)
+                SizedBox(
+                  width: width,
+                  child: _slotChip(_slotFor(_selectedDay, time)),
+                ),
+            ],
+          );
+        },
+      ),
+      const SizedBox(height: 12),
+      _body(
+        'Booked and past times remain visible but cannot be selected.',
+        size: 10,
+      ),
+    ],
   );
 
   Widget _dayCard(int day, bool compact) {
     final date = _dateFor(day), selected = day == _selectedDay;
+    final available =
+        date.weekday <= DateTime.friday &&
+        _slotFor(day, _slots.last).isAfter(DateTime.now());
     return Semantics(
       selected: selected,
       button: true,
       child: InkWell(
         key: ValueKey('schedule-day-$day'),
-        onTap: _busyApplicationId == null
+        onTap: _busyApplicationId == null && available
             ? () => setState(() {
                 _selectedDay = day;
                 _selectedSlot = null;
@@ -1034,8 +1131,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
               Text(
                 _days[day].toUpperCase(),
                 style: GoogleFonts.inter(
-                  color: _muted,
-                  fontSize: 9,
+                  color: available ? _muted : _muted.withValues(alpha: .6),
+                  fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1043,7 +1140,11 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
               Text(
                 '${date.day}',
                 style: GoogleFonts.inter(
-                  color: _ink,
+                  color: selected
+                      ? _colors.onPrimaryContainer
+                      : available
+                      ? _ink
+                      : _muted.withValues(alpha: .6),
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1078,7 +1179,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
               }),
         style: OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
-          foregroundColor: selected ? _blue : _ink,
+          foregroundColor: selected ? _colors.onPrimaryContainer : _ink,
           disabledForegroundColor: _muted.withValues(alpha: 0.45),
           backgroundColor: selected ? _activeFill : _surface,
           side: BorderSide(
@@ -1090,7 +1191,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         child: Text(
           _time(slot),
           style: GoogleFonts.inter(
-            fontSize: 11,
+            fontSize: 13,
             decoration: taken ? TextDecoration.lineThrough : null,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
           ),
@@ -1107,7 +1208,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.inter(color: _muted, fontSize: 11)),
+        Text(label, style: GoogleFonts.inter(color: _muted, fontSize: 13)),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
@@ -1115,7 +1216,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
             textAlign: TextAlign.right,
             style: GoogleFonts.inter(
               color: _ink,
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1124,150 +1225,191 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     ),
   );
 
-  Widget _invitationPanel(bool compact) => _panel(
+  Widget _invitationPanel() => _panel(
     key: const Key('schedule-invitation-card'),
+    padding: EdgeInsets.zero,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _heading(compact ? '03 · Invitation' : '03 · Invitation details'),
-        const SizedBox(height: 7),
-        _body('Review the session before sending.'),
-        const SizedBox(height: 5),
-        _summaryRow(
-          'Candidate',
-          _selectedApplication == null
-              ? 'Select a candidate'
-              : _candidateName(_selectedApplication!),
-        ),
-        _summaryRow('Date', _dateLabel(_dateFor(_selectedDay))),
-        _summaryRow(
-          'Time',
-          _selectedSlot == null
-              ? 'Select a time'
-              : '${_time(_selectedSlot!)} ${DateTime.now().timeZoneName}',
-        ),
-        _summaryRow('Duration', 'Set by interview agent'),
-        _summaryRow('Interview type', 'Retell AI · Voice'),
-        const SizedBox(height: 18),
-        _label('Optional message to candidate'),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _message,
-          minLines: 3,
-          maxLines: 5,
-          style: GoogleFonts.inter(color: _ink, fontSize: 12),
-          decoration: _inputDecoration().copyWith(
-            hintText: 'We look forward to speaking with you.',
-            hintStyle: TextStyle(color: _muted),
-          ),
-        ),
-        const SizedBox(height: 6),
-        _body(
-          'Preview draft only. Invitations currently use the standard message.',
-          size: 10,
-        ),
-        const SizedBox(height: 10),
-        _deliveryOption('Email invitation'),
-        _deliveryOption('In-app invitation'),
-        const SizedBox(height: 5),
-        _body('Delivery channels are managed automatically.', size: 10),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: _blue.withValues(alpha: 0.04),
-            border: Border.all(color: _blue.withValues(alpha: 0.18)),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline_rounded, size: 15, color: _blue),
-              const SizedBox(width: 7),
-              Expanded(
-                child: _body(
-                  'The candidate receives a preparation link and device-check instructions. The invitation is sent only after you confirm.',
-                  size: 11,
+              _heading('Invitation details'),
+              const SizedBox(height: 7),
+              _body('Review the details before sending.'),
+              const SizedBox(height: 12),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: _edge),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  child: _body('DRAFT', size: 10),
                 ),
               ),
             ],
           ),
         ),
-        if (_applicationId != null && _rowErrors[_applicationId] != null) ...[
-          const SizedBox(height: 12),
-          Text(
-            _rowErrors[_applicationId]!,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.error,
-              fontSize: 12,
-            ),
+        Divider(height: 1, color: _edge),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
+          child: Column(
+            children: [
+              _summaryRow(
+                'Candidate',
+                _selectedApplication == null
+                    ? 'Not selected'
+                    : _candidateName(_selectedApplication!),
+              ),
+              _summaryRow(
+                'Role',
+                _jobs.where((job) => job.id == _jobId).firstOrNull?.title ??
+                    'Select a role',
+              ),
+              _summaryRow('Date', _dateLabel(_dateFor(_selectedDay))),
+              _summaryRow(
+                'Time',
+                _selectedSlot == null
+                    ? 'Select a time'
+                    : '${_time(_selectedSlot!)} ${DateTime.now().timeZoneName}',
+              ),
+              _summaryRow('Duration', 'Determined by interview agent'),
+              _summaryRow('Format', 'AI-guided voice interview'),
+            ],
           ),
-        ],
-        const SizedBox(height: 18),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            OutlinedButton(
-              onPressed: _selectedApplication != null && _selectedSlot != null
-                  ? () => _previewInvite(false)
-                  : null,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _ink,
-                side: BorderSide(color: _edge),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+        ),
+        Divider(height: 1, color: _edge),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _label('Send invitation via'),
+              _deliveryOption(
+                'In-app invitation',
+                _inAppInvitation,
+                (value) => setState(() => _inAppInvitation = value),
+              ),
+              _deliveryOption(
+                'Email invitation',
+                _emailInvitation,
+                (value) => setState(() => _emailInvitation = value),
+              ),
+              const SizedBox(height: 5),
+              _body(
+                'Delivery preferences are a draft. The server manages actual delivery.',
+                size: 12,
+              ),
+              const SizedBox(height: 18),
+              _label('Optional message to candidate'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _message,
+                minLines: 3,
+                maxLines: 5,
+                style: GoogleFonts.inter(color: _ink, fontSize: 12),
+                decoration: _inputDecoration().copyWith(
+                  hintText: 'We look forward to speaking with you.',
+                  hintStyle: TextStyle(color: _muted),
                 ),
               ),
-              child: const Text(
-                'Preview invite',
-                style: TextStyle(fontSize: 12),
+              const SizedBox(height: 6),
+              _body(
+                'Preview draft only. Invitations currently use the standard message.',
+                size: 10,
               ),
-            ),
-            if (!compact) _sendButton(false),
-          ],
+              const SizedBox(height: 10),
+              if (_applicationId != null &&
+                  _rowErrors[_applicationId] != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _rowErrors[_applicationId]!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              _sendButton(),
+            ],
+          ),
         ),
       ],
     ),
   );
 
-  Widget _deliveryOption(String label) => Row(
+  Widget _deliveryOption(
+    String label,
+    bool selected,
+    ValueChanged<bool> onChanged,
+  ) => CheckboxListTile(
+    contentPadding: EdgeInsets.zero,
+    controlAffinity: ListTileControlAffinity.leading,
+    dense: true,
+    value: selected,
+    onChanged: _busyApplicationId == null
+        ? (value) => onChanged(value ?? false)
+        : null,
+    activeColor: const Color(0xFF087B67),
+    checkColor: Colors.white,
+    side: BorderSide(color: _colors.outline),
+    checkboxShape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(3),
+    ),
+    title: Text(label, style: TextStyle(color: _ink, fontSize: 14)),
+  );
+
+  Widget _sectionHeading(String number, String title) => Row(
     children: [
-      SizedBox(
-        width: 23,
+      Container(
+        width: 28,
         height: 28,
-        child: Checkbox(
-          value: true,
-          onChanged: null,
-          fillColor: WidgetStatePropertyAll(_blue),
-          checkColor: Colors.white,
-          side: BorderSide.none,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity.compact,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _dark ? _colors.primaryContainer : const Color(0xFFEEF2F9),
+          border: Border.all(color: _edge),
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Text(
+          number,
+          style: TextStyle(
+            color: _dark ? _colors.onPrimaryContainer : const Color(0xFF49658E),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
-      const SizedBox(width: 5),
-      Expanded(child: _body(label, size: 11)),
+      const SizedBox(width: 10),
+      Expanded(child: _heading(title)),
     ],
   );
 
-  Widget _sendButton(bool compact) => FilledButton(
-    key: Key(compact ? 'schedule-mobile-review-send' : 'schedule-review-send'),
+  Widget _sendButton() => FilledButton(
+    key: const Key('schedule-review-send'),
     onPressed:
         !_loading &&
             _error == null &&
             _selectedApplication != null &&
             _selectedSlot != null &&
+            _booked != null &&
+            !_taken(_selectedSlot!) &&
+            _selectedSlot!.isAfter(DateTime.now()) &&
             _busyApplicationId == null
         ? _reviewAndSend
         : null,
     style: RecruiterButtonStyle.primary(
       FilledButton.styleFrom(
         backgroundColor: _blue,
+        disabledBackgroundColor: _colors.surfaceContainerHighest,
+        disabledForegroundColor: _muted,
+        minimumSize: const Size(0, 46),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -1282,29 +1424,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
             ),
           )
         : Text(
-            compact ? 'Review & send invitation →' : 'Review & send →',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            'Send invitation',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
           ),
-  );
-
-  Widget _safeguards() => _panel(
-    key: const Key('schedule-safeguards-card'),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _heading('Scheduling safeguards'),
-        const SizedBox(height: 12),
-        _body(
-          'Availability is checked again when you submit. A reserved slot cannot be double-booked.',
-        ),
-        const SizedBox(height: 14),
-        _body(
-          'Only eligible shortlisted candidates can be invited. Review and approve the current interview questions before sending.',
-        ),
-        const SizedBox(height: 14),
-        _body('All times shown in $_zone.', size: 10),
-      ],
-    ),
   );
 
   Widget _questionReview() => KeyedSubtree(
@@ -1378,20 +1500,17 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       });
       return;
     }
-    await _previewInvite(true);
+    await _confirmInvite();
   }
 
-  Future<void> _previewInvite(bool confirm) async {
+  Future<void> _confirmInvite() async {
     final app = _selectedApplication, slot = _selectedSlot;
     if (app == null || slot == null) return;
     final approved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: _surface,
-        title: Text(
-          confirm ? 'Review & send invitation' : 'Invitation preview',
-          style: TextStyle(color: _ink),
-        ),
+        title: Text('Review & send invitation', style: TextStyle(color: _ink)),
         content: SizedBox(
           width: 420,
           child: SingleChildScrollView(
@@ -1414,9 +1533,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 ],
                 const SizedBox(height: 16),
                 _body(
-                  confirm
-                      ? 'Confirm to schedule this interview using the approved question revision and send the standard invitation.'
-                      : 'The invitation is sent only after confirmation.',
+                  'Confirm to schedule this interview using the approved question revision and send the standard invitation.',
                 ),
               ],
             ),
@@ -1425,14 +1542,13 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(confirm ? 'Cancel' : 'Close'),
+            child: Text('Cancel'),
           ),
-          if (confirm)
-            FilledButton(
-              style: RecruiterButtonStyle.primary(FilledButton.styleFrom()),
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Send invitation'),
-            ),
+          FilledButton(
+            style: RecruiterButtonStyle.primary(FilledButton.styleFrom()),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Send invitation'),
+          ),
         ],
       ),
     );
@@ -1532,10 +1648,14 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     ),
   );
 
-  Widget _panel({Key? key, required Widget child}) => Container(
+  Widget _panel({
+    Key? key,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(18),
+    required Widget child,
+  }) => Container(
     key: key,
     width: double.infinity,
-    padding: const EdgeInsets.all(18),
+    padding: padding,
     decoration: BoxDecoration(
       color: _surface,
       border: Border.all(color: _edge),
@@ -1555,7 +1675,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     text,
     style: GoogleFonts.inter(
       color: _ink,
-      fontSize: 14,
+      fontSize: 16,
       fontWeight: FontWeight.w700,
     ),
   );
@@ -1563,12 +1683,17 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     text,
     style: GoogleFonts.inter(
       color: _muted,
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: FontWeight.w600,
     ),
   );
-  Widget _body(String text, {double size = 12}) => Text(
+  Widget _body(String text, {double size = 14}) => Text(
     text,
-    style: GoogleFonts.inter(color: _muted, fontSize: size, height: 1.6),
+    style: GoogleFonts.inter(
+      color: _muted,
+      fontSize: size,
+      height: 1.52,
+      fontWeight: FontWeight.w500,
+    ),
   );
 }

@@ -18,16 +18,18 @@ enum ApplicationStatus {
   const ApplicationStatus(this.value);
 
   static ApplicationStatus fromString(String val) {
-    return switch (val.toUpperCase()) {
+    return switch (val.trim().toUpperCase()) {
       'PENDING' || 'APPLIED' => ApplicationStatus.applied,
       'SCREENED' || 'SHORTLISTED' => ApplicationStatus.screened,
       'SCREENING' || 'UNDER_REVIEW' => ApplicationStatus.underReview,
-      'REJECTED' => ApplicationStatus.rejected,
+      'REJECTED' ||
+      'NOT_SELECTED' ||
+      'NOT SELECTED' => ApplicationStatus.rejected,
       'SCHEDULED' => ApplicationStatus.scheduled,
       'IN_PROGRESS' => ApplicationStatus.inProgress,
       'INTERVIEW_FAILED' => ApplicationStatus.interviewFailed,
       'INTERVIEWED' => ApplicationStatus.interviewed,
-      'DECIDED' || 'DECISION' => ApplicationStatus.decision,
+      'DECIDED' || 'DECISION' || 'HIRED' => ApplicationStatus.decision,
       _ => ApplicationStatus.unknown,
     };
   }

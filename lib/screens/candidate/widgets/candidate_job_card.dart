@@ -2,6 +2,7 @@ import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/candidate_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../models/job.dart';
@@ -93,6 +94,8 @@ class _CandidateJobCardState extends State<CandidateJobCard>
         : 'Unknown Company';
     final location = widget.job.location;
     final skills = widget.job.skillsRequired;
+    final skillChips = _buildSkillChips(skills);
+    final scrollBehavior = ScrollConfiguration.of(context);
 
     final matchScore = widget.job.matchScore;
     final score =
@@ -296,18 +299,6 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                   ),
                               ],
                             ),
-                            if (score == null && widget.hasUploadedResume)
-                              Text(
-                                'Match score available after application screening.',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.inter(
-                                  color: context.themeForeground(
-                                    const Color(0xFF94A3B8),
-                                  ),
-                                  fontSize: 9,
-                                ),
-                              ),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
@@ -316,11 +307,28 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                     padding: EdgeInsets.only(
                                       top: skills.isEmpty ? 0 : 8,
                                     ),
-                                    child: Wrap(
-                                      spacing: 6,
-                                      runSpacing: 4,
-                                      children: _buildSkillChips(skills),
-                                    ),
+                                    child: widget.isMobile
+                                        ? Wrap(
+                                            spacing: 6,
+                                            runSpacing: 4,
+                                            children: skillChips,
+                                          )
+                                        : ScrollConfiguration(
+                                            behavior: scrollBehavior.copyWith(
+                                              scrollbars: false,
+                                              dragDevices: {
+                                                ...scrollBehavior.dragDevices,
+                                                PointerDeviceKind.mouse,
+                                              },
+                                            ),
+                                            child: SingleChildScrollView(
+                                              scrollDirection: Axis.horizontal,
+                                              child: Row(
+                                                spacing: 6,
+                                                children: skillChips,
+                                              ),
+                                            ),
+                                          ),
                                   ),
                                 ),
                                 if (widget.isMobile)

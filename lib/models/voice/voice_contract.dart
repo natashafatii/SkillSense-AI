@@ -126,6 +126,8 @@ class VoiceSessionSnapshot {
         'interview_status': voice['status'],
         'workflow_state': voice['workflow_state'],
         'audio_ended_at': voice['audio_ended_at'],
+        'started_at': voice['started_at'],
+        'conversation': voice['conversation'],
         'report_ready': analysis['report_ready'],
         'analysis_status': analysis['analysis_state'],
         'retell_session_id': voice['retell_session_id'],
@@ -149,6 +151,10 @@ class VoiceSessionSnapshot {
       interviewStatus = source.interviewStatus,
       workflowState = source.workflowState,
       audioEndedAt = source.audioEndedAt,
+      startedAt = source.startedAt,
+      questionNumber = source.questionNumber,
+      questionCount = source.questionCount,
+      questionText = source.questionText,
       reportReady = source.reportReady,
       analysisStatus = source.analysisStatus,
       callId = source.callId,
@@ -177,6 +183,10 @@ class VoiceSessionSnapshot {
        conversationOutcome =
            json['conversation_outcome'] as String? ?? 'UNVERIFIED',
        audioEndedAt = voiceDate(json, 'audio_ended_at'),
+       startedAt = voiceDate(json, 'started_at'),
+       questionNumber = _conversation(json)?['question_number'] as int?,
+       questionCount = _conversation(json)?['total'] as int?,
+       questionText = _conversation(json)?['question_text'] as String?,
        reportReady = voiceBool(json, 'report_ready'),
        analysisStatus = json['analysis_status'] == null
            ? null
@@ -209,12 +219,18 @@ class VoiceSessionSnapshot {
     return value;
   }
 
+  static Map? _conversation(JsonObject json) =>
+      json['conversation'] is Map ? json['conversation'] as Map : null;
+
   final InterviewSessionIdentity identity;
   final int revision;
   final bool videoRequired, videoSealed, reportReady, finishRequested;
   final String interviewStatus, workflowState;
   final String conversationOutcome;
   final DateTime? audioEndedAt;
+  final DateTime? startedAt;
+  final int? questionNumber, questionCount;
+  final String? questionText;
   final AnalysisState? analysisStatus;
   final String? callId;
   final RetellCredential? credential;

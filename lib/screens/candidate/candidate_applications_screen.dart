@@ -146,7 +146,10 @@ class _CandidateApplicationsScreenState
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      _buildHeader(),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: _buildHeader(),
+                                      ),
                                       const SizedBox(height: 32),
                                       if (_visibleApplications.isEmpty)
                                         _buildNoFilteredApplications()
@@ -177,6 +180,7 @@ class _CandidateApplicationsScreenState
 
   Widget _buildHeader() {
     return Wrap(
+      alignment: WrapAlignment.spaceBetween,
       spacing: 24,
       runSpacing: 16,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -270,6 +274,23 @@ class _CandidateApplicationsScreenState
   }
 
   Widget _buildGrid(bool wide) {
+    final applications = _visibleApplications;
+    if (_filter == 'closed' || _filter == 'offers') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final application in applications)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: ApplicationCard(
+                application: application,
+                onChanged: () => _load(page: _page),
+                fitContent: true,
+              ),
+            ),
+        ],
+      );
+    }
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -280,10 +301,10 @@ class _CandidateApplicationsScreenState
         childAspectRatio: wide ? 2.8 : 1.8,
         mainAxisExtent: 160,
       ),
-      itemCount: _visibleApplications.length,
+      itemCount: applications.length,
       itemBuilder: (context, index) {
         return ApplicationCard(
-          application: _visibleApplications[index],
+          application: applications[index],
           onChanged: () => _load(page: _page),
         );
       },
@@ -444,14 +465,45 @@ class _CandidateApplicationsScreenState
       const CandidateMobileNav(currentRoute: '/candidate/applications');
 }
 
+enum _FinalDecision {
+  hired,
+  notSelected;
+
+  static _FinalDecision? from(Application application) {
+    if (application.status == ApplicationStatus.rejected) return notSelected;
+    if (application.status != ApplicationStatus.decision) return null;
+    if (application.rawStatus?.trim().toUpperCase() == 'HIRED') return hired;
+    return switch (application.outcome?.trim().toUpperCase()) {
+      'HIRE' || 'HIRED' => hired,
+      'REJECT' ||
+      'REJECTED' ||
+      'NO' ||
+      'NOT_SELECTED' ||
+      'NOT SELECTED' => notSelected,
+      _ => null,
+    };
+  }
+}
+
 class ApplicationCard extends StatelessWidget {
   final Application application;
 
   final VoidCallback? onChanged;
-  const ApplicationCard({super.key, required this.application, this.onChanged});
+  final bool fitContent;
+  const ApplicationCard({
+    super.key,
+    required this.application,
+    this.onChanged,
+    this.fitContent = false,
+  });
+
+  String get _title => application.jobTitle.isEmpty
+      ? 'Job ${application.job}'
+      : application.jobTitle;
 
   @override
   Widget build(BuildContext context) {
+    final decision = _FinalDecision.from(application);
     final statusColor = _getStatusColor(application.status);
     final statusText = _getStatusBadgeText(application.status);
     final statusBg = statusColor.withValues(alpha: 0.1);
@@ -499,7 +551,7 @@ class ApplicationCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: context.themeSurface(Colors.white),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(decision == null ? 16 : 20),
           border: Border.all(
             color: context.themeOutline(const Color(0xFFE2E8F0)),
           ),
@@ -511,100 +563,185 @@ class ApplicationCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Stack(
-          children: [
-            if (application.status == ApplicationStatus.interviewed)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 3,
-                  decoration: const BoxDecoration(
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF10B981), Color(0xFF3B82F6)],
-                    ),
-                  ),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: decision != null
+            ? _buildDecision(context, decision)
+            : Stack(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
+                  if (application.status == ApplicationStatus.interviewed)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        height: 3,
+                        decoration: const BoxDecoration(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(16),
+                          ),
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF10B981), Color(0xFF3B82F6)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              application.jobTitle.isEmpty
-                                  ? 'Job ${application.job}'
-                                  : application.jobTitle,
-                              style: GoogleFonts.inter(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: context.themeForeground(
-                                  const Color(0xFF1E293B),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _title,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: context.themeForeground(
+                                        const Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '$companyName · $subtext',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: context.themeForeground(
+                                        const Color(0xFF64748B),
+                                      ),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusBg,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: statusColor.withValues(alpha: 0.2),
                                 ),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '$companyName · $subtext',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: context.themeForeground(
-                                  const Color(0xFF64748B),
+                              child: Text(
+                                statusText,
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.0,
+                                  color: statusColor,
                                 ),
-                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
+                        if (fitContent)
+                          const SizedBox(height: 16)
+                        else
+                          const Spacer(),
+                        _ProgressBar(
+                          status: application.status,
+                          themeColor: statusColor,
                         ),
-                        decoration: BoxDecoration(
-                          color: statusBg,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: statusColor.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Text(
-                          statusText,
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.0,
-                            color: statusColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  _ProgressBar(
-                    status: application.status,
-                    themeColor: statusColor,
+                      ],
+                    ),
                   ),
                 ],
               ),
+      ),
+    );
+  }
+
+  Widget _buildDecision(BuildContext context, _FinalDecision decision) {
+    final hired = decision == _FinalDecision.hired;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final accent = hired
+        ? (dark ? const Color(0xFF6EE7B7) : const Color(0xFF008866))
+        : (dark ? const Color(0xFFFDA4AF) : const Color(0xFFC53246));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _title,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: context.themeForeground(const Color(0xFF17243A)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.09),
+                  border: Border.all(color: accent.withValues(alpha: 0.22)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  hired ? 'HIRED' : 'NOT SELECTED',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: accent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text.rich(
+            TextSpan(
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                height: 1.45,
+                color: context.themeForeground(const Color(0xFF64748B)),
+              ),
+              children: [
+                TextSpan(
+                  text: hired
+                      ? "Congratulations, you're hired!"
+                      : 'Not selected this time.',
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w700),
+                ),
+                TextSpan(
+                  text: hired
+                      ? ' Check your email for your offer and next steps.'
+                      : ' Thank you for your time. Keep applying, the right role is out there.',
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          _ProgressBar(
+            status: application.status,
+            themeColor: const Color(0xFF3973EC),
+            decisionColor: accent,
+            hired: hired,
+          ),
+        ],
       ),
     );
   }
@@ -659,13 +796,20 @@ class ApplicationCard extends StatelessWidget {
 class _ProgressBar extends StatelessWidget {
   final ApplicationStatus status;
   final Color themeColor;
+  final Color? decisionColor;
+  final bool hired;
 
-  const _ProgressBar({required this.status, required this.themeColor});
+  const _ProgressBar({
+    required this.status,
+    required this.themeColor,
+    this.decisionColor,
+    this.hired = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final stages = ['APPLIED', 'SHORTLISTED', 'INTERVIEW', 'DECISION'];
-    int currentIndex = _getStatusIndex(status);
+    final currentIndex = decisionColor == null ? _getStatusIndex(status) : 3;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -746,6 +890,7 @@ class _ProgressBar extends StatelessWidget {
     required bool isFirst,
     required bool isLast,
   }) {
+    final finalAccent = isLast ? decisionColor : null;
     return Column(
       crossAxisAlignment: isFirst
           ? CrossAxisAlignment.start
@@ -760,19 +905,27 @@ class _ProgressBar extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: isCurrent
-                ? themeColor.withValues(alpha: 0.2)
+                ? (finalAccent ?? themeColor).withValues(alpha: 0.2)
                 : Colors.transparent,
           ),
           child: Center(
             child: Container(
-              width: 8,
-              height: 8,
+              width: hired && isLast ? 14 : 8,
+              height: hired && isLast ? 14 : 8,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isActive
-                    ? themeColor
+                    ? (hired ? themeColor : finalAccent ?? themeColor)
                     : context.themeSurface(const Color(0xFFCBD5E1)),
               ),
+              child: hired && isLast
+                  ? Icon(
+                      Icons.check,
+                      size: 12,
+                      color: finalAccent,
+                      shadows: [Shadow(color: finalAccent!, blurRadius: 4)],
+                    )
+                  : null,
             ),
           ),
         ),
@@ -783,7 +936,8 @@ class _ProgressBar extends StatelessWidget {
             fontSize: 10,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
-            color: context.themeForeground(const Color(0xFF94A3B8)),
+            color:
+                finalAccent ?? context.themeForeground(const Color(0xFF94A3B8)),
           ),
         ),
       ],

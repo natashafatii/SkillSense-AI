@@ -29,6 +29,12 @@ export function createRetellBridge(Client, notify) {
       finally { if (disposed || current !== client) { client.removeAllListeners(); client.stopCall(); } }
     },
     async resumeAudio() { if (current && !disposed) await current.startAudioPlayback(); },
+    setMicrophoneMuted(muted) {
+      if (!current || disposed) return false;
+      if (muted) current.mute();
+      else current.unmute();
+      return true;
+    },
     stop,
     dispose() { disposed = true; stop(); },
   };

@@ -409,6 +409,7 @@ class RankingRow {
   final double? finalScore;
   final double? technical, behavioral, communication;
   final String? topDriver;
+  final String? modelVersion;
   final int? rubricVersion;
   RankingRow.fromJson(Json j)
     : applicationId = j['id'].toString(),
@@ -420,6 +421,7 @@ class RankingRow {
       technical = bounded(j['technical_score'], 10),
       behavioral = bounded(j['behavioral_score'], 10),
       communication = bounded(j['communication_score'], 10),
-      topDriver = j['top_driver'] as String?,
+      topDriver = j['shap_top_driver'] as String?,
+      modelVersion = j['model_version'] as String?,
       rubricVersion = _optionalInt(j['rubric_version']);
 }
