@@ -141,7 +141,8 @@ extension type ClerkSignUpVerifications._(JSObject _) implements JSObject {
 }
 
 @JS()
-extension type ClerkExternalAccountVerification._(JSObject _) implements JSObject {
+extension type ClerkExternalAccountVerification._(JSObject _)
+    implements JSObject {
   external String? get status;
 }
 
@@ -197,6 +198,7 @@ extension type ClerkSession._(JSObject _) implements JSObject {
 
 @JS()
 extension type ClerkUser._(JSObject _) implements JSObject {
+  external JSArray<ClerkGoogleAccount>? get externalAccounts;
   external String? get id;
   external String? get firstName;
   external String? get lastName;
@@ -206,6 +208,16 @@ extension type ClerkUser._(JSObject _) implements JSObject {
 
   /// `user.unsafeMetadata` — readable & writable from client.
   external JSObject? get unsafeMetadata;
+}
+
+extension type ClerkGoogleAccount._(JSObject _) implements JSObject {
+  external String? get provider;
+  external String? get emailAddress;
+  external ClerkExternalVerification? get verification;
+}
+
+extension type ClerkExternalVerification._(JSObject _) implements JSObject {
+  external String? get status;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

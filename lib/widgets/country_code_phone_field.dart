@@ -60,6 +60,7 @@ class CountryCodePhoneField extends StatefulWidget {
   final bool anchoredMobilePicker;
   final CountryData? initialCountry;
   final bool enabled;
+  final bool requiredPhone;
   final Iterable<String>? autofillHints;
   final ({
     Color fill,
@@ -82,6 +83,7 @@ class CountryCodePhoneField extends StatefulWidget {
     this.anchoredMobilePicker = false,
     this.initialCountry,
     this.enabled = true,
+    this.requiredPhone = true,
     this.autofillHints,
     this.fieldColors,
   });
@@ -404,7 +406,9 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
       initialValue: widget.controller.text,
       validator: (value) {
         final text = widget.controller.text;
-        if (text.isEmpty) return 'Phone number is required';
+        if (text.isEmpty) {
+          return widget.requiredPhone ? 'Phone number is required' : null;
+        }
         if (text.length != _selectedCountry.maxLength) {
           return 'Enter a valid ${_selectedCountry.name} number.';
         }

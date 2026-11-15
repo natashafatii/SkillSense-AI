@@ -9,17 +9,71 @@ import '../services/media/interview_media_route_observer.dart';
 import '../services/recruitment_workflow_service.dart';
 import '../services/session_scope.dart';
 
+Color reviewAnswerScoreColor(double? score) => switch (score) {
+  null => const Color(0xFF687893),
+  < 3 => const Color(0xFFB32D47),
+  < 7 => const Color(0xFF8A5806),
+  _ => const Color(0xFF087C63),
+};
+
+class ReviewQuestionBadge extends StatelessWidget {
+  const ReviewQuestionBadge({super.key, required this.category});
+
+  final String category;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = category.trim().toUpperCase();
+    final (ink, fill) = switch (type) {
+      'BEHAVIORAL' => (const Color(0xFF3159C7), const Color(0xFFE8EEFF)),
+      'TECHNICAL' => (const Color(0xFF087C63), const Color(0xFFE0F3ED)),
+      'SITUATIONAL' => (const Color(0xFF6941C6), const Color(0xFFEFE8FF)),
+      _ => (const Color(0xFF687893), const Color(0xFFEDF1F7)),
+    };
+    return Tooltip(
+      message: type.isEmpty ? 'Uncategorized question' : category,
+      child: Container(
+        width: 24,
+        height: 24,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: context.themeSurface(fill),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          type.isEmpty ? '—' : type.characters.first,
+          style: TextStyle(
+            color: context.themeForeground(ink),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+typedef _EvidenceAnswer = ({
+  String text,
+  String category,
+  double? score,
+  Duration? timestamp,
+  String? callId,
+});
+
 class RecruiterInterviewDashboard extends StatefulWidget {
   const RecruiterInterviewDashboard({
     super.key,
     required this.review,
     required this.service,
     required this.refreshVersion,
+    this.viewportHeight,
   });
 
   final RecruitmentReview review;
   final RecruitmentWorkflowService service;
   final int refreshVersion;
+  final double? viewportHeight;
 
   @override
   State<RecruiterInterviewDashboard> createState() =>
@@ -42,6 +96,7 @@ class _RecruiterInterviewDashboardState
   bool _recordingLoading = true;
   bool _behaviorLoading = true;
   bool _recordingFailed = false;
+  bool _showRecording = false;
   bool _behaviorFailed = false;
 
   @override
@@ -79,6 +134,7 @@ class _RecruiterInterviewDashboardState
     _request?.cancel();
     _player?.dispose();
     _player = null;
+    _showRecording = false;
     _recording = null;
     _behavior = null;
   }
@@ -159,84 +215,127 @@ class _RecruiterInterviewDashboardState
   Widget build(BuildContext context) => DefaultTextStyle.merge(
     style: TextStyle(
       color: context.themeForeground(_ink),
-      fontSize: 13,
+      fontSize: 14,
       fontFamily: 'Inter',
     ),
     child: LayoutBuilder(
       builder: (context, size) {
-        final recording = _surface(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [_recordingPanel(context), _expressionPanel()],
-          ),
-        );
-        final evidence = Column(
+        final answers = _evidenceAnswers();
+        final wide = size.maxWidth >= 690;
+        final recording = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _answersPanel(),
-            const SizedBox(height: 14),
-            _eventsPanel(context),
+            _recordingPanel(context, answers),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, bounds) {
+                final events = _eventsPanel(context);
+                final expression = _expressionPanel();
+                if (bounds.maxWidth < 350) {
+                  return Column(spacing: 12, children: [events, expression]);
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: 12,
+                  children: [
+                    Expanded(child: events),
+                    Expanded(child: expression),
+                  ],
+                );
+              },
+            ),
           ],
         );
-        if (size.maxWidth < 690) {
+        final evidence = _answersPanel(
+          answers,
+          wide ? widget.viewportHeight : null,
+        );
+        if (!wide) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [recording, const SizedBox(height: 14), evidence],
+            spacing: 14,
+            children: [recording, evidence],
           );
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 12,
           children: [
-            Expanded(flex: 60, child: recording),
-            const SizedBox(width: 14),
-            Expanded(flex: 40, child: evidence),
+            Expanded(flex: 59, child: recording),
+            Expanded(flex: 41, child: evidence),
           ],
         );
       },
     ),
   );
 
-  Widget _recordingPanel(BuildContext context) {
+  bool _canSeek(_EvidenceAnswer answer) {
+    final value = _player?.value;
+    final time = answer.timestamp;
+    return time != null &&
+        answer.callId?.isNotEmpty == true &&
+        answer.callId == _recording?.callId &&
+        value?.isInitialized == true &&
+        value?.hasError == false &&
+        time <= value!.duration;
+  }
+
+  Widget _recordingPanel(BuildContext context, List<_EvidenceAnswer> answers) {
     final candidate = widget.review.application.candidateName?.trim();
     final email = widget.review.application.candidateEmail.trim();
     final startedAt = _recording?.startedAt?.toLocal();
-    final start = startedAt == null
-        ? null
-        : TimeOfDay.fromDateTime(startedAt).format(context);
+    final header = [
+      if (candidate?.isNotEmpty == true)
+        candidate!
+      else if (email.isNotEmpty)
+        email,
+      if (startedAt != null) TimeOfDay.fromDateTime(startedAt).format(context),
+    ].join(' · ').toUpperCase();
     final player = _player;
 
     Widget contents(VideoPlayerValue? value) {
       final ready =
           value?.isInitialized == true &&
-          value?.hasError != true &&
+          value?.hasError == false &&
           !_recordingFailed;
       final duration = ready && value!.duration > Duration.zero
           ? value.duration
           : _recording?.duration;
-      final header = [
-        if (candidate != null && candidate.isNotEmpty)
-          candidate
-        else if (email.isNotEmpty)
-          email,
-        if (start != null) start,
-        if (duration != null) _clock(duration),
-      ].join(' · ');
-      final placeholder = _recordingFailed || value?.hasError == true
-          ? 'Recording unavailable'
-          : _recordingLoading || (player != null && !ready)
-          ? 'Loading recording…'
-          : ready
-          ? 'Recorded session'
-          : 'No recording available';
       final position = ready ? value!.position : null;
+      final playing = ready && value!.isPlaying;
+      final showVideo =
+          ready &&
+          (_showRecording ||
+              playing ||
+              (position != null && position > Duration.zero));
       final milliseconds = duration?.inMilliseconds.toDouble() ?? 0;
       final progress = milliseconds == 0
           ? 0.0
           : ((position?.inMilliseconds ?? 0) / milliseconds).clamp(0.0, 1.0);
+      final message = _recordingFailed || value?.hasError == true
+          ? 'Recording unavailable'
+          : _recordingLoading || (player != null && !ready)
+          ? 'Loading recording…'
+          : ready
+          ? 'Recorded session. Press play or pick an answer.'
+          : 'No recording available';
+
+      void togglePlayback() {
+        if (playing) {
+          player!.pause();
+        } else {
+          setState(() => _showRecording = true);
+          player!.play();
+        }
+      }
+
       return Stack(
         fit: StackFit.expand,
         children: [
-          if (ready && value!.size.width > 0 && value.size.height > 0)
+          if (showVideo &&
+              value != null &&
+              value.size.width > 0 &&
+              value.size.height > 0)
             Center(
               child: AspectRatio(
                 aspectRatio: value.aspectRatio,
@@ -245,112 +344,176 @@ class _RecruiterInterviewDashboardState
             )
           else
             Center(
-              child: Text(
-                placeholder,
-                style: TextStyle(
-                  color: context.themeForeground(const Color(0xFF8090AE)),
-                ),
-              ),
-            ),
-          if (header.isNotEmpty)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                color: const Color(0xA80B1220),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 13,
-                ),
-                child: Text(
-                  header.toUpperCase(),
-                  style: _eyebrow(const Color(0xFF9FACC6)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (ready)
+                      IconButton.filledTonal(
+                        tooltip: 'Play recording',
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFF293143),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.square(46),
+                        ),
+                        onPressed: togglePlayback,
+                        icon: const Icon(Icons.play_arrow_rounded),
+                      ),
+                    if (ready) const SizedBox(height: 10),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF9CADCA),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: ColoredBox(
+              color: const Color(0xA80C1427),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        header,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _eyebrow(const Color(0xFF9FACC6)),
+                      ),
+                    ),
+                    if (duration != null)
+                      Text(
+                        _clock(duration),
+                        style: _eyebrow(const Color(0xFF9FACC6)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: Container(
-              color: const Color(0xD90B1220),
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-              child: Column(
-                children: [
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 4,
+            child: ColoredBox(
+              color: const Color(0xD90C1427),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: playing ? 'Pause recording' : 'Play recording',
+                      color: Colors.white,
+                      disabledColor: const Color(0xFF62718A),
+                      onPressed: ready ? togglePlayback : null,
+                      icon: Icon(
+                        playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
                       ),
-                      overlayShape: SliderComponentShape.noOverlay,
-                      activeTrackColor: const Color(0xFF2EE6C8),
-                      inactiveTrackColor: const Color(0xFF263247),
-                      disabledInactiveTrackColor: const Color(0xFF263247),
-                      thumbColor: const Color(0xFF2EE6C8),
                     ),
-                    child: SizedBox(
-                      height: 22,
-                      child: Slider(
-                        value: progress,
-                        onChanged: ready && milliseconds > 0
-                            ? (fraction) => player!.seekTo(
-                                Duration(
-                                  milliseconds: (milliseconds * fraction)
-                                      .round(),
+                    Text(
+                      '${position == null ? '—' : _clock(position)} / ${duration == null ? '—' : _clock(duration)}',
+                      style: const TextStyle(
+                        color: Color(0xFFA7B7CF),
+                        fontSize: 11,
+                      ),
+                    ),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, bounds) {
+                          return Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  trackHeight: 4,
+                                  thumbShape: const RoundSliderThumbShape(
+                                    enabledThumbRadius: 6,
+                                  ),
+                                  overlayShape: SliderComponentShape.noOverlay,
+                                  activeTrackColor: const Color(0xFF91A7D0),
+                                  inactiveTrackColor: const Color(0xFF3C4659),
+                                  disabledInactiveTrackColor: const Color(
+                                    0xFF3C4659,
+                                  ),
+                                  thumbColor: Colors.white,
                                 ),
-                              )
-                            : null,
+                                child: Slider(
+                                  value: progress,
+                                  onChanged: ready && milliseconds > 0
+                                      ? (fraction) => player!.seekTo(
+                                          Duration(
+                                            milliseconds:
+                                                (milliseconds * fraction)
+                                                    .round(),
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                              ),
+                              if (milliseconds > 0 && bounds.maxWidth > 12)
+                                for (final answer in answers)
+                                  if (_canSeek(answer) && answer.score != null)
+                                    Positioned(
+                                      left:
+                                          2 +
+                                          (bounds.maxWidth - 12) *
+                                              answer.timestamp!.inMilliseconds /
+                                              milliseconds,
+                                      child: IgnorePointer(
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color: answer.score! < 3
+                                                ? const Color(0xFFEF5270)
+                                                : answer.score! < 7
+                                                ? const Color(0xFFF4A637)
+                                                : const Color(0xFF28CCA8),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const SizedBox.square(
+                                            dimension: 7,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                            ],
+                          );
+                        },
                       ),
                     ),
-                  ),
-                  Row(
-                    children: [
-                      Text(
-                        position == null ? '—' : _clock(position),
-                        style: _eyebrow(const Color(0xFF9FACC6)),
+                    PopupMenuButton<double>(
+                      tooltip: 'Playback speed',
+                      enabled: ready,
+                      initialValue: value?.playbackSpeed,
+                      onSelected: (speed) => player!.setPlaybackSpeed(speed),
+                      itemBuilder: (_) => [
+                        for (final speed in [1.0, 1.25, 1.5, 2.0])
+                          PopupMenuItem(
+                            value: speed,
+                            child: Text(_speedLabel(speed)),
+                          ),
+                      ],
+                      child: Text(
+                        ready ? _speedLabel(value!.playbackSpeed) : '—',
+                        style: _eyebrow(const Color(0xFFA7B7CF)),
                       ),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: value?.isPlaying == true
-                            ? 'Pause recording'
-                            : 'Play recording',
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 17,
-                        color: const Color(0xFFA7B7CF),
-                        disabledColor: const Color(0xFF62718A),
-                        onPressed: !ready
-                            ? null
-                            : () => value!.isPlaying
-                                  ? player!.pause()
-                                  : player!.play(),
-                        icon: Icon(
-                          value?.isPlaying == true
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                        ),
-                      ),
-                      PopupMenuButton<double>(
-                        tooltip: 'Playback speed',
-                        enabled: ready,
-                        initialValue: value?.playbackSpeed,
-                        onSelected: (speed) => player!.setPlaybackSpeed(speed),
-                        itemBuilder: (_) => [
-                          for (final speed in [1.0, 1.25, 1.5, 2.0])
-                            PopupMenuItem(
-                              value: speed,
-                              child: Text(_speedLabel(speed)),
-                            ),
-                        ],
-                        child: Text(
-                          ready ? _speedLabel(value!.playbackSpeed) : '—',
-                          style: _eyebrow(const Color(0xFFA7B7CF)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -358,22 +521,19 @@ class _RecruiterInterviewDashboardState
       );
     }
 
-    return AspectRatio(
-      aspectRatio: 1.96,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF121A2B), Color(0xFF0A0F1A)],
-          ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: AspectRatio(
+        aspectRatio: 1.36,
+        child: ColoredBox(
+          color: const Color(0xFF0C1427),
+          child: player == null
+              ? contents(null)
+              : ValueListenableBuilder(
+                  valueListenable: player,
+                  builder: (_, value, _) => contents(value),
+                ),
         ),
-        child: player == null
-            ? contents(null)
-            : ValueListenableBuilder(
-                valueListenable: player,
-                builder: (_, value, _) => contents(value),
-              ),
       ),
     );
   }
@@ -388,74 +548,83 @@ class _RecruiterInterviewDashboardState
       Color(0xFF7192E8),
     ];
     final measurements = percentages.entries.toList();
-    return Padding(
-      padding: const EdgeInsets.all(15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('EMOTION TIMELINE · FER', style: _eyebrow(_muted)),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              height: 13,
-              child: LayoutBuilder(
-                builder: (context, constraints) => ColoredBox(
-                  color: context.themeSurface(const Color(0xFFE3EAF4)),
-                  child: Row(
-                    children: [
-                      for (final (index, entry) in measurements.indexed)
-                        Container(
-                          width: constraints.maxWidth * entry.value / 100.01,
-                          color: colors[index % colors.length],
+    final status = _behavior?.report?.snapshot.expressionStatus;
+    final disabled =
+        status?.toLowerCase() == 'disabled' ||
+        _behavior?.availability == 'disabled';
+    return _section(
+      'Emotion timeline · FER',
+      badge: disabled ? _badge('DISABLED', neutral: true) : null,
+      children: [
+        if (measurements.isEmpty)
+          _evidenceNotice(
+            Icons.sentiment_neutral_outlined,
+            disabled ? 'Not enabled for this report' : null,
+            disabled
+                ? 'FER is disabled, so no emotion data is shown.'
+                : _behaviorMessage(expression: true),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    height: 13,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => ColoredBox(
+                        color: context.themeSurface(const Color(0xFFE3EAF4)),
+                        child: Row(
+                          children: [
+                            for (final (index, entry) in measurements.indexed)
+                              Container(
+                                width:
+                                    constraints.maxWidth * entry.value / 100.01,
+                                color: colors[index % colors.length],
+                              ),
+                          ],
                         ),
-                    ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 7),
-          if (measurements.isEmpty)
-            Text(
-              _behaviorMessage(expression: true),
-              style: TextStyle(
-                color: context.themeForeground(_muted),
-                fontSize: 11,
-              ),
-            )
-          else
-            Wrap(
-              spacing: 12,
-              runSpacing: 6,
-              children: [
-                for (final (index, entry) in measurements.indexed)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.square_rounded,
-                        size: 11,
-                        color: colors[index % colors.length],
+                const SizedBox(height: 7),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  children: [
+                    for (final (index, entry) in measurements.indexed)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.square_rounded,
+                            size: 11,
+                            color: colors[index % colors.length],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${entry.key} ${entry.value.toStringAsFixed(0)}%',
+                            style: TextStyle(
+                              color: context.themeForeground(_muted),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${entry.key} ${entry.value.toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          color: context.themeForeground(_muted),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
+                ),
               ],
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
-  Widget _answersPanel() {
+  List<_EvidenceAnswer> _evidenceAnswers() {
     final review = widget.review;
     final evaluation = review.latestEvaluation;
     final history = review.transcripts;
@@ -478,48 +647,29 @@ class _RecruiterInterviewDashboardState
     final questions = evaluation?.questions.isNotEmpty == true
         ? evaluation!.questions
         : review.interview!.questions;
-    return _section(
-      'Answers',
-      trailing: Text(
-        evaluation?.status == 'READY' ? 'SCORED' : 'SCORES UNAVAILABLE',
-        style: _eyebrow(_muted),
-      ),
-      accent: true,
-      children: [
-        if (questions.isEmpty)
-          _row(
-            Text(
-              'No interview questions available.',
-              style: TextStyle(color: context.themeForeground(_muted)),
-            ),
-          ),
-        for (final question in questions)
-          _answerRow(
-            question.text,
-            question.category,
-            evaluation?.status == 'READY' ? answers[question.id] : null,
+    return [
+      for (final question in questions)
+        (
+          text: question.text,
+          category: question.category,
+          score: evaluation?.status == 'READY'
+              ? answers[question.id]?.scoreOutOfTen
+              : null,
+          timestamp: _answerTimestamp(
             extractions[question.id],
+            answers[question.id],
             turns,
-            transcript?.callId,
           ),
-      ],
-    );
+          callId: transcript?.callId,
+        ),
+    ];
   }
 
-  Widget _answerRow(
-    String text,
-    String category,
-    AnswerResult? answer,
+  Duration? _answerTimestamp(
     ExtractedAnswer? extraction,
+    AnswerResult? answer,
     Map<String, TranscriptTurn> turns,
-    String? callId,
   ) {
-    final criteria =
-        answer?.criteria.values.whereType<double>().toList() ??
-        const <double>[];
-    final score = criteria.isEmpty
-        ? null
-        : 10 * criteria.reduce((a, b) => a + b) / criteria.length;
     final seconds =
         [
               ...?extraction?.answerTurnIds,
@@ -528,63 +678,104 @@ class _RecruiterInterviewDashboardState
             ]
             .map((id) => turns[id]?.start)
             .whereType<double>()
-            .where((time) => time >= 0)
+            .where((time) => time.isFinite && time >= 0)
             .firstOrNull;
-    final timestamp = seconds == null
+    return seconds == null
         ? null
         : Duration(milliseconds: (seconds * 1000).round());
-    final canSeek =
-        timestamp != null &&
-        callId?.isNotEmpty == true &&
-        callId == _recording?.callId &&
-        _player?.value.isInitialized == true &&
-        _player?.value.hasError != true &&
-        timestamp <= _player!.value.duration;
-    return _row(
-      Row(
-        children: [
-          if (category.isNotEmpty) ...[
-            _badge(category.characters.first.toUpperCase(), tooltip: category),
-            const SizedBox(width: 11),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  }
+
+  Widget _answersPanel(List<_EvidenceAnswer> answers, double? viewportHeight) {
+    final scores = answers.map((answer) => answer.score).whereType<double>();
+    final average = scores.isEmpty
+        ? null
+        : scores.reduce((a, b) => a + b) / scores.length;
+    final list = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (answers.isEmpty)
+          _row(const Text('No interview questions available.')),
+        for (final answer in answers) _answerRow(answer),
+      ],
+    );
+    return _section(
+      'Answers',
+      trailing: Text(
+        average == null
+            ? 'Scores unavailable'
+            : '${scores.length} scored · average ${average.toStringAsFixed(1)} / 10',
+        style: TextStyle(fontSize: 12, color: context.themeForeground(_muted)),
+      ),
+      children: [
+        Divider(height: 1, color: context.themeOutline(_line)),
+        if (viewportHeight != null)
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: (viewportHeight - 56).clamp(180.0, double.infinity),
+            ),
+            child: SingleChildScrollView(
+              key: PageStorageKey(
+                'evidence-answers-${widget.review.interview?.id}',
+              ),
+              primary: false,
+              child: list,
+            ),
+          )
+        else
+          list,
+      ],
+    );
+  }
+
+  Widget _answerRow(_EvidenceAnswer answer) {
+    final canSeek = _canSeek(answer);
+    return InkWell(
+      onTap: canSeek
+          ? () {
+              if (!_canSeek(answer)) return;
+              setState(() => _showRecording = true);
+              _player!.seekTo(answer.timestamp!);
+            }
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            ReviewQuestionBadge(category: answer.category),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                answer.text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(text),
-                if (timestamp != null)
-                  InkWell(
-                    onTap: canSeek ? () => _player!.seekTo(timestamp) : null,
-                    child: Text(
-                      '${_clock(timestamp)}${canSeek ? ' · jump to answer' : ''}',
-                      style: TextStyle(
-                        color: canSeek
-                            ? _blue
-                            : context.themeForeground(_muted),
-                        fontSize: 11,
-                      ),
+                Text(
+                  answer.score?.toStringAsFixed(1) ?? '—',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: context.themeForeground(
+                      reviewAnswerScoreColor(answer.score),
+                    ),
+                  ),
+                ),
+                if (answer.timestamp != null)
+                  Text(
+                    _clock(answer.timestamp!),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: context.themeForeground(canSeek ? _blue : _muted),
                     ),
                   ),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            score?.toStringAsFixed(1) ?? '—',
-            semanticsLabel: score == null
-                ? 'Score unavailable'
-                : '${score.toStringAsFixed(1)} out of 10',
-            style: TextStyle(
-              color: score == null
-                  ? context.themeForeground(_muted)
-                  : score >= 8
-                  ? context.themeForeground(_green)
-                  : _blue,
-              fontFamily: 'JetBrains Mono',
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -599,14 +790,18 @@ class _RecruiterInterviewDashboardState
           ? null
           : _badge(
               '${events.length}${report.episodesTruncated ? '+' : ''} EVENTS',
+              success: events.isEmpty,
+              warm: events.isNotEmpty,
             ),
       children: [
         if (events.isEmpty)
-          _row(
-            Text(
-              _behaviorMessage(),
-              style: TextStyle(color: context.themeForeground(_muted)),
-            ),
+          _evidenceNotice(
+            Icons.verified_user_outlined,
+            report == null ? null : 'No observed events',
+            report == null
+                ? _behaviorMessage()
+                : 'Nothing was flagged during this session.',
+            success: report != null,
           ),
         for (final event in events)
           _row(
@@ -626,6 +821,49 @@ class _RecruiterInterviewDashboardState
       ],
     );
   }
+
+  Widget _evidenceNotice(
+    IconData icon,
+    String? title,
+    String detail, {
+    bool success = false,
+  }) => _row(
+    Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: context.themeSurface(
+              success ? const Color(0xFFE0F3ED) : const Color(0xFFEDF1F7),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: context.themeForeground(success ? _green : _muted),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (title != null)
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              Text(
+                detail,
+                style: TextStyle(color: context.themeForeground(_muted)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 
   String _behaviorMessage({bool expression = false}) {
     if (_behaviorLoading) return 'Loading behavioral report…';
@@ -675,29 +913,33 @@ class _RecruiterInterviewDashboardState
 
   static TextStyle _eyebrow(Color color) => TextStyle(
     color: color,
-    fontFamily: 'Space Grotesk',
+    fontFamily: 'Inter',
     fontWeight: FontWeight.w700,
     fontSize: 10,
     letterSpacing: .8,
   );
 
-  Widget _badge(String text, {bool warm = false, String? tooltip}) {
-    final badge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+  Widget _badge(
+    String text, {
+    bool warm = false,
+    bool neutral = false,
+    bool success = false,
+  }) {
+    final (ink, fill) = warm
+        ? (const Color(0xFF946214), const Color(0xFFFBEFD4))
+        : success
+        ? (_green, const Color(0xFFE0F3ED))
+        : neutral
+        ? (_muted, const Color(0xFFEDF1F7))
+        : (_blue, const Color(0xFFE5EDFF));
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: warm
-            ? context.themeSurface(const Color(0xFFFBEFD4))
-            : context.themeSurface(const Color(0xFFE5EDFF)),
-        borderRadius: BorderRadius.circular(5),
+        color: context.themeSurface(fill),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        text,
-        style: _eyebrow(
-          warm ? const Color(0xFF946214) : const Color(0xFF365BC5),
-        ).copyWith(fontSize: 9),
-      ),
+      child: Text(text, style: _eyebrow(context.themeForeground(ink))),
     );
-    return tooltip == null ? badge : Tooltip(message: tooltip, child: badge);
   }
 
   Widget _row(Widget child) => Container(
@@ -713,50 +955,39 @@ class _RecruiterInterviewDashboardState
     required List<Widget> children,
     Widget? trailing,
     Widget? badge,
-    bool accent = false,
   }) => _surface(
     Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (accent)
-          Container(
-            height: 2,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  _blue,
-                  Color(0xFF7C7AF5),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          child: Row(
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-              if (badge != null) ...[const SizedBox(width: 8), badge],
-              if (trailing != null) ...[const Spacer(), trailing],
+              if (badge != null) badge,
+              if (trailing != null) trailing,
             ],
           ),
         ),
         ...children,
       ],
     ),
-    accent: accent,
   );
 
-  Widget _surface(Widget child, {bool accent = false}) => DecoratedBox(
+  Widget _surface(Widget child) => DecoratedBox(
     decoration: BoxDecoration(
-      color: context.themeSurface(const Color(0xFFFAFBFD)),
+      color: context.themeSurface(Colors.white),
       borderRadius: BorderRadius.circular(17),
-      boxShadow: [
+      border: Border.all(color: context.themeOutline(const Color(0xFFE2E8F2))),
+      boxShadow: const [
         BoxShadow(
-          color: accent ? const Color(0x253E6FF0) : const Color(0x120F172A),
-          blurRadius: 20,
-          offset: const Offset(0, 9),
+          color: Color(0x0A0F172A),
+          blurRadius: 4,
+          offset: Offset(0, 2),
         ),
       ],
     ),

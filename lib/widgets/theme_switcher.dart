@@ -13,6 +13,7 @@ class ThemeSwitcher extends StatelessWidget {
     required this.labelStyle,
     this.mobile = false,
     this.horizontalPadding = 9,
+    this.selectedBorder,
   });
 
   final Color surface;
@@ -23,6 +24,7 @@ class ThemeSwitcher extends StatelessWidget {
   final TextStyle labelStyle;
   final bool mobile;
   final double horizontalPadding;
+  final Color? selectedBorder;
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +62,7 @@ class ThemeSwitcher extends StatelessWidget {
                       color: controller.value == mode ? surface : null,
                       borderRadius: radius,
                       border: controller.value == mode
-                          ? Border.all(color: border)
+                          ? Border.all(color: selectedBorder ?? border)
                           : null,
                     ),
                     child: Text(

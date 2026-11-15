@@ -167,6 +167,12 @@ class AnswerResult {
       gaps = strings(j['gaps']),
       evidence = records(j['evidence'], EvidenceQuote.fromJson),
       uncertainty = bounded(j['uncertainty'], 1);
+
+  double? get scoreOutOfTen {
+    final values = criteria.values.whereType<double>();
+    if (values.isEmpty || values.length != criteria.length) return null;
+    return 10 * values.reduce((a, b) => a + b) / values.length;
+  }
 }
 
 class EvaluationRevision {
