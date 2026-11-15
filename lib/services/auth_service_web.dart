@@ -15,7 +15,22 @@ AuthServiceInterface createAuthService() => AuthServiceWeb();
 /// the dev-browser handshake (`__clerk_db_jwt` cookie exchange)
 /// automatically — the exact capability missing from the Dart SDK on web.
 class AuthServiceWeb
-    implements AuthServiceInterface, GoogleOAuthService, GoogleSignInService {
+    implements
+        AuthServiceInterface,
+        GoogleOAuthService,
+        GoogleSignInService,
+        GoogleEmailVerification {
+  @override
+  bool isGoogleEmailVerified(String email) =>
+      _initialised &&
+      (_clerk.user?.externalAccounts?.toDart.any(
+            (account) =>
+                const {'google', 'oauth_google'}.contains(account.provider) &&
+                account.verification?.status == 'verified' &&
+                account.emailAddress?.toLowerCase() ==
+                    email.trim().toLowerCase(),
+          ) ??
+          false);
   late ClerkJS _clerk;
   final StreamController<bool> _authStreamController =
       StreamController<bool>.broadcast();

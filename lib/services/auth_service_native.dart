@@ -13,7 +13,17 @@ AuthServiceInterface createAuthService() => AuthServiceNative();
 /// Behaviour is identical to the original static `AuthService` class that
 /// was here before the platform split — only the shape changed (instance
 /// methods implementing [AuthServiceInterface]).
-class AuthServiceNative implements AuthServiceInterface {
+class AuthServiceNative
+    implements AuthServiceInterface, GoogleEmailVerification {
+  @override
+  bool isGoogleEmailVerified(String email) =>
+      _auth?.client.user?.externalAccounts?.any(
+        (account) =>
+            const {'google', 'oauth_google'}.contains(account.provider) &&
+            account.isVerified &&
+            account.emailAddress.toLowerCase() == email.trim().toLowerCase(),
+      ) ??
+      false;
   clerk.Auth? _auth;
   final StreamController<bool> _authStreamController =
       StreamController<bool>.broadcast();

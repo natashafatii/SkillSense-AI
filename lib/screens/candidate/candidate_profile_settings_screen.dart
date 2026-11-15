@@ -1,18 +1,19 @@
 import '../../widgets/theme_switcher.dart';
-import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
-import '../../widgets/mobile_edge_shadow_wrapper.dart';
-import '../../widgets/candidate_mobile_nav.dart';
+import '../../widgets/country_code_phone_field.dart';
 import '../../widgets/candidate_button_style.dart';
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/candidate_profile.dart';
+import '../../services/auth_service_interface.dart';
+import '../../services/session_scope.dart';
 import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
@@ -21,6 +22,29 @@ import '../../widgets/candidate_avatar_image.dart';
 import '../../widgets/recruiter_top_bar.dart';
 
 enum _PhotoAction { gallery, camera, remove }
+
+class _ReadinessRing extends CustomPainter {
+  const _ReadinessRing(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bounds = (Offset.zero & size).deflate(1);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3;
+    const segment = math.pi / 6;
+    for (var index = 0; index < 12; index++) {
+      canvas.drawArc(bounds, index * segment, segment * .58, false, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReadinessRing oldDelegate) =>
+      oldDelegate.color != color;
+}
 
 /// Candidate Profile & Settings (CD-10). The spacing follows the supplied
 /// profile reference, with the candidate console's teal accent.
@@ -43,7 +67,7 @@ class _Colors {
   Color get surface2 =>
       dark ? const Color(0xFF111A2E) : const Color(0xFFF7F9FD);
   Color get field => dark ? const Color(0xFF0A1120) : Colors.white;
-  Color get border => dark ? const Color(0x2494AADC) : const Color(0xFFE0E5F0);
+  Color get border => dark ? const Color(0x2494AADC) : const Color(0xFFE3E8F0);
   Color get border2 => dark ? const Color(0x4794AADC) : const Color(0xFFC8D0E3);
   Color get text => dark ? const Color(0xFFE8EDF8) : const Color(0xFF16213A);
   Color get text2 => dark ? const Color(0xFFA3AFC8) : const Color(0xFF4A5875);
@@ -70,23 +94,26 @@ const _details = [
   _Detail('phone', 'Phone', '+92 300 1234567'),
   _Detail('linkedin_url', 'LinkedIn', 'linkedin.com/in/yourname'),
   _Detail('portfolio_url', 'Portfolio', 'yourname.com'),
-  _Detail('github', 'GitHub', 'github.com/yourname'),
+  _Detail('github_url', 'GitHub', 'github.com/yourname'),
 ];
 
 class _CandidateProfileSettingsScreenState
     extends State<CandidateProfileSettingsScreen> {
-  static const _signOutRed = Color(0xFFE85D5B);
   CandidateProfile? _profile;
   final Map<String, String> _values = {
     for (final detail in _details) detail.key: '',
   };
-  final List<int> _sections = [0, 0, 0, 0];
-  final List<bool> _notifications = [true, true, true, false];
-  final TextEditingController _editor = TextEditingController();
-  final FocusNode _editFocus = FocusNode();
+  bool _profileLoading = true;
+  bool _profileError = false;
+  bool _savingContacts = false;
+  final _contactDraft = <String, TextEditingController>{};
+  final _contactKey = GlobalKey();
+  CountryData? _phoneCountry;
+  final _phoneFocus = FocusNode();
+  String? _phoneDraft;
+  final _session = SessionScope.generation;
   final ScrollController _mobileScroll = ScrollController();
   int _mobileTab = 0;
-  String? _editing;
   String? _toast;
   Timer? _toastTimer;
   bool _signingOut = false;
@@ -98,44 +125,49 @@ class _CandidateProfileSettingsScreenState
   @override
   void initState() {
     super.initState();
-    _editFocus.addListener(() {
-      if (mounted) setState(() {});
-    });
     _loadProfile(forceRefresh: true);
   }
 
   Future<void> _loadProfile({bool forceRefresh = false}) async {
+    setState(() {
+      _profileLoading = true;
+      _profileError = false;
+    });
     try {
       final profile =
           await (widget.loadProfile?.call() ??
               ProfileService.getCandidateProfile(forceRefresh: forceRefresh));
-      if (!mounted || profile == null) return;
-      setState(() {
-        _profile = profile;
-        _values['headline'] = profile.headline;
-        _values['location'] = profile.location;
-        _values['years_experience'] = profile.yearsExperience?.toString() ?? '';
-        _values['phone'] = profile.phone;
-        _values['linkedin_url'] = profile.linkedinUrl;
-        _values['portfolio_url'] = profile.portfolioUrl;
-      });
+      if (!_current) return;
+      if (profile == null) {
+        setState(() => _profileError = true);
+        return;
+      }
+      setState(() => _applyProfile(profile));
     } on ApiException catch (error) {
-      if (!mounted) return;
+      if (!mounted || _session != SessionScope.generation) return;
       if (error.statusCode == 401) {
         await _signOut();
       } else {
-        _showToast(error.message);
+        setState(() => _profileError = true);
       }
     } catch (_) {
-      // The screen remains usable while a profile service is unavailable.
+      if (mounted && _session == SessionScope.generation) {
+        setState(() => _profileError = true);
+      }
+    } finally {
+      if (mounted && _session == SessionScope.generation) {
+        setState(() => _profileLoading = false);
+      }
     }
   }
 
   @override
   void dispose() {
     _toastTimer?.cancel();
-    _editor.dispose();
-    _editFocus.dispose();
+    for (final draft in _contactDraft.values) {
+      draft.dispose();
+    }
+    _phoneFocus.dispose();
     _mobileScroll.dispose();
     super.dispose();
   }
@@ -343,7 +375,7 @@ class _CandidateProfileSettingsScreenState
     }
     ProfileService.setCandidateProfileImageUrl(url);
     final cached = ProfileService.currentProfileNotifier.value;
-    if (cached != null) setState(() => _profile = cached);
+    if (cached != null) setState(() => _applyProfile(cached));
   }
 
   Future<void> _handlePhotoError(
@@ -500,227 +532,6 @@ class _CandidateProfileSettingsScreenState
               TextButton(
                 onPressed: busy ? null : remove,
                 child: Text('Remove', style: TextStyle(color: c.error)),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  void _beginEdit(String key) {
-    setState(() {
-      _editing = key;
-      _editor.text = _values[key] ?? '';
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _editFocus.requestFocus();
-    });
-  }
-
-  void _cancelEdit() => setState(() => _editing = null);
-
-  Future<void> _saveEdit() async {
-    final key = _editing;
-    if (key == null) return;
-    final value = _editor.text.trim();
-    final years = key == 'years_experience' ? int.tryParse(value) : null;
-    if (key == 'years_experience' &&
-        value.isNotEmpty &&
-        (years == null || years < 0)) {
-      _showToast('Enter a whole number of years, zero or greater.');
-      return;
-    }
-    final savedValue = key == 'years_experience' && years != null
-        ? years.toString()
-        : value;
-    if (key == 'github') {
-      // The current profile API has no GitHub field. Keep this session-only.
-      setState(() {
-        _values[key] = value;
-        _editing = null;
-      });
-      _showToast('GitHub updated for this session only.');
-      return;
-    }
-    final patch = <String, dynamic>{
-      key: key == 'years_experience' ? years : value,
-    };
-    try {
-      final updated = widget.loadProfile != null
-          ? null
-          : await ProfileService.updateCandidateProfile(patch);
-      if (!mounted) return;
-      setState(() {
-        if (updated != null) _profile = updated;
-        _values[key] = savedValue;
-        _editing = null;
-      });
-      _showToast('Saved');
-    } catch (_) {
-      if (mounted) _showToast('Could not sync this change. Please try again.');
-    }
-  }
-
-  void _openResumes() {
-    Navigator.of(context).pushNamed('/candidate/resumes');
-  }
-
-  Future<void> _openProfileEditor() async {
-    if (_profile == null) await _loadProfile(forceRefresh: true);
-    if (!mounted) return;
-    final profile = _profile;
-    final initial = <String, String>{
-      'first_name': profile?.user.firstName ?? AuthService.firstName,
-      'last_name': profile?.user.lastName ?? AuthService.lastName,
-      'headline': profile?.headline ?? '',
-      'location': profile?.location ?? '',
-      'phone': profile?.phone ?? '',
-      'linkedin_url': profile?.linkedinUrl ?? '',
-      'portfolio_url': profile?.portfolioUrl ?? '',
-      'years_experience': profile?.yearsExperience?.toString() ?? '',
-    };
-    final edited = Map<String, String>.from(initial);
-    bool saving = false;
-    String? errorMessage;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) {
-          Widget field(String key, String label, {TextInputType? inputType}) =>
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: TextFormField(
-                  key: Key('candidate-profile-edit-$key'),
-                  initialValue: initial[key],
-                  onChanged: (value) => edited[key] = value,
-                  keyboardType: inputType,
-                  enabled: !saving,
-                  decoration: InputDecoration(
-                    labelText: label,
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-              );
-
-          Future<void> save() async {
-            if (saving) return;
-            final values = {
-              for (final entry in edited.entries) entry.key: entry.value.trim(),
-            };
-            final yearsText = values['years_experience']!;
-            final years = yearsText.isEmpty ? null : int.tryParse(yearsText);
-            if (yearsText.isNotEmpty && (years == null || years < 0)) {
-              setDialogState(
-                () => errorMessage = 'Enter valid years of experience.',
-              );
-              return;
-            }
-            final patch = <String, dynamic>{};
-            for (final key in [
-              'headline',
-              'location',
-              'phone',
-              'linkedin_url',
-              'portfolio_url',
-            ]) {
-              if (values[key] != initial[key]) patch[key] = values[key];
-            }
-            if (yearsText != initial['years_experience']) {
-              patch['years_experience'] = years;
-            }
-            final firstChanged = values['first_name'] != initial['first_name'];
-            final lastChanged = values['last_name'] != initial['last_name'];
-            setDialogState(() {
-              saving = true;
-              errorMessage = null;
-            });
-            try {
-              if (patch.isNotEmpty) {
-                await ProfileService.updateCandidateProfile(patch);
-              }
-              if (firstChanged || lastChanged) {
-                await AuthService.updateUserProfile(
-                  firstName: firstChanged ? values['first_name'] : null,
-                  lastName: lastChanged ? values['last_name'] : null,
-                );
-              }
-              await _loadProfile(forceRefresh: true);
-              if (!mounted || !dialogContext.mounted) return;
-              Navigator.of(dialogContext).pop();
-              _showToast('Profile saved.');
-            } catch (error) {
-              if (!mounted || !dialogContext.mounted) return;
-              if (error is ApiException && error.statusCode == 401) {
-                Navigator.of(dialogContext).pop();
-                await _signOut();
-                return;
-              }
-              setDialogState(() {
-                errorMessage = error is ApiException
-                    ? error.message
-                    : 'Could not save your profile. Please try again.';
-              });
-            } finally {
-              if (dialogContext.mounted) {
-                setDialogState(() => saving = false);
-              }
-            }
-          }
-
-          return AlertDialog(
-            title: const Text('Edit profile'),
-            content: SizedBox(
-              width: 420,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    field('first_name', 'First name'),
-                    field('last_name', 'Last name'),
-                    field('headline', 'Headline'),
-                    field('location', 'Location'),
-                    field('phone', 'Phone', inputType: TextInputType.phone),
-                    field(
-                      'linkedin_url',
-                      'LinkedIn',
-                      inputType: TextInputType.url,
-                    ),
-                    field(
-                      'portfolio_url',
-                      'Portfolio',
-                      inputType: TextInputType.url,
-                    ),
-                    field(
-                      'years_experience',
-                      'Years of experience',
-                      inputType: TextInputType.number,
-                    ),
-                    if (errorMessage != null)
-                      Text(
-                        errorMessage!,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: saving
-                    ? null
-                    : () => Navigator.of(dialogContext).pop(),
-                style: CandidateButtonStyle.secondary(
-                  context,
-                  TextButton.styleFrom(),
-                ),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: saving ? null : save,
-                style: CandidateButtonStyle.primary(TextButton.styleFrom()),
-                child: Text(saving ? 'Saving…' : 'Save'),
               ),
             ],
           );
@@ -923,22 +734,10 @@ class _CandidateProfileSettingsScreenState
       ),
       child: Text(
         'Sign out',
-        style: _inter(mobile ? 16 : 13.5, _signOutRed, weight: FontWeight.w600),
+        style: _inter(mobile ? 16 : 13.5, c.error, weight: FontWeight.w600),
       ),
     ),
   );
-
-  int get _filled =>
-      _values.values.where((value) => value.trim().isNotEmpty).length;
-  int get _strength =>
-      ((_filled / _details.length) * 40 +
-              (_sections.reduce((a, b) => a + b) / 4) * .6)
-          .round();
-  String get _strengthHelper => _strength == 100
-      ? 'Your profile is complete.'
-      : _filled < _details.length
-      ? 'Finish your details, then add a resume and skills.'
-      : 'Add your resume and skills to get a match score.';
 
   bool _isDark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
@@ -948,7 +747,7 @@ class _CandidateProfileSettingsScreenState
     Color color, {
     FontWeight weight = FontWeight.w400,
     double? height,
-  }) => GoogleFonts.inter(
+  }) => GoogleFonts.plusJakartaSans(
     fontSize: size,
     color: color,
     fontWeight: weight,
@@ -958,1803 +757,993 @@ class _CandidateProfileSettingsScreenState
     double size,
     Color color, {
     FontWeight weight = FontWeight.w700,
-  }) => GoogleFonts.spaceGrotesk(
+  }) => GoogleFonts.plusJakartaSans(
     fontSize: size,
     color: color,
     fontWeight: weight,
   );
 
+  bool get _current => mounted && _session == SessionScope.generation;
+
+  void _applyProfile(CandidateProfile profile) {
+    _profile = profile;
+    _values.addAll({
+      'headline': profile.headline,
+      'phone': profile.phone,
+      'location': profile.location,
+      'linkedin_url': profile.linkedinUrl,
+      'github_url': profile.githubUrl,
+      'portfolio_url': profile.portfolioUrl,
+      'years_experience': profile.yearsExperience?.toString() ?? '',
+    });
+  }
+
+  void _editContacts([String key = 'phone']) {
+    if (_profileLoading ||
+        _profileError ||
+        _savingContacts ||
+        _profile == null) {
+      return;
+    }
+    setState(() {
+      _mobileTab = 0;
+      if (!_contactDraft.containsKey(key)) {
+        _clearDraft();
+        var value = _values[key] ?? '';
+        if (key == 'phone') {
+          _phoneDraft = value;
+          final matches =
+              kSupportedCountries
+                  .where(
+                    (country) =>
+                        value.startsWith(country.dialCode) &&
+                        value.length - country.dialCode.length <=
+                            country.maxLength,
+                  )
+                  .toList()
+                ..sort(
+                  (a, b) => b.dialCode.length.compareTo(a.dialCode.length),
+                );
+          _phoneCountry = matches.firstOrNull;
+          if (_phoneCountry case final country?) {
+            value = value.substring(country.dialCode.length);
+          } else if (value.isEmpty) {
+            _phoneCountry = kSupportedCountries.first;
+          }
+        }
+        _contactDraft[key] = TextEditingController(text: value);
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _contactKey.currentContext;
+      if (mounted &&
+          key == 'phone' &&
+          _phoneCountry != null &&
+          _contactDraft.containsKey(key)) {
+        _phoneFocus.requestFocus();
+      }
+      if (mounted && target != null) {
+        Scrollable.ensureVisible(
+          target,
+          duration: const Duration(milliseconds: 180),
+        );
+      }
+    });
+  }
+
+  void _clearDraft() {
+    final controllers = _contactDraft.values.toList();
+    _contactDraft.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final controller in controllers) {
+        controller.dispose();
+      }
+    });
+  }
+
+  Future<void> _saveContacts() async {
+    if (_savingContacts || _contactDraft.isEmpty) return;
+    final patch = <String, dynamic>{};
+    for (final entry in _contactDraft.entries) {
+      var value = entry.value.text.trim();
+      if (entry.key == 'phone' && value.isNotEmpty && _phoneCountry != null) {
+        value = _phoneDraft ?? value;
+      }
+      if (value == _values[entry.key]) continue;
+      if (entry.key == 'years_experience') {
+        final years = int.tryParse(value);
+        if (value.isNotEmpty && (years == null || years < 0)) {
+          _showToast('Enter a whole number of years, zero or greater.');
+          return;
+        }
+        patch[entry.key] = years;
+      } else {
+        patch[entry.key] = value;
+      }
+    }
+    if (patch.isEmpty) {
+      setState(_clearDraft);
+      return;
+    }
+    setState(() => _savingContacts = true);
+    try {
+      final profile = await ProfileService.updateCandidateProfile(patch);
+      if (!_current) return;
+      setState(() {
+        _applyProfile(profile);
+        _clearDraft();
+      });
+      _showToast('Contact details saved.');
+    } on ApiException catch (error) {
+      if (_current) {
+        if (error.statusCode == 401) {
+          await _signOut();
+        } else {
+          _showToast(
+            error.validationBody is Map
+                ? error.message
+                : 'Could not save contact details.',
+          );
+        }
+      }
+    } catch (_) {
+      if (_current) _showToast('Could not save contact details.');
+    } finally {
+      if (_current) setState(() => _savingContacts = false);
+    }
+  }
+
+  bool get _googleVerified {
+    final auth = AuthService.instance;
+    final email = _profile?.user.email ?? '';
+    return email.isNotEmpty &&
+        auth is GoogleEmailVerification &&
+        (auth as GoogleEmailVerification).isGoogleEmailVerified(email);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = _Colors(_isDark(context));
-    final width = MediaQuery.sizeOf(context).width;
-    if (width < 900) return _mobileLayout(c);
-    final narrow = width < 1060;
-    final mobile = width < 640;
-    final reducedMotion = MediaQuery.disableAnimationsOf(context);
-    return CandidateScaffold(
-      currentRoute:
-          '', // Keep the Profile avatar neutral in this screen's rail.
-      body: Scaffold(
-        backgroundColor: c.bg,
-        body: SafeArea(
-          bottom: false,
-          child: Stack(
-            children: [
-              Column(
-                children: [
-                  const RecruiterTopBar(
-                    pageTitle: 'Profile & settings',
-                    candidate: true,
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1320),
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              mobile ? 16 : 32,
-                              0,
-                              mobile ? 16 : 32,
-                              64,
-                            ),
-                            child: Column(
-                              children: [
-                                _identity(c, mobile),
-                                if (narrow)
-                                  Column(
-                                    children: [
-                                      _leftCard(c, narrow, mobile),
-                                      const SizedBox(height: 24),
-                                      _rightCards(c, mobile, reducedMotion),
-                                    ],
-                                  )
-                                else
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: _leftCard(c, narrow, mobile),
-                                      ),
-                                      const SizedBox(width: 24),
-                                      SizedBox(
-                                        width: 380,
-                                        child: _rightCards(
-                                          c,
-                                          mobile,
-                                          reducedMotion,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 24,
-                child: IgnorePointer(
-                  child: AnimatedSlide(
-                    offset: _toast == null ? const Offset(0, .5) : Offset.zero,
-                    duration: reducedMotion
-                        ? Duration.zero
-                        : const Duration(milliseconds: 250),
-                    child: AnimatedOpacity(
-                      opacity: _toast == null ? 0 : 1,
-                      duration: reducedMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 250),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 11,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF16213A),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            _toast ?? '',
-                            style: _inter(
-                              14,
-                              const Color(0xFFF4F6FB),
-                              weight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+    final mobile = MediaQuery.sizeOf(context).width < 900;
+    final base = _inter(14, c.text, height: 1.55);
+    final profile = _profile;
+    final steps = <(String, bool, String, VoidCallback)>[
+      (
+        'Email address',
+        profile?.user.email.trim().isNotEmpty ?? false,
+        'Manage',
+        _openAccountManagement,
       ),
-    );
-  }
-
-  void _selectMobileTab(int tab) {
-    if (_mobileTab == tab) return;
-    setState(() => _mobileTab = tab);
-    if (_mobileScroll.hasClients) _mobileScroll.jumpTo(0);
-  }
-
-  Widget _mobileLayout(_Colors c) {
-    final reducedMotion = MediaQuery.disableAnimationsOf(context);
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: SafeArea(
-        bottom: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final content = Stack(
-              children: [
-                Column(
-                  children: [
-                    Container(
-                      key: const Key('candidate-profile-mobile-top-bar'),
-                      decoration: BoxDecoration(
-                        color: c.surface,
-                        border: Border(bottom: BorderSide(color: c.border)),
-                      ),
-                      child: Column(
-                        children: [
-                          const RecruiterTopBar(
-                            pageTitle: 'Profile & settings',
-                            mobileTitle: 'Profile',
-                            candidate: true,
-                          ),
-                          Padding(
-                            key: const Key('candidate-profile-mobile-tabs'),
-                            padding: const EdgeInsets.symmetric(horizontal: 18),
-                            child: Row(
-                              children: [
-                                _mobileTabButton('Profile', 0, c),
-                                _mobileTabButton('Settings', 1, c),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: MobileEdgeShadowWrapper(
-                        surfaceColor: c.bg,
-                        child: SingleChildScrollView(
-                          controller: _mobileScroll,
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              16,
-                              16,
-                              16,
-                              164 + safeBottom,
-                            ),
-                            child: Column(
-                              children: _mobileTab == 0
-                                  ? _mobileProfileCards(c)
-                                  : _mobileSettingsCards(c, reducedMotion),
+      (
+        'Add a phone number',
+        profile?.phone.trim().isNotEmpty ?? false,
+        'Add',
+        () => _editContacts('phone'),
+      ),
+      for (final (key, label) in const [
+        ('location', 'Add a location'),
+        ('linkedin_url', 'Add a LinkedIn link'),
+        ('github_url', 'Add a GitHub link'),
+      ])
+        (
+          label,
+          _values[key]!.trim().isNotEmpty,
+          'Add',
+          () => _editContacts(key),
+        ),
+      (
+        'Add a portfolio link',
+        profile?.portfolioUrl.trim().isNotEmpty ?? false,
+        'Add',
+        () => _editContacts('portfolio_url'),
+      ),
+    ];
+    final completed = steps.where((step) => step.$2).length;
+    final progress = completed / steps.length;
+    return CandidateScaffold(
+      currentRoute: '',
+      body: ColoredBox(
+        color: c.bg,
+        child: Column(
+          children: [
+            const RecruiterTopBar(
+              pageTitle: 'Profile & settings',
+              candidate: true,
+            ),
+            Expanded(
+              child: DefaultTextStyle(
+                style: base,
+                child: LayoutBuilder(
+                  builder: (context, bounds) {
+                    final inset = bounds.maxWidth < 640 ? 16.0 : 48.0;
+                    final wide = bounds.maxWidth >= 900;
+                    final sticky =
+                        wide &&
+                        bounds.maxHeight >= 550 &&
+                        MediaQuery.textScalerOf(context).scale(14) <= 18;
+                    final rail = _readiness(c, completed, steps, mobile);
+                    final header = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _hero(c, progress),
+                        const SizedBox(height: 16),
+                        _tabs(c),
+                        const SizedBox(height: 20),
+                      ],
+                    );
+                    final panel = _panelForTab(c);
+                    return Stack(
+                      children: [
+                        Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1280),
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(inset, 4, inset, 0),
+                              child: sticky
+                                  ? Column(
+                                      children: [
+                                        header,
+                                        Expanded(
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: SingleChildScrollView(
+                                                  controller: _mobileScroll,
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        bottom: 64,
+                                                      ),
+                                                  child: panel,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 22),
+                                              SizedBox(
+                                                width: 302,
+                                                child: SingleChildScrollView(
+                                                  primary: false,
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        bottom: 64,
+                                                      ),
+                                                  child: rail,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : SingleChildScrollView(
+                                      controller: _mobileScroll,
+                                      padding: EdgeInsets.only(
+                                        bottom: mobile ? 132 : 64,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          header,
+                                          if (wide)
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Expanded(child: panel),
+                                                const SizedBox(width: 22),
+                                                SizedBox(
+                                                  width: 302,
+                                                  child: rail,
+                                                ),
+                                              ],
+                                            )
+                                          else ...[
+                                            panel,
+                                            const SizedBox(height: 16),
+                                            rail,
+                                          ],
+                                        ],
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: _mobileNav(c, safeBottom),
-                ),
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 92 + safeBottom,
-                  child: IgnorePointer(
-                    child: AnimatedSlide(
-                      offset: _toast == null
-                          ? const Offset(0, .5)
-                          : Offset.zero,
-                      duration: reducedMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 250),
-                      child: AnimatedOpacity(
-                        opacity: _toast == null ? 0 : 1,
-                        duration: reducedMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 250),
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF16213A),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              _toast ?? '',
-                              textAlign: TextAlign.center,
-                              style: _inter(
-                                14,
-                                const Color(0xFFF4F6FB),
-                                weight: FontWeight.w500,
+                        if (_toast case final message?)
+                          Positioned(
+                            bottom: mobile ? 82 : 20,
+                            left: 16,
+                            right: 16,
+                            child: IgnorePointer(
+                              child: Center(
+                                child: Material(
+                                  color: c.text,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 10,
+                                    ),
+                                    child: Text(
+                                      message,
+                                      style: base.copyWith(color: c.bg),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-
-            return SizedBox(
-              key: const Key('candidate-profile-mobile-frame'),
-              width: constraints.maxWidth,
-              height: constraints.maxHeight,
-              child: content,
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _mobileTabButton(String label, int tab, _Colors c) => Expanded(
-    child: Semantics(
-      selected: _mobileTab == tab,
-      child: InkWell(
-        onTap: () => _selectMobileTab(tab),
-        child: SizedBox(
-          height: 46,
-          child: Stack(
-            children: [
-              Center(
-                child: Text(
-                  label,
-                  style: _inter(
-                    15,
-                    _mobileTab == tab ? c.text : c.text3,
-                    weight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (_mobileTab == tab)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: FractionallySizedBox(
-                      widthFactor: .6,
-                      child: Container(
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: c.accent,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(3),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-
-  List<Widget> _mobileProfileCards(_Colors c) => [
-    _mobileIdentity(c),
-    const SizedBox(height: 14),
-    _mobileStrength(c),
-    const SizedBox(height: 14),
-    _mobileDetails(c),
-    const SizedBox(height: 14),
-    _mobileSections(c),
-    const SizedBox(height: 14),
-    _mobileResumes(c),
-  ];
-
-  Widget _mobileCard(_Colors c, Widget child) => Container(
-    width: double.infinity,
-    clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(
-      color: c.surface,
-      border: Border.all(color: c.border),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: child,
-  );
-
-  Widget _mobileIdentity(_Colors c) {
-    final user = _profile?.user;
-    final name = [
-      user?.firstName,
-      user?.lastName,
-    ].where((s) => s != null && s.trim().isNotEmpty).join(' ');
-    final displayName = name.isEmpty ? 'Candidate' : name;
-    final initials = name.isEmpty
-        ? 'CA'
-        : name
-              .split(RegExp(r'\s+'))
-              .take(2)
-              .map((part) => part[0].toUpperCase())
-              .join();
-    return _mobileCard(
-      c,
-      Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 68,
-                  height: 68,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: c.accentSoft,
-                    border: Border.all(color: c.accentBorder),
-                  ),
-                  child: Text(
-                    initials,
-                    style: _inter(24, c.accent, weight: FontWeight.w600),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _grotesk(
-                          22,
-                          c.text,
-                        ).copyWith(letterSpacing: -.33, height: 1.2),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        user?.email ?? '',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: _inter(14, c.text2),
-                      ),
-                      Text('Candidate account', style: _inter(13, c.text3)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _mobileButton(
-              'Edit profile',
-              c,
-              primary: true,
-              onPressed: _openProfileEditor,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _mobileStrength(_Colors c) => _mobileCard(
-    c,
-    Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 76,
-            height: 76,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox.expand(
-                  child: CircularProgressIndicator(
-                    value: 1,
-                    strokeWidth: 7,
-                    color: c.border,
-                  ),
-                ),
-                SizedBox.expand(
-                  child: CircularProgressIndicator(
-                    value: _strength / 100,
-                    strokeWidth: 7,
-                    strokeCap: StrokeCap.round,
-                    color: c.accent,
-                  ),
-                ),
-                Text(
-                  '$_strength%',
-                  style: _grotesk(18, c.text).copyWith(
-                    fontFeatures: [const FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Profile strength',
-                  style: _inter(16, c.text, weight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Text(_strengthHelper, style: _inter(14, c.text2, height: 1.4)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _mobileHeading(String title, _Colors c, {String? count}) => Padding(
-    padding: const EdgeInsets.fromLTRB(18, 20, 18, 6),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: _inter(17, c.text, weight: FontWeight.w600),
-          ),
-        ),
-        if (count != null) Text(count, style: _inter(13, c.text3)),
-      ],
-    ),
-  );
-
-  Widget _mobileDetails(_Colors c) => _mobileCard(
-    c,
-    Column(
-      children: [
-        _mobileHeading(
-          'Personal details',
-          c,
-          count: '$_filled of ${_details.length}',
-        ),
-        for (final detail in _details) _mobileDetailRow(detail, c),
-      ],
-    ),
-  );
-
-  Widget _mobileDetailRow(_Detail detail, _Colors c) {
-    final value = _values[detail.key] ?? '';
-    return Material(
-      color: c.surface,
-      child: InkWell(
-        splashColor: c.accentSoft,
-        highlightColor: c.accentSoft,
-        onTap: () => _openMobileSheet(detail, c),
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 62),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: c.border)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(detail.label, style: _inter(12.5, c.text3)),
-                    Text(
-                      value.isEmpty ? 'Not added' : value,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: _inter(
-                        15.5,
-                        value.isEmpty ? c.text3 : c.text,
-                        weight: value.isEmpty
-                            ? FontWeight.w400
-                            : FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              value.isEmpty
-                  ? Text(
-                      'Add',
-                      style: _inter(14, c.accent, weight: FontWeight.w600),
-                    )
-                  : Icon(Icons.chevron_right_rounded, color: c.text3, size: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _mobileSections(_Colors c) => _mobileCard(
-    c,
-    Column(
-      children: [
-        _mobileHeading('Profile sections', c),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final tileWidth = (constraints.maxWidth - 12) / 2;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _mobileTile(
-                    0,
-                    'Experience',
-                    'Jobs and internships',
-                    tileWidth,
-                    c,
-                  ),
-                  _mobileTile(1, 'Skills', 'What you can do', tileWidth, c),
-                  _mobileTile(
-                    2,
-                    'Education',
-                    'Degrees and courses',
-                    tileWidth,
-                    c,
-                  ),
-                  _mobileTile(3, 'Projects', "Work you've built", tileWidth, c),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _mobileTile(
-    int index,
-    String title,
-    String subtitle,
-    double width,
-    _Colors c,
-  ) => Material(
-    color: c.surface2,
-    borderRadius: BorderRadius.circular(14),
-    child: InkWell(
-      onTap: _openResumes,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: width,
-        height: 180,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          border: Border.all(color: c.border),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: _inter(15, c.text, weight: FontWeight.w600)),
-            Text(
-              subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: _inter(12.5, c.text3, height: 1.3),
-            ),
-            const Spacer(),
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${_sections[index]}',
-                    style: _grotesk(26, c.text),
-                  ),
-                  TextSpan(text: '%', style: _grotesk(13, c.text3)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: LinearProgressIndicator(
-                value: _sections[index] / 100,
-                minHeight: 4,
-                backgroundColor: c.border,
-                color: c.accent,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text('Add', style: _inter(14, c.accent, weight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  Widget _mobileResumes(_Colors c) => _mobileCard(
-    c,
-    Padding(
-      padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Resumes', style: _inter(17, c.text, weight: FontWeight.w600)),
-          const SizedBox(height: 2),
-          Text(
-            'Upload a resume to unlock your match score.',
-            style: _inter(14, c.text2),
-          ),
-          const SizedBox(height: 16),
-          _mobileButton(
-            'Manage resumes',
-            c,
-            primary: true,
-            onPressed: _openResumes,
-          ),
-        ],
-      ),
-    ),
-  );
-
-  List<Widget> _mobileSettingsCards(_Colors c, bool reducedMotion) => [
-    _mobileCard(
-      c,
-      Column(
-        children: [
-          _mobileHeading('Notifications', c),
-          _mobileNotification(
-            0,
-            'Interview reminders',
-            'Email and push, 24 hours and 1 hour before',
-            c,
-            reducedMotion,
-          ),
-          _mobileNotification(
-            1,
-            'New matched jobs',
-            'Daily digest',
-            c,
-            reducedMotion,
-          ),
-          _mobileNotification(
-            2,
-            'Feedback ready',
-            'Push notification immediately',
-            c,
-            reducedMotion,
-          ),
-          _mobileNotification(
-            3,
-            'Recruiter views',
-            'Weekly summary',
-            c,
-            reducedMotion,
-          ),
-        ],
-      ),
-    ),
-    const SizedBox(height: 14),
-    _mobileCard(
-      c,
-      Column(
-        children: [
-          _mobileHeading('Appearance and account', c),
-          _mobileSettingRow(
-            'Theme',
-            null,
-            _themeControl(
-              c,
-              mobile: true,
-              compact: MediaQuery.sizeOf(context).width < 400,
-            ),
-            c,
-          ),
-          _mobileSettingRow(
-            'Signed in with Clerk',
-            'Google SSO, session lasts 30 days',
-            _button('Manage', c, onPressed: _openAccountManagement),
-            c,
-          ),
-          _mobileSettingRow(
-            'Download my data',
-            'Interviews, scores and recordings',
-            _button('Request', c, onPressed: _requestDataExport),
-            c,
-          ),
-        ],
-      ),
-    ),
-    const SizedBox(height: 14),
-    _signOutButton(c, mobile: true),
-  ];
-
-  Widget _mobileNotification(
-    int index,
-    String title,
-    String subtitle,
-    _Colors c,
-    bool reducedMotion,
-  ) => Container(
-    constraints: const BoxConstraints(minHeight: 64),
-    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-    decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: c.border)),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: _inter(15.5, c.text, weight: FontWeight.w600)),
-              Text(subtitle, style: _inter(13, c.text3, height: 1.35)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 14),
-        Semantics(
-          label: title,
-          toggled: _notifications[index],
-          child: PointerGestureDetector(
-            onTap: () =>
-                setState(() => _notifications[index] = !_notifications[index]),
-            child: AnimatedContainer(
-              duration: reducedMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 200),
-              width: 50,
-              height: 30,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: _notifications[index] ? c.accent : c.border2,
-                borderRadius: BorderRadius.circular(99),
-              ),
-              child: AnimatedAlign(
-                duration: reducedMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 200),
-                alignment: _notifications[index]
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _mobileSettingRow(
-    String title,
-    String? subtitle,
-    Widget action,
-    _Colors c,
-  ) => Container(
-    constraints: const BoxConstraints(minHeight: 64),
-    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-    decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: c.border)),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _inter(15.5, c.text, weight: FontWeight.w600),
-              ),
-              if (subtitle != null)
-                Text(subtitle, style: _inter(13, c.text3, height: 1.35)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        action,
-      ],
-    ),
-  );
-
-  Widget _mobileButton(
-    String label,
-    _Colors c, {
-    required VoidCallback onPressed,
-    bool primary = false,
-  }) => Container(
-    width: double.infinity,
-    height: 50,
-    decoration: primary
-        ? CandidateButtonStyle.primaryDecoration(radius: 14)
-        : null,
-    child: OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        backgroundColor: primary ? Colors.transparent : Colors.white,
-        side: BorderSide(
-          color: primary ? Colors.transparent : CandidateButtonStyle.edge,
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      child: Text(
-        label,
-        style: _inter(
-          16,
-          primary ? Colors.white : CandidateButtonStyle.secondaryText,
-          weight: FontWeight.w600,
-        ),
-      ),
-    ),
-  );
-
-  Widget _mobileNav(_Colors c, double safeBottom) => const CandidateMobileNav(
-    key: Key('candidate-profile-mobile-nav'),
-    currentRoute: '/candidate/profile',
-  );
-
-  Future<void> _openMobileSheet(_Detail detail, _Colors c) async {
-    _editing = detail.key;
-    _editor.text = _values[detail.key] ?? '';
-    final reducedMotion = MediaQuery.disableAnimationsOf(context);
-    final sheetContext = context;
-    final focusTimer = Timer(const Duration(milliseconds: 150), () {
-      if (mounted) _editFocus.requestFocus();
-    });
-    await showModalBottomSheet<void>(
-      context: sheetContext,
-      isScrollControlled: true,
-      barrierColor: const Color(0x80070B14),
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: reducedMotion
-          ? AnimationStyle.noAnimation
-          : const AnimationStyle(duration: Duration(milliseconds: 300)),
-      builder: (modalContext) => Align(
-        alignment: Alignment.bottomCenter,
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(modalContext).bottom,
-            ),
-            child: Container(
-              padding: EdgeInsets.fromLTRB(
-                18,
-                10,
-                18,
-                22 + MediaQuery.paddingOf(modalContext).bottom,
-              ),
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(22),
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 5,
-                      margin: const EdgeInsets.only(bottom: 14),
-                      decoration: BoxDecoration(
-                        color: c.border2,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                  ),
-                  Text(detail.label, style: _grotesk(19, c.text)),
-                  const SizedBox(height: 4),
-                  Text(
-                    'This shows on your profile to recruiters.',
-                    style: _inter(14, c.text3),
-                  ),
-                  const SizedBox(height: 14),
-                  Focus(
-                    onKeyEvent: (node, event) {
-                      if (event is KeyDownEvent &&
-                          event.logicalKey == LogicalKeyboardKey.escape) {
-                        Navigator.of(modalContext).pop();
-                        return KeyEventResult.handled;
-                      }
-                      return KeyEventResult.ignored;
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(color: c.accentSoft, spreadRadius: 4),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _editor,
-                        focusNode: _editFocus,
-                        keyboardType: detail.key == 'phone'
-                            ? TextInputType.phone
-                            : detail.key == 'years_experience'
-                            ? TextInputType.number
-                            : (detail.key.endsWith('_url') ||
-                                  detail.key == 'github')
-                            ? TextInputType.url
-                            : TextInputType.text,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) {
-                          Navigator.of(modalContext).pop();
-                          _saveEdit();
-                        },
-                        style: _inter(16, c.text),
-                        decoration: InputDecoration(
-                          hintText: detail.placeholder,
-                          hintStyle: _inter(16, c.text3),
-                          filled: true,
-                          fillColor: c.field,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 14,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: c.accent),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: c.accent),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 10,
-                        child: _mobileButton(
-                          'Cancel',
-                          c,
-                          onPressed: () => Navigator.of(modalContext).pop(),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        flex: 14,
-                        child: _mobileButton(
-                          'Save',
-                          c,
-                          primary: true,
-                          onPressed: () {
-                            Navigator.of(modalContext).pop();
-                            _saveEdit();
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    focusTimer.cancel();
-    _editFocus.unfocus();
-    _editing = null;
-  }
-
-  Widget _identity(_Colors c, bool mobile) {
-    final user = _profile?.user;
-    final name = [
-      user?.firstName,
-      user?.lastName,
-    ].where((s) => s != null && s.trim().isNotEmpty).join(' ');
-    final displayName = name.isEmpty ? 'Candidate' : name;
-    final avatarSize = mobile ? 68.0 : 88.0;
-    final avatar = MouseRegion(
-      onEnter: mobile ? null : (_) => setState(() => _avatarHovered = true),
-      onExit: mobile ? null : (_) => setState(() => _avatarHovered = false),
-      child: InkWell(
-        key: const Key('candidate-profile-avatar'),
-        onTapDown: (details) => _avatarTapPosition = details.globalPosition,
-        onTap: _openPhotoMenu,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: avatarSize,
-          height: avatarSize,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: c.accentSoft,
-            border: Border.all(color: c.accentBorder),
-          ),
-          child: ClipOval(
-            child: ValueListenableBuilder<CandidateProfile?>(
-              valueListenable: ProfileService.currentProfileNotifier,
-              builder: (context, cached, _) => Stack(
-                fit: StackFit.expand,
-                children: [
-                  CandidateAvatarImage(
-                    profile: cached ?? _profile,
-                    initialsStyle: _inter(
-                      mobile ? 24 : 30,
-                      c.accent,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
-                  if (!mobile && _avatarHovered)
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Container(
-                        height: avatarSize * .34,
-                        color: const Color(0x99070B14),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          Icons.photo_camera_outlined,
-                          size: avatarSize * .21,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    final who = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          displayName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: _grotesk(
-            mobile ? 26 : 32,
-            c.text,
-          ).copyWith(letterSpacing: -.02 * (mobile ? 26 : 32), height: 1.15),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 5,
-          children: [
-            Text(user?.email ?? '', style: _inter(15, c.text2)),
-            Text('Candidate account', style: _inter(15, c.text3)),
-          ],
-        ),
-      ],
-    );
-    final strength = _strengthCard(c);
-    final edit = _button('Edit profile', c, onPressed: _openProfileEditor);
-    if (mobile) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 34, bottom: 30),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                avatar,
-                const SizedBox(width: 18),
-                Expanded(child: who),
-              ],
-            ),
-            const SizedBox(height: 18),
-            strength,
-            const SizedBox(height: 18),
-            edit,
-          ],
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.only(top: 34, bottom: 30),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final tight = constraints.maxWidth < 900;
-          if (tight) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    avatar,
-                    const SizedBox(width: 28),
-                    Expanded(child: who),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Flexible(child: strength),
-                    const SizedBox(width: 20),
-                    edit,
-                  ],
-                ),
-              ],
-            );
-          }
-          return Row(
-            children: [
-              avatar,
-              const SizedBox(width: 28),
-              Expanded(child: who),
-              const SizedBox(width: 28),
-              strength,
-              const SizedBox(width: 28),
-              edit,
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _strengthCard(_Colors c) => ConstrainedBox(
-    constraints: const BoxConstraints(maxWidth: 400),
-    child: Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 22, 14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border.all(color: c.border),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 64,
-            height: 64,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox.expand(
-                  child: CircularProgressIndicator(
-                    value: 1,
-                    strokeWidth: 6,
-                    color: c.border,
-                  ),
-                ),
-                SizedBox.expand(
-                  child: CircularProgressIndicator(
-                    value: _strength / 100,
-                    strokeWidth: 6,
-                    color: c.accent,
-                    strokeCap: StrokeCap.round,
-                  ),
-                ),
-                Text(
-                  '$_strength%',
-                  style: _grotesk(16, c.text).copyWith(
-                    fontFeatures: [const FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Profile strength',
-                  style: _inter(14.5, c.text, weight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Text(_strengthHelper, style: _inter(13, c.text2, height: 1.4)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _card(_Colors c, Widget child) => Container(
-    decoration: BoxDecoration(
-      color: c.surface,
-      border: Border.all(color: c.border),
-      borderRadius: BorderRadius.circular(14),
-    ),
-    child: child,
-  );
-
-  Widget _sectionHeading(String title, _Colors c, {String? count}) => Row(
-    children: [
-      Expanded(
-        child: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: _inter(16, c.text, weight: FontWeight.w600),
-        ),
-      ),
-      if (count != null) ...[
-        const SizedBox(width: 8),
-        Text(count, style: _inter(13, c.text3)),
-      ],
-    ],
-  );
-
-  Widget _leftCard(_Colors c, bool narrow, bool mobile) {
-    final paddingX = mobile ? 18.0 : 30.0;
-    final detailRows = mobile
-        ? Column(
-            children: _details.map((detail) => _detailRow(detail, c)).toList(),
-          )
-        : Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    for (var i = 0; i < _details.length; i += 2)
-                      _detailRow(_details[i], c),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 48),
-              Expanded(
-                child: Column(
-                  children: [
-                    for (var i = 1; i < _details.length; i += 2)
-                      _detailRow(_details[i], c),
-                  ],
-                ),
-              ),
-            ],
-          );
-    return _card(
-      c,
-      Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              paddingX,
-              mobile ? 22 : 26,
-              paddingX,
-              12,
-            ),
-            child: Column(
-              children: [
-                _sectionHeading(
-                  'Personal details',
-                  c,
-                  count: '$_filled of ${_details.length} added',
-                ),
-                const SizedBox(height: 18),
-                detailRows,
-              ],
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              paddingX,
-              14,
-              paddingX,
-              mobile ? 22 : 26,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionHeading('Profile sections', c),
-                const SizedBox(height: 18),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final columns = mobile
-                        ? 1
-                        : narrow
-                        ? 2
-                        : 4;
-                    const gap = 14.0;
-                    final tileWidth =
-                        (constraints.maxWidth - gap * (columns - 1)) / columns;
-                    return Wrap(
-                      spacing: gap,
-                      runSpacing: gap,
-                      children: [
-                        _tile(
-                          0,
-                          'Experience',
-                          'Jobs and internships',
-                          tileWidth,
-                          c,
-                        ),
-                        _tile(1, 'Skills', 'What you can do', tileWidth, c),
-                        _tile(
-                          2,
-                          'Education',
-                          'Degrees and courses',
-                          tileWidth,
-                          c,
-                        ),
-                        _tile(3, 'Projects', "Work you've built", tileWidth, c),
                       ],
                     );
                   },
                 ),
-              ],
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: paddingX, vertical: 20),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: c.border)),
-            ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 20,
-              runSpacing: 12,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Resumes',
-                      style: _inter(14.5, c.text, weight: FontWeight.w600),
-                    ),
-                    Text(
-                      'Upload a resume to unlock your match score.',
-                      style: _inter(13.5, c.text2),
-                    ),
-                  ],
-                ),
-                _button(
-                  'Manage resumes',
-                  c,
-                  primary: true,
-                  onPressed: _openResumes,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _detailRow(_Detail detail, _Colors c) {
-    final value = _values[detail.key] ?? '';
-    final editing = _editing == detail.key;
-    return Container(
-      key: ValueKey('personal-detail-${detail.key}'),
-      width: double.infinity,
-      padding: const EdgeInsets.only(top: 14, bottom: 16),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: c.border)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text(detail.label, style: _inter(13, c.text3))),
-              if (!editing)
-                _link(
-                  value.isEmpty ? 'Add' : 'Edit',
-                  c,
-                  () => _beginEdit(detail.key),
-                ),
-            ],
-          ),
-          if (editing) ...[
-            const SizedBox(height: 6),
-            Focus(
-              onKeyEvent: (node, event) {
-                if (event is KeyDownEvent &&
-                    event.logicalKey == LogicalKeyboardKey.escape) {
-                  _cancelEdit();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: _editFocus.hasFocus
-                      ? [BoxShadow(color: c.accentSoft, spreadRadius: 3)]
-                      : null,
-                ),
-                child: TextField(
-                  controller: _editor,
-                  focusNode: _editFocus,
-                  keyboardType: detail.key == 'years_experience'
-                      ? TextInputType.number
-                      : detail.key == 'phone'
-                      ? TextInputType.phone
-                      : detail.key.endsWith('_url') || detail.key == 'github'
-                      ? TextInputType.url
-                      : TextInputType.text,
-                  onSubmitted: (_) => _saveEdit(),
-                  style: _inter(14.5, c.text),
-                  decoration: InputDecoration(
-                    hintText: detail.placeholder,
-                    hintStyle: _inter(14.5, c.text3),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    filled: true,
-                    fillColor: c.field,
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: c.accent),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: c.accent),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _button(
-                  'Save',
-                  c,
-                  primary: true,
-                  compact: true,
-                  onPressed: _saveEdit,
-                ),
-                const SizedBox(width: 8),
-                _button('Cancel', c, compact: true, onPressed: _cancelEdit),
-              ],
-            ),
-          ] else ...[
-            const SizedBox(height: 3),
-            Text(
-              value.isEmpty ? 'Not added' : value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _inter(
-                15,
-                value.isEmpty ? c.text3 : c.text,
-                weight: value.isEmpty ? FontWeight.w400 : FontWeight.w500,
               ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _tile(
-    int index,
-    String title,
-    String subtitle,
-    double width,
-    _Colors c,
-  ) => Container(
-    width: width,
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: c.surface2,
-      border: Border.all(color: c.border),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: _inter(14.5, c.text, weight: FontWeight.w600)),
-        Text(
-          subtitle,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: _inter(12.5, c.text3, height: 1.35),
-        ),
-        const SizedBox(height: 18),
-        RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: '${_sections[index]}',
-                style: _grotesk(28, c.text),
-              ),
-              TextSpan(text: '%', style: _grotesk(14, c.text3)),
-            ],
+  Widget _hero(_Colors c, double progress) {
+    final user = _profile?.user;
+    final name = [
+      user?.firstName ?? AuthService.firstName,
+      user?.lastName ?? AuthService.lastName,
+    ].where((part) => part.trim().isNotEmpty).join(' ');
+    final subtitle = [
+      _values['headline']!,
+      _values['location']!,
+    ].where((part) => part.trim().isNotEmpty).join(' · ');
+    final avatar = SizedBox.square(
+      dimension: 92,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(
+            child: CircularProgressIndicator(
+              value: progress,
+              color: c.accent,
+              backgroundColor: c.border,
+              strokeWidth: 4,
+              semanticsLabel: 'Profile readiness',
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(99),
-          child: LinearProgressIndicator(
-            value: _sections[index] / 100,
-            minHeight: 4,
-            backgroundColor: c.border,
-            color: c.accent,
-          ),
-        ),
-        const SizedBox(height: 14),
-        _link('Add ${title.toLowerCase()}', c, _openResumes),
-      ],
-    ),
-  );
-
-  Widget _rightCards(_Colors c, bool mobile, bool reducedMotion) => Column(
-    children: [
-      _card(
-        c,
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            mobile ? 18 : 30,
-            mobile ? 22 : 26,
-            mobile ? 18 : 30,
-            12,
-          ),
-          child: Column(
-            children: [
-              _sectionHeading('Notifications', c),
-              const SizedBox(height: 10),
-              _notificationRow(
-                0,
-                'Interview reminders',
-                'Email and push, 24 hours and 1 hour before',
-                c,
-                reducedMotion,
-              ),
-              _notificationRow(
-                1,
-                'New matched jobs',
-                'Daily digest',
-                c,
-                reducedMotion,
-              ),
-              _notificationRow(
-                2,
-                'Feedback ready',
-                'Push notification immediately',
-                c,
-                reducedMotion,
-              ),
-              _notificationRow(
-                3,
-                'Recruiter views',
-                'Weekly summary',
-                c,
-                reducedMotion,
-              ),
-            ],
-          ),
-        ),
-      ),
-      const SizedBox(height: 24),
-      _card(
-        c,
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            mobile ? 18 : 30,
-            mobile ? 22 : 26,
-            mobile ? 18 : 30,
-            12,
-          ),
-          child: Column(
-            children: [
-              _sectionHeading('Appearance and account', c),
-              const SizedBox(height: 10),
-              _settingsRow(c, title: 'Theme', action: _themeControl(c)),
-              _settingsRow(
-                c,
-                title: 'Signed in with Clerk',
-                subtitle: 'Google SSO, session lasts 30 days',
-                action: _button('Manage', c, onPressed: _openAccountManagement),
-              ),
-              _settingsRow(
-                c,
-                title: 'Download my data',
-                subtitle: 'Interviews, scores and recordings',
-                action: _button('Request', c, onPressed: _requestDataExport),
-              ),
-            ],
-          ),
-        ),
-      ),
-      const SizedBox(height: 24),
-      _signOutButton(c, mobile: false),
-    ],
-  );
-
-  Widget _notificationRow(
-    int index,
-    String title,
-    String subtitle,
-    _Colors c,
-    bool reducedMotion,
-  ) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 14),
-    decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: c.border)),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: _inter(14.5, c.text, weight: FontWeight.w600)),
-              Text(subtitle, style: _inter(13, c.text3, height: 1.4)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        Semantics(
-          label: title,
-          toggled: _notifications[index],
-          child: PointerGestureDetector(
-            onTap: () =>
-                setState(() => _notifications[index] = !_notifications[index]),
-            child: AnimatedContainer(
-              duration: reducedMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 200),
-              width: 42,
-              height: 24,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: _notifications[index] ? c.accent : c.border2,
-                borderRadius: BorderRadius.circular(99),
-              ),
-              child: AnimatedAlign(
-                duration: reducedMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 200),
-                alignment: _notifications[index]
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
+          MouseRegion(
+            onEnter: (_) => setState(() => _avatarHovered = true),
+            onExit: (_) => setState(() => _avatarHovered = false),
+            child: InkWell(
+              key: const Key('candidate-profile-avatar'),
+              customBorder: const CircleBorder(),
+              onTapDown: (details) =>
+                  _avatarTapPosition = details.globalPosition,
+              onTap: _openPhotoMenu,
+              child: SizedBox.square(
+                dimension: 74,
+                child: ClipOval(
+                  child: ColoredBox(
+                    color: c.accentSoft,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CandidateAvatarImage(
+                          profile: _profile,
+                          initialsStyle: _inter(
+                            26,
+                            c.accent,
+                            weight: FontWeight.w800,
+                          ),
+                        ),
+                        if (_avatarHovered)
+                          const ColoredBox(
+                            color: Color(0x66000000),
+                            child: Icon(
+                              Icons.photo_camera_outlined,
+                              color: Colors.white,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _settingsRow(
-    _Colors c, {
-    required String title,
-    String? subtitle,
-    required Widget action,
-  }) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 14),
-    decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: c.border)),
-    ),
-    child: Row(
+          Positioned(
+            bottom: -4,
+            child: _pill(
+              c,
+              '${(progress * 100).round()}%',
+              tint: c.accent,
+              surface: c.surface,
+            ),
+          ),
+        ],
+      ),
+    );
+    final identity = Row(
       children: [
+        avatar,
+        const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.ellipsis,
-                style: _inter(14.5, c.text, weight: FontWeight.w600),
+                name.isEmpty ? 'Candidate profile' : name,
+                style: _grotesk(26, c.text).copyWith(height: 1.2),
               ),
-              if (subtitle != null)
-                Text(subtitle, style: _inter(13, c.text3, height: 1.4)),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(subtitle, style: _inter(14, c.text2)),
+              ],
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  if (_googleVerified)
+                    _pill(
+                      c,
+                      'Email verified',
+                      tint: c.accent,
+                      icon: Icons.check,
+                    ),
+                  _pill(c, 'Candidate'),
+                ],
+              ),
             ],
           ),
         ),
-        const SizedBox(width: 12),
-        action,
+      ],
+    );
+    final edit = _primary(
+      c,
+      'Edit contact details',
+      _profile == null || _savingContacts ? null : _editContacts,
+    );
+    return _card(
+      c,
+      LayoutBuilder(
+        builder: (context, box) => box.maxWidth < 540
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [identity, const SizedBox(height: 16), edit],
+              )
+            : Row(
+                children: [
+                  Expanded(child: identity),
+                  const SizedBox(width: 16),
+                  edit,
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _tabs(_Colors c) => DecoratedBox(
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: c.border)),
+    ),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final (index, label) in ['Profile', 'Preferences'].indexed)
+            Semantics(
+              selected: _mobileTab == index,
+              child: InkWell(
+                onTap: () {
+                  setState(() => _mobileTab = index);
+                  if (_mobileScroll.hasClients) _mobileScroll.jumpTo(0);
+                },
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 12, 10, 11),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        width: 2,
+                        color: _mobileTab == index
+                            ? _blue(c)
+                            : Colors.transparent,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    label,
+                    style: _inter(
+                      13,
+                      _mobileTab == index ? c.text : c.text3,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _panelForTab(_Colors c) =>
+      _mobileTab == 0 ? _contactPanel(c) : _accountPanel(c);
+
+  Widget _contactPanel(_Colors c) => KeyedSubtree(
+    key: _contactKey,
+    child: _card(
+      c,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _heading(c, 'Contact and links'),
+          const SizedBox(height: 8),
+          if (_profileLoading)
+            const LinearProgressIndicator()
+          else if (_profileError) ...[
+            const Text('Unable to load your profile.'),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: c.accent),
+              onPressed: () => _loadProfile(forceRefresh: true),
+              child: const Text('Retry'),
+            ),
+          ] else ...[
+            _row(c, 'Email', _profile?.user.email ?? ''),
+            for (final key in [
+              'phone',
+              'location',
+              'linkedin_url',
+              'github_url',
+              'portfolio_url',
+            ])
+              _contactRow(c, _details.firstWhere((field) => field.key == key)),
+          ],
+        ],
+      ),
+    ),
+  );
+
+  Widget _contactRow(_Colors c, _Detail field) {
+    final isPhone = field.key == 'phone';
+    final draft = _contactDraft[field.key];
+    if (draft == null) {
+      return _row(
+        c,
+        field.label,
+        _values[field.key]!,
+        action: IconButton(
+          tooltip: 'Edit ${field.label}',
+          icon: Icon(Icons.edit_outlined, color: _blue(c), size: 17),
+          onPressed: _savingContacts ? null : () => _editContacts(field.key),
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: c.border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(field.label, style: _inter(13, c.text2)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: isPhone && _phoneCountry != null
+                    ? CountryCodePhoneField(
+                        controller: draft,
+                        focusNode: _phoneFocus,
+                        initialCountry: _phoneCountry,
+                        enabled: !_savingContacts,
+                        requiredPhone: false,
+                        focusColor: c.accent,
+                        onPhoneChanged: (value) => _phoneDraft = value,
+                      )
+                    : TextField(
+                        key: ValueKey(field.key),
+                        controller: draft,
+                        autofocus: true,
+                        enabled: !_savingContacts,
+                        keyboardType: isPhone
+                            ? TextInputType.phone
+                            : field.key.endsWith('_url')
+                            ? TextInputType.url
+                            : TextInputType.text,
+                        onSubmitted: (_) => _saveContacts(),
+                        style: _inter(14, c.text),
+                        decoration: InputDecoration(
+                          hintText: field.placeholder,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 11,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: c.border),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: c.accent),
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 7),
+              _primary(
+                c,
+                _savingContacts ? 'Saving…' : 'Save',
+                _savingContacts ? null : _saveContacts,
+              ),
+              const SizedBox(width: 6),
+              OutlinedButton(
+                onPressed: _savingContacts
+                    ? null
+                    : () {
+                        FocusScope.of(context).unfocus();
+                        setState(_clearDraft);
+                      },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: c.accent,
+                  backgroundColor: c.surface,
+                  padding: const EdgeInsets.symmetric(horizontal: 9),
+                  side: BorderSide(color: c.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _accountPanel(_Colors c) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _card(
+        c,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _heading(c, 'Preferences'),
+            const SizedBox(height: 10),
+            _preferenceRow(
+              c,
+              'Appearance',
+              'Choose how SkillSense looks.',
+              ThemeSwitcher(
+                surface: c.accentSoft,
+                track: c.surface2,
+                border: c.border,
+                selectedBorder: c.accent,
+                foreground: c.accent,
+                inactiveForeground: c.text2,
+                labelStyle: _inter(13, c.text, weight: FontWeight.w600),
+              ),
+            ),
+            _preferenceRow(
+              c,
+              _googleVerified ? 'Signed in with Google' : 'Account email',
+              [
+                if (_profile?.user.email case final email?
+                    when email.isNotEmpty)
+                  email,
+                if (AuthService.isAuthenticated) 'Session active',
+              ].join(' · '),
+              _preferenceAction(
+                c,
+                'Manage',
+                _googleVerified ? _manageGoogleAccount : _openAccountManagement,
+              ),
+            ),
+            _preferenceRow(
+              c,
+              'Download my data',
+              'Request a copy of your SkillSense account data.',
+              _preferenceAction(
+                c,
+                'Request',
+                _requestingExport ? null : _requestDataExport,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 14),
+      _card(
+        c,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _heading(c, 'Danger zone'),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              style: CandidateButtonStyle.destructive(
+                context,
+                OutlinedButton.styleFrom(),
+              ),
+              onPressed: () => _showToast(
+                'Account deletion is not available in SkillSense yet.',
+              ),
+              child: const Row(
+                children: [
+                  Expanded(child: Text('Delete my account')),
+                  Icon(Icons.chevron_right, size: 18),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  Widget _preferenceRow(
+    _Colors c,
+    String title,
+    String subtitle,
+    Widget action,
+  ) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 13),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: c.border)),
+    ),
+    child: LayoutBuilder(
+      builder: (context, bounds) {
+        final description = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: _inter(14, c.text, weight: FontWeight.w700)),
+            if (subtitle.isNotEmpty) Text(subtitle, style: _inter(13, c.text3)),
+          ],
+        );
+        return bounds.maxWidth < 380
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [description, const SizedBox(height: 8), action],
+              )
+            : Row(
+                children: [
+                  Expanded(child: description),
+                  const SizedBox(width: 12),
+                  action,
+                ],
+              );
+      },
+    ),
+  );
+
+  Future<void> _manageGoogleAccount() async {
+    try {
+      if (await launchUrl(
+        Uri.https('myaccount.google.com', '/'),
+        mode: LaunchMode.externalApplication,
+      )) {
+        return;
+      }
+    } catch (_) {
+      // The platform can reject external links.
+    }
+    if (mounted) _showToast('Could not open Google Account.');
+  }
+
+  Widget _preferenceAction(_Colors c, String label, VoidCallback? onPressed) =>
+      OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: c.accent,
+          side: BorderSide(color: c.accentBorder),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: Text(label),
+      );
+
+  Widget _readiness(
+    _Colors c,
+    int completed,
+    List<(String, bool, String, VoidCallback)> steps,
+    bool mobile,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _card(
+        c,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _heading(c, 'Profile readiness'),
+            const SizedBox(height: 4),
+            Text(
+              'Add a few details so recruiters can reach you.',
+              style: _inter(13, c.text3, height: 1.55),
+            ),
+            const SizedBox(height: 18),
+            if (_profileLoading)
+              const LinearProgressIndicator()
+            else if (_profileError)
+              TextButton(
+                onPressed: () => _loadProfile(forceRefresh: true),
+                child: const Text('Retry loading profile readiness'),
+              )
+            else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$completed of ${steps.length} complete',
+                      style: _inter(13, c.text, weight: FontWeight.w700),
+                    ),
+                  ),
+                  Text(
+                    '${(completed * 100 / steps.length).round()}%',
+                    style: _inter(13, c.accent, weight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              LinearProgressIndicator(
+                value: completed / steps.length,
+                minHeight: 8,
+                color: c.accent,
+                backgroundColor: c.border,
+                borderRadius: BorderRadius.circular(99),
+              ),
+              const SizedBox(height: 14),
+              for (final (index, step) in steps.indexed) ...[
+                if (index > 0) Divider(height: 1, color: c.border),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    children: [
+                      SizedBox.square(
+                        dimension: 24,
+                        child: step.$2
+                            ? DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: c.accentSoft,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.check,
+                                  size: 15,
+                                  color: c.accent,
+                                ),
+                              )
+                            : CustomPaint(painter: _ReadinessRing(c.text3)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          step.$1,
+                          style: _inter(
+                            14,
+                            step.$2 ? c.text2 : c.text,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (!step.$2) ...[
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: _profile == null ? null : step.$4,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: c.text,
+                            side: BorderSide(color: c.border),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: Text(step.$3),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      _signOutButton(c, mobile: mobile),
+    ],
+  );
+
+  Widget _row(
+    _Colors c,
+    String label,
+    String value, {
+    Widget? icon,
+    Widget? action,
+  }) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 11),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: c.border)),
+    ),
+    child: Row(
+      children: [
+        if (icon != null) ...[icon, const SizedBox(width: 8)],
+        Expanded(flex: 2, child: Text(label, style: _inter(13, c.text2))),
+        if (value.isNotEmpty || icon == null) ...[
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value.isEmpty ? 'Not added' : value,
+              textAlign: TextAlign.end,
+              style: _inter(13, c.text, weight: FontWeight.w700),
+            ),
+          ),
+        ],
+        if (action != null) action,
       ],
     ),
   );
 
-  Widget _themeControl(
-    _Colors c, {
-    bool mobile = false,
-    bool compact = false,
-  }) => ThemeSwitcher(
-    surface: c.surface,
-    track: c.surface2,
-    border: c.border,
-    foreground: c.text,
-    inactiveForeground: c.text2,
-    labelStyle: _inter(mobile ? 13.5 : 13, c.text, weight: FontWeight.w500),
-    mobile: mobile,
-    horizontalPadding: compact
-        ? 5
-        : mobile
-        ? 11
-        : 9,
-  );
+  Color _blue(_Colors c) =>
+      c.dark ? const Color(0xFF8CA7FF) : const Color(0xFF2456DB);
+  Widget _heading(_Colors c, String label) =>
+      Text(label, style: _inter(16, c.text, weight: FontWeight.w700));
+  Widget _primary(_Colors c, String label, VoidCallback? onPressed) =>
+      FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: CandidateButtonStyle.deepTeal,
+          foregroundColor: Colors.white,
+          textStyle: _inter(13, Colors.white, weight: FontWeight.w700),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: Text(label),
+      );
 
-  Widget _link(String label, _Colors c, VoidCallback onPressed) => TextButton(
-    onPressed: onPressed,
-    style: TextButton.styleFrom(
-      padding: EdgeInsets.zero,
-      minimumSize: const Size(0, 24),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      foregroundColor: CandidateButtonStyle.deepTeal,
-    ),
-    child: Text(
-      label,
-      style: _inter(13, CandidateButtonStyle.deepTeal, weight: FontWeight.w600),
-    ),
-  );
-
-  Widget _button(
-    String label,
-    _Colors c, {
-    required VoidCallback onPressed,
-    bool primary = false,
-    bool compact = false,
+  Widget _pill(
+    _Colors c,
+    String text, {
+    Color? tint,
+    Color? surface,
+    IconData? icon,
   }) => Container(
-    height: compact ? 32 : 40,
-    decoration: primary
-        ? CandidateButtonStyle.primaryDecoration(radius: 12)
-        : null,
-    child: OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        backgroundColor: primary ? Colors.transparent : Colors.white,
-        foregroundColor: primary
-            ? Colors.white
-            : CandidateButtonStyle.secondaryText,
-        side: BorderSide(
-          color: primary ? Colors.transparent : CandidateButtonStyle.edge,
-        ),
-        padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Text(
-        label,
-        style: _inter(
-          13.5,
-          primary ? Colors.white : CandidateButtonStyle.secondaryText,
-          weight: FontWeight.w600,
-        ),
-      ),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+    decoration: BoxDecoration(
+      color: surface ?? (tint == null ? c.bg : c.accentSoft),
+      borderRadius: BorderRadius.circular(99),
     ),
+    child: Text.rich(
+      TextSpan(
+        children: [
+          if (icon != null)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Icon(icon, size: 13, color: tint),
+            ),
+          TextSpan(text: icon == null ? text : ' $text'),
+        ],
+      ),
+      style: _inter(12, tint ?? c.text2, weight: FontWeight.w600),
+    ),
+  );
+
+  Widget _card(_Colors c, Widget child) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: c.surface,
+      border: Border.all(color: c.border),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: child,
   );
 }

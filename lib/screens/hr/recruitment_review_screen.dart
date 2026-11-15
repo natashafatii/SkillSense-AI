@@ -1,12 +1,20 @@
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
+import '../../models/interview_analysis_contract.dart';
 import '../../models/application.dart';
+import '../../models/interview.dart';
 import '../../models/recruitment_evidence.dart';
 import '../../services/recruitment_review_controller.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/feedback_review_panel.dart';
 import '../../widgets/recruiter_interview_dashboard.dart';
+
+const _reviewBlue = Color(0xFF3E6FF0);
+const _reviewTeal = Color(0xFF0E8F76);
+const _reviewRed = Color(0xFFC8374D);
+const _reviewAmber = Color(0xFFD9892B);
 
 String percent(double? value, {bool ratio = false}) => value == null
     ? 'Unavailable'
@@ -40,10 +48,60 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
   String? transcriptId, compareTranscriptId, evaluationId, compareEvaluationId;
   DateTime? scheduledAt;
   int _dashboardRefresh = 0;
+  int _tab = 0;
+  bool _decisionPreview = false;
+  CancelToken? _checklistRequest;
+  String? _checklistAttempt;
+  RecruiterReportResult? _checklistReport;
+  bool _checklistLoading = false;
+
+  Future<void> _loadChecklist(String? id, {bool refresh = false}) async {
+    if (!refresh && _checklistAttempt == id) return;
+    _checklistRequest?.cancel();
+    _checklistAttempt = id;
+    final token = _checklistRequest = CancelToken();
+    setState(() {
+      _checklistReport = null;
+      _checklistLoading = id != null;
+    });
+    if (id == null) return;
+    try {
+      final recording = await controller.service.interviewRecording(
+        id,
+        cancelToken: token,
+      );
+      if (token.isCancelled || recording.sessionId == null) return;
+      final report = await controller.service.interviewBehavior(
+        InterviewSessionIdentity(
+          interviewId: id,
+          sessionId: recording.sessionId!,
+        ),
+        cancelToken: token,
+      );
+      if (mounted && !token.isCancelled) {
+        setState(() => _checklistReport = report);
+      }
+    } catch (_) {
+      // Missing or inaccessible behavioral data is shown as unavailable.
+    } finally {
+      if (mounted && !token.isCancelled) {
+        setState(() => _checklistLoading = false);
+      }
+    }
+  }
+
+  static const _tabs = [
+    'Overview',
+    'Evidence',
+    'Evaluation',
+    'Feedback',
+    'History',
+  ];
 
   void _refresh() {
-    if (widget.showInterviewDashboard) setState(() => _dashboardRefresh++);
+    setState(() => _dashboardRefresh++);
     controller.refresh();
+    _loadChecklist(controller.review?.interview?.id, refresh: true);
   }
 
   @override
@@ -65,11 +123,15 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       decisionReason.clear();
       overrideReason.clear();
     }
-    if (mounted) setState(() {});
+    if (mounted) {
+      _loadChecklist(controller.review?.interview?.id);
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
+    _checklistRequest?.cancel();
     controller.removeListener(_changed);
     controller.dispose();
     reason.dispose();
@@ -79,6 +141,14 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
   }
 
   Widget section(String title, List<Widget> children) => Card(
+    margin: const EdgeInsets.only(bottom: 14),
+    elevation: 0,
+    color: context.themeSurface(Colors.white),
+    surfaceTintColor: Colors.transparent,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: context.themeOutline(const Color(0xFFE2E8F2))),
+    ),
     child: Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -103,54 +173,88 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           child: Text(text),
         ),
       );
-  Future<bool> confirm(String title, String detail) async =>
+  Future<bool> confirm(
+    String title,
+    String detail, {
+    TextEditingController? input,
+    TextEditingController? justification,
+  }) async =>
       await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: Text(title),
-          content: SingleChildScrollView(child: Text(detail)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(detail),
+                if (input != null) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: input,
+                    maxLength: 2000,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Reason (required)',
+                    ),
+                  ),
+                ],
+                if (justification != null)
+                  TextField(
+                    controller: justification,
+                    maxLength: 2000,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Override justification (required)',
+                    ),
+                  ),
+              ],
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Confirm'),
+            ListenableBuilder(
+              listenable: Listenable.merge([input, justification]),
+              builder: (_, _) => FilledButton(
+                onPressed:
+                    (input?.text.trim().isEmpty ?? false) ||
+                        (justification?.text.trim().isEmpty ?? false)
+                    ? null
+                    : () => Navigator.pop(context, true),
+                child: const Text('Confirm'),
+              ),
             ),
           ],
         ),
       ) ??
       false;
-  Future<void> decision(String outcome, {bool override = false}) async {
-    final r = controller.review!;
-    final rationale = decisionReason.text.trim();
-    final justification = override ? overrideReason.text.trim() : null;
-    if (rationale.isEmpty || justification == '') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Enter a decision reason and a separate justification if overriding.',
-          ),
-        ),
-      );
-      return;
-    }
+  Future<void> decision(
+    String outcome, {
+    bool override = false,
+    RecruitmentReview? reviewed,
+  }) async {
+    final r = reviewed ?? controller.review!;
+
     final accepted = await confirm(
       override
           ? 'Early decision override: $outcome'
           : 'Record $outcome decision',
       '${r.application.candidateName ?? r.application.candidateEmail}\nApplication version ${r.application.version}\n'
-      'Current outcome: ${r.decision?.outcome ?? 'None'}\nLatest evaluation: ${r.latestEvaluation?.revision.value ?? 'Unavailable'} (${r.latestEvaluation?.id ?? 'Unavailable'})\n'
-      '${override ? 'You are deliberately overriding normal evidence readiness.\nJustification: $justification\n' : ''}Reason: $rationale',
+      'Current outcome: ${r.decision?.outcome ?? 'None'}\nLatest evaluation: ${r.latestEvaluation?.revision.value ?? 'Unavailable'} (${r.latestEvaluation?.id ?? 'Unavailable'})',
+      input: decisionReason,
+      justification: override ? overrideReason : null,
     );
     if (!accepted || !mounted) return;
     await controller.command((captured) async {
       await controller.service.decide(
         captured,
         outcome,
-        rationale,
-        overrideReason: justification,
+        decisionReason.text.trim(),
+        overrideReason: override ? overrideReason.text.trim() : null,
       );
     }, reviewed: r);
   }
@@ -182,22 +286,23 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
 
   Future<void> recover(bool reopen) async {
     final reviewed = controller.review!;
-    if (scheduledAt == null) {
-      await chooseTime();
-      return;
-    }
+    scheduledAt = null;
+    await chooseTime();
+    final time = scheduledAt;
+    if (!mounted || time == null) return;
     if (!await confirm(
       reopen ? 'Schedule another attempt' : 'Reschedule this interview',
       'Time: ${localTime(scheduledAt)}\nReason: ${reason.text}\n'
       '${reopen ? 'A new interview identity and frozen question copies will be created. Historical evidence is retained.' : 'This interview keeps its current identity.'}',
+      input: reason,
     )) {
       return;
     }
     await controller.command((r) async {
       final next = await controller.service.recover(
         r,
-        scheduledAt!,
-        reason.text,
+        time,
+        reason.text.trim(),
         reopen: reopen,
       );
       controller.interviewId = next.id;
@@ -383,7 +488,8 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         () async {
           if (await confirm(
             'Change pinned transcript?',
-            'Revision ${selected!.number}\nReason: ${reason.text}\nA new evaluation will be requested. Released reports remain historical.',
+            'Revision ${selected!.number}\nA new evaluation will be requested. Released reports remain historical.',
+            input: reason,
           )) {
             await controller.command((captured) async {
               await controller.service.selectTranscript(
@@ -433,8 +539,27 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
               line(
                 'Frozen question ID ${a.questionId}\nCriteria: ${a.criteria}\nUncertainty: ${percent(a.uncertainty, ratio: true)}\n${a.rationale}\nStrengths: ${a.strengths.join('; ')}\nGaps: ${a.gaps.join('; ')}',
               ),
-              for (final evidence in a.evidence)
-                turnLink(t, evidence.turnId, quote: evidence.quote),
+              _cardGrid([
+                section('Answer excerpt', [
+                  if (a.evidence.isEmpty) const Text('No excerpt available.'),
+                  for (final evidence in a.evidence)
+                    turnLink(t, evidence.turnId, quote: evidence.quote),
+                ]),
+                section('Extracted evidence', [
+                  for (final extracted
+                      in e.extraction?.questions.where(
+                            (item) => item.questionId == a.questionId,
+                          ) ??
+                          const <ExtractedAnswer>[])
+                    line(
+                      '${extracted.state} · ${percent(extracted.confidence, ratio: true)} confidence',
+                    ),
+                  if (a.strengths.isNotEmpty) line(a.strengths.join('\n')),
+                  if (a.gaps.isNotEmpty) line(a.gaps.join('\n')),
+                  if (e.extraction == null)
+                    const Text('No extraction available.'),
+                ]),
+              ]),
             ],
           ),
         if (e.extraction == null)
@@ -522,6 +647,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           'Your selected evaluation is outside the available history window. Select a revision to inspect it.',
         ),
       if (selected != null) evaluationView(r, selected),
+      if (selected != null) _coverageMap(r, selected),
       DropdownButtonFormField<String>(
         key: ValueKey(
           'evaluation-comparison-${r.interview!.id}-${comparison?.id}',
@@ -546,24 +672,6 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           title: Text('Comparison: evaluation ${comparison.revision.value}'),
           children: [evaluationView(r, comparison)],
         ),
-      button(
-        'Request evaluation rerun',
-        () async {
-          if (await confirm(
-            'Rerun latest evaluation?',
-            'Revision ${r.latestEvaluation?.revision.value}\nReason: ${reason.text}\nCurrent score will be invalidated while new evidence is processed.',
-          )) {
-            await controller.command((captured) async {
-              await controller.service.rerun(captured, reason.text);
-            }, reviewed: r);
-          }
-        },
-        enabled:
-            r.interview?.status == 'DONE' &&
-            r.interview?.completedAt != null &&
-            r.interview?.completionOutcome == 'USABLE' &&
-            r.latestEvaluation?.terminal == true,
-      ),
     ]);
   }
 
@@ -580,140 +688,1411 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         r.interview!.questions.any((question) => question.isApproved) &&
         !finalStage;
     final d = r.decision;
+    final metrics = _metrics(r);
+    final weights = r.latestAttempt ? controller.currentScore?.weights : null;
     final currentAttemptReviewed = r.interview == null || r.latestAttempt;
-    return section('Decisions and interview recovery', [
-      if (!currentAttemptReviewed)
-        const Text(
-          'Select the latest attempt to review its current evidence before recording or reversing a decision.',
-        ),
-      if (d == null)
-        const Text(
-          'No hiring decision has been recorded. Feedback release is a separate step.',
-        )
-      else
-        line(
-          'Current outcome: ${d.legacy ? 'Legacy — unrecorded decision' : d.outcome}\nActor: ${d.actor ?? 'Unavailable'} · ${localTime(d.createdAt)}\nDecision evaluation: ${d.evaluation ?? 'Unavailable'}\nReason: ${d.reason}${d.override ? '\nOverride: ${d.overrideReason}' : ''}',
-        ),
-      if (r.latestEvaluation case final evaluation?)
-        Text(
-          'Latest evaluation: revision ${evaluation.revision.value} · ${evaluation.status}',
-        ),
-      if (currentAttemptReviewed &&
-          (d == null && !finalStage ||
-              r.application.status == ApplicationStatus.decision))
-        TextField(
-          key: const Key('hiring-decision-reason'),
-          controller: decisionReason,
-          maxLength: 2000,
-          minLines: 2,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            labelText: 'Decision reason (required)',
-            helperText: 'Used for Hire, Reject, early override, or reversal.',
-          ),
-        ),
-      Wrap(
-        children: [
-          button(
-            'HIRE',
-            () => decision('HIRE'),
-            enabled: r.normalDecisionReady && d == null && !finalStage,
-          ),
-          button(
-            'REJECT',
-            () => decision('REJECT'),
-            enabled: r.normalDecisionReady && d == null && !finalStage,
-          ),
-        ],
+    final enabled =
+        controller.canCommand && r.normalDecisionReady && !finalStage;
+    return _reviewCard(
+      'Decision',
+      badge: _pill(
+        d == null ? 'PENDING' : d.outcome ?? 'UNRECORDED',
+        d == null
+            ? _reviewAmber
+            : d.outcome == 'REJECT'
+            ? _reviewRed
+            : _reviewTeal,
       ),
-      ExpansionTile(
-        title: const Text('Deliberate early override'),
-        children: [
+      children: [
+        if (!currentAttemptReviewed)
           const Text(
-            'Use only when deliberately deciding before normal evidence readiness. A separate justification is required.',
+            'Select the latest attempt to record or reverse a decision.',
           ),
-          TextField(
-            key: const Key('decision-override-reason'),
-            controller: overrideReason,
-            maxLength: 2000,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'Override justification',
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: context.themeSurface(const Color(0xFFF5F7FB)),
+            border: Border.all(
+              color: context.themeOutline(const Color(0xFFE2E8F2)),
             ),
+            borderRadius: BorderRadius.circular(12),
           ),
-          Wrap(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              button(
-                'Override: HIRE',
-                () => decision('HIRE', override: true),
-                enabled: currentAttemptReviewed && d == null && !finalStage,
+              Text(
+                d == null
+                    ? 'No decision yet'
+                    : d.outcome ?? 'Unrecorded decision',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              button(
-                'Override: REJECT',
-                () => decision('REJECT', override: true),
-                enabled: currentAttemptReviewed && d == null && !finalStage,
+              const SizedBox(height: 7),
+              Text(
+                d == null
+                    ? 'Review the evidence, then record Hire or Reject with a reason.'
+                    : [
+                        d.reason,
+                        'Recorded ${_scheduleTime(d.createdAt)}',
+                        if (d.override) d.overrideReason,
+                      ].whereType<String>().join('\n'),
+              ),
+            ],
+          ),
+        ),
+        if (d == null && !_decisionPreview) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _reviewTeal,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 40),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: enabled ? () => decision('HIRE') : null,
+                  icon: const Icon(Icons.check, size: 16),
+                  label: const Text('Hire'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _reviewRed,
+                    side: const BorderSide(color: Color(0xFFF1CCD2)),
+                    minimumSize: const Size(0, 40),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: enabled ? () => decision('REJECT') : null,
+                  icon: const Icon(Icons.close, size: 16),
+                  label: const Text('Reject'),
+                ),
               ),
             ],
           ),
         ],
-      ),
-      button(
-        'Reverse recorded decision',
-        () async {
-          final rationale = decisionReason.text.trim();
-          if (rationale.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Enter a reason for reversing the decision.'),
+        const SizedBox(height: 12),
+        const Divider(),
+        const SizedBox(height: 6),
+        _eyebrow('Recommendation'),
+        _scoreBar('Combined', metrics[2].$2, metrics[2].$3),
+        for (final (index, component) in [(0, 'match'), (1, 'interview')])
+          _scoreBar(
+            weights?[component] == null
+                ? metrics[index].$1
+                : '${metrics[index].$1} · ${percent(weights?[component], ratio: true)}',
+            metrics[index].$2,
+            metrics[index].$3,
+          ),
+        if (!_decisionPreview) ...[
+          const Divider(),
+          const SizedBox(height: 10),
+          _eyebrow('Other actions'),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, bounds) {
+              final twoColumns =
+                  bounds.maxWidth >= 260 &&
+                  MediaQuery.textScalerOf(context).scale(14) <= 16;
+              final width = twoColumns
+                  ? (bounds.maxWidth - 8) / 2
+                  : bounds.maxWidth;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _decisionAction(
+                    width,
+                    'Reschedule',
+                    Icons.calendar_today_outlined,
+                    r.latestAttempt &&
+                        r.interview?.status == 'SCHEDULED' &&
+                        r.interview?.workflowState == 'SCHEDULED' &&
+                        !finalStage,
+                    () => recover(false),
+                  ),
+                  _decisionAction(
+                    width,
+                    'New attempt',
+                    Icons.add,
+                    canReopen,
+                    () => recover(true),
+                  ),
+                  _decisionAction(
+                    width,
+                    'Early override',
+                    Icons.bolt_outlined,
+                    currentAttemptReviewed && d == null && !finalStage,
+                    () => _earlyOverride(r),
+                  ),
+                  _decisionAction(
+                    width,
+                    'Rerun evaluation',
+                    Icons.refresh,
+                    r.latestAttempt &&
+                        r.interview?.status == 'DONE' &&
+                        r.interview?.completedAt != null &&
+                        r.interview?.completionOutcome == 'USABLE' &&
+                        r.latestEvaluation?.terminal == true,
+                    () => _rerunEvaluation(r),
+                  ),
+                ],
+              );
+            },
+          ),
+          if (currentAttemptReviewed &&
+              r.application.status == ApplicationStatus.decision)
+            button(
+              'Reverse recorded decision',
+              () async {
+                if (await confirm(
+                  'Reverse current decision?',
+                  'Outcome ${d?.outcome ?? 'Legacy / unavailable'}\nDecision evaluation ${d?.evaluation ?? 'Unavailable'} (revision ${r.evaluations?.revisions.where((e) => e.id == d?.evaluation).firstOrNull?.revision.value ?? 'Unavailable'})\nCurrent evaluation revision ${r.latestEvaluation?.revision.value ?? 'Unavailable'}\nApplication version ${r.application.version}\nThis does not record a replacement decision.',
+                  input: decisionReason,
+                )) {
+                  await controller.command((captured) async {
+                    await controller.service.reverse(
+                      captured,
+                      decisionReason.text.trim(),
+                    );
+                  }, reviewed: r);
+                }
+              },
+              enabled:
+                  currentAttemptReviewed &&
+                  r.application.status == ApplicationStatus.decision,
+            ),
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.lock_outline, size: 15),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'If this interview changes while you are reviewing, you will be asked to refresh before acting.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.5,
+                    color: context.themeForeground(const Color(0xFF5F6C85)),
+                  ),
+                ),
               ),
-            );
-            return;
-          }
-          if (await confirm(
-            'Reverse current decision?',
-            'Outcome ${d?.outcome ?? 'Legacy / unavailable'}\nDecision evaluation ${d?.evaluation ?? 'Unavailable'} (revision ${r.evaluations?.revisions.where((e) => e.id == d?.evaluation).firstOrNull?.revision.value ?? 'Unavailable'})\nCurrent evaluation revision ${r.latestEvaluation?.revision.value ?? 'Unavailable'}\nApplication version ${r.application.version}\nReason: $rationale\nThis does not record a replacement decision.',
-          )) {
-            await controller.command((captured) async {
-              await controller.service.reverse(captured, rationale);
-            }, reviewed: r);
-          }
-        },
-        enabled:
-            currentAttemptReviewed &&
-            r.application.status == ApplicationStatus.decision,
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _decisionAction(
+    double width,
+    String label,
+    IconData icon,
+    bool eligible,
+    VoidCallback action,
+  ) => SizedBox(
+    width: width,
+    child: OutlinedButton(
+      onPressed: eligible && controller.canCommand ? action : null,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 42),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        side: BorderSide(color: context.themeOutline(const Color(0xFFE2E8F2))),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      TextButton(
-        onPressed: controller.busy ? null : chooseTime,
-        child: Text(
-          scheduledAt == null
-              ? 'Choose future interview time'
-              : localTime(scheduledAt),
+      child: Row(
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 12))),
+        ],
+      ),
+    ),
+  );
+
+  Future<void> _earlyOverride(RecruitmentReview review) async {
+    final outcome = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Early decision override'),
+        children: [
+          for (final outcome in ['HIRE', 'REJECT'])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, outcome),
+              child: Text(_displayStatus(outcome)),
+            ),
+        ],
+      ),
+    );
+    if (mounted && outcome != null && controller.canCommand) {
+      await decision(outcome, override: true, reviewed: review);
+    }
+  }
+
+  Future<void> _rerunEvaluation(RecruitmentReview review) async {
+    if (!await confirm(
+          'Rerun latest evaluation?',
+          'Revision ${review.latestEvaluation?.revision.value}\nCurrent score will be invalidated while new evidence is processed.',
+          input: reason,
+        ) ||
+        !mounted) {
+      return;
+    }
+    await controller.command((captured) async {
+      await controller.service.rerun(captured, reason.text.trim());
+    }, reviewed: review);
+  }
+
+  Widget _workspace(RecruitmentReview? r) {
+    final notices = <Widget>[
+      if (controller.error != null)
+        section('Review required', [line(controller.error!)]),
+      if (controller.requiresReview)
+        section('Unsaved input retained', [
+          const Text(
+            'Refresh, compare the current versions with your intended command, then explicitly accept the reviewed state. No command has been automatically retried.',
+          ),
+          TextButton(
+            onPressed: controller.loading || controller.busy
+                ? null
+                : () => controller.refresh(poll: false),
+            child: const Text('Refresh current state'),
+          ),
+          TextButton(
+            onPressed: controller.error == null && !controller.loading
+                ? controller.confirmRefreshedReview
+                : null,
+            child: const Text('I reviewed the current versions'),
+          ),
+        ]),
+      if (controller.retryAt != null)
+        line('Retry permitted after ${localTime(controller.retryAt)}'),
+    ];
+    if (r == null) {
+      return ListView(padding: const EdgeInsets.all(20), children: notices);
+    }
+    final tabs = DefaultTabController(
+      key: ValueKey(_tab),
+      length: _tabs.length,
+      initialIndex: _tab,
+      child: TabBar(
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        onTap: (index) => setState(() => _tab = index),
+        labelStyle: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        indicatorSize: TabBarIndicatorSize.label,
+        indicatorColor: context.themeForeground(const Color(0xFF16213A)),
+        labelColor: context.themeForeground(const Color(0xFF16213A)),
+        unselectedLabelColor: context.themeForeground(const Color(0xFF3D4A63)),
+        dividerColor: context.themeOutline(const Color(0xFFE2E8F2)),
+        tabs: [
+          for (final (index, label) in _tabs.indexed)
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label),
+                  if (index == 2 || index == 3) ...[
+                    const SizedBox(width: 8),
+                    _pill(
+                      '${index == 2 ? r.latestEvaluation?.questions.length ?? r.interview?.questions.length ?? 0 : r.feedback.length}',
+                      const Color(0xFF5F6C85),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    final summary = _reviewHeader(r);
+    return LayoutBuilder(
+      builder: (context, bounds) {
+        final wide =
+            bounds.maxWidth >= 1080 &&
+            bounds.maxHeight >= 440 &&
+            MediaQuery.textScalerOf(context).scale(14) <= 18;
+        if (!wide) {
+          return ListView(
+            padding: const EdgeInsets.all(14),
+            children: [
+              summary,
+              tabs,
+              const SizedBox(height: 14),
+              ...notices,
+              ..._tabContent(r),
+              decisions(r),
+            ],
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: bounds.maxHeight * .35),
+                child: SingleChildScrollView(primary: false, child: summary),
+              ),
+              tabs,
+              const SizedBox(height: 22),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, viewport) => ListView(
+                          key: PageStorageKey(
+                            'review-${r.interview?.id}-$_tab',
+                          ),
+                          primary: false,
+                          children: [
+                            ...notices,
+                            ..._tabContent(
+                              r,
+                              viewportHeight: viewport.maxHeight,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    SizedBox(
+                      width: (bounds.maxWidth * .27).clamp(300.0, 380.0),
+                      child: SingleChildScrollView(
+                        key: PageStorageKey(
+                          'review-decision-${r.interview?.id}',
+                        ),
+                        primary: false,
+                        child: decisions(r),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _eyebrow(String text) => Text(
+    text.toUpperCase(),
+    style: TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1,
+      color: context.themeForeground(const Color(0xFF3D4A63)),
+    ),
+  );
+
+  Widget _pill(String label, Color color) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .13),
+      borderRadius: BorderRadius.circular(30),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: context.themeForeground(color),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
       ),
-      Wrap(
-        children: [
-          button(
-            'Reschedule',
-            () => recover(false),
-            enabled:
-                r.latestAttempt &&
-                r.interview?.status == 'SCHEDULED' &&
-                r.interview?.workflowState == 'SCHEDULED' &&
-                !finalStage,
+    ),
+  );
+
+  Widget _reviewCard(
+    String title, {
+    Widget? badge,
+    Widget? leading,
+    required List<Widget> children,
+  }) => Card(
+    margin: const EdgeInsets.only(bottom: 14),
+    elevation: 1,
+    shadowColor: Colors.black.withValues(alpha: .10),
+    surfaceTintColor: Colors.transparent,
+    color: context.themeSurface(Colors.white),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: context.themeOutline(const Color(0xFFE2E8F2))),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (leading != null) ...[leading, const SizedBox(width: 10)],
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (badge != null) badge,
+            ],
           ),
-          button(
-            'Schedule another attempt',
-            () => recover(true),
-            enabled: canReopen,
+        ),
+        Divider(
+          height: 1,
+          color: context.themeOutline(const Color(0xFFEDF1F7)),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  String _scheduleTime(DateTime? time) {
+    if (time == null) return 'Unavailable';
+    final local = time.toLocal();
+    final formats = MaterialLocalizations.of(context);
+    final date = formats.formatShortMonthDay(local);
+    return '$date, ${formats.formatTimeOfDay(TimeOfDay.fromDateTime(local), alwaysUse24HourFormat: true)}';
+  }
+
+  String _displayStatus(String value) => value
+      .toLowerCase()
+      .split('_')
+      .where((word) => word.isNotEmpty)
+      .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+      .join(' ');
+
+  Widget _reviewHeader(RecruitmentReview r) {
+    final interview = r.interview;
+    final app = r.application;
+    final name = app.candidateName?.trim().isNotEmpty == true
+        ? app.candidateName!.trim()
+        : app.candidateEmail.trim();
+    final initials = name
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .map((part) => part.characters.first.toUpperCase())
+        .join();
+    Widget field(String label, Widget content) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [_eyebrow(label), const SizedBox(height: 4), content],
+    );
+    Widget status(String label, String value, Color color) => field(
+      label,
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            _displayStatus(value),
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
       ),
-      const Text(
-        'Eligibility and lifecycle changes are validated by the server. Rescheduling retains identity; another attempt receives a new identity and preserves historical evidence.',
+    );
+    final identity = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: const Color(0xFFE4F5F0),
+          child: Text(
+            initials,
+            style: const TextStyle(
+              color: Color(0xFF067A63),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name.isEmpty ? 'Candidate unavailable' : name,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text('${app.jobTitle} · Application v${app.version}'),
+            ],
+          ),
+        ),
+      ],
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+      decoration: BoxDecoration(
+        color: context.themeSurface(Colors.white),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.themeOutline(const Color(0xFFE2E8F2)),
+        ),
       ),
+      child: LayoutBuilder(
+        builder: (context, bounds) {
+          final fields = <Widget>[
+            identity,
+            status('Stage', app.status.value, _reviewBlue),
+            if (interview != null) ...[
+              status('Workflow', interview.workflowState, _reviewBlue),
+              status(
+                'Completion',
+                interview.completionOutcome,
+                interview.completionOutcome == 'USABLE'
+                    ? _reviewTeal
+                    : _reviewAmber,
+              ),
+              status(
+                'Evaluation',
+                interview.evaluationStatus,
+                interview.evaluationStatus == 'READY'
+                    ? _reviewTeal
+                    : _reviewAmber,
+              ),
+              field(
+                'Schedule',
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Scheduled ${_scheduleTime(interview.scheduledAt)}'),
+                    Text('Completed ${_scheduleTime(interview.completedAt)}'),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 194,
+                child: field(
+                  'Attempt',
+                  DropdownButtonFormField<String>(
+                    key: ValueKey(interview.id),
+                    initialValue: r.attempts.any((a) => a.id == interview.id)
+                        ? interview.id
+                        : null,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    items: [
+                      for (final (index, entry) in r.attempts.indexed)
+                        DropdownMenuItem(
+                          value: entry.id,
+                          child: Text(
+                            'Attempt ${r.attempts.length - index}${index == 0 ? ' · Latest' : ''}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: controller.busy || controller.loading
+                        ? null
+                        : (id) {
+                            if (id == null || id == interview.id) return;
+                            setState(
+                              () => transcriptId = compareTranscriptId =
+                                  evaluationId = compareEvaluationId = null,
+                            );
+                            controller.selectAttempt(id);
+                          },
+                  ),
+                ),
+              ),
+            ],
+          ];
+          return Wrap(
+            spacing: 14,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.spaceBetween,
+            children: [
+              for (final (index, item) in fields.indexed)
+                if (index == 0 || bounds.maxWidth < 1140)
+                  item
+                else
+                  Container(
+                    padding: const EdgeInsets.only(left: 14),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(
+                          color: context.themeOutline(const Color(0xFFEDF1F7)),
+                        ),
+                      ),
+                    ),
+                    child: item,
+                  ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _status(String label, String value) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: (switch (value) {
+          'READY' || 'USABLE' || 'EVALUATED' || 'HIRE' => _reviewTeal,
+          'REJECT' || 'FAILED' => _reviewRed,
+          'PENDING' || 'WAITING' => _reviewAmber,
+          _ => _reviewBlue,
+        }).withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(40),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Text(
+          '$label: ${value.replaceAll('_', ' ')}',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: colors.onPrimaryContainer,
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _tabContent(RecruitmentReview r, {double? viewportHeight}) {
+    switch (_tab) {
+      case 1:
+        return [
+          if (r.interview != null)
+            RecruiterInterviewDashboard(
+              key: ValueKey(r.interview!.id),
+              review: r,
+              service: controller.service,
+              refreshVersion: _dashboardRefresh,
+              viewportHeight: viewportHeight,
+            )
+          else
+            section('Evidence', [
+              const Text('No interview attempt available.'),
+            ]),
+          if (r.transcripts != null) transcripts(r),
+        ];
+      case 2:
+        return [
+          if (r.evaluations != null && r.transcripts != null) evaluations(r),
+          if (r.transcripts != null) transcripts(r),
+          if (r.evaluations == null || r.transcripts == null)
+            section('Evaluation', [
+              const Text('No evaluation evidence available for this attempt.'),
+            ]),
+        ];
+      case 3:
+        return [
+          section('Candidate feedback', [
+            _status('Release', 'Feedback is shared only after approval'),
+          ]),
+          if (r.feedback.isNotEmpty)
+            _cardGrid([
+              for (final report in r.feedback.take(3))
+                section('Version ${report.revision.value}', [
+                  _status(
+                    'Status',
+                    report.status == 'RELEASED' ? 'Sent' : report.status,
+                  ),
+                  if (report.releasedAt != null)
+                    line(localTime(report.releasedAt)),
+                ]),
+            ]),
+          FeedbackReviewPanel(
+            key: ValueKey('feedback-${r.application.id}-${r.interview?.id}'),
+            controller: controller,
+          ),
+          section('Feedback history', [
+            if (r.feedback.isEmpty) const Text('No feedback prepared.'),
+            for (final report in r.feedback)
+              ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: Text(
+                  'Revision ${report.revision.value} · ${report.status}',
+                ),
+                subtitle: Text(
+                  'Prepared ${localTime(report.preparedAt)}\nReleased ${localTime(report.releasedAt)} · Retracted ${localTime(report.retractedAt)}',
+                ),
+              ),
+          ]),
+        ];
+      case 4:
+        return [
+          section('Workflow history', [
+            if (r.actions.isEmpty) const Text('No workflow events recorded.'),
+            for (final event in r.actions)
+              ListTile(
+                leading: const Icon(Icons.history),
+                title: Text(event.action.replaceAll('.', ' · ')),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _status('Source', event.action.split('.').first),
+                    SelectableText(
+                      '${localTime(event.createdAt)}\n${event.reason}${event.details.isEmpty ? '' : '\n${event.details}'}',
+                    ),
+                  ],
+                ),
+              ),
+          ]),
+          section('How score is calculated', [_contribution(r)]),
+          scores(r),
+          section('Evaluation summary', [
+            if (r.latestEvaluation case final evaluation?)
+              line(
+                '${evaluation.status} · Revision ${evaluation.revision.value} · ${percent(evaluation.coverage, ratio: true)} coverage',
+              )
+            else
+              const Text('No evaluation available.'),
+          ]),
+          section('Candidate feedback', [
+            if (r.feedback.isEmpty) const Text('No feedback prepared.'),
+            for (final report in r.feedback)
+              line('Revision ${report.revision.value} · ${report.status}'),
+          ]),
+        ];
+      default:
+        return [
+          LayoutBuilder(
+            builder: (context, bounds) {
+              final recommendation = _recommendation(r);
+              final checklist = _checklist(r);
+              if (bounds.maxWidth < 700) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [recommendation, checklist],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 2, child: recommendation),
+                  const SizedBox(width: 14),
+                  Expanded(child: checklist),
+                ],
+              );
+            },
+          ),
+          _questionTypes(r),
+        ];
+    }
+  }
+
+  List<(String, double?, Color)> _metrics(RecruitmentReview r) {
+    final score = r.latestAttempt ? controller.currentScore : null;
+    return [
+      (
+        'Screening match',
+        score?.match ??
+            (r.application.screening?.status == 'SUCCEEDED'
+                ? r.application.screening?.matchScore
+                : null),
+        _reviewBlue,
+      ),
+      (
+        'Interview score',
+        score?.interview ?? r.latestEvaluation?.score,
+        _reviewRed,
+      ),
+      ('Combined', score?.publishedCombined, _reviewAmber),
+    ];
+  }
+
+  Widget _cardGrid(List<Widget> cards) => LayoutBuilder(
+    builder: (context, bounds) => bounds.maxWidth >= 620
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final (index, card) in cards.indexed) ...[
+                if (index > 0) const SizedBox(width: 14),
+                Expanded(child: card),
+              ],
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: cards,
+          ),
+  );
+
+  Widget _contribution(RecruitmentReview r) {
+    final score = r.latestAttempt ? controller.currentScore : null;
+    final weights = score?.weights ?? const {};
+    if (weights.isEmpty || score?.publishedCombined == null) {
+      return const Text('Score contribution is unavailable.');
+    }
+    final components = [
+      ('Screening', score?.match, weights['match'], _reviewBlue),
+      ('Interview', score?.interview, weights['interview'], _reviewTeal),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (label, value, weight, color) in components)
+          _scoreBar(
+            '$label · ${percent(weight, ratio: true)} weight',
+            value == null || weight == null ? null : value * weight,
+            color,
+          ),
+      ],
+    );
+  }
+
+  Widget _coverageMap(RecruitmentReview review, EvaluationRevision evaluation) {
+    final extraction = evaluation.extraction;
+    final transcript = evaluation.frozenTranscript(review.transcripts!);
+    if (extraction == null || transcript == null || transcript.turns.isEmpty) {
+      return const Text('Transcript coverage map unavailable.');
+    }
+    final unlinked = extraction.unmatchedTurnIds.toSet();
+    final linked = {
+      for (final answer in extraction.questions) ...[
+        if (answer.askedTurnId != null) answer.askedTurnId!,
+        ...answer.answerTurnIds,
+        ...answer.followUpTurnIds,
+        ...answer.spans.map((span) => span.turnId),
+      ],
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        const Text(
+          'Transcript coverage map',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        line(
+          '${transcript.turns.length} turns · ${transcript.turns.where((turn) => !linked.contains(turn.id) || unlinked.contains(turn.id)).length} unlinked',
+        ),
+        Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            for (final (index, turn) in transcript.turns.indexed)
+              SizedBox.square(
+                dimension: 32,
+                child: IconButton(
+                  tooltip:
+                      'Turn ${index + 1} · ${linked.contains(turn.id) && !unlinked.contains(turn.id) ? 'Linked' : 'Unlinked'}',
+                  padding: EdgeInsets.zero,
+                  onPressed: () => showTurn(transcript, turn.id),
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    backgroundColor:
+                        (linked.contains(turn.id) && !unlinked.contains(turn.id)
+                                ? _reviewBlue
+                                : _reviewAmber)
+                            .withValues(alpha: .15),
+                  ),
+                  icon: Text(
+                    '${index + 1}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _questionTypes(RecruitmentReview r) {
+    final evaluation = r.latestEvaluation;
+    final groups = <String, List<InterviewQuestion>>{
+      'BEHAVIORAL': [],
+      'TECHNICAL': [],
+      'SITUATIONAL': [],
+    };
+    final questions = evaluation?.questions.isNotEmpty == true
+        ? evaluation!.questions
+        : r.interview?.questions ?? const <InterviewQuestion>[];
+    if (questions.isEmpty) return const SizedBox.shrink();
+    for (final question in questions) {
+      final category = question.category.trim().toUpperCase();
+      (groups[category.isEmpty ? 'QUESTIONS' : category] ??= []).add(question);
+    }
+    final scores = {
+      if (evaluation?.status == 'READY')
+        for (final answer in evaluation!.answers)
+          answer.questionId: answer.scoreOutOfTen,
+    };
+    return _cardGrid([
+      for (final group in groups.entries)
+        _questionTypeCard(group.key, group.value, scores),
     ]);
   }
+
+  Widget _questionTypeCard(
+    String category,
+    List<InterviewQuestion> questions,
+    Map<String, double?> scores,
+  ) {
+    final values = questions.map((q) => scores[q.id]).whereType<double>();
+    final average = values.isEmpty
+        ? null
+        : values.reduce((a, b) => a + b) / values.length;
+    final color = reviewAnswerScoreColor(average);
+    return _reviewCard(
+      _displayStatus(category),
+      leading: ReviewQuestionBadge(category: category),
+      badge: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: average?.toStringAsFixed(1) ?? '—',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: context.themeForeground(color),
+              ),
+            ),
+            if (average != null) const TextSpan(text: ' /10'),
+          ],
+        ),
+      ),
+      children: [
+        if (average != null)
+          LinearProgressIndicator(
+            value: average / 10,
+            color: color,
+            minHeight: 6,
+            borderRadius: BorderRadius.circular(8),
+            backgroundColor: context.themeChartTrack(const Color(0xFFE7ECF4)),
+          ),
+        if (questions.isEmpty) const Text('No questions in this category.'),
+        for (final question in questions) ...[
+          const Divider(height: 22),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    question.text,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  scores[question.id]?.toStringAsFixed(1) ?? '—',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: context.themeForeground(
+                      reviewAnswerScoreColor(scores[question.id]),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _recommendation(RecruitmentReview r) {
+    final score = r.latestAttempt ? controller.currentScore : null;
+    final coverage =
+        (r.latestAttempt ? controller.currentScore?.answerCoverage : null) ??
+        r.latestEvaluation?.coverage;
+    final weights = score?.weights;
+    final answers = r.latestEvaluation?.answers.length;
+    final metrics = _metrics(r);
+    final interviewScore = metrics[1].$2;
+    final weightSplit = ['match', 'interview', 'behavioral']
+        .map((key) => weights?[key])
+        .whereType<double>()
+        .where((value) => value > 0)
+        .map((value) => (value * 100).toStringAsFixed(0))
+        .join(' / ');
+    String weight(String key) => percent(weights?[key], ratio: true);
+    final descriptions = [
+      weights?['match'] == null
+          ? 'Resume vs role'
+          : 'Resume vs role · weight ${weight('match')}',
+      [
+        if (answers != null)
+          '$answers answers${interviewScore == null ? '' : ', average ${(interviewScore / 10).toStringAsFixed(1)} / 10'}',
+        if (weights?['interview'] != null) 'weight ${weight('interview')}',
+      ].join(' · '),
+      if (weightSplit.isNotEmpty) 'Weighted $weightSplit' else '',
+    ];
+    final contributions = [
+      ('Screening', score?.match, weights?['match'], const Color(0xFF6C93F7)),
+      (
+        'Interview',
+        score?.interview,
+        weights?['interview'],
+        const Color(0xFF2FCDB3),
+      ),
+      (
+        'Behavioral',
+        score?.breakdown['behavioral'],
+        weights?['behavioral'],
+        const Color(0xFFCBD5E4),
+      ),
+    ];
+    return _reviewCard(
+      'Recommendation',
+      badge: score?.publishedCombined != null && coverage == 1
+          ? _pill('✓  COMPLETE · FULL COVERAGE', _reviewTeal)
+          : null,
+      children: [
+        LayoutBuilder(
+          builder: (context, bounds) {
+            final wide = bounds.maxWidth >= 385;
+            final tiles = [
+              for (final (index, metric) in metrics.indexed)
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: index == 2
+                        ? const Color(0xFF16213A)
+                        : context.themeSurface(const Color(0xFFF7F8FA)),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: context.themeOutline(
+                        index == 2
+                            ? const Color(0xFF16213A)
+                            : const Color(0xFFEDF1F7),
+                      ),
+                    ),
+                  ),
+                  child: DefaultTextStyle.merge(
+                    style: TextStyle(
+                      color: index == 2
+                          ? const Color(0xFFA9B5CE)
+                          : context.themeForeground(const Color(0xFF3D4A63)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          (index == 2 ? 'Combined' : metric.$1).toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .8,
+                          ),
+                        ),
+                        const SizedBox(height: 9),
+                        Text(
+                          percent(metric.$2),
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: index == 2
+                                ? Colors.white
+                                : context.themeForeground(
+                                    const Color(0xFF16213A),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        if (descriptions[index].isNotEmpty)
+                          Text(
+                            descriptions[index],
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+            ];
+            return wide
+                ? IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (index, tile) in tiles.indexed) ...[
+                          if (index > 0) const SizedBox(width: 12),
+                          Expanded(child: tile),
+                        ],
+                      ],
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 8,
+                    children: tiles,
+                  );
+          },
+        ),
+        if (score?.publishedCombined != null && weights != null) ...[
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, bounds) => ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: ColoredBox(
+                color: context.themeChartTrack(const Color(0xFFE7ECF4)),
+                child: SizedBox(
+                  height: 10,
+                  child: Row(
+                    children: [
+                      for (final (_, value, factor, color) in contributions)
+                        if (value != null && factor != null && factor > 0)
+                          SizedBox(
+                            width:
+                                bounds.maxWidth *
+                                value.clamp(0, 100) *
+                                factor /
+                                100,
+                            child: ColoredBox(color: color),
+                          ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 14,
+            runSpacing: 5,
+            children: [
+              for (final (label, value, factor, color) in contributions)
+                if (factor != null)
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Icon(
+                              Icons.square_rounded,
+                              size: 9,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                        TextSpan(
+                          text: factor == 0
+                              ? '$label · weight 0 · excluded'
+                              : value == null
+                              ? '$label · weight ${percent(factor, ratio: true)}'
+                              : '$label ${value.toStringAsFixed(1)} × $factor = ${(value * factor).toStringAsFixed(1)}',
+                        ),
+                      ],
+                    ),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _checklist(RecruitmentReview r) {
+    final coverage =
+        (r.latestAttempt ? controller.currentScore?.answerCoverage : null) ??
+        r.latestEvaluation?.coverage;
+    final evaluationReady =
+        r.interview?.evaluationStatus == 'READY' &&
+        r.latestEvaluation?.status == 'READY';
+    final sent = r.feedback.any(
+      (report) => report.status == 'RELEASED' && report.retractedAt == null,
+    );
+    final report = _checklistReport?.report;
+    final availability = _checklistLoading
+        ? 'Loading…'
+        : switch (_checklistReport?.availability) {
+            'pending' => 'Pending',
+            'disabled' => 'Disabled',
+            _ => 'Unavailable',
+          };
+    final expression = report?.snapshot.expressionStatus;
+    final entries = [
+      (
+        'Evaluation ready',
+        evaluationReady
+            ? 'Latest'
+            : _displayStatus(r.interview?.evaluationStatus ?? 'Unavailable'),
+        evaluationReady,
+        2,
+      ),
+      ('Answer coverage', percent(coverage, ratio: true), coverage == 1, 2),
+      (
+        'Proctoring flags',
+        report == null
+            ? availability
+            : '${report.episodes.length}${report.episodesTruncated ? '+' : ''} events',
+        report != null && report.episodes.isEmpty,
+        1,
+      ),
+      (
+        'Emotion timeline (FER)',
+        expression == null ? availability : _displayStatus(expression),
+        report?.expressionPercentages.isNotEmpty == true,
+        1,
+      ),
+      (
+        'Candidate feedback',
+        sent
+            ? 'Sent to candidate'
+            : r.feedback.isEmpty
+            ? 'Not prepared'
+            : _displayStatus(r.feedback.first.status),
+        sent,
+        3,
+      ),
+    ];
+    return _reviewCard(
+      'Review checklist',
+      children: [
+        for (final (index, entry) in entries.indexed) ...[
+          if (index > 0)
+            Divider(
+              height: 1,
+              color: context.themeOutline(const Color(0xFFEDF1F7)),
+            ),
+          InkWell(
+            onTap: () => setState(() => _tab = entry.$4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 11,
+                    backgroundColor: context.themeSurface(
+                      entry.$3
+                          ? const Color(0xFFE4F5F0)
+                          : const Color(0xFFEDF1F7),
+                    ),
+                    child: Icon(
+                      entry.$3 ? Icons.check : Icons.remove,
+                      size: 14,
+                      color: context.themeForeground(
+                        entry.$3 ? _reviewTeal : const Color(0xFF5F6C85),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      entry.$1,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      entry.$2,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: context.themeForeground(const Color(0xFF5F6C85)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _scoreBar(String label, double? value, Color color) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text(label)),
+            Text(
+              percent(value),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        if (value != null) ...[
+          const SizedBox(height: 6),
+          LinearProgressIndicator(
+            color: color,
+            backgroundColor: context.themeChartTrack(const Color(0xFFE7ECF4)),
+            minHeight: 6,
+            value: (value / 100).clamp(0.0, 1.0),
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ],
+      ],
+    ),
+  );
+
+  Widget _previewToggle() => SegmentedButton<bool>(
+    style: SegmentedButton.styleFrom(
+      textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 12),
+      visualDensity: VisualDensity.compact,
+    ),
+    segments: const [
+      ButtonSegment(value: false, label: Text('Live review')),
+      ButtonSegment(value: true, label: Text('Decision preview')),
+    ],
+    selected: {_decisionPreview},
+    showSelectedIcon: false,
+    onSelectionChanged: (selection) =>
+        setState(() => _decisionPreview = selection.single),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -724,160 +2103,70 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       onPressed: controller.busy || controller.loading ? null : _refresh,
       icon: const Icon(Icons.refresh),
     );
-    return Scaffold(
-      backgroundColor: context.themeCanvas(const Color(0xfff5f7fc)),
-      appBar: dashboard
-          ? null
-          : AppBar(
-              title: const Text('Recruiter evidence and decisions'),
-              actions: [refreshAction],
-            ),
-      body: Column(
-        children: [
-          if (dashboard)
-            SafeArea(
-              bottom: false,
-              child: Row(
-                children: [
-                  const BackButton(color: Color(0xFF475569)),
-                  const Expanded(
-                    child: RecruiterTopBar(
-                      pageTitle: 'Interview review',
-                      showWorkspacePrefix: false,
-                    ),
-                  ),
-                  refreshAction,
-                ],
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(
+        textTheme: theme.textTheme.apply(fontFamily: 'Inter'),
+        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'Inter'),
+      ),
+      child: Scaffold(
+        backgroundColor: context.themeCanvas(const Color(0xfff5f7fb)),
+        appBar: dashboard
+            ? null
+            : AppBar(
+                title: const Text('Recruiter evidence and decisions'),
+                actions: [refreshAction],
               ),
-            )
-          else
-            const RecruiterTopBar(pageTitle: 'Evidence review'),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                if (controller.loading || controller.busy)
-                  const LinearProgressIndicator(),
-                if (controller.error != null)
-                  section('Review required', [line(controller.error!)]),
-                if (controller.requiresReview)
-                  section('Unsaved input retained', [
-                    const Text(
-                      'Refresh, compare the current versions with your intended command, then explicitly accept the reviewed state. No command has been automatically retried.',
-                    ),
-                    TextButton(
-                      onPressed: controller.loading || controller.busy
-                          ? null
-                          : () => controller.refresh(poll: false),
-                      child: const Text('Refresh current state'),
-                    ),
-                    TextButton(
-                      onPressed: controller.error == null && !controller.loading
-                          ? controller.confirmRefreshedReview
-                          : null,
-                      child: const Text('I reviewed the current versions'),
-                    ),
-                  ]),
-                if (controller.retryAt != null)
-                  line(
-                    'Retry permitted after ${localTime(controller.retryAt)}',
-                  ),
-                if (r != null) ...[
-                  if (dashboard && r.interview != null) ...[
-                    RecruiterInterviewDashboard(
-                      key: ValueKey(r.interview!.id),
-                      review: r,
-                      service: controller.service,
-                      refreshVersion: _dashboardRefresh,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  section('Application and attempts', [
-                    line(
-                      '${r.application.candidateName ?? r.application.candidateEmail} · ${r.application.jobTitle}\nStage ${r.application.rawStatus} · Version ${r.application.version}',
-                    ),
-                    if (r.attempts.isEmpty)
-                      const Text(
-                        'No interview attempt. An early override requires deliberate confirmation.',
-                      ),
-                    if (r.interview != null) ...[
-                      DropdownButtonFormField<String>(
-                        key: ValueKey(r.interview!.id),
-                        initialValue: r.interview!.id,
-                        isExpanded: true,
-                        items: [
-                          for (final attempt in r.attempts)
-                            DropdownMenuItem(
-                              value: attempt.id,
-                              child: Text(
-                                '${attempt.id} · ${attempt.workflowState}${attempt.id == r.attempts.first.id ? ' · Latest' : ' · Historical'}',
-                              ),
-                            ),
+        body: Column(
+          children: [
+            if (dashboard)
+              SafeArea(
+                bottom: false,
+                child: Row(
+                  children: [
+                    const BackButton(color: Color(0xFF475569)),
+                    Expanded(
+                      child: RecruiterTopBar(
+                        pageTitle: 'Interview review',
+                        breadcrumbSegments: const [
+                          'Workspace',
+                          'Interview review',
                         ],
-                        onChanged: controller.busy
-                            ? null
-                            : (id) {
-                                if (id != null) {
-                                  setState(() {
-                                    transcriptId = null;
-                                    compareTranscriptId = null;
-                                    evaluationId = null;
-                                    compareEvaluationId = null;
-                                  });
-                                  controller.selectAttempt(id);
-                                }
-                              },
-                      ),
-                      line(
-                        'Workflow ${r.interview!.workflowState} · Completion ${r.interview!.completionOutcome} · Evaluation ${r.interview!.evaluationStatus}\nScheduled ${localTime(r.interview!.scheduledAt)} · Completed ${localTime(r.interview!.completedAt)}',
-                      ),
-                    ],
-                  ]),
-                  section('Command reason', [
-                    const Text(
-                      'This text is preserved across refreshes and conflicts. Each command uses the versions currently shown.',
-                    ),
-                    TextField(
-                      key: const Key('workflow-command-reason'),
-                      controller: reason,
-                      maxLength: 2000,
-                      minLines: 2,
-                      maxLines: 5,
-                      decoration: const InputDecoration(
-                        labelText: 'Reason for the intended command',
+                        desktopAccessory: _previewToggle(),
                       ),
                     ),
-                  ]),
-                  scores(r),
-                  if (r.transcripts != null) transcripts(r),
-                  if (r.evaluations != null) evaluations(r),
-                  decisions(r),
-                  FeedbackReviewPanel(
-                    key: ValueKey(
-                      'feedback-${r.application.id}-${r.interview?.id}',
-                    ),
-                    controller: controller,
-                  ),
-                  section('Feedback report history', [
-                    const Text(
-                      'Released reports retain their original evidence identity. These are independent of behavioral analysis reports.',
-                    ),
-                    for (final f in r.feedback)
-                      line(
-                        'Revision ${f.revision.value} · ${f.status} · Edit version ${f.editVersion.value}\nEvaluation ${f.evaluation ?? 'Unavailable'} · ${f.contract}\nPrepared ${localTime(f.preparedAt)} · Released ${localTime(f.releasedAt)} · Retracted ${localTime(f.retractedAt)}\nHash ${f.hash}\n${f.error ?? ''}',
+                    if (MediaQuery.sizeOf(context).width < 1130)
+                      IconButton(
+                        tooltip: _decisionPreview
+                            ? 'Exit decision preview'
+                            : 'Preview current decision',
+                        isSelected: _decisionPreview,
+                        onPressed: () => setState(
+                          () => _decisionPreview = !_decisionPreview,
+                        ),
+                        icon: const Icon(Icons.visibility_outlined),
                       ),
-                  ]),
-                  section('Private workflow history (newest 100)', [
-                    for (final a in r.actions)
-                      line(
-                        '${a.action} · ${localTime(a.createdAt)}\nActor ${a.actorId ?? 'Unavailable'} · Expected version ${a.expectedVersion ?? 'Unavailable'} · Interview ${a.interviewId ?? 'None'}\n${a.reason}\n${a.details}',
-                      ),
-                  ]),
-                ],
-              ],
+                    refreshAction,
+                  ],
+                ),
+              )
+            else
+              const RecruiterTopBar(pageTitle: 'Evidence review'),
+            if (controller.loading || controller.busy)
+              const LinearProgressIndicator(minHeight: 2),
+            Expanded(
+              child: DefaultTextStyle(
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  color: context.themeForeground(const Color(0xFF16213A)),
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+                child: _workspace(r),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

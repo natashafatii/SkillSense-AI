@@ -44,6 +44,7 @@ class RecruiterTopBar extends StatelessWidget {
     this.showTrailingButton = false,
     this.mobileBreakpoint = 900,
     this.profileReference = false,
+    this.desktopAccessory,
   });
 
   final String pageTitle;
@@ -70,6 +71,7 @@ class RecruiterTopBar extends StatelessWidget {
   final bool showTrailingButton;
   final double mobileBreakpoint;
   final bool profileReference;
+  final Widget? desktopAccessory;
 
   @override
   Widget build(BuildContext context) =>
@@ -194,6 +196,11 @@ class RecruiterTopBar extends StatelessWidget {
                               Flexible(child: breadcrumbText(i))
                             else
                               breadcrumbText(i),
+                          ],
+                          if (desktopAccessory != null &&
+                              constraints.maxWidth >= 1030) ...[
+                            const SizedBox(width: 16),
+                            desktopAccessory!,
                           ],
                         ],
                       ),

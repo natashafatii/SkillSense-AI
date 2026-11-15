@@ -1,5 +1,9 @@
 import 'dart:async';
 
+abstract interface class GoogleEmailVerification {
+  bool isGoogleEmailVerified(String email);
+}
+
 abstract interface class GoogleSignInService {
   bool get pendingGoogleSignIn;
   Future<void> startGoogleSignIn({String? role});

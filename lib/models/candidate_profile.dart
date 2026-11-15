@@ -10,6 +10,7 @@ class CandidateProfile {
   final String location;
   final String linkedinUrl;
   final String portfolioUrl;
+  final String githubUrl;
   final int? yearsExperience;
   final String headline; // max 150 chars (serializer-enforced)
   final int? _savedCompletionPercentage;
@@ -20,6 +21,7 @@ class CandidateProfile {
     required this.location,
     required this.linkedinUrl,
     required this.portfolioUrl,
+    this.githubUrl = '',
     this.yearsExperience,
     required this.headline,
     int? savedCompletionPercentage,
@@ -42,6 +44,7 @@ class CandidateProfile {
       location: json['location'] as String? ?? '',
       linkedinUrl: json['linkedin_url'] as String? ?? '',
       portfolioUrl: json['portfolio_url'] as String? ?? '',
+      githubUrl: json['github_url'] as String? ?? '',
       yearsExperience: (json['years_experience'] as num?)?.toInt(),
       headline: json['headline'] as String? ?? '',
       savedCompletionPercentage:
@@ -93,6 +96,7 @@ class CandidateProfile {
     location: location,
     linkedinUrl: linkedinUrl,
     portfolioUrl: portfolioUrl,
+    githubUrl: githubUrl,
     yearsExperience: yearsExperience,
     headline: headline,
     savedCompletionPercentage: _savedCompletionPercentage,
