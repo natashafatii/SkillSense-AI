@@ -162,7 +162,7 @@ class _CandidateInterviewHistoryScreenState
       ]..sort(_newest);
       setState(() {
         _items = entries;
-        _expanded = entries.firstOrNull?.interview.id;
+        _expanded = null;
       });
     } catch (_) {
       if (current()) {

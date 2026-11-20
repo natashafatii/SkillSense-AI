@@ -1,5 +1,10 @@
 import 'dart:async';
 
+/// Verification of the specific email displayed by the application.
+abstract interface class EmailVerificationService {
+  bool? isEmailVerified(String email);
+}
+
 abstract interface class GoogleEmailVerification {
   bool isGoogleEmailVerified(String email);
 }

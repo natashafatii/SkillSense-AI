@@ -11,9 +11,16 @@ import '../services/session_scope.dart';
 
 Color reviewAnswerScoreColor(double? score) => switch (score) {
   null => const Color(0xFF687893),
-  < 3 => const Color(0xFFB32D47),
-  < 7 => const Color(0xFF8A5806),
-  _ => const Color(0xFF087C63),
+  < 3 => const Color(0xFFA52F43),
+  < 6 => const Color(0xFF8A5A00),
+  _ => const Color(0xFF067A63),
+};
+
+Color reviewAnswerProgressColor(double? score) => switch (score) {
+  null => const Color(0xFFE9EEF6),
+  < 3 => const Color(0xFFE5546A),
+  < 6 => const Color(0xFFF0A23B),
+  _ => const Color(0xFF17B894),
 };
 
 class ReviewQuestionBadge extends StatelessWidget {
@@ -26,7 +33,7 @@ class ReviewQuestionBadge extends StatelessWidget {
     final type = category.trim().toUpperCase();
     final (ink, fill) = switch (type) {
       'BEHAVIORAL' => (const Color(0xFF3159C7), const Color(0xFFE8EEFF)),
-      'TECHNICAL' => (const Color(0xFF087C63), const Color(0xFFE0F3ED)),
+      'TECHNICAL' => (const Color(0xFF067A63), const Color(0xFFE0F3ED)),
       'SITUATIONAL' => (const Color(0xFF6941C6), const Color(0xFFEFE8FF)),
       _ => (const Color(0xFF687893), const Color(0xFFEDF1F7)),
     };
@@ -87,7 +94,7 @@ class _RecruiterInterviewDashboardState
   static const _muted = Color(0xFF687893);
   static const _line = Color(0xFFE7EBF2);
   static const _blue = Color(0xFF3E6FF0);
-  static const _green = Color(0xFF087C63);
+  static const _green = Color(0xFF067A63);
 
   CancelToken? _request;
   InterviewRecording? _recording;
@@ -215,7 +222,8 @@ class _RecruiterInterviewDashboardState
   Widget build(BuildContext context) => DefaultTextStyle.merge(
     style: TextStyle(
       color: context.themeForeground(_ink),
-      fontSize: 14,
+      fontSize: 13,
+      height: 1.45,
       fontFamily: 'Inter',
     ),
     child: LayoutBuilder(
@@ -225,18 +233,24 @@ class _RecruiterInterviewDashboardState
         final recording = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _recordingPanel(context, answers),
-            const SizedBox(height: 12),
+            _recordingPanel(
+              context,
+              answers,
+              height: wide && widget.viewportHeight != null
+                  ? (widget.viewportHeight! - 170).clamp(300.0, double.infinity)
+                  : null,
+            ),
+            const SizedBox(height: 14),
             LayoutBuilder(
               builder: (context, bounds) {
                 final events = _eventsPanel(context);
                 final expression = _expressionPanel();
                 if (bounds.maxWidth < 350) {
-                  return Column(spacing: 12, children: [events, expression]);
+                  return Column(spacing: 14, children: [events, expression]);
                 }
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 12,
+                  spacing: 14,
                   children: [
                     Expanded(child: events),
                     Expanded(child: expression),
@@ -259,10 +273,10 @@ class _RecruiterInterviewDashboardState
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: 12,
+          spacing: 14,
           children: [
-            Expanded(flex: 59, child: recording),
-            Expanded(flex: 41, child: evidence),
+            Expanded(flex: 145, child: recording),
+            Expanded(flex: 100, child: evidence),
           ],
         );
       },
@@ -280,7 +294,11 @@ class _RecruiterInterviewDashboardState
         time <= value!.duration;
   }
 
-  Widget _recordingPanel(BuildContext context, List<_EvidenceAnswer> answers) {
+  Widget _recordingPanel(
+    BuildContext context,
+    List<_EvidenceAnswer> answers, {
+    double? height,
+  }) {
     final candidate = widget.review.application.candidateName?.trim();
     final email = widget.review.application.candidateEmail.trim();
     final startedAt = _recording?.startedAt?.toLocal();
@@ -523,16 +541,19 @@ class _RecruiterInterviewDashboardState
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: AspectRatio(
-        aspectRatio: 1.36,
-        child: ColoredBox(
-          color: const Color(0xFF0C1427),
-          child: player == null
-              ? contents(null)
-              : ValueListenableBuilder(
-                  valueListenable: player,
-                  builder: (_, value, _) => contents(value),
-                ),
+      child: SizedBox(
+        height: height,
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: ColoredBox(
+            color: const Color(0xFF0C1427),
+            child: player == null
+                ? contents(null)
+                : ValueListenableBuilder(
+                    valueListenable: player,
+                    builder: (_, value, _) => contents(value),
+                  ),
+          ),
         ),
       ),
     );
@@ -593,7 +614,7 @@ class _RecruiterInterviewDashboardState
                 ),
                 const SizedBox(height: 7),
                 Wrap(
-                  spacing: 12,
+                  spacing: 14,
                   runSpacing: 6,
                   children: [
                     for (final (index, entry) in measurements.indexed)
@@ -695,7 +716,15 @@ class _RecruiterInterviewDashboardState
       children: [
         if (answers.isEmpty)
           _row(const Text('No interview questions available.')),
-        for (final answer in answers) _answerRow(answer),
+        for (final answer in answers)
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: viewportHeight == null || answers.isEmpty
+                  ? 54
+                  : ((viewportHeight - 70) / answers.length).clamp(54.0, 100.0),
+            ),
+            child: _answerRow(answer),
+          ),
       ],
     );
     return _section(
@@ -738,7 +767,7 @@ class _RecruiterInterviewDashboardState
             }
           : null,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Row(
           children: [
             ReviewQuestionBadge(category: answer.category),
@@ -960,14 +989,20 @@ class _RecruiterInterviewDashboardState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
           child: Wrap(
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 8,
             runSpacing: 4,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               if (badge != null) badge,
               if (trailing != null) trailing,
             ],
@@ -981,7 +1016,7 @@ class _RecruiterInterviewDashboardState
   Widget _surface(Widget child) => DecoratedBox(
     decoration: BoxDecoration(
       color: context.themeSurface(Colors.white),
-      borderRadius: BorderRadius.circular(17),
+      borderRadius: BorderRadius.circular(16),
       border: Border.all(color: context.themeOutline(const Color(0xFFE2E8F2))),
       boxShadow: const [
         BoxShadow(
@@ -991,6 +1026,6 @@ class _RecruiterInterviewDashboardState
         ),
       ],
     ),
-    child: ClipRRect(borderRadius: BorderRadius.circular(17), child: child),
+    child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
   );
 }

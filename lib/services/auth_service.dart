@@ -302,6 +302,21 @@ class AuthService {
   static String get email =>
       currentUserNotifier.value?['email']?.toString().trim() ?? '';
 
+  static bool? emailVerifiedFor(Map<String, dynamic>? user) {
+    if (user?['email_verified'] is bool) {
+      return user!['email_verified'] as bool;
+    }
+    final service = instance;
+    if (service is! EmailVerificationService ||
+        !service.isSignedIn ||
+        user?['clerk_id'] != service.userId) {
+      return null;
+    }
+    return (service as EmailVerificationService).isEmailVerified(
+      user?['email']?.toString() ?? '',
+    );
+  }
+
   /// Saves the current user session data to memory & persistent SharedPreferences.
   static Future<void> saveUserSession(Map<String, dynamic> data) async {
     final current = Map<String, dynamic>.from(currentUserNotifier.value ?? {});

@@ -1,5 +1,4 @@
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
-import '../../widgets/recruiter_button_style.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -7,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/job.dart';
+import '../../models/application.dart';
 import '../../models/recruitment_evidence.dart';
 import '../../services/downloads/save_bytes_stub.dart'
     if (dart.library.io) '../../services/downloads/save_bytes_io.dart'
@@ -16,12 +16,17 @@ import '../../services/job_service.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../services/session_scope.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
-import '../../widgets/recruiter_top_bar.dart';
+import '../../services/app_theme_controller.dart';
+
 import 'recruitment_review_screen.dart';
 
+part 'rankings_view.dart';
+part 'rankings_dialogs.dart';
+
 class RankingsScreen extends StatefulWidget {
-  const RankingsScreen({super.key, this.jobId, this.service});
+  const RankingsScreen({super.key, this.jobId, this.service, this.loadJobs});
   final String? jobId;
+  final Future<List<Job>> Function()? loadJobs;
   final RecruitmentWorkflowService? service;
 
   @override
@@ -29,21 +34,31 @@ class RankingsScreen extends StatefulWidget {
 }
 
 class _RankingsScreenState extends State<RankingsScreen> {
-  static const _ink = Color(0xFF1B2740);
-  static const _muted = Color(0xFF687893);
-  static const _surface = Color(0xFFFAFBFC);
-  static const _edge = Color(0xFFE7EBF2);
-  static const _blue = Color(0xFF3E6FF0);
-  static const _green = Color(0xFF10B58A);
-  static const _amber = Color(0xFFEBA738);
-  static const _red = Color(0xFFEC5C5A);
+  static const _ink = Color(0xFF101828);
+  static const _muted = Color(0xFF667085);
+  static const _surface = Color(0xFFF8F9FB);
+  static const _edge = Color(0xFFE4E7EC);
+  static const _blue = Color(0xFF3146E0);
 
   late final _service = widget.service ?? RecruitmentWorkflowService();
   final _generation = SessionScope.generation;
   final _selected = <String>{};
+  final _search = TextEditingController();
+  final _tableScroll = ScrollController();
+  final _jobPickerAnchor = GlobalKey();
+  bool _jobPickerOpen = false;
+  String _query = '',
+      _evaluation = 'all',
+      _decisionFilter = 'all',
+      _sort = 'interview';
+  Map<String, Application> _details = const {};
+  bool _detailsLoading = false;
   CancelToken? _request;
   List<Job> _jobs = const [];
   List<RankingRow> _cohort = const [];
+  List<RankingRow> _rankedCohort = const [];
+  Map<String, int> _ranks = const {};
+  double? _averageScore;
   String? _jobId, _error;
   bool _loading = true, _exporting = false;
 
@@ -60,6 +75,11 @@ class _RankingsScreenState extends State<RankingsScreen> {
     setState(() {
       _jobs = const [];
       _cohort = const [];
+      _rankedCohort = const [];
+      _ranks = const {};
+      _averageScore = null;
+      _details = const {};
+      _detailsLoading = false;
       _selected.clear();
       _jobId = null;
       _error = 'Session changed.';
@@ -71,7 +91,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
 
   Future<void> _loadJobs() async {
     try {
-      final jobs = await JobService.listAllJobs();
+      final jobs = await (widget.loadJobs?.call() ?? JobService.listAllJobs());
       if (!_active) return;
       setState(() {
         _jobs = jobs;
@@ -95,9 +115,21 @@ class _RankingsScreenState extends State<RankingsScreen> {
     _request?.cancel();
     final request = _request = CancelToken();
     setState(() {
-      if (_jobId != id) _selected.clear();
+      if (_jobId != id) {
+        _selected.clear();
+        _search.clear();
+        _query = '';
+        _evaluation = 'all';
+        _decisionFilter = 'all';
+        _sort = 'interview';
+      }
       _jobId = id;
       _cohort = const [];
+      _rankedCohort = const [];
+      _ranks = const {};
+      _averageScore = null;
+      _details = const {};
+      _detailsLoading = false;
       _error = null;
       _loading = true;
     });
@@ -127,11 +159,33 @@ class _RankingsScreenState extends State<RankingsScreen> {
         rows.addAll(result.results);
         if (!result.hasNext) break;
       }
+      final ranked = rows.where((row) => _score(row) != null).toList()
+        ..sort((a, b) {
+          final order = _score(b)!.compareTo(_score(a)!);
+          return order != 0 ? order : _name(a).compareTo(_name(b));
+        });
+      final ranks = <String, int>{};
+      double? previous;
+      var rank = 0;
+      var total = 0.0;
+      for (final (index, row) in ranked.indexed) {
+        final score = _score(row)!;
+        if (score != previous) {
+          rank = index + 1;
+        }
+        ranks[row.applicationId] = rank;
+        previous = score;
+        total += score;
+      }
       setState(() {
-        _cohort = rows;
+        _cohort = List.unmodifiable(rows);
+        _rankedCohort = List.unmodifiable(ranked);
+        _ranks = Map.unmodifiable(ranks);
+        _averageScore = ranked.isEmpty ? null : total / ranked.length;
         _selected.retainAll(ids);
         _loading = false;
       });
+      await _loadDetails(rows, request);
     } catch (error) {
       if (_active && !request.isCancelled) {
         setState(() {
@@ -142,10 +196,41 @@ class _RankingsScreenState extends State<RankingsScreen> {
     }
   }
 
+  // The ranking contract intentionally contains only policy-safe sortable
+  // scores. Supplementary application details never replace those scores.
+  Future<void> _loadDetails(List<RankingRow> rows, CancelToken token) async {
+    if (!_active || token.isCancelled) return;
+    setState(() => _detailsLoading = rows.isNotEmpty);
+    final details = <String, Application>{};
+    for (var offset = 0; offset < rows.length; offset += 6) {
+      await Future.wait(
+        rows.skip(offset).take(6).map((row) async {
+          try {
+            final data = await _service.request(
+              '/applications/${row.applicationId}/',
+              cancelToken: token,
+            );
+            final application = Application.fromJson(data);
+            if (application.id == row.applicationId) {
+              details[row.applicationId] = application;
+            }
+          } catch (_) {
+            // Missing details stay unavailable; they must not hide the cohort.
+          }
+        }),
+      );
+      if (!_active || token.isCancelled) return;
+      setState(() => _details = Map.unmodifiable(details));
+    }
+    if (_active && !token.isCancelled) setState(() => _detailsLoading = false);
+  }
+
   @override
   void dispose() {
     SessionScope.invalidations.removeListener(_clear);
     _request?.cancel();
+    _search.dispose();
+    _tableScroll.dispose();
     super.dispose();
   }
 
@@ -168,13 +253,6 @@ class _RankingsScreenState extends State<RankingsScreen> {
     _ => 'NO',
   };
 
-  static Color _scoreColor(double? score) => switch (score) {
-    null => _muted,
-    >= 70 => _green,
-    >= 40 => _amber,
-    _ => _red,
-  };
-
   static String _cell(String value) {
     // Quoted cells alone do not prevent spreadsheet formula execution.
     final safe = RegExp(r'^\s*[=+\-@]|^[\t\r\n]').hasMatch(value)
@@ -191,9 +269,9 @@ class _RankingsScreenState extends State<RankingsScreen> {
     try {
       final csv = [
         'Rank,Application ID,Candidate,Top driver (SHAP),Technical,Behavioral,Communication,Overall,Score band,Score status,Rubric version,Evaluation model',
-        for (final (index, row) in rows.indexed)
+        for (final row in rows)
           [
-            if (_score(row) != null) '${index + 1}' else '',
+            if (_score(row) != null) '${_rank(row)}' else '',
             row.applicationId,
             _name(row),
             row.topDriver ?? '',
@@ -224,559 +302,53 @@ class _RankingsScreenState extends State<RankingsScreen> {
     }
   }
 
-  void _compare() {
-    final selected = _cohort.indexed
-        .where((entry) => _selected.contains(entry.$2.applicationId))
-        .toList();
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Compare selected'),
-        content: AnimatedBuilder(
-          animation: SessionScope.invalidations,
-          builder: (context, _) => !_active
-              ? const Text('Session changed.')
-              : SingleChildScrollView(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: [
-                        for (final label in [
-                          'Rank',
-                          'Candidate',
-                          'Technical',
-                          'Behavioral',
-                          'Communication',
-                          'Overall',
-                          'Score band',
-                          'Top driver',
-                        ])
-                          DataColumn(label: Text(label)),
-                      ],
-                      rows: [
-                        for (final (index, row) in selected)
-                          DataRow(
-                            cells: [
-                              for (final value in [
-                                _score(row) == null ? '—' : '${index + 1}',
-                                _name(row),
-                                _metric(row.technical),
-                                _metric(row.behavioral),
-                                _metric(row.communication),
-                                _metric(_score(row)),
-                                _band(_score(row)),
-                                row.topDriver ?? 'Unavailable',
-                              ])
-                                DataCell(Text(value)),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
+  void _compare() => _showComparison();
 
   Future<void> _openReview(RankingRow row) async {
     final jobId = _jobId;
     await Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            RecruitmentReviewScreen(applicationId: row.applicationId),
+        builder: (_) => RecruitmentReviewScreen(
+          applicationId: row.applicationId,
+          service: _service,
+          showInterviewDashboard: true,
+        ),
       ),
     );
     if (_active && jobId != null && _jobId == jobId) await _loadCohort(jobId);
   }
 
+  void _update(VoidCallback change) => setState(change);
+
+  // Rank stays relative to the full cohort when the view is sorted or filtered.
+  int? _rank(RankingRow row) => _ranks[row.applicationId];
+
+  List<RankingRow> get _visible {
+    final rows = _cohort.where((row) {
+      final matches = '${_name(row)} ${row.email}'.toLowerCase().contains(
+        _query,
+      );
+      return matches &&
+          (_evaluation == 'all' ||
+              (_evaluation == 'complete') == (_score(row) != null)) &&
+          (_decisionFilter == 'all' || _decisionKey(row) == _decisionFilter);
+    }).toList();
+    rows.sort((a, b) {
+      final order = switch (_sort) {
+        'name' => _name(a).toLowerCase().compareTo(_name(b).toLowerCase()),
+        'screening' => (_screening(b) ?? -1).compareTo(_screening(a) ?? -1),
+        'recent' =>
+          (_details[b.applicationId]?.createdAt ?? DateTime(0)).compareTo(
+            _details[a.applicationId]?.createdAt ?? DateTime(0),
+          ),
+        _ => (_score(b) ?? -1).compareTo(_score(a) ?? -1),
+      };
+      return order != 0 ? order : _name(a).compareTo(_name(b));
+    });
+    return rows;
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    bottomNavigationBar: MediaQuery.sizeOf(context).width < 900
-        ? const RecruiterMobileNav(currentRoute: '/recruiter/rankings')
-        : null,
-    backgroundColor: context.themeCanvas(const Color(0xFFF4F6FC)),
-    body: Column(
-      children: [
-        const RecruiterTopBar(pageTitle: 'Rankings'),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 680;
-              return ListView.builder(
-                padding: EdgeInsets.fromLTRB(
-                  compact ? 14 : 20,
-                  18,
-                  compact ? 14 : 20,
-                  24,
-                ),
-                itemCount: _cohort.isEmpty ? 1 : _cohort.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == 0) return _overview(compact);
-                  final row = _cohort[index - 1];
-                  return _candidateRow(
-                    row,
-                    index,
-                    compact,
-                    last: index == _cohort.length,
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _overview(bool compact) {
-    final title = _jobs.where((job) => job.id == _jobId).firstOrNull?.title;
-    final ranked = _cohort.indexed.where((entry) => _score(entry.$2) != null);
-    final models = ranked
-        .map((entry) => entry.$2.modelVersion?.trim())
-        .whereType<String>()
-        .where((model) => model.isNotEmpty)
-        .toSet();
-    final rubric = _cohort.firstOrNull?.rubricVersion;
-    final actions = Wrap(
-      spacing: 9,
-      runSpacing: 8,
-      children: [
-        OutlinedButton(
-          onPressed: _cohort.isEmpty || _exporting ? null : _export,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: context.themeForeground(_ink),
-            backgroundColor: context.themeSurface(Colors.white),
-            side: BorderSide(color: context.themeOutline(_edge)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: Text(_exporting ? 'Exporting…' : 'Export CSV'),
-        ),
-        FilledButton(
-          onPressed: _selected.length >= 2 && !_loading ? _compare : null,
-          style: RecruiterButtonStyle.primary(
-            FilledButton.styleFrom(
-              backgroundColor: _blue,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-          child: Text(
-            _selected.isEmpty
-                ? 'Compare selected'
-                : 'Compare selected (${_selected.length})',
-          ),
-        ),
-      ],
-    );
-    final heading = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Flexible(
-              child: Text(
-                title == null ? 'Rankings' : 'Rankings — $title',
-                style: _style(21, weight: FontWeight.w700),
-              ),
-            ),
-            if (_jobs.length > 1)
-              PopupMenuButton<String>(
-                tooltip: 'Choose job',
-                icon: const Icon(Icons.expand_more, size: 19),
-                initialValue: _jobId,
-                onSelected: (id) {
-                  if (id != _jobId) _loadCohort(id);
-                },
-                itemBuilder: (_) => [
-                  for (final job in _jobs)
-                    PopupMenuItem(value: job.id, child: Text(job.title)),
-                ],
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          [
-            if (!_loading && _error == null)
-              '${ranked.length} ranked of ${_cohort.length} applications',
-            if (models.isNotEmpty) models.join(', '),
-            if (models.isEmpty && rubric != null) 'Rubric v$rubric',
-            '${_selected.length} selected for comparison',
-          ].join(' · '),
-          style: _style(11, color: context.themeForeground(_muted)),
-        ),
-      ],
-    );
-    final podium = ranked.take(3).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (compact) ...[
-          heading,
-          const SizedBox(height: 9),
-          actions,
-        ] else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: heading),
-              const SizedBox(width: 12),
-              actions,
-            ],
-          ),
-        const SizedBox(height: 14),
-        if (_loading)
-          const LinearProgressIndicator()
-        else if (_error != null) ...[
-          Text(
-            _error!,
-            style: _style(13, color: context.themeForeground(_muted)),
-          ),
-          if (_active)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () =>
-                    _jobId == null ? _loadJobs() : _loadCohort(_jobId!),
-                child: const Text('Retry'),
-              ),
-            ),
-        ] else if (_jobs.isEmpty)
-          const Text('No jobs available.')
-        else ...[
-          if (podium.isNotEmpty) ...[
-            if (compact)
-              for (final (index, row) in podium)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _podiumCard(row, index + 1),
-                )
-            else
-              Row(
-                children: [
-                  for (final (index, row) in podium) ...[
-                    if (index > 0) const SizedBox(width: 12),
-                    Expanded(child: _podiumCard(row, index + 1)),
-                  ],
-                  for (var i = podium.length; i < 3; i++) const Spacer(),
-                ],
-              ),
-            const SizedBox(height: 12),
-          ],
-          _tableHeader(compact),
-          if (_cohort.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('No applications for this job.'),
-            ),
-        ],
-      ],
-    );
-  }
-
-  Widget _podiumCard(RankingRow row, int rank) => Material(
-    color: rank == 1
-        ? context.themeSurface(Colors.white)
-        : context.themeSurface(_surface),
-    elevation: rank == 1 ? 4 : 2,
-    shadowColor: rank == 1 ? const Color(0x403E6FF0) : const Color(0x200F172A),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-      side: BorderSide(
-        color: rank == 1
-            ? context.themeOutline(const Color(0xFFD6E0FF))
-            : Colors.transparent,
-      ),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: () => _openReview(row),
-      child: Padding(
-        padding: const EdgeInsets.all(13),
-        child: Row(
-          children: [
-            Text(
-              '#$rank',
-              style: _style(20, color: _muted, weight: FontWeight.w700),
-            ),
-            const SizedBox(width: 9),
-            _ring(_score(row), size: 48),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _name(row),
-                    style: _style(12, weight: FontWeight.w700),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    'T ${_metric(row.technical)} · B ${_metric(row.behavioral)} · C ${_metric(row.communication)}',
-                    style: _style(10, color: context.themeForeground(_muted)),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  Widget _tableHeader(bool compact) => Container(
-    decoration: BoxDecoration(
-      color: context.themeSurface(_surface),
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    padding: const EdgeInsets.fromLTRB(14, 7, 8, 7),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            'Full cohort',
-            style: _style(13, weight: FontWeight.w700),
-          ),
-        ),
-        if (!compact)
-          Text(
-            'T · B · C · OVERALL',
-            style: _style(9, color: _muted, weight: FontWeight.w700),
-          ),
-        IconButton(
-          tooltip: 'Refresh ranking',
-          iconSize: 17,
-          onPressed: _jobId == null ? null : () => _loadCohort(_jobId!),
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
-  );
-
-  Widget _candidateRow(
-    RankingRow row,
-    int index,
-    bool compact, {
-    required bool last,
-  }) {
-    final score = _score(row);
-    final checked = _selected.contains(row.applicationId);
-    final (initials, avatarColor) = _avatar(row, index);
-    final identity = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(_name(row), style: _style(12, weight: FontWeight.w700)),
-        Text(
-          'Top driver · ${row.topDriver ?? 'Unavailable'}',
-          style: _style(10, color: context.themeForeground(_muted)),
-        ),
-        if (compact)
-          Text(
-            'T ${_metric(row.technical)} · B ${_metric(row.behavioral)} · C ${_metric(row.communication)}',
-            style: _style(10, color: context.themeForeground(_muted)),
-          ),
-      ],
-    );
-    return Material(
-      color: checked
-          ? context.themeSurface(const Color(0xFFF0F4FF))
-          : context.themeSurface(_surface),
-      clipBehavior: Clip.antiAlias,
-      borderRadius: last
-          ? const BorderRadius.vertical(bottom: Radius.circular(16))
-          : null,
-      child: InkWell(
-        onTap: () => _openReview(row),
-        child: Container(
-          padding: EdgeInsets.fromLTRB(
-            compact ? 5 : 14,
-            6,
-            compact ? 8 : 14,
-            6,
-          ),
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: context.themeOutline(_edge))),
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: compact ? 20 : 24,
-                child: Text(
-                  score == null ? '—' : '$index',
-                  style: _style(10, color: _muted, mono: true),
-                ),
-              ),
-              SizedBox(
-                width: 30,
-                child: Tooltip(
-                  message: 'Select ${_name(row)} for comparison',
-                  child: Checkbox(
-                    value: checked,
-                    activeColor: _blue,
-                    visualDensity: VisualDensity.compact,
-                    onChanged: (selected) => setState(() {
-                      if (selected == true) {
-                        _selected.add(row.applicationId);
-                      } else {
-                        _selected.remove(row.applicationId);
-                      }
-                    }),
-                  ),
-                ),
-              ),
-              Container(
-                width: 26,
-                height: 26,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: avatarColor.withValues(alpha: .15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  initials,
-                  style: _style(
-                    10,
-                    color: avatarColor,
-                    weight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              SizedBox(width: compact ? 6 : 10),
-              Expanded(child: identity),
-              if (!compact)
-                for (final metric in [
-                  row.technical,
-                  row.behavioral,
-                  row.communication,
-                ])
-                  SizedBox(
-                    width: 35,
-                    child: Text(
-                      _metric(metric),
-                      textAlign: TextAlign.center,
-                      style: _style(11, color: _muted, mono: true),
-                    ),
-                  ),
-              const SizedBox(width: 6),
-              if (compact)
-                Column(
-                  children: [
-                    _ring(score, size: 33),
-                    const SizedBox(height: 3),
-                    _badge(score),
-                  ],
-                )
-              else ...[
-                _ring(score, size: 33),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 76,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: _badge(score),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static (String, Color) _avatar(RankingRow row, int index) {
-    const colors = [
-      _blue,
-      Color(0xFF087C63),
-      Color(0xFF7654C8),
-      Color(0xFF9A6616),
-      Color(0xFFB74943),
-    ];
-    final parts = _name(
-      row,
-    ).split(RegExp(r'\s+')).where((part) => part.isNotEmpty).take(2);
-    return (
-      parts.map((part) => part.characters.first.toUpperCase()).join(),
-      colors[(index - 1) % colors.length],
-    );
-  }
-
-  Widget _ring(double? score, {required double size}) => Semantics(
-    label: score == null
-        ? 'Overall score unavailable'
-        : 'Overall score ${score.toStringAsFixed(1)} percent',
-    excludeSemantics: true,
-    child: SizedBox.square(
-      dimension: size,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          CircularProgressIndicator(
-            value: (score ?? 0) / 100,
-            strokeWidth: size >= 48 ? 4 : 3,
-            strokeAlign: BorderSide.strokeAlignInside,
-            padding: EdgeInsets.zero,
-            trackGap: 0,
-            color: _scoreColor(score),
-            backgroundColor: context.themeSurface(_edge),
-          ),
-          Center(
-            child: Text(
-              score?.toStringAsFixed(0) ?? '—',
-              style: _style(size >= 48 ? 14 : 10, weight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _badge(double? score) {
-    final color = switch (score) {
-      null => _muted,
-      >= 85 => const Color(0xFF087C63),
-      >= 70 => const Color(0xFF087C63),
-      >= 40 => const Color(0xFFA36618),
-      _ => const Color(0xFFB83C3D),
-    };
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .11),
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: color.withValues(alpha: .22)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        child: Text(
-          _band(score),
-          style: _style(8, color: color, mono: true, weight: FontWeight.w700),
-        ),
-      ),
-    );
-  }
-
-  TextStyle _style(
-    double size, {
-    Color color = _ink,
-    bool mono = false,
-    FontWeight weight = FontWeight.w400,
-  }) => TextStyle(
-    fontFamily: mono ? 'JetBrains Mono' : 'Inter',
-    fontSize: size,
-    color: context.themeForeground(color),
-    fontWeight: weight,
-  );
+  Widget build(BuildContext context) => _buildRanking(context);
 }

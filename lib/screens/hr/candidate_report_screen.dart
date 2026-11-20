@@ -2,14 +2,17 @@ import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../models/api_contract.dart';
 import '../../models/application.dart';
 import '../../models/interview.dart';
 import '../../models/job.dart';
 import '../../models/resume_detail.dart';
+import '../../models/recruitment_evidence.dart';
 import '../../models/screening_assessment.dart';
 import '../../services/api_exception.dart';
+import '../../services/app_theme_controller.dart';
 import '../../services/application_service.dart';
 import '../../services/foreground_poller.dart';
 import '../../services/job_service.dart';
@@ -17,13 +20,15 @@ import '../../services/recruitment_workflow_service.dart';
 import '../../services/resume_download.dart';
 import '../../services/resume_service.dart';
 import '../../services/session_scope.dart';
+import '../../widgets/notification_unread_scope.dart';
 import '../../widgets/question_preparation_panel.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
-import '../../widgets/recruiter_top_bar.dart';
 import 'recruitment_review_screen.dart';
 import 'schedule_interview_screen.dart';
 
 part 'candidate_report_content.dart';
+part 'candidate_report_workspace.dart';
+part 'candidate_report_chrome.dart';
 part 'candidate_report_evidence.dart';
 part 'candidate_report_plan.dart';
 
@@ -59,9 +64,21 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   final _session = SessionScope.generation;
   late final _workflow = widget.workflow ?? RecruitmentWorkflowService();
   late final ForegroundPoller<_ReportData> _poller;
+  late final AppLifecycleListener _lifecycle;
   CancelToken? _request;
   CancelToken? _interviewRequest;
   Future<RecruiterInterview?>? _interview;
+  late final ForegroundPoller<_InterviewEvidence> _evidencePoller;
+  _InterviewEvidence? _evidence;
+  bool _evidenceLoading = false;
+  bool _evidenceError = false;
+  final _overviewKey = GlobalKey();
+  final _decisionKey = GlobalKey();
+  final _screeningKey = GlobalKey();
+  final _interviewKey = GlobalKey();
+  final _answersKey = GlobalKey();
+  final _scroll = ScrollController();
+  int _section = 0;
   Future<List<Job>>? _jobs;
   Future<List<Application>>? _candidates;
   String? _jobId;
@@ -92,9 +109,37 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
           } else if (_isPending(_data!)) {
             setState(
               () => _notice =
-                  'Processing is still pending. Refresh to check again.',
+                  _data?.application.status == ApplicationStatus.inProgress
+                  ? 'The interview is still in progress. Refresh to check again.'
+                  : 'Processing is still pending. Refresh to check again.',
             );
           }
+        }
+      },
+    );
+    _evidencePoller = ForegroundPoller(
+      read: (token) async => _readEvidence((await _interview!)!, token),
+      isVisible: () =>
+          mounted && _signedIn && ModalRoute.of(context)?.isCurrent != false,
+      isPending: (data) => data.pending,
+      onData: (data) => setState(() => _evidence = data),
+      onStopped: (error) {
+        if (!mounted || !_signedIn || error == null) return;
+        setState(() {
+          _evidenceError = true;
+          if (error is ApiException && error.accessUnavailable) {
+            _evidence = null;
+          }
+        });
+      },
+    );
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        if (_signedIn &&
+            _data != null &&
+            !_loading &&
+            ModalRoute.of(context)?.isCurrent == true) {
+          _load(refreshCandidates: true);
         }
       },
     );
@@ -124,6 +169,9 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     SessionScope.invalidations.removeListener(_clearSession);
     _clearReport();
     _poller.dispose();
+    _lifecycle.dispose();
+    _evidencePoller.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -134,10 +182,15 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     _request = null;
     _interviewRequest = null;
     _interview = null;
+    _evidencePoller.stop();
+    _evidence = null;
+    _evidenceLoading = false;
+    _evidenceError = false;
     _data = null;
     _error = null;
     _notice = null;
     _loading = false;
+    _section = 0;
   }
 
   void _clearSession() {
@@ -151,7 +204,9 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
   }
 
   bool _isPending(_ReportData data) =>
-      data.assessment?.pending == true || data.resume?.isPending == true;
+      data.assessment?.pending == true ||
+      data.resume?.isPending == true ||
+      data.application.status == ApplicationStatus.inProgress;
 
   Future<_ReportData> _read(CancelToken token, {bool poll = false}) async {
     final id = _applicationId!;
@@ -234,8 +289,78 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
         .then(
           (rows) => rows.where((row) => row.applicationId == id).firstOrNull,
         );
-    // The report can be offscreen before its FutureBuilder attaches.
-    _interview!.ignore();
+    _evidencePoller.stop();
+    _evidence = null;
+    _evidenceError = false;
+    _evidenceLoading = true;
+    _loadEvidence(_interview!, token);
+  }
+
+  Future<void> _loadEvidence(
+    Future<RecruiterInterview?> attempt,
+    CancelToken token,
+  ) async {
+    try {
+      final interview = await attempt;
+      if (token.isCancelled || !mounted || !_signedIn) return;
+      if (interview == null || interview.status == 'SCHEDULED') return;
+      final evidence = await _readEvidence(interview, token);
+      if (token.isCancelled || !mounted || !_signedIn) return;
+      setState(() => _evidence = evidence);
+      if (evidence.pending) _evidencePoller.start();
+    } catch (_) {
+      if (!token.isCancelled && mounted && _signedIn) {
+        setState(() => _evidenceError = true);
+      }
+    } finally {
+      if (!token.isCancelled && mounted && _signedIn) {
+        setState(() => _evidenceLoading = false);
+      }
+    }
+  }
+
+  Future<_InterviewEvidence> _readEvidence(
+    RecruiterInterview interview,
+    CancelToken token,
+  ) async {
+    final history = EvaluationHistory.fromJson(
+      await _workflow.request(
+        '/interviews/${Uri.encodeComponent(interview.id)}/evaluations/',
+        cancelToken: token,
+      ),
+    );
+    final evaluation = history.revisions.firstOrNull;
+    TranscriptRevision? transcript;
+    var transcriptUnavailable = false;
+    if (evaluation != null &&
+        evaluation.status == 'READY' &&
+        (evaluation.answers.any((answer) => answer.evidence.isNotEmpty) ||
+            evaluation.extraction?.questions.any(
+                  (answer) => answer.followUpTurnIds.isNotEmpty,
+                ) ==
+                true)) {
+      try {
+        transcript = evaluation.frozenTranscript(
+          TranscriptHistory.fromJson(
+            await _workflow.request(
+              '/interviews/${Uri.encodeComponent(interview.id)}/transcript-revisions/',
+              cancelToken: token,
+            ),
+          ),
+        );
+        transcriptUnavailable = transcript == null;
+      } catch (_) {
+        transcriptUnavailable = true;
+      }
+    }
+    return (
+      evaluation: evaluation,
+      transcript: transcript,
+      transcriptUnavailable: transcriptUnavailable,
+      pending:
+          evaluation?.pending == true ||
+          (evaluation == null && history.transcriptState == 'WAITING'),
+    );
   }
 
   Future<void> _load({bool refreshCandidates = false}) async {
@@ -260,6 +385,8 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
       if (mounted && _signedIn && token == _request) {
         setState(() {
           _data = null;
+          _interviewRequest?.cancel();
+          _evidencePoller.stop();
           _error = 'Could not load this candidate report.';
         });
       }
@@ -305,6 +432,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
         builder: (_) => RecruitmentReviewScreen(
           applicationId: app.id,
           interviewId: interviewId,
+          service: _workflow,
         ),
       ),
     );
@@ -323,6 +451,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
 
   Widget _picker<T>({
     required String label,
+    required _ReportPalette palette,
     required Future<List<T>> future,
     required String? selection,
     required String Function(T) id,
@@ -344,38 +473,72 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
         );
       }
       if (rows.isEmpty) return Text('No ${label.toLowerCase()}s available.');
-      return DropdownMenu<String>(
-        key: ValueKey((label, selection)),
-        expandedInsets: EdgeInsets.zero,
-        label: Text(label),
-        initialSelection: selection,
-        enableFilter: true,
-        requestFocusOnTap: true,
-        menuHeight: 360,
-        inputDecorationTheme: InputDecorationThemeData(
-          filled: true,
-          fillColor: context.themeSurface(_surface),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: context.themeOutline(_border)),
+      return Semantics(
+        label: label,
+        child: DropdownMenu<String>(
+          key: ValueKey((label, selection)),
+          expandedInsets: EdgeInsets.zero,
+          hintText: label == 'Job' ? 'Select a job' : 'Select an applicant',
+          textStyle: _reportDisplay(14).copyWith(color: palette.ink),
+          initialSelection: selection,
+          enableFilter: true,
+          requestFocusOnTap: true,
+          menuHeight: 360,
+          leadingIcon: Center(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: _ReportGlyph(
+              label == 'Job' ? _ReportIcon.job : _ReportIcon.person,
+              color: palette.muted,
+              size: 17,
+            ),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: context.themeOutline(_border)),
+          trailingIcon: _ReportGlyph(
+            _ReportIcon.chevron,
+            color: palette.accent,
           ),
+          selectedTrailingIcon: RotatedBox(
+            quarterTurns: 2,
+            child: _ReportGlyph(_ReportIcon.chevron, color: palette.accent),
+          ),
+          menuStyle: MenuStyle(
+            backgroundColor: WidgetStatePropertyAll(palette.paper),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(13),
+                side: BorderSide(color: palette.border),
+              ),
+            ),
+          ),
+          inputDecorationTheme: InputDecorationThemeData(
+            filled: true,
+            isDense: true,
+            fillColor: palette.field,
+            hintStyle: _reportDisplay(13).copyWith(color: palette.muted),
+            prefixIconConstraints: const BoxConstraints(minWidth: 40),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(color: palette.blue),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(color: palette.border),
+            ),
+          ),
+          dropdownMenuEntries: [
+            for (final row in rows)
+              DropdownMenuEntry(value: id(row), label: title(row)),
+          ],
+          onSelected: onSelected,
         ),
-        dropdownMenuEntries: [
-          for (final row in rows)
-            DropdownMenuEntry(value: id(row), label: title(row)),
-        ],
-        onSelected: onSelected,
       );
     },
   );
 
-  Widget _selectors(double width) {
+  Widget _selectors(double width, _ReportPalette palette) {
     final roles = _picker<Job>(
-      label: 'Role',
+      label: 'Job',
+      palette: palette,
       future: _jobs!,
       selection: _jobId,
       id: (job) => job.id,
@@ -386,100 +549,133 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     final candidates = _candidates;
     if (candidates == null) return roles;
     final applicants = _picker<Application>(
-      label: 'Candidate',
+      label: 'Applicant',
+      palette: palette,
       future: candidates,
-      selection: _selectedId,
+      selection: _applicationId,
       id: (app) => app.id,
-      title: (app) => '${_candidateName(app)} · ${_statusLabel(app.status)}',
+      title: _candidateName,
       onSelected: _selectCandidate,
       retry: () => setState(() => _candidates = _loadCandidates(_jobId!)),
     );
-    return _ReportColumns(
-      width: width,
-      columns: 2,
-      children: [roles, applicants],
+    if (width <= 456) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [roles, const SizedBox(height: 8), applicants],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(child: roles),
+        const SizedBox(width: 8),
+        Expanded(child: applicants),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final app = _data?.application;
-    final mobile = MediaQuery.sizeOf(context).width < 900;
+    final viewport = MediaQuery.sizeOf(context).width;
+    final mobile = viewport < 900;
+    final palette = _ReportPalette(context.isDarkTheme);
     final body = Column(
       children: [
-        RecruiterTopBar(
-          pageTitle: 'Candidate report',
-          breadcrumbSegments: [
-            'Jobs',
-            if (app != null) app.jobTitle,
-            'Candidate report',
-          ],
-          profileReference: true,
-          showSearch: false,
+        _ReportCommandBar(
+          palette: palette,
+          candidate: app == null ? null : _candidateName(app),
+          compact: viewport <= 480,
+          mobile: mobile,
+          section: _section,
+          onSection: app != null ? _jumpToSection : null,
+          onBack: widget.applicationId != null && Navigator.of(context).canPop()
+              ? () => Navigator.of(context).maybePop()
+              : null,
         ),
+        if (_loading && _data != null)
+          const LinearProgressIndicator(minHeight: 2),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final gutter = constraints.maxWidth < 680 ? 16.0 : 32.0;
-              final width = constraints.maxWidth - gutter * 2;
+              final gutter = viewport <= 480
+                  ? 12.0
+                  : (viewport * .03).clamp(18.0, 42.0);
+              final width =
+                  (constraints.maxWidth.clamp(0.0, 1440.0) - gutter * 2).clamp(
+                    0.0,
+                    1440.0,
+                  );
               final data = _data;
+              final selectorWidth = _candidates == null ? 300.0 : 480.0;
+              final title = Semantics(
+                key: _overviewKey,
+                header: true,
+                child: Text(
+                  'Candidate report',
+                  style: _reportDisplay((viewport * .03).clamp(26.0, 34.0))
+                      .copyWith(
+                        letterSpacing:
+                            -(viewport * .03).clamp(26.0, 34.0) * .035,
+                      ),
+                ),
+              );
               return RefreshIndicator(
                 onRefresh: () => _load(refreshCandidates: true),
-                child: CustomScrollView(
+                child: SingleChildScrollView(
+                  controller: _scroll,
                   physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(gutter, 24, gutter, 28),
-                      sliver: SliverList.list(
-                        children: [
-                          if (widget.applicationId != null &&
-                              Navigator.of(context).canPop())
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: TextButton.icon(
-                                onPressed: () =>
-                                    Navigator.of(context).maybePop(),
-                                icon: const Icon(Icons.arrow_back_rounded),
-                                label: const Text('Back to applicants'),
-                              ),
+                  padding: EdgeInsets.fromLTRB(
+                    (constraints.maxWidth - width) / 2,
+                    23,
+                    (constraints.maxWidth - width) / 2,
+                    56,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_jobs != null && width >= 760)
+                        Row(
+                          children: [
+                            Expanded(child: title),
+                            SizedBox(
+                              width: selectorWidth,
+                              child: _selectors(selectorWidth, palette),
                             ),
-                          if (_jobs != null) ...[
-                            _selectors(width),
-                            const SizedBox(height: _gap),
                           ],
-                          if (!_signedIn)
-                            const _ReportMessage(
-                              'Account session changed. Reopen the report.',
-                            )
-                          else if (data != null)
-                            ..._report(data)
-                          else if (_loading)
-                            const _ReportMessage(
-                              'Loading candidate report…',
-                              loading: true,
-                            )
-                          else if (_error case final error?)
-                            _ReportMessage(
-                              error,
-                              action: OutlinedButton(
-                                onPressed: () => _load(refreshCandidates: true),
-                                child: const Text('Retry'),
-                              ),
-                            )
-                          else
-                            _ReportMessage(
-                              'Select a role and candidate to open their report.',
-                              action: OutlinedButton(
-                                onPressed: () => Navigator.of(
-                                  context,
-                                ).pushNamed('/recruiter/pipeline'),
-                                child: const Text('Open pipeline'),
-                              ),
-                            ),
+                        )
+                      else ...[
+                        title,
+                        if (_jobs != null) ...[
+                          const SizedBox(height: 12),
+                          _selectors(width, palette),
                         ],
-                      ),
-                    ),
-                  ],
+                      ],
+                      const SizedBox(height: 15),
+                      if (!_signedIn)
+                        const _ReportMessage(
+                          'Account session changed. Reopen the report.',
+                        )
+                      else if (data != null)
+                        ..._report(data, palette, viewport)
+                      else if (_loading)
+                        const _ReportMessage(
+                          'Loading candidate report…',
+                          loading: true,
+                        )
+                      else if (_error case final error?)
+                        _ReportMessage(
+                          error,
+                          action: OutlinedButton(
+                            onPressed: () => _load(refreshCandidates: true),
+                            child: const Text('Retry'),
+                          ),
+                        )
+                      else
+                        const _ReportMessage(
+                          'Select a role and candidate to open their report.',
+                        ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -491,128 +687,200 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     );
     return Theme(
       data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
         colorScheme: Theme.of(context).colorScheme.copyWith(
-          primary: _accent,
+          primary: palette.dark ? palette.accent : _accent,
           onPrimary: Colors.white,
-          onSurface: context.themeForeground(_ink),
-          surface: context.themeSurface(_surface),
+          onSurface: palette.ink,
+          surface: palette.paper,
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: context.themeForeground(_ink),
-            side: BorderSide(color: context.themeOutline(_edge)),
+            foregroundColor: palette.ink,
+            backgroundColor: palette.field,
+            side: BorderSide(color: palette.border),
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            textStyle: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
-            backgroundColor: _accent,
+            backgroundColor: palette.dark
+                ? const Color(0xff4055e8)
+                : const Color(0xff335cd0),
             foregroundColor: Colors.white,
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            textStyle: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
         ),
       ),
       child: Scaffold(
-        backgroundColor: context.themeCanvas(const Color(0xFFF4F6FB)),
+        backgroundColor: palette.canvas,
         body: DefaultTextStyle.merge(
           style: TextStyle(
             fontFamily: 'Inter',
-            color: context.themeForeground(_ink),
-            fontSize: 14,
+            color: palette.ink,
+            fontSize: 13,
             height: 1.45,
           ),
-          child: body,
+          child: SafeArea(bottom: !mobile, child: body),
         ),
       ),
     );
   }
 
-  List<Widget> _report(_ReportData data) {
+  void _jumpToSection(int section) {
+    final target = [
+      _overviewKey,
+      _screeningKey,
+      _interviewKey,
+      _answersKey,
+      _decisionKey,
+    ][section].currentContext;
+    if (target == null) return;
+    setState(() => _section = section);
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 280);
+    if (section == 0 && _scroll.hasClients) {
+      if (duration == Duration.zero) {
+        _scroll.jumpTo(0);
+      } else {
+        _scroll.animateTo(0, duration: duration, curve: Curves.easeOut);
+      }
+      return;
+    }
+    Scrollable.ensureVisible(
+      target,
+      alignment: .025,
+      duration: duration,
+      curve: Curves.easeOut,
+    );
+  }
+
+  List<Widget> _report(
+    _ReportData data,
+    _ReportPalette palette,
+    double viewport,
+  ) {
     final app = data.application;
     final assessment = data.assessment;
     final resume = data.resume;
     final fit = _SkillFit(assessment, resume);
     return [
-      FutureBuilder<List<Application>>(
-        future: _candidates,
-        builder: (context, snapshot) {
-          final candidates = _rankedCandidates(snapshot.data ?? const [], app);
-          final index = candidates.indexWhere(
-            (candidate) => candidate.id == app.id,
-          );
-          final rank = app.resumeScore == null || index == -1
-              ? null
-              : candidates.indexWhere(
-                      (candidate) => candidate.resumeScore == app.resumeScore,
-                    ) +
-                    1;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _CandidateHeading(
-                application: app,
-                rank: rank,
-                candidateCount: candidates.length,
-                onPrevious: index > 0
-                    ? () => _selectCandidate(candidates[index - 1].id)
-                    : null,
-                onNext: index >= 0 && index + 1 < candidates.length
-                    ? () => _selectCandidate(candidates[index + 1].id)
-                    : null,
-                onReview: () => _openReview(app),
-                onRefresh: _loading
-                    ? null
-                    : () => _load(refreshCandidates: true),
-              ),
-              if (snapshot.hasError)
-                Padding(
-                  padding: EdgeInsets.only(top: 10),
-                  child: Text(
-                    'Candidate ranking and navigation are temporarily unavailable.',
-                    style: _mutedStyle(context),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
       if (_loading) const LinearProgressIndicator(minHeight: 2),
-      if (_notice case final notice?)
-        Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: Text(notice, style: _mutedStyle(context)),
-        ),
-      const SizedBox(height: _gap),
-      _MatchCard(application: app, assessment: assessment, fit: fit),
-      const SizedBox(height: _gap),
+      if (_notice case final notice?) _ReportMessage(notice),
       FutureBuilder<RecruiterInterview?>(
         future: _interview,
-        builder: (context, snapshot) {
-          final current = snapshot.connectionState == ConnectionState.done;
-          final interview = current ? snapshot.data : null;
-          return _ReportBody(
-            application: app,
-            resume: resume,
-            assessment: assessment,
-            fit: fit,
-            resumeUnavailable: data.resumeUnavailable,
-            interview: interview,
-            interviewLoading: !current,
-            interviewUnavailable: snapshot.hasError,
-            retryInterview: () => setState(() => _readInterview(app.id)),
-            onManageInterview:
-                interview != null &&
-                    app.status == ApplicationStatus.scheduled &&
-                    interview.workflowState == 'SCHEDULED'
-                ? () => _openReview(app, interviewId: interview.id)
-                : null,
-            onSchedule: app.eligibleForInterview ? () => _schedule(app) : null,
-          );
-        },
+        builder: (context, attempt) => FutureBuilder<List<Application>>(
+          future: _candidates,
+          builder: (context, applicants) {
+            final candidates = _rankedCandidates(
+              applicants.data ?? const [],
+              app,
+            );
+            final index = candidates.indexWhere(
+              (candidate) => candidate.id == app.id,
+            );
+            final rank = app.resumeScore == null || index == -1
+                ? null
+                : candidates.indexWhere(
+                        (candidate) => candidate.resumeScore == app.resumeScore,
+                      ) +
+                      1;
+            final interview = attempt.connectionState == ConnectionState.done
+                ? attempt.data
+                : null;
+            return _ReportWorkspace(
+              palette: palette,
+              data: data,
+              decisionKey: _decisionKey,
+              screeningKey: _screeningKey,
+              interviewKey: _interviewKey,
+              answersKey: _answersKey,
+              viewport: viewport,
+              interview: interview,
+              evidence: _evidence,
+              evidenceLoading: _evidenceLoading,
+              evidenceError: _evidenceError,
+              rank: rank,
+              candidateCount: candidates.length,
+              onPrevious: index > 0
+                  ? () => _selectCandidate(candidates[index - 1].id)
+                  : null,
+              onNext: index >= 0 && index + 1 < candidates.length
+                  ? () => _selectCandidate(candidates[index + 1].id)
+                  : null,
+              onReview: () => _openReview(app),
+              onSchedule: app.eligibleForInterview
+                  ? () => _schedule(app)
+                  : null,
+              onManage:
+                  interview != null &&
+                      app.status == ApplicationStatus.scheduled &&
+                      interview.workflowState == 'SCHEDULED'
+                  ? () => _openReview(app, interviewId: interview.id)
+                  : null,
+              onRefresh: _loading ? null : () => _load(refreshCandidates: true),
+              onRetryEvidence: () => setState(() => _readInterview(app.id)),
+              onDecision: () => _jumpToSection(4),
+            );
+          },
+        ),
+      ),
+      const SizedBox(height: _gap),
+      _ReportPanel(
+        child: ExpansionTile(
+          title: const Text('Application and resume details'),
+          children: [
+            _MatchCard(application: app, assessment: assessment, fit: fit),
+            const SizedBox(height: _gap),
+            FutureBuilder<RecruiterInterview?>(
+              future: _interview,
+              builder: (context, snapshot) {
+                final current =
+                    snapshot.connectionState == ConnectionState.done;
+                final interview = current ? snapshot.data : null;
+                return _ReportBody(
+                  application: app,
+                  resume: resume,
+                  assessment: assessment,
+                  fit: fit,
+                  resumeUnavailable: data.resumeUnavailable,
+                  interview: interview,
+                  interviewLoading: !current,
+                  interviewUnavailable: snapshot.hasError,
+                  retryInterview: () => setState(() => _readInterview(app.id)),
+                  onManageInterview:
+                      interview != null &&
+                          app.status == ApplicationStatus.scheduled &&
+                          interview.workflowState == 'SCHEDULED'
+                      ? () => _openReview(app, interviewId: interview.id)
+                      : null,
+                  onSchedule: app.eligibleForInterview
+                      ? () => _schedule(app)
+                      : null,
+                );
+              },
+            ),
+          ],
+        ),
       ),
       const SizedBox(height: _gap),
       FutureBuilder<RecruiterInterview?>(

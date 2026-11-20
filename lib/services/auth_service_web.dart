@@ -19,7 +19,22 @@ class AuthServiceWeb
         AuthServiceInterface,
         GoogleOAuthService,
         GoogleSignInService,
+        EmailVerificationService,
         GoogleEmailVerification {
+  @override
+  bool? isEmailVerified(String email) {
+    if (!isSignedIn || email.trim().isEmpty) return null;
+    final addresses = _clerk.user?.emailAddresses?.toDart;
+    if (addresses == null) return null;
+    for (final address in addresses) {
+      if (address.emailAddress?.toLowerCase() == email.trim().toLowerCase()) {
+        final status = address.verification?.status;
+        return status == null ? null : status == 'verified';
+      }
+    }
+    return null;
+  }
+
   @override
   bool isGoogleEmailVerified(String email) =>
       _initialised &&
@@ -280,30 +295,13 @@ class AuthServiceWeb
   @override
   late Future<void> Function(String token) sessionValidator;
 
-  /// Polls for window.__clerkReady to be set to true by index.html init script
-  /// up to ~20 seconds.
-  Future<ClerkJS> _waitForClerk() async {
-    for (var i = 0; i < 200; i++) {
-      final bootstrapError = clerkBootstrapError;
-      if (bootstrapError != null && bootstrapError.isNotEmpty) {
-        throw StateError('Clerk failed to initialize: $bootstrapError');
-      }
-      if (isClerkReady) {
-        return clerkInstance;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    }
-    throw TimeoutException(
-      'Clerk did not finish initializing within 20 seconds.',
-    );
-  }
-
   @override
   Future<void> initialize(String publishableKey) async {
     if (_initialised) return;
 
-    // Wait until clerk-js script in index.html finishes initialization and sets __clerkReady.
-    _clerk = await _waitForClerk();
+    _clerk = await loadSkillSenseClerk(
+      publishableKey,
+    ).toDart.timeout(const Duration(seconds: 20));
 
     _initialised = true;
 

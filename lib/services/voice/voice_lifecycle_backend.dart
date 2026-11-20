@@ -64,6 +64,9 @@ class VoiceLifecycleBindings {
 }
 
 class VoiceLifecycleBackend {
+  static const startResponseTimeout = Duration(seconds: 30);
+  static const startFlowTimeout = Duration(seconds: 40);
+
   VoiceLifecycleBackend({
     VoiceLifecycleBindings? bindings,
     this.contractConfirmed = const bool.fromEnvironment(
@@ -90,6 +93,7 @@ class VoiceLifecycleBackend {
     bool post = false,
     Object? data,
     CancelToken? cancelToken,
+    Duration? receiveTimeout,
   }) async {
     try {
       final dio = await _client();
@@ -102,7 +106,10 @@ class VoiceLifecycleBackend {
         path,
         data: data,
         cancelToken: cancelToken,
-        options: Options(method: post ? 'POST' : 'GET'),
+        options: Options(
+          method: post ? 'POST' : 'GET',
+          receiveTimeout: receiveTimeout,
+        ),
       );
     } on DioException catch (error) {
       if (CancelToken.isCancel(error)) rethrow;
@@ -115,11 +122,13 @@ class VoiceLifecycleBackend {
     bool post = false,
     Object? data,
     CancelToken? cancelToken,
+    Duration? receiveTimeout,
   }) async => (await _response(
     path,
     post: post,
     data: data,
     cancelToken: cancelToken,
+    receiveTimeout: receiveTimeout,
   )).data;
 
   /// Read-only session discovery; the owned interview route binds this ID.
@@ -170,6 +179,7 @@ class VoiceLifecycleBackend {
       post: true,
       data: {'video_required': videoRequired, if (startNow) 'start_now': true},
       cancelToken: cancelToken,
+      receiveTimeout: startResponseTimeout,
     );
     final join = requireJsonObject(response);
     final sessionId = requireInterviewIdentity(join['interview_session_id']);

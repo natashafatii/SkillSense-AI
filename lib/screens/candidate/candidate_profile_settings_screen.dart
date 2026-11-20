@@ -7,7 +7,6 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -19,7 +18,9 @@ import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/candidate_avatar_image.dart';
-import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/notification_unread_scope.dart';
+
+part 'candidate_profile_chrome.dart';
 
 enum _PhotoAction { gallery, camera, remove }
 
@@ -47,7 +48,7 @@ class _ReadinessRing extends CustomPainter {
 }
 
 /// Candidate Profile & Settings (CD-10). The spacing follows the supplied
-/// profile reference, with the candidate console's teal accent.
+/// profile reference while retaining the live candidate account workflows.
 class CandidateProfileSettingsScreen extends StatefulWidget {
   final Future<CandidateProfile?> Function()? loadProfile;
 
@@ -62,22 +63,22 @@ class _Colors {
   final bool dark;
   const _Colors(this.dark);
 
-  Color get bg => dark ? const Color(0xFF070B14) : const Color(0xFFF4F6FB);
-  Color get surface => dark ? const Color(0xFF0D1424) : Colors.white;
+  Color get bg => dark ? const Color(0xFF0A111F) : const Color(0xFFF4F6FB);
+  Color get surface => dark ? const Color(0xFF111A2C) : Colors.white;
   Color get surface2 =>
-      dark ? const Color(0xFF111A2E) : const Color(0xFFF7F9FD);
-  Color get field => dark ? const Color(0xFF0A1120) : Colors.white;
-  Color get border => dark ? const Color(0x2494AADC) : const Color(0xFFE3E8F0);
+      dark ? const Color(0xFF0F1727) : const Color(0xFFF8FAFD);
+  Color get field => surface2;
+  Color get border => dark ? const Color(0xFF212C42) : const Color(0xFFE3E8F0);
   Color get border2 => dark ? const Color(0x4794AADC) : const Color(0xFFC8D0E3);
-  Color get text => dark ? const Color(0xFFE8EDF8) : const Color(0xFF16213A);
-  Color get text2 => dark ? const Color(0xFFA3AFC8) : const Color(0xFF4A5875);
-  Color get text3 => dark ? const Color(0xFF9FACC6) : const Color(0xFF74829E);
-  Color get accent => dark ? const Color(0xFF2EE6C8) : const Color(0xFF10A778);
+  Color get text => dark ? const Color(0xFFEEF2F9) : const Color(0xFF0E1A2E);
+  Color get text2 => dark ? const Color(0xFFB4BFD1) : const Color(0xFF46566E);
+  Color get text3 => dark ? const Color(0xFF8B98AF) : const Color(0xFF66748B);
+  Color get accent => dark ? const Color(0xFF2FC4A6) : const Color(0xFF0A8A73);
   Color get accentSoft =>
-      dark ? const Color(0x242EE6C8) : const Color(0x1710A778);
+      dark ? const Color(0xFF0F2D29) : const Color(0xFFE1F5EF);
   Color get accentBorder =>
-      dark ? const Color(0x472EE6C8) : const Color(0x4710A778);
-  Color get error => dark ? const Color(0xFFFF7B7B) : const Color(0xFFD64545);
+      dark ? const Color(0xFF0F2D29) : const Color(0xFFE1F5EF);
+  Color get error => dark ? const Color(0xFFFF7A8A) : const Color(0xFFC2384A);
 }
 
 class _Detail {
@@ -197,7 +198,7 @@ class _CandidateProfileSettingsScreenState
   Future<void> _openPhotoMenu() async {
     if (_photoSaving) return;
     final c = _Colors(_isDark(context));
-    final mobile = MediaQuery.sizeOf(context).width < 900;
+    final mobile = MediaQuery.sizeOf(context).width < 780;
     final _PhotoAction? action;
     if (mobile) {
       action = await showModalBottomSheet<_PhotoAction>(
@@ -443,7 +444,10 @@ class _CandidateProfileSettingsScreenState
 
           return AlertDialog(
             backgroundColor: c.surface,
-            title: Text('Use this photo?', style: _grotesk(18, c.text)),
+            title: Text(
+              'Use this photo?',
+              style: _profileHeadingText(18, c.text),
+            ),
             content: SizedBox(
               width: 220,
               child: Center(
@@ -522,7 +526,7 @@ class _CandidateProfileSettingsScreenState
             backgroundColor: c.surface,
             content: Text(
               'Remove your profile photo? Your initials will be shown instead.',
-              style: _inter(15, c.text),
+              style: _profileText(15, c.text),
             ),
             actions: [
               TextButton(
@@ -723,18 +727,28 @@ class _CandidateProfileSettingsScreenState
 
   Widget _signOutButton(_Colors c, {required bool mobile}) => SizedBox(
     width: double.infinity,
-    height: mobile ? 50 : 40,
+    height: 48,
     child: OutlinedButton(
       key: Key(mobile ? 'candidate-mobile-sign-out' : 'candidate-web-sign-out'),
       onPressed: _signingOut ? null : _confirmSignOut,
-      style: CandidateButtonStyle.destructive(
-        context,
-        OutlinedButton.styleFrom(),
-        radius: mobile ? 14 : 12,
+      style: _outlineStyle(c).copyWith(
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 18),
+        ),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       ),
-      child: Text(
-        'Sign out',
-        style: _inter(mobile ? 16 : 13.5, c.error, weight: FontWeight.w600),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Sign out',
+              style: _profileText(13.5, c.text2, weight: FontWeight.w600),
+            ),
+          ),
+          Icon(Icons.logout, size: 18, color: c.text2),
+        ],
       ),
     ),
   );
@@ -742,22 +756,24 @@ class _CandidateProfileSettingsScreenState
   bool _isDark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
 
-  TextStyle _inter(
+  TextStyle _profileText(
     double size,
     Color color, {
     FontWeight weight = FontWeight.w400,
     double? height,
-  }) => GoogleFonts.plusJakartaSans(
+  }) => TextStyle(
+    fontFamily: 'Plus Jakarta Sans',
     fontSize: size,
     color: color,
     fontWeight: weight,
-    height: height,
+    height: height ?? 1.55,
   );
-  TextStyle _grotesk(
+  TextStyle _profileHeadingText(
     double size,
     Color color, {
     FontWeight weight = FontWeight.w700,
-  }) => GoogleFonts.plusJakartaSans(
+  }) => TextStyle(
+    fontFamily: 'Plus Jakarta Sans',
     fontSize: size,
     color: color,
     fontWeight: weight,
@@ -904,8 +920,8 @@ class _CandidateProfileSettingsScreenState
   @override
   Widget build(BuildContext context) {
     final c = _Colors(_isDark(context));
-    final mobile = MediaQuery.sizeOf(context).width < 900;
-    final base = _inter(14, c.text, height: 1.55);
+    final mobile = MediaQuery.sizeOf(context).width < 780;
+    final base = _profileText(14, c.text, height: 1.55);
     final profile = _profile;
     final steps = <(String, bool, String, VoidCallback)>[
       (
@@ -941,22 +957,24 @@ class _CandidateProfileSettingsScreenState
     final completed = steps.where((step) => step.$2).length;
     final progress = completed / steps.length;
     return CandidateScaffold(
-      currentRoute: '',
+      currentRoute: '/candidate/profile',
       body: ColoredBox(
         color: c.bg,
         child: Column(
           children: [
-            const RecruiterTopBar(
-              pageTitle: 'Profile & settings',
-              candidate: true,
-            ),
+            _ProfileTopBar(colors: c),
             Expanded(
               child: DefaultTextStyle(
                 style: base,
                 child: LayoutBuilder(
                   builder: (context, bounds) {
-                    final inset = bounds.maxWidth < 640 ? 16.0 : 48.0;
-                    final wide = bounds.maxWidth >= 900;
+                    final inset = mobile
+                        ? 16.0
+                        : (MediaQuery.sizeOf(context).width * .034).clamp(
+                            20.0,
+                            48.0,
+                          );
+                    final wide = MediaQuery.sizeOf(context).width > 1100;
                     final sticky =
                         wide &&
                         bounds.maxHeight >= 550 &&
@@ -966,9 +984,9 @@ class _CandidateProfileSettingsScreenState
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _hero(c, progress),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 26),
                         _tabs(c),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 22),
                       ],
                     );
                     final panel = _panelForTab(c);
@@ -1000,7 +1018,7 @@ class _CandidateProfileSettingsScreenState
                                               ),
                                               const SizedBox(width: 22),
                                               SizedBox(
-                                                width: 302,
+                                                width: 330,
                                                 child: SingleChildScrollView(
                                                   primary: false,
                                                   padding:
@@ -1033,14 +1051,14 @@ class _CandidateProfileSettingsScreenState
                                                 Expanded(child: panel),
                                                 const SizedBox(width: 22),
                                                 SizedBox(
-                                                  width: 302,
+                                                  width: 330,
                                                   child: rail,
                                                 ),
                                               ],
                                             )
                                           else ...[
                                             panel,
-                                            const SizedBox(height: 16),
+                                            const SizedBox(height: 22),
                                             rail,
                                           ],
                                         ],
@@ -1102,6 +1120,10 @@ class _CandidateProfileSettingsScreenState
         alignment: Alignment.center,
         children: [
           Positioned.fill(
+            left: 4,
+            top: 4,
+            right: 4,
+            bottom: 4,
             child: CircularProgressIndicator(
               value: progress,
               color: c.accent,
@@ -1122,17 +1144,23 @@ class _CandidateProfileSettingsScreenState
               child: SizedBox.square(
                 dimension: 74,
                 child: ClipOval(
-                  child: ColoredBox(
-                    color: c.accentSoft,
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF0A8A73), Color(0xFF0B6B8F)],
+                      ),
+                    ),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
                         CandidateAvatarImage(
                           profile: _profile,
-                          initialsStyle: _inter(
-                            26,
-                            c.accent,
-                            weight: FontWeight.w800,
+                          initialsStyle: _profileText(
+                            28,
+                            Colors.white,
+                            weight: FontWeight.w700,
                           ),
                         ),
                         if (_avatarHovered)
@@ -1152,11 +1180,17 @@ class _CandidateProfileSettingsScreenState
           ),
           Positioned(
             bottom: -4,
-            child: _pill(
-              c,
-              '${(progress * 100).round()}%',
-              tint: c.accent,
-              surface: c.surface,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+              decoration: BoxDecoration(
+                color: c.surface,
+                border: Border.all(color: c.border),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                '${(progress * 100).round()}%',
+                style: _profileText(11.5, c.accent, weight: FontWeight.w700),
+              ),
             ),
           ),
         ],
@@ -1165,20 +1199,24 @@ class _CandidateProfileSettingsScreenState
     final identity = Row(
       children: [
         avatar,
-        const SizedBox(width: 16),
+        SizedBox(width: MediaQuery.sizeOf(context).width < 780 ? 18 : 24),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 name.isEmpty ? 'Candidate profile' : name,
-                style: _grotesk(26, c.text).copyWith(height: 1.2),
+                style: _profileHeadingText(
+                  MediaQuery.sizeOf(context).width < 780 ? 22 : 26,
+                  c.text,
+                  weight: FontWeight.w800,
+                ).copyWith(height: 1.2, letterSpacing: -.7),
               ),
               if (subtitle.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text(subtitle, style: _inter(14, c.text2)),
+                Text(subtitle, style: _profileText(14, c.text2)),
               ],
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
@@ -1200,13 +1238,19 @@ class _CandidateProfileSettingsScreenState
     );
     final edit = _primary(
       c,
-      'Edit contact details',
-      _profile == null || _savingContacts ? null : _editContacts,
+      _contactDraft.isEmpty ? 'Edit contact details' : 'Save changes',
+      _profile == null || _savingContacts
+          ? null
+          : _contactDraft.isEmpty
+          ? _editContacts
+          : _saveContacts,
     );
     return _card(
       c,
       LayoutBuilder(
-        builder: (context, box) => box.maxWidth < 540
+        builder: (context, box) => _mobileTab != 0
+            ? identity
+            : box.maxWidth < 540
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [identity, const SizedBox(height: 16), edit],
@@ -1219,6 +1263,9 @@ class _CandidateProfileSettingsScreenState
                 ],
               ),
       ),
+      padding: MediaQuery.sizeOf(context).width < 780
+          ? const EdgeInsets.all(20)
+          : const EdgeInsets.symmetric(horizontal: 28, vertical: 26),
     );
   }
 
@@ -1230,16 +1277,25 @@ class _CandidateProfileSettingsScreenState
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          for (final (index, label) in ['Profile', 'Preferences'].indexed)
+          for (final (index, label) in [
+            'Profile',
+            'Notifications',
+            'Preferences & account',
+          ].indexed)
             Semantics(
               selected: _mobileTab == index,
               child: InkWell(
                 onTap: () {
+                  if (index == 1) {
+                    Navigator.of(context).pushNamed('/candidate/notifications');
+                    return;
+                  }
                   setState(() => _mobileTab = index);
                   if (_mobileScroll.hasClients) _mobileScroll.jumpTo(0);
                 },
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(10, 12, 10, 11),
+                  margin: const EdgeInsets.only(right: 28),
+                  padding: const EdgeInsets.only(bottom: 13),
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
@@ -1252,8 +1308,8 @@ class _CandidateProfileSettingsScreenState
                   ),
                   child: Text(
                     label,
-                    style: _inter(
-                      13,
+                    style: _profileText(
+                      14,
                       _mobileTab == index ? c.text : c.text3,
                       weight: FontWeight.w700,
                     ),
@@ -1277,110 +1333,205 @@ class _CandidateProfileSettingsScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _heading(c, 'Contact and links'),
-          const SizedBox(height: 8),
+          const SizedBox(height: 3),
+          Text(
+            'Recruiters use these to reach you.',
+            style: _profileText(13, c.text3),
+          ),
+          const SizedBox(height: 14),
           if (_profileLoading)
             const LinearProgressIndicator()
           else if (_profileError) ...[
             const Text('Unable to load your profile.'),
             TextButton(
-              style: TextButton.styleFrom(foregroundColor: c.accent),
               onPressed: () => _loadProfile(forceRefresh: true),
               child: const Text('Retry'),
             ),
-          ] else ...[
-            _row(c, 'Email', _profile?.user.email ?? ''),
-            for (final key in [
-              'phone',
-              'location',
-              'linkedin_url',
-              'github_url',
-              'portfolio_url',
-            ])
-              _contactRow(c, _details.firstWhere((field) => field.key == key)),
-          ],
+          ] else
+            LayoutBuilder(
+              builder: (context, bounds) {
+                final singleColumn =
+                    MediaQuery.sizeOf(context).width < 780 ||
+                    bounds.maxWidth < 380 ||
+                    MediaQuery.textScalerOf(context).scale(14) > 21;
+                final width = singleColumn
+                    ? bounds.maxWidth
+                    : (bounds.maxWidth - 28) / 2;
+                return Wrap(
+                  spacing: 28,
+                  children: [
+                    SizedBox(
+                      width: width,
+                      child: _contactField(
+                        c,
+                        'Email',
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _profile?.user.email ?? '',
+                              style: _profileText(
+                                14,
+                                c.text,
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                            if (_googleVerified)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.check,
+                                      size: 13,
+                                      color: c.accent,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text(
+                                        'Verified through Google',
+                                        style: _profileText(
+                                          12,
+                                          c.accent,
+                                          weight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    for (final key in [
+                      'phone',
+                      'location',
+                      'linkedin_url',
+                      'github_url',
+                      'portfolio_url',
+                    ])
+                      SizedBox(
+                        width: width,
+                        child: _contactRow(
+                          c,
+                          _details.firstWhere((field) => field.key == key),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
         ],
       ),
+    ),
+  );
+
+  Widget _contactField(_Colors c, String label, Widget child) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 15),
+    constraints: const BoxConstraints(minHeight: 82),
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: c.border)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: _profileText(12.5, c.text3, weight: FontWeight.w600),
+        ),
+        const SizedBox(height: 5),
+        child,
+      ],
     ),
   );
 
   Widget _contactRow(_Colors c, _Detail field) {
     final isPhone = field.key == 'phone';
     final draft = _contactDraft[field.key];
+    final value = _values[field.key]!;
     if (draft == null) {
-      return _row(
+      return _contactField(
         c,
         field.label,
-        _values[field.key]!,
-        action: IconButton(
-          tooltip: 'Edit ${field.label}',
-          icon: Icon(Icons.edit_outlined, color: _blue(c), size: 17),
-          onPressed: _savingContacts ? null : () => _editContacts(field.key),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: _savingContacts ? null : () => _editContacts(field.key),
+            child: Semantics(
+              button: true,
+              label: 'Edit ${field.label}',
+              child: Text(
+                value.isEmpty ? '+ Add ${field.label.toLowerCase()}' : value,
+                style: _profileText(
+                  value.isEmpty ? 13 : 14,
+                  value.isEmpty ? _blue(c) : c.text,
+                  weight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
         ),
       );
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: c.border)),
-      ),
-      child: Column(
+    return _contactField(
+      c,
+      field.label,
+      Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(field.label, style: _inter(13, c.text2)),
-          const SizedBox(height: 6),
-          Row(
+          if (isPhone && _phoneCountry != null)
+            CountryCodePhoneField(
+              controller: draft,
+              focusNode: _phoneFocus,
+              initialCountry: _phoneCountry,
+              enabled: !_savingContacts,
+              requiredPhone: false,
+              focusColor: _blue(c),
+              onPhoneChanged: (value) => _phoneDraft = value,
+            )
+          else
+            TextField(
+              key: ValueKey(field.key),
+              controller: draft,
+              autofocus: true,
+              enabled: !_savingContacts,
+              keyboardType: isPhone
+                  ? TextInputType.phone
+                  : field.key.endsWith('_url')
+                  ? TextInputType.url
+                  : TextInputType.text,
+              onSubmitted: (_) => _saveContacts(),
+              style: _profileText(14, c.text, weight: FontWeight.w600),
+              decoration: InputDecoration(
+                hintText: field.placeholder,
+                filled: true,
+                fillColor: c.surface2,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 11,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: c.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: _blue(c)),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
             children: [
-              Expanded(
-                child: isPhone && _phoneCountry != null
-                    ? CountryCodePhoneField(
-                        controller: draft,
-                        focusNode: _phoneFocus,
-                        initialCountry: _phoneCountry,
-                        enabled: !_savingContacts,
-                        requiredPhone: false,
-                        focusColor: c.accent,
-                        onPhoneChanged: (value) => _phoneDraft = value,
-                      )
-                    : TextField(
-                        key: ValueKey(field.key),
-                        controller: draft,
-                        autofocus: true,
-                        enabled: !_savingContacts,
-                        keyboardType: isPhone
-                            ? TextInputType.phone
-                            : field.key.endsWith('_url')
-                            ? TextInputType.url
-                            : TextInputType.text,
-                        onSubmitted: (_) => _saveContacts(),
-                        style: _inter(14, c.text),
-                        decoration: InputDecoration(
-                          hintText: field.placeholder,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 11,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: c.border),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: c.accent),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-              ),
-              const SizedBox(width: 7),
-              _primary(
-                c,
-                _savingContacts ? 'Saving…' : 'Save',
-                _savingContacts ? null : _saveContacts,
-              ),
-              const SizedBox(width: 6),
               OutlinedButton(
                 onPressed: _savingContacts
                     ? null
@@ -1388,16 +1539,13 @@ class _CandidateProfileSettingsScreenState
                         FocusScope.of(context).unfocus();
                         setState(_clearDraft);
                       },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: c.accent,
-                  backgroundColor: c.surface,
-                  padding: const EdgeInsets.symmetric(horizontal: 9),
-                  side: BorderSide(color: c.border),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
+                style: _outlineStyle(c),
                 child: const Text('Cancel'),
+              ),
+              _primary(
+                c,
+                _savingContacts ? 'Saving…' : 'Save',
+                _savingContacts ? null : _saveContacts,
               ),
             ],
           ),
@@ -1414,22 +1562,50 @@ class _CandidateProfileSettingsScreenState
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _heading(c, 'Preferences'),
-            const SizedBox(height: 10),
-            _preferenceRow(
-              c,
-              'Appearance',
-              'Choose how SkillSense looks.',
-              ThemeSwitcher(
-                surface: c.accentSoft,
-                track: c.surface2,
-                border: c.border,
-                selectedBorder: c.accent,
-                foreground: c.accent,
-                inactiveForeground: c.text2,
-                labelStyle: _inter(13, c.text, weight: FontWeight.w600),
-              ),
+            LayoutBuilder(
+              builder: (context, bounds) {
+                final title = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _heading(c, 'Appearance'),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Choose how SkillSense looks.',
+                      style: _profileText(13, c.text3),
+                    ),
+                  ],
+                );
+                final theme = ThemeSwitcher(
+                  surface: c.surface,
+                  track: c.border,
+                  border: c.border,
+                  selectedBorder: c.border,
+                  foreground: c.text,
+                  inactiveForeground: c.text2,
+                  labelStyle: _profileText(
+                    12.5,
+                    c.text,
+                    weight: FontWeight.w600,
+                  ),
+                );
+                if (bounds.maxWidth < 500 ||
+                    MediaQuery.textScalerOf(context).scale(14) > 21) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [title, const SizedBox(height: 14), theme],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: title),
+                    const SizedBox(width: 12),
+                    theme,
+                  ],
+                );
+              },
             ),
+            const SizedBox(height: 18),
             _preferenceRow(
               c,
               _googleVerified ? 'Signed in with Google' : 'Account email',
@@ -1502,8 +1678,12 @@ class _CandidateProfileSettingsScreenState
         final description = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: _inter(14, c.text, weight: FontWeight.w700)),
-            if (subtitle.isNotEmpty) Text(subtitle, style: _inter(13, c.text3)),
+            Text(
+              title,
+              style: _profileText(14, c.text, weight: FontWeight.w700),
+            ),
+            if (subtitle.isNotEmpty)
+              Text(subtitle, style: _profileText(13, c.text3)),
           ],
         );
         return bounds.maxWidth < 380
@@ -1566,7 +1746,7 @@ class _CandidateProfileSettingsScreenState
             const SizedBox(height: 4),
             Text(
               'Add a few details so recruiters can reach you.',
-              style: _inter(13, c.text3, height: 1.55),
+              style: _profileText(13, c.text3, height: 1.55),
             ),
             const SizedBox(height: 18),
             if (_profileLoading)
@@ -1582,12 +1762,12 @@ class _CandidateProfileSettingsScreenState
                   Expanded(
                     child: Text(
                       '$completed of ${steps.length} complete',
-                      style: _inter(13, c.text, weight: FontWeight.w700),
+                      style: _profileText(13, c.text, weight: FontWeight.w700),
                     ),
                   ),
                   Text(
                     '${(completed * 100 / steps.length).round()}%',
-                    style: _inter(13, c.accent, weight: FontWeight.w700),
+                    style: _profileText(13, c.accent, weight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -1603,7 +1783,7 @@ class _CandidateProfileSettingsScreenState
               for (final (index, step) in steps.indexed) ...[
                 if (index > 0) Divider(height: 1, color: c.border),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Row(
                     children: [
                       SizedBox.square(
@@ -1626,10 +1806,10 @@ class _CandidateProfileSettingsScreenState
                       Expanded(
                         child: Text(
                           step.$1,
-                          style: _inter(
+                          style: _profileText(
                             14,
                             step.$2 ? c.text2 : c.text,
-                            weight: FontWeight.w700,
+                            weight: step.$2 ? FontWeight.w600 : FontWeight.w700,
                           ),
                         ),
                       ),
@@ -1637,13 +1817,7 @@ class _CandidateProfileSettingsScreenState
                         const SizedBox(width: 8),
                         OutlinedButton(
                           onPressed: _profile == null ? null : step.$4,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: c.text,
-                            side: BorderSide(color: c.border),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
+                          style: _outlineStyle(c),
                           child: Text(step.$3),
                         ),
                       ],
@@ -1655,53 +1829,30 @@ class _CandidateProfileSettingsScreenState
           ],
         ),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: 14),
       _signOutButton(c, mobile: mobile),
     ],
   );
 
-  Widget _row(
-    _Colors c,
-    String label,
-    String value, {
-    Widget? icon,
-    Widget? action,
-  }) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 11),
-    decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: c.border)),
-    ),
-    child: Row(
-      children: [
-        if (icon != null) ...[icon, const SizedBox(width: 8)],
-        Expanded(flex: 2, child: Text(label, style: _inter(13, c.text2))),
-        if (value.isNotEmpty || icon == null) ...[
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value.isEmpty ? 'Not added' : value,
-              textAlign: TextAlign.end,
-              style: _inter(13, c.text, weight: FontWeight.w700),
-            ),
-          ),
-        ],
-        if (action != null) action,
-      ],
-    ),
-  );
-
   Color _blue(_Colors c) =>
-      c.dark ? const Color(0xFF8CA7FF) : const Color(0xFF2456DB);
-  Widget _heading(_Colors c, String label) =>
-      Text(label, style: _inter(16, c.text, weight: FontWeight.w700));
+      c.dark ? const Color(0xFF4F74F0) : const Color(0xFF2456DB);
+  Widget _heading(_Colors c, String label) => Text(
+    label,
+    style: _profileText(
+      16.5,
+      c.text,
+      weight: FontWeight.w700,
+    ).copyWith(letterSpacing: -.2),
+  );
   Widget _primary(_Colors c, String label, VoidCallback? onPressed) =>
       FilledButton(
         onPressed: onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: CandidateButtonStyle.deepTeal,
+          backgroundColor: _blue(c),
           foregroundColor: Colors.white,
-          textStyle: _inter(13, Colors.white, weight: FontWeight.w700),
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          textStyle: _profileText(13.5, Colors.white, weight: FontWeight.w600),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
@@ -1716,7 +1867,7 @@ class _CandidateProfileSettingsScreenState
     Color? surface,
     IconData? icon,
   }) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
     decoration: BoxDecoration(
       color: surface ?? (tint == null ? c.bg : c.accentSoft),
       borderRadius: BorderRadius.circular(99),
@@ -1732,18 +1883,42 @@ class _CandidateProfileSettingsScreenState
           TextSpan(text: icon == null ? text : ' $text'),
         ],
       ),
-      style: _inter(12, tint ?? c.text2, weight: FontWeight.w600),
+      style: _profileText(12.5, tint ?? c.text2, weight: FontWeight.w600),
     ),
   );
 
-  Widget _card(_Colors c, Widget child) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: c.surface,
-      border: Border.all(color: c.border),
-      borderRadius: BorderRadius.circular(18),
-    ),
-    child: child,
+  ButtonStyle _outlineStyle(_Colors c) => OutlinedButton.styleFrom(
+    foregroundColor: c.text,
+    backgroundColor: c.surface,
+    minimumSize: const Size(0, 34),
+    padding: const EdgeInsets.symmetric(horizontal: 14),
+    textStyle: _profileText(13, c.text, weight: FontWeight.w600),
+    side: BorderSide(color: c.border),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
   );
+
+  Widget _card(_Colors c, Widget child, {EdgeInsetsGeometry? padding}) =>
+      Container(
+        width: double.infinity,
+        padding:
+            padding ??
+            (MediaQuery.sizeOf(context).width < 780
+                ? const EdgeInsets.all(20)
+                : const EdgeInsets.symmetric(horizontal: 26, vertical: 22)),
+        decoration: BoxDecoration(
+          color: c.surface,
+          border: Border.all(color: c.border),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: c.dark
+              ? null
+              : const [
+                  BoxShadow(
+                    color: Color(0x0A0E1A2E),
+                    offset: Offset(0, 1),
+                    blurRadius: 2,
+                  ),
+                ],
+        ),
+        child: child,
+      );
 }

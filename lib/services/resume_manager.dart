@@ -121,6 +121,8 @@ class ResumeManager {
           'active': isDefault,
           'status': status,
           'processingError': (r['processing_error'] ?? '').toString(),
+          'processingCode': r['processing_code'],
+          'canRetryParsing': r['can_retry_parsing'] == true,
           if (coverage != null) 'coverage': coverage,
           if (extracted != null) 'extracted': extracted,
         };
@@ -330,6 +332,8 @@ class ResumeManager {
     Map<String, dynamic>? coverage,
     Map<String, dynamic>? extracted,
     String? processingError,
+    String? processingCode,
+    bool? canRetryParsing,
   }) {
     getResumes();
     for (var r in _cachedResumes!) {
@@ -338,6 +342,8 @@ class ResumeManager {
         if (coverage != null) r['coverage'] = coverage;
         if (extracted != null) r['extracted'] = extracted;
         if (processingError != null) r['processingError'] = processingError;
+        if (processingCode != null) r['processingCode'] = processingCode;
+        if (canRetryParsing != null) r['canRetryParsing'] = canRetryParsing;
         break;
       }
     }

@@ -86,6 +86,19 @@ class ResumeService {
 
   // ── DETAIL / POLL ─────────────────────────────────────────────────────────
 
+  static Future<void> retryParsing(String resumeId) async {
+    try {
+      final dio = await ApiClient.getInstance();
+      await dio.post('/candidates/resumes/$resumeId/retry-parsing/');
+      if (_cachedDetailId == resumeId) {
+        _cachedDetail = null;
+        _cachedDetailId = null;
+      }
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
   /// GET /api/candidates/resumes/{id}/ — fetch one resume's parsed detail.
   static Future<ResumeDetail> getResumeDetail(
     String resumeId, {
@@ -130,6 +143,7 @@ class ResumeService {
     Duration interval = const Duration(seconds: 2),
     Duration timeout = const Duration(seconds: 90),
     Function(int elapsedSeconds)? onTick,
+    void Function(ResumeDetail)? onStatus,
     Future<ResumeDetail> Function(String)? fetchDetail,
   }) async {
     final stopWatch = Stopwatch()..start();
@@ -144,10 +158,15 @@ class ResumeService {
             await (fetchDetail?.call(resumeId) ??
                 getResumeDetail(resumeId, refresh: true));
         lastRequestError = null;
+        onStatus?.call(detail);
         if (detail.isFailed) {
           final message = detail.processingError?.trim();
           throw ApiException(
             statusCode: 422,
+            validationBody: {
+              'can_retry_parsing': detail.canRetryParsing,
+              'processing_code': detail.processingCode,
+            },
             message: message == null || message.isEmpty
                 ? 'Resume parsing failed.'
                 : message,

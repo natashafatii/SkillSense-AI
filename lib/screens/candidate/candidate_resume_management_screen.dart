@@ -11,6 +11,7 @@ import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../constants/app_colors.dart';
+import '../../models/resume_detail.dart';
 import '../../services/resume_manager.dart';
 import '../../services/resume_service.dart';
 import '../../services/api_exception.dart';
@@ -39,6 +40,10 @@ class _CandidateResumeManagementScreenState
   bool _isParsing = false;
   bool _parseCompleted = false;
   bool _isFailed = false;
+  bool _processingDelayed = false;
+  bool _canRetryParsing = false;
+  bool _parseNeedsSupport = false;
+  final Set<String> _retryingResumes = {};
   String _failureErrorMessage = '';
   String? _statusCheckMessage;
   String _stagedFilename = '';
@@ -343,12 +348,24 @@ class _CandidateResumeManagementScreenState
   void _pollParsingStatus(String resumeId) async {
     setState(() {
       _isParsing = true;
+      _isFailed = false;
+      _canRetryParsing = false;
+      _parseNeedsSupport = false;
+      _processingDelayed = false;
       _statusCheckMessage = null;
       _parsingElapsedSeconds = 0;
     });
     try {
       final detail = await ResumeService.pollResumeUntilReady(
         resumeId,
+        onStatus: (detail) {
+          final delayed = detail.processingCode == 'RETRY_PENDING';
+          if (mounted &&
+              _stagedResumeId == resumeId &&
+              delayed != _processingDelayed) {
+            setState(() => _processingDelayed = delayed);
+          }
+        },
         onTick: (elapsed) {
           if (mounted && _stagedResumeId == resumeId) {
             setState(() {
@@ -408,6 +425,13 @@ class _CandidateResumeManagementScreenState
         _isParsing = false;
         if (e is ApiException && e.statusCode == 422) {
           _isFailed = true;
+          _canRetryParsing =
+              e.validationBody is Map &&
+              (e.validationBody as Map)['can_retry_parsing'] == true;
+          _parseNeedsSupport =
+              e.validationBody is Map &&
+              (e.validationBody as Map)['processing_code'] ==
+                  'SUPPORT_REQUIRED';
           _failureErrorMessage = e.message;
         } else {
           _statusCheckMessage = e is ApiException
@@ -415,6 +439,59 @@ class _CandidateResumeManagementScreenState
               : 'The resume status could not be checked.';
         }
       });
+    }
+  }
+
+  Future<void> _retryParsing(String resumeId) async {
+    if (!_retryingResumes.add(resumeId)) return;
+    setState(() {});
+    try {
+      await ResumeService.retryParsing(resumeId);
+      if (!mounted) return;
+      if (_stagedResumeId == resumeId) {
+        _pollParsingStatus(resumeId);
+        return;
+      }
+      setState(() {
+        ResumeManager.updateResumeStatus(
+          resumeId,
+          status: 'pending',
+          processingError: '',
+          processingCode: '',
+          canRetryParsing: false,
+        );
+      });
+      await ResumeService.pollResumeUntilReady(
+        resumeId,
+        onStatus: (ResumeDetail detail) {
+          if (!mounted) return;
+          setState(() {
+            ResumeManager.updateResumeStatus(
+              resumeId,
+              status: detail.status.value.toLowerCase(),
+              processingError: detail.processingError ?? '',
+              processingCode: detail.processingCode ?? '',
+              canRetryParsing: detail.canRetryParsing,
+            );
+          });
+        },
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is ApiException
+                  ? error.message
+                  : 'Resume parsing could not be retried.',
+            ),
+          ),
+        );
+        if (_stagedResumeId != resumeId) await _loadResumeList();
+      }
+    } finally {
+      _retryingResumes.remove(resumeId);
+      if (mounted) setState(() {});
     }
   }
 
@@ -972,6 +1049,8 @@ class _CandidateResumeManagementScreenState
                                   Text(
                                     _isFailed
                                         ? 'Resume processing failed'
+                                        : _processingDelayed
+                                        ? 'Processing delayed'
                                         : _statusCheckMessage != null
                                         ? 'Processing status'
                                         : (_canUpload
@@ -1001,6 +1080,8 @@ class _CandidateResumeManagementScreenState
                                         ? (_failureErrorMessage.isNotEmpty
                                               ? _failureErrorMessage
                                               : 'Text extraction or AI parsing failed')
+                                        : _processingDelayed
+                                        ? 'We’ll retry automatically.'
                                         : _statusCheckMessage ??
                                               (_canUpload
                                                   ? 'Click "Use this resume" to begin extraction'
@@ -1029,42 +1110,57 @@ class _CandidateResumeManagementScreenState
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  InkWell(
-                                    onTap: _statusCheckMessage != null
-                                        ? () => _pollParsingStatus(
-                                            _stagedResumeId!,
-                                          )
-                                        : _triggerBrowseFiles,
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 7,
-                                        vertical: 3,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: context.themeSurface(
-                                          const Color(0xFFFEE2E2),
+                                  if (!_parseNeedsSupport ||
+                                      _stagedResumeId == null)
+                                    InkWell(
+                                      onTap: _statusCheckMessage != null
+                                          ? () => _pollParsingStatus(
+                                              _stagedResumeId!,
+                                            )
+                                          : _canRetryParsing &&
+                                                _stagedResumeId != null
+                                          ? _retryingResumes.contains(
+                                                  _stagedResumeId,
+                                                )
+                                                ? null
+                                                : () => _retryParsing(
+                                                    _stagedResumeId!,
+                                                  )
+                                          : _triggerBrowseFiles,
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 3,
                                         ),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: const Color(0xFFFCA5A5),
-                                          width: 0.88,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        _statusCheckMessage != null
-                                            ? 'Check status'
-                                            : 'Choose file',
-                                        style: GoogleFonts.jetBrainsMono(
-                                          color: context.themeForeground(
-                                            const Color(0xFF991B1B),
+                                        decoration: BoxDecoration(
+                                          color: context.themeSurface(
+                                            const Color(0xFFFEE2E2),
                                           ),
-                                          fontSize: 8.5,
-                                          fontWeight: FontWeight.w600,
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFFCA5A5),
+                                            width: 0.88,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _statusCheckMessage != null
+                                              ? 'Check status'
+                                              : _canRetryParsing
+                                              ? 'Retry parsing'
+                                              : 'Choose file',
+                                          style: GoogleFonts.jetBrainsMono(
+                                            color: context.themeForeground(
+                                              const Color(0xFF991B1B),
+                                            ),
+                                            fontSize: 8.5,
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
                                   const SizedBox(width: 4),
                                   InkWell(
                                     onTap: () {
@@ -1333,6 +1429,14 @@ class _CandidateResumeManagementScreenState
                 final String filenameStr = (r['filename'] ?? 'resume.pdf')
                     .toString();
                 final String dateStr = ResumeManager.getFormattedDateTag(r);
+                final resumeId = r['id'].toString();
+                final parsingNotice = switch (r['status']) {
+                  'pending' when r['processingCode'] == 'RETRY_PENDING' =>
+                    'Processing delayed. We’ll retry automatically.',
+                  'pending' => 'Processing resume…',
+                  'failed' => r['processingError']?.toString(),
+                  _ => null,
+                };
 
                 return Container(
                   padding: const EdgeInsets.symmetric(
@@ -1403,6 +1507,20 @@ class _CandidateResumeManagementScreenState
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            if (parsingNotice != null &&
+                                parsingNotice.isNotEmpty)
+                              Text(
+                                parsingNotice,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            if (r['canRetryParsing'] == true &&
+                                resumeId != _stagedResumeId)
+                              TextButton(
+                                onPressed: _retryingResumes.contains(resumeId)
+                                    ? null
+                                    : () => _retryParsing(resumeId),
+                                child: const Text('Retry parsing'),
+                              ),
                           ],
                         ),
                       ),

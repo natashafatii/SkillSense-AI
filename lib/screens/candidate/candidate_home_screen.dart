@@ -1,26 +1,26 @@
-import 'package:skillsense_ai/constants/adaptive_colors.dart';
-import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
-import '../../widgets/mobile_edge_shadow_wrapper.dart';
-import '../../widgets/candidate_mobile_nav.dart';
-import '../../widgets/candidate_button_style.dart';
-import 'dart:ui';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../../widgets/recruiter_top_bar.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../constants/app_colors.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../models/application.dart';
-import '../../models/job.dart';
-import '../../models/interview.dart';
 import '../../models/candidate_profile.dart';
+import '../../models/interview.dart';
+import '../../models/job.dart';
 import '../../services/application_service.dart';
-import '../../services/job_service.dart';
 import '../../services/auth_service.dart';
-import '../../services/resume_service.dart';
 import '../../services/interview_service.dart';
+import '../../services/job_service.dart';
+import '../../services/media/interview_media_route_observer.dart';
 import '../../services/profile_service.dart';
+import '../../services/resume_service.dart';
 import '../../services/session_scope.dart';
-import '../../widgets/candidate_side_nav.dart';
+import '../../widgets/candidate_scaffold.dart';
+import '../../widgets/recruiter_top_bar.dart';
+
+import '../application_screening_screen.dart';
+
+part 'candidate_home_content.dart';
 
 class CandidateHomeScreen extends StatefulWidget {
   final Future<List<Application>> Function()? loadApplications;
@@ -44,19 +44,14 @@ class CandidateHomeScreen extends StatefulWidget {
   State<CandidateHomeScreen> createState() => _CandidateHomeScreenState();
 }
 
-class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
-  // Navigation active state
-
-  // Search input control
-  final TextEditingController _searchController = TextEditingController();
-
-  // Backend data
-  List<Application> _recentApplications = [];
+class _CandidateHomeScreenState extends State<CandidateHomeScreen>
+    with WidgetsBindingObserver, RouteAware {
   List<Job> _matchedJobs = [];
-  bool _loadingApplications = true;
-  bool _loadingJobs = true;
+  List<Job> _exploreJobs = [];
   bool _isLoading = true;
-  bool _hasError = false;
+  Future<void>? _refreshing;
+  ModalRoute<dynamic>? _route;
+  bool _wasBackgrounded = false;
   List<Application> _allApplications = [];
   List<Interview> _interviews = [];
   List<Map<String, dynamic>> _resumes = [];
@@ -70,66 +65,105 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   final int _account = SessionScope.generation;
   bool get _current => mounted && _account == SessionScope.generation;
 
-  Interview? get _nextInterview {
-    final upcoming =
-        _interviews
-            .where(
-              (i) =>
-                  i.status.toUpperCase() == 'SCHEDULED' &&
-                  i.scheduledAt != null &&
-                  i.scheduledAt!.isAfter(DateTime.now()),
-            )
-            .toList()
-          ..sort((a, b) => a.scheduledAt!.compareTo(b.scheduledAt!));
-    return upcoming.firstOrNull;
+  Interview? _nextInterview(DateTime now) {
+    Interview? scheduled;
+    for (final interview in _interviews) {
+      final status = interview.status.toUpperCase();
+      if (status == 'LIVE') return interview;
+      final time = interview.scheduledAt;
+      if (status == 'SCHEDULED' &&
+          time != null &&
+          !time.isBefore(now) &&
+          (scheduled == null || time.isBefore(scheduled.scheduledAt!))) {
+        scheduled = interview;
+      }
+    }
+    return scheduled;
   }
 
-  int? get _profileCompletion => _profile?.completionPercentage;
+  bool get _isNewCandidate =>
+      _profileError == null &&
+      _applicationsError == null &&
+      _interviewsError == null &&
+      _resumesError == null &&
+      _allApplications.isEmpty &&
+      _interviews.isEmpty &&
+      _resumes.isEmpty &&
+      (_profile == null || (_profile?.completionPercentage ?? 100) < 100);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     SessionScope.invalidations.addListener(_clearAccountData);
     ProfileService.currentProfileNotifier.addListener(_profileChanged);
-    _initializeData();
-    _countdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (_current && _interviews.isNotEmpty) setState(() {});
+    _refresh(includeUser: true);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_current &&
+          _route?.isCurrent != false &&
+          _interviews.any((interview) => interview.status == 'SCHEDULED')) {
+        setState(() {});
+      }
     });
   }
 
-  Future<void> _initializeData() async {
-    if (mounted) setState(() => _isLoading = true);
+  Future<void> _refresh({bool includeUser = false}) {
+    if (!_current) return Future.value();
+    return _refreshing ??= _loadDashboard(includeUser).whenComplete(() {
+      _refreshing = null;
+    });
+  }
 
+  Future<void> _loadDashboard(bool includeUser) async {
     try {
-      // Ensure user is loaded first
-      await _loadUser();
-
+      if (includeUser) await _loadUser();
       if (!_current) return;
       await Future.wait([
         _loadApplications(),
-        _loadMatchedJobs(),
+        _loadJobs(),
         _loadProfile(),
         _loadInterviews(),
         _loadResumes(),
       ]);
-    } catch (e) {
-      if (_current) setState(() => _hasError = true);
     } finally {
       if (_current && _isLoading) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == _route) return;
+    interviewMediaRouteObserver.unsubscribe(this);
+    _route = route;
+    if (route != null) interviewMediaRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPopNext() => unawaited(_refresh());
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _wasBackgrounded = true;
+    } else if (state == AppLifecycleState.resumed && _wasBackgrounded) {
+      _wasBackgrounded = false;
+      if (_route?.isCurrent != false) unawaited(_refresh());
     }
   }
 
   void _clearAccountData() {
     if (!mounted) return;
     setState(() {
-      _recentApplications = [];
       _allApplications = [];
       _matchedJobs = [];
+      _exploreJobs = [];
       _interviews = [];
       _resumes = [];
       _profile = null;
       _isLoading = false;
-      _hasError = true;
     });
   }
 
@@ -142,50 +176,39 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
         setState(() {
           _allApplications = List.of(applications)
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          _recentApplications = _allApplications.take(3).toList();
           _applicationsError = null;
-          _loadingApplications = false;
         });
       }
     } catch (_) {
       if (_current) {
         setState(() {
-          _loadingApplications = false;
           _applicationsError = 'Unable to load applications.';
         });
       }
     }
   }
 
-  Future<void> _loadMatchedJobs() async {
+  Future<void> _loadJobs() async {
     try {
       final jobs =
           await (widget.loadJobs?.call() ??
               JobService.listAllJobs(status: JobStatus.active));
       if (_current) {
         setState(() {
-          _matchedJobs =
-              jobs
-                  .where(
-                    (job) =>
-                        job.isActive &&
-                        job.matchScore != null &&
-                        job.matchScore!.isFinite &&
-                        job.matchScore! > 0 &&
-                        job.matchScore! <= 100,
-                  )
-                  .toList()
-                ..sort((a, b) => b.matchScore!.compareTo(a.matchScore!));
-          _matchedJobs = _matchedJobs.take(3).toList();
+          final active = jobs.where((job) => job.isActive).toList();
+          final ranked = active.where((job) {
+            final score = job.matchScore;
+            return score != null && score.isFinite && score > 0 && score <= 100;
+          }).toList()..sort((a, b) => b.matchScore!.compareTo(a.matchScore!));
+          _matchedJobs = ranked.take(5).toList();
+          _exploreJobs = active.take(3).toList();
           _jobsError = null;
-          _loadingJobs = false;
         });
       }
     } catch (_) {
       if (_current) {
         setState(() {
-          _loadingJobs = false;
-          _jobsError = 'Unable to load matched jobs.';
+          _jobsError = 'Unable to load jobs.';
         });
       }
     }
@@ -264,1387 +287,126 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     }
   }
 
-  Future<void> _openResumes() async {
-    await Navigator.of(context).pushNamed('/candidate/resumes');
-    if (_current) {
-      await Future.wait([_loadResumes(), _loadMatchedJobs()]);
-    }
-  }
-
-  Future<void> _openProfile() async {
-    await Navigator.of(context).pushNamed('/candidate/profile');
-    if (_current) await _loadProfile();
-  }
-
-  Widget _sectionError(String message) => Column(
-    children: [
-      Text(message),
-      TextButton(onPressed: _initializeData, child: const Text('Retry')),
-    ],
-  );
-
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    interviewMediaRouteObserver.unsubscribe(this);
     SessionScope.invalidations.removeListener(_clearAccountData);
     ProfileService.currentProfileNotifier.removeListener(_profileChanged);
     _countdownTimer?.cancel();
-    _searchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 900;
-
-    final Color bgBase = context.themeCanvas(const Color(0xFFF8FAFC));
-    final Color textPrimary = context.themeForeground(const Color(0xFF0F172A));
-    final Color textSecondary = context.themeForeground(
-      const Color(0xFF64748B),
-    );
-    final Color cardBg = context.themeSurface(Colors.white);
-    final Color cardBorder = context.themeOutline(const Color(0xFFE2E8F0));
-
-    return Scaffold(
-      backgroundColor: bgBase,
-      body: Stack(
+    final colors = _HomeColors(Theme.of(context).brightness == Brightness.dark);
+    final hasMobileDock = MediaQuery.sizeOf(context).width < 900;
+    final now = DateTime.now();
+    final interview = _interviewsError == null ? _nextInterview(now) : null;
+    final application = interview == null || _applicationsError != null
+        ? null
+        : _allApplications
+              .where((row) => row.id == interview.applicationId)
+              .firstOrNull;
+    return CandidateScaffold(
+      currentRoute: '/candidate/home',
+      body: Column(
         children: [
-          // Grid pattern background
-          Positioned.fill(
-            child: CustomPaint(
-              painter: GridPainter(
-                color: isMobile
-                    ? Colors.white.withValues(alpha: 0.02)
-                    : Colors.black.withValues(alpha: 0.015),
-              ),
-            ),
-          ),
-
-          // Aurora glow backdrop
-          Positioned(
-            top: isMobile ? -50 : -120,
-            left: isMobile ? 20 : 180,
-            child: Container(
-              width: isMobile ? 300 : 450,
-              height: isMobile ? 300 : 450,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.dashboardTeal.withValues(
-                  alpha: isMobile ? 0.06 : 0.04,
-                ),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-          ),
-
-          // Main Layout
-          SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      if (!isMobile)
-                        const CandidateSideNav(currentRoute: '/candidate/home'),
-
-                      Expanded(
-                        child: Column(
-                          children: [
-                            RecruiterTopBar(pageTitle: 'Home', candidate: true),
-                            Expanded(
-                              child: MobileEdgeShadowWrapper(
-                                child: _isLoading
-                                    ? const Center(
-                                        child: CircularProgressIndicator(
-                                          color: Color(0xFF0FB89B),
-                                        ),
-                                      )
-                                    : _hasError
-                                    ? Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              'Could not load data',
-                                              style: GoogleFonts.inter(
-                                                color: context.themeForeground(
-                                                  const Color(0xFF64748B),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 16),
-                                            ElevatedButton(
-                                              onPressed: () {
-                                                setState(() {
-                                                  _isLoading = true;
-                                                  _hasError = false;
-                                                });
-                                                _initializeData();
-                                              },
-                                              style: CandidateButtonStyle.primary(
-                                                ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(
-                                                    0xFF0FB89B,
-                                                  ),
-                                                  foregroundColor: Colors.white,
-                                                  elevation: 0,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 20,
-                                                        vertical: 12,
-                                                      ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          20,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                              child: const Text('Retry'),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                    : Builder(
-                                        builder: (context) {
-                                          final bool hasUploadedResume =
-                                              _resumes.isNotEmpty;
-                                          final activeResume =
-                                              _resumes.firstOrNull ??
-                                              <String, dynamic>{};
-
-                                          return SingleChildScrollView(
-                                            physics:
-                                                const BouncingScrollPhysics(),
-                                            padding: EdgeInsets.only(
-                                              left: isMobile ? 16 : 24,
-                                              right: isMobile ? 16 : 24,
-                                              top: 16,
-                                              bottom: isMobile ? 164 : 32,
-                                            ),
-                                            child: isMobile
-                                                ? _buildMobileLayout(
-                                                    textPrimary,
-                                                    textSecondary,
-                                                    cardBg,
-                                                    cardBorder,
-                                                    hasUploadedResume,
-                                                    activeResume,
-                                                  )
-                                                : _buildWebLayout(
-                                                    textPrimary,
-                                                    textSecondary,
-                                                    cardBg,
-                                                    cardBorder,
-                                                    hasUploadedResume,
-                                                    activeResume,
-                                                  ),
-                                          );
-                                        },
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          if (isMobile)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildMobileBottomDock(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ── WEB LAYOUT ─────────────────────────────────────────────────────────────
-  Widget _buildWebLayout(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool hasResume,
-    Map<String, dynamic> activeResume,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Left Column: Hero panel (flex 42)
-        Expanded(
-          flex: 42,
-          child: _buildHeroCard(
-            false,
-            textPrimary,
-            textSecondary,
-            cardBg,
-            cardBorder,
-            hasResume,
-            activeResume,
-          ),
-        ),
-        const SizedBox(width: 20),
-
-        // Right Column: Profile strength + Applications (Row 1), Matched for you (Row 2) (flex 58)
-        Expanded(
-          flex: 58,
-          child: Column(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _buildProfileStrengthCard(
-                      false,
-                      textPrimary,
-                      textSecondary,
-                      cardBg,
-                      cardBorder,
-                      hasResume,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildApplicationsPanel(
-                      textPrimary,
-                      textSecondary,
-                      cardBg,
-                      cardBorder,
-                      hasResume,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              _buildMatchedJobsPanel(
-                false,
-                textPrimary,
-                textSecondary,
-                cardBg,
-                cardBorder,
-                hasResume,
-                activeResume,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── MOBILE LAYOUT ──────────────────────────────────────────────────────────
-  Widget _buildMobileLayout(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool hasResume,
-    Map<String, dynamic> activeResume,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildHeroCard(
-          true,
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          hasResume,
-          activeResume,
-        ),
-        const SizedBox(height: 16),
-        _buildProfileStrengthCard(
-          true,
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          hasResume,
-        ),
-        const SizedBox(height: 16),
-        _buildApplicationsPanel(
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          hasResume,
-        ),
-        const SizedBox(height: 16),
-        _buildMatchedJobsPanel(
-          true,
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          hasResume,
-          activeResume,
-        ),
-      ],
-    );
-  }
-
-  // ── HERO CARD (WELCOME / NEXT INTERVIEW) ──────────────────────────────────
-  Widget _buildHeroCard(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool hasResume,
-    Map<String, dynamic> activeResume,
-  ) {
-    final interview = _nextInterview;
-    if (_interviewsError != null) {
-      return Container(
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cardBorder),
-        ),
-        child: _sectionError(_interviewsError!),
-      );
-    }
-    if (interview == null) {
-      // ── STATE 1: EMPTY STATE (WELCOME SCREEN) ──
-      return ValueListenableBuilder<Map<String, dynamic>?>(
-        valueListenable: AuthService.currentUserNotifier,
-        builder: (context, userData, child) {
-          final firstName = (userData?['first_name'] ?? '').toString().trim();
-          final lastName = (userData?['last_name'] ?? '').toString().trim();
-
-          String displayName = '';
-          if (firstName.isNotEmpty) {
-            displayName = firstName;
-            if (lastName.isNotEmpty) displayName += ' $lastName';
-          } else if (lastName.isNotEmpty) {
-            displayName = lastName;
-          } else {
-            final email = (userData?['email'] ?? '').toString().trim();
-            if (email.isNotEmpty) {
-              final prefix = email.split('@').first;
-              displayName = prefix.isNotEmpty
-                  ? prefix[0].toUpperCase() + prefix.substring(1)
-                  : email;
-            }
-          }
-
-          final welcomeText = 'No upcoming interviews';
-
-          return Container(
-            constraints: BoxConstraints(minHeight: isMobile ? 0 : 360),
-            padding: EdgeInsets.all(isMobile ? 20 : 28),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cardBorder, width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0FB89B).withValues(alpha: 0.05),
-                  blurRadius: 16,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'WELCOME',
-                      style: GoogleFonts.inter(
-                        color: context.themeForeground(const Color(0xFF64748B)),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      welcomeText,
-                      style: GoogleFonts.spaceGrotesk(
-                        color: textPrimary,
-                        fontSize: isMobile ? 22 : 26,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      displayName.isEmpty
-                          ? 'Scheduled interviews will appear here when a recruiter invites you.'
-                          : '$displayName, scheduled interviews will appear here when a recruiter invites you.',
-                      style: GoogleFonts.inter(
-                        color: textSecondary,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w400,
-                        height: 1.5,
-                      ),
-                    ),
-                    if (!hasResume && _resumesError == null) ...[
-                      const SizedBox(height: 24),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _openResumes,
-                            style: CandidateButtonStyle.primary(
-                              ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0FB89B),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.add,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            label: Text(
-                              'Upload resume',
-                              style: GoogleFonts.inter(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          OutlinedButton(
-                            onPressed: _openProfile,
-                            style: CandidateButtonStyle.secondary(
-                              context,
-                              OutlinedButton.styleFrom(
-                                backgroundColor: context.themeSurface(
-                                  Colors.white,
-                                ),
-                                foregroundColor: context.themeForeground(
-                                  const Color(0xFF334155),
-                                ),
-                                side: BorderSide(
-                                  color: context.themeOutline(
-                                    const Color(0xFFE2E8F0),
-                                  ),
-                                  width: 1.5,
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              'Complete profile',
-                              style: GoogleFonts.inter(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w600,
-                                color: CandidateButtonStyle.secondaryText,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-                if (!isMobile) const SizedBox(height: 48),
-                Text(
-                  'Browse jobs and track your applications while you wait for an invitation.',
-                  style: GoogleFonts.inter(
-                    color: context.themeForeground(const Color(0xFF94A3B8)),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    }
-
-    // ── STATE 2: POPULATED STATE (NEXT INTERVIEW COUNTDOWN) ──
-    final application = _allApplications
-        .where((app) => app.id == interview.applicationId)
-        .firstOrNull;
-    final jobTitle = application?.jobTitle.trim().isNotEmpty == true
-        ? application!.jobTitle
-        : 'Scheduled interview';
-    final company = application?.jobCompany.trim() ?? '';
-    final scheduled = interview.scheduledAt!.toLocal();
-    final remaining = scheduled.difference(DateTime.now());
-    final days = remaining.inDays.toString().padLeft(2, '0');
-    final hours = (remaining.inHours % 24).toString().padLeft(2, '0');
-    final minutes = (remaining.inMinutes % 60).toString().padLeft(2, '0');
-
-    return Container(
-      constraints: BoxConstraints(minHeight: isMobile ? 0 : 360),
-      padding: EdgeInsets.all(isMobile ? 20 : 28),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0FB89B).withValues(alpha: 0.06),
-            blurRadius: 20,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // NEXT INTERVIEW Eyebrow
-              Text(
-                'NEXT INTERVIEW',
-                style: GoogleFonts.inter(
-                  color: context.themeForeground(const Color(0xFF64748B)),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // Title
-              Text(
-                jobTitle,
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: isMobile ? 22 : 26,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 4),
-
-              // Subtitle
-              Text(
-                '${company.isEmpty ? '' : '$company · '}${scheduled.toString().substring(0, 16)}',
-                style: GoogleFonts.inter(
-                  color: textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Countdown timer boxes
-              Row(
-                children: [
-                  Expanded(child: _buildCountdownBox(days, 'DAYS', isMobile)),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildCountdownBox(hours, 'HOURS', isMobile)),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildCountdownBox(minutes, 'MIN', isMobile)),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Action buttons
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  ElevatedButton(
-                    onPressed: () => Navigator.of(context).pushNamed(
-                      '/candidate/interview-lobby',
-                      arguments: interview.id,
-                    ),
-                    style: CandidateButtonStyle.primary(
-                      ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0FB89B),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 22,
-                          vertical: 13,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                    child: Text(
-                      'Run device check',
-                      style: GoogleFonts.inter(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          if (!isMobile) const SizedBox(height: 32),
-
-          // Verified Camera Status Row
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF0FB89B),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Check your camera and microphone before joining your interview.',
-                  style: GoogleFonts.inter(
-                    color: context.themeForeground(const Color(0xFF64748B)),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCountdownBox(String value, String label, bool isMobile) {
-    return Container(
-      height: isMobile ? 58 : 64,
-      decoration: BoxDecoration(
-        color: context.themeSurface(const Color(0xFFF8FAFC)),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: context.themeOutline(const Color(0xFFE2E8F0)),
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style: GoogleFonts.spaceGrotesk(
-              color: context.themeForeground(const Color(0xFF0F172A)),
-              fontSize: isMobile ? 18 : 22,
-              fontWeight: FontWeight.bold,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: context.themeForeground(const Color(0xFF94A3B8)),
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── PROFILE STRENGTH CARD ─────────────────────────────────────────────────
-  Widget _buildProfileStrengthCard(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool hasResume,
-  ) {
-    final double gaugeSize = isMobile ? 54 : 64;
-
-    final completion = _profileCompletion;
-    final unavailable = _profileError != null || completion == null;
-    final score = unavailable ? 0.0 : completion / 100;
-    final scoreText = unavailable ? '—' : '$completion';
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: PointerGestureDetector(
-        onTap: _openProfile,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 110),
-          padding: EdgeInsets.all(isMobile ? 14 : 18),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cardBorder, width: 1.5),
-          ),
-          child: Row(
-            children: [
-              // Gauge ring
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: gaugeSize,
-                    height: gaugeSize,
-                    child: CircularProgressIndicator(
-                      key: const Key('candidate-profile-strength-ring'),
-                      value: score,
-                      strokeWidth: 4.5,
-                      backgroundColor: context.themeSurface(
-                        const Color(0xFFE2E8F0),
-                      ),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        score > 0
-                            ? const Color(0xFF0FB89B)
-                            : const Color(0xFFE2E8F0),
-                      ),
-                    ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        scoreText,
-                        key: const Key('candidate-profile-strength-value'),
-                        style: GoogleFonts.spaceGrotesk(
-                          color: score > 0
-                              ? context.themeForeground(const Color(0xFF0F172A))
-                              : context.themeForeground(
-                                  const Color(0xFF94A3B8),
-                                ),
-                          fontSize: isMobile ? 14 : 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        'PROFILE',
-                        style: GoogleFonts.inter(
-                          color: context.themeForeground(
-                            const Color(0xFF94A3B8),
-                          ),
-                          fontSize: isMobile ? 7 : 8,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(width: 14),
-
-              // Title & Tip
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Profile strength',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: textPrimary,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      unavailable
-                          ? 'Unable to load profile completion. Tap to view your profile.'
-                          : _profileCompletion == 100
-                          ? 'Your saved profile is complete.'
-                          : 'Complete your remaining profile details.',
-                      style: GoogleFonts.inter(
-                        color: textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── APPLICATIONS PANEL ──────────────────────────────────────────────────
-  Widget _buildApplicationsPanel(
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool hasResume,
-  ) {
-    return InkWell(
-      onTap: () => Navigator.of(context).pushNamed('/candidate/applications'),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 110),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cardBorder, width: 1.5),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Applications',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.spaceGrotesk(
-                      color: textPrimary,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                if (_recentApplications.isNotEmpty) const SizedBox(width: 6),
-                if (_recentApplications.isNotEmpty)
-                  Text(
-                    'All >',
-                    style: GoogleFonts.inter(
-                      color: context.themeForeground(const Color(0xFF64748B)),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            if (_loadingApplications)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else if (_applicationsError != null)
-              _sectionError(_applicationsError!)
-            else if (_recentApplications.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: context.themeSurface(const Color(0xFFF8FAFC)),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: context.themeOutline(
-                              const Color(0xFFE2E8F0),
-                            ),
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.article_outlined,
-                          size: 18,
-                          color: context.themeForeground(
-                            const Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No applications yet',
-                        style: GoogleFonts.inter(
-                          color: textSecondary,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              Column(
-                children: [
-                  for (int i = 0; i < _recentApplications.length; i++) ...[
-                    _buildApplicationRow(
-                      _recentApplications[i].jobTitle,
-                      _recentApplications[i].jobCompany,
-                      _recentApplications[i].rawStatus ??
-                          _recentApplications[i].status.value,
-                      _recentApplications[i].status ==
-                          ApplicationStatus.interviewed,
-                    ),
-                    if (i < _recentApplications.length - 1)
-                      const SizedBox(height: 8),
-                  ],
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildApplicationRow(
-    String title,
-    String company,
-    String status,
-    bool isInterview,
-  ) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  color: context.themeForeground(const Color(0xFF0F172A)),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                company,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  color: context.themeForeground(const Color(0xFF64748B)),
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: isInterview
-                ? context.themeSurface(const Color(0xFFD1FAE5))
-                : context.themeSurface(const Color(0xFFF1F5F9)),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            status,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              color: isInterview
-                  ? context.themeForeground(const Color(0xFF065F46))
-                  : context.themeForeground(const Color(0xFF475569)),
-              fontSize: 9.5,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── MATCHED JOBS PANEL ────────────────────────────────────────────────────
-  Widget _buildMatchedJobsPanel(
-    bool isMobile,
-    Color textPrimary,
-    Color textSecondary,
-    Color cardBg,
-    Color cardBorder,
-    bool hasResume,
-    Map<String, dynamic> activeResume,
-  ) {
-    final error = _jobsError ?? _resumesError;
-    if (error != null) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cardBorder),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [const Text('Matched for you'), _sectionError(error)],
-        ),
-      );
-    }
-    if (!hasResume) {
-      // Empty state
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cardBorder, width: 1.5),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Matched for you',
-              style: GoogleFonts.spaceGrotesk(
-                color: textPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: context.themeSurface(const Color(0xFFF8FAFC)),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: context.themeOutline(const Color(0xFFE2E8F0)),
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.donut_large_outlined,
-                        size: 20,
-                        color: context.themeForeground(const Color(0xFF94A3B8)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Upload your resume to see matches',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: textPrimary,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'We\'ll rank open roles by fit the moment it\'s parsed.',
-                      style: GoogleFonts.inter(
-                        color: textSecondary,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: _openResumes,
-                      style: CandidateButtonStyle.primary(
-                        ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0FB89B),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 10,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                      ),
-                      icon: const Icon(
-                        Icons.add,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      label: Text(
-                        'Upload resume',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // ── POPULATED STATE (MATCHED ROLES FOR PARSED CV) ──
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'Matched for you',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: context.themeSurface(const Color(0xFFE6FFFA)),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'MATCHED',
-                      style: GoogleFonts.inter(
-                        color: context.themeForeground(const Color(0xFF0D9488)),
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              InkWell(
-                onTap: () => Navigator.of(context).pushNamed('/candidate/jobs'),
-                child: Text(
-                  'Feed >',
-                  style: GoogleFonts.inter(
-                    color: context.themeForeground(const Color(0xFF64748B)),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Matched Role Cards from backend
-          if (_loadingJobs)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else if (_matchedJobs.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'No matched jobs yet. Browse the Job Feed for available roles.',
-                  style: GoogleFonts.inter(color: textSecondary, fontSize: 13),
-                ),
-              ),
-            )
-          else
-            isMobile
-                ? Column(
-                    children: [
-                      for (int i = 0; i < _matchedJobs.length; i++) ...[
-                        _buildMatchedJobCard(
-                          _matchedJobs[i].title,
-                          _matchedJobs[i].recruiterCompany,
-                          _matchedJobs[i].skillsRequired.isNotEmpty
-                              ? _matchedJobs[i].skillsRequired.first
-                              : _matchedJobs[i].jobType.value,
-                          _matchedJobs[i].location,
-                          const Color(0xFF0FB89B),
-                        ),
-                        if (i < _matchedJobs.length - 1)
-                          const SizedBox(height: 12),
-                      ],
-                    ],
-                  )
-                : Row(
-                    children: [
-                      for (int i = 0; i < _matchedJobs.length; i++) ...[
-                        Expanded(
-                          child: _buildMatchedJobCard(
-                            _matchedJobs[i].title,
-                            _matchedJobs[i].recruiterCompany,
-                            _matchedJobs[i].skillsRequired.isNotEmpty
-                                ? _matchedJobs[i].skillsRequired.first
-                                : _matchedJobs[i].jobType.value,
-                            _matchedJobs[i].location,
-                            const Color(0xFF0FB89B),
-                          ),
-                        ),
-                        if (i < _matchedJobs.length - 1)
-                          const SizedBox(width: 12),
-                      ],
-                    ],
-                  ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMatchedJobCard(
-    String title,
-    String company,
-    String tag1,
-    String tag2,
-    Color ringColor,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.themeSurface(const Color(0xFFFAFAFA)),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: context.themeOutline(const Color(0xFFE2E8F0)),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Role icon
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: ringColor.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.work_outline_rounded, color: ringColor, size: 20),
-          ),
-          const SizedBox(width: 12),
-
+          const RecruiterTopBar(pageTitle: 'Home', candidate: true),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.spaceGrotesk(
-                    color: context.themeForeground(const Color(0xFF0F172A)),
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  company,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: context.themeForeground(const Color(0xFF64748B)),
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: context.themeSurface(Colors.white),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: context.themeOutline(
-                              const Color(0xFFE2E8F0),
-                            ),
-                          ),
-                        ),
+            child: ColoredBox(
+              color: colors.canvas,
+              child: DefaultTextStyle(
+                style: _homeText(14, color: colors.ink),
+                child: !_current
+                    ? const Center(
                         child: Text(
-                          tag1,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            color: context.themeForeground(
-                              const Color(0xFF64748B),
-                            ),
-                            fontSize: 9.5,
-                          ),
+                          'Your session changed. Reopen Candidate Home.',
                         ),
+                      )
+                    : _isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          color: colors.teal,
+                          semanticsLabel: 'Loading candidate home',
+                        ),
+                      )
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final compact = constraints.maxWidth <= 760;
+                          final inset = compact ? 16.0 : 32.0;
+                          final footer = hasMobileDock
+                              ? 110 + MediaQuery.paddingOf(context).bottom
+                              : 32.0;
+                          return RefreshIndicator(
+                            onRefresh: _refresh,
+                            color: colors.teal,
+                            child: SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(
+                                inset,
+                                16,
+                                inset,
+                                footer,
+                              ),
+                              child: ValueListenableBuilder(
+                                valueListenable:
+                                    AuthService.currentUserNotifier,
+                                builder: (context, user, _) => _HomeDashboard(
+                                  colors: colors,
+                                  viewportHeight: constraints.maxHeight,
+                                  emailVerified: AuthService.emailVerifiedFor(
+                                    user,
+                                  ),
+                                  now: now,
+                                  name: _displayName(user),
+                                  onboarding: _isNewCandidate,
+                                  decisionCount: _applicationsError == null
+                                      ? _allApplications
+                                            .where(
+                                              (app) =>
+                                                  app.status ==
+                                                  ApplicationStatus.decision,
+                                            )
+                                            .length
+                                      : 0,
+                                  interview: interview,
+                                  interviewApplication: application,
+                                  profile: _profile,
+                                  applications: _allApplications
+                                      .take(3)
+                                      .toList(),
+                                  matches: _matchedJobs,
+                                  exploreJobs: _exploreJobs,
+                                  hasResume: _resumes.isNotEmpty,
+                                  interviewsError: _interviewsError,
+                                  applicationsError: _applicationsError,
+                                  profileError: _profileError,
+                                  jobsError: _jobsError,
+                                  resumesError: _resumesError,
+                                  onRetry: _refresh,
+                                  onProfile: () =>
+                                      _navigate('/candidate/profile'),
+                                  onResumes: () =>
+                                      _navigate('/candidate/resumes'),
+                                  onApplication: _openApplication,
+                                  onApplications: () =>
+                                      _navigate('/candidate/applications'),
+                                  onFeed: () => _navigate('/candidate/jobs'),
+                                  onJob: (job) => _navigate(
+                                    '/candidate/jobs/${Uri.encodeComponent(job.id)}',
+                                  ),
+                                  onInterview: (interview) => _navigate(
+                                    '/candidate/interview-lobby',
+                                    arguments: interview.id,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: context.themeSurface(Colors.white),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: context.themeOutline(
-                              const Color(0xFFE2E8F0),
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          tag2,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            color: context.themeForeground(
-                              const Color(0xFF64748B),
-                            ),
-                            fontSize: 9.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -1652,35 +414,24 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
-  // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() =>
-      const CandidateMobileNav(currentRoute: '/candidate/home');
-
-  // ── TOP BAR (Web & Mobile) ──────────────────────────────────────────────────
-}
-
-// ── CUSTOM GRID PAINTER ─────────────────────────────────────────────────────
-class GridPainter extends CustomPainter {
-  final Color color;
-  GridPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.0;
-
-    const double step = 30.0;
-
-    for (double i = 0; i < size.width; i += step) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-    for (double i = 0; i < size.height; i += step) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
+  void _openApplication(Application application) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ApplicationScreeningScreen(applicationId: application.id),
+      ),
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant GridPainter oldDelegate) =>
-      oldDelegate.color != color;
+  Future<void> _navigate(String route, {Object? arguments}) async {
+    await Navigator.of(context).pushNamed(route, arguments: arguments);
+  }
+
+  String _displayName(Map<String, dynamic>? user) {
+    final parts = [
+      (_profile?.user.firstName ?? user?['first_name'])?.toString().trim(),
+      (_profile?.user.lastName ?? user?['last_name'])?.toString().trim(),
+    ].whereType<String>().where((part) => part.isNotEmpty);
+    return parts.join(' ');
+  }
 }

@@ -155,6 +155,8 @@ class VoiceSessionSnapshot {
       questionNumber = source.questionNumber,
       questionCount = source.questionCount,
       questionText = source.questionText,
+      liveAnswer = source.liveAnswer,
+      approvedQuestions = source.approvedQuestions,
       reportReady = source.reportReady,
       analysisStatus = source.analysisStatus,
       callId = source.callId,
@@ -187,6 +189,11 @@ class VoiceSessionSnapshot {
        questionNumber = _conversation(json)?['question_number'] as int?,
        questionCount = _conversation(json)?['total'] as int?,
        questionText = _conversation(json)?['question_text'] as String?,
+       liveAnswer = _conversation(json)?['live_answer'] as String? ?? '',
+       approvedQuestions = List.unmodifiable(
+         (_conversation(json)?['approved_questions'] as List? ?? const [])
+             .whereType<String>(),
+       ),
        reportReady = voiceBool(json, 'report_ready'),
        analysisStatus = json['analysis_status'] == null
            ? null
@@ -231,6 +238,8 @@ class VoiceSessionSnapshot {
   final DateTime? startedAt;
   final int? questionNumber, questionCount;
   final String? questionText;
+  final String liveAnswer;
+  final List<String> approvedQuestions;
   final AnalysisState? analysisStatus;
   final String? callId;
   final RetellCredential? credential;

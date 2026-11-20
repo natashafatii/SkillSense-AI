@@ -103,6 +103,7 @@ class CandidatePublisherController extends ChangeNotifier {
   CancelToken? _request;
   Timer? _retryTimer, _handshakeTimer, _ackTimer, _leaseTimer, _heartbeatTimer;
   DateTime? _lastPong;
+  DateTime? _readySince;
   DateTime? _outageStarted, _deadline;
   ReadyMessage? _ready;
   PublisherState _state = PublisherState.idle;
@@ -119,6 +120,11 @@ class CandidatePublisherController extends ChangeNotifier {
     'peak_buffered_bytes': _peakBufferedBytes,
   };
   PublisherState get state => _state;
+  bool _renewing = false;
+  bool get needsAttention =>
+      _state == PublisherState.terminal ||
+      _state == PublisherState.unavailable ||
+      (_state == PublisherState.reconnecting && !_renewing);
   String get notice => _notice;
   int get sent => _sent;
   int get accepted => _accepted;
@@ -160,6 +166,7 @@ class CandidatePublisherController extends ChangeNotifier {
       return;
     }
     _active = true;
+    _renewing = false;
     _retries = 0;
     _outageStarted = null;
     unawaited(_attempt());
@@ -317,6 +324,9 @@ class CandidatePublisherController extends ChangeNotifier {
       } else if (message is TransportErrorMessage) {
         switch (message.code) {
           case 'lease_expired':
+          case 'credential_expired':
+          case 'ticket_invalid':
+          case 'stale_connection':
             _recover(epoch, 'The server requires renewed frame authorization.');
           case 'access_denied':
           case 'account_inactive':
@@ -328,6 +338,16 @@ class CandidatePublisherController extends ChangeNotifier {
               'This session is no longer eligible for frame publishing.',
             );
           case 'publisher_conflict':
+            if (_renewing) {
+              // The replacement handshake can beat cleanup of our old socket.
+              // Give fenced server cleanup one bounded retry; never take over
+              // another publisher or bypass server authorization.
+              _recover(
+                epoch,
+                'Waiting for the previous video connection to close.',
+              );
+              break;
+            }
             _terminal(
               'Another publisher is active. Check other interview tabs.',
             );
@@ -373,6 +393,8 @@ class CandidatePublisherController extends ChangeNotifier {
       maxHeight: min(480, ready.maxHeight!),
     );
     _ready = ready;
+    _renewing = false;
+    _readySince = _now();
     _lastGeneration = ready.connectionGeneration;
     _nextSequence = 0;
     _pendingSequence = null;
@@ -382,6 +404,7 @@ class CandidatePublisherController extends ChangeNotifier {
     _handshakeTimer = null;
     _leaseTimer = Timer(_deadline!.difference(_now()) - policy.renewAhead, () {
       if (!_current(epoch)) return;
+      _renewing = true;
       unawaited(
         _attempt(),
       ); // Fresh Clerk-authenticated ticket; never finish-video.
@@ -443,10 +466,6 @@ class CandidatePublisherController extends ChangeNotifier {
     }
     if (_pendingSequence != null || (socket.bufferedAmount ?? 0) > 0) {
       _localDropped++;
-      _publish(
-        PublisherState.ready,
-        'Transport busy; current samples are skipped, never queued.',
-      );
       return false;
     }
     return true;
@@ -506,10 +525,7 @@ class CandidatePublisherController extends ChangeNotifier {
       _peakBufferedBytes = max(_peakBufferedBytes, socket.bufferedAmount ?? 0);
       _sent++;
       if (_current(epoch)) {
-        _publish(
-          PublisherState.ready,
-          'Frame sent; waiting for admission acknowledgement.',
-        );
+        _publish(PublisherState.ready, 'Video connected.');
       }
     } catch (_) {
       _recover(epoch, 'Frame transport could not send.');
@@ -532,8 +548,11 @@ class CandidatePublisherController extends ChangeNotifier {
     _ackTimer = null;
     if (ack.status == AdmissionState.accepted) {
       _accepted++;
-      _retries = 0;
-      _outageStarted = null;
+      // A flapping socket can acknowledge one frame before failing again.
+      if (_now().difference(_readySince!) >= const Duration(seconds: 5)) {
+        _retries = 0;
+        _outageStarted = null;
+      }
       _publish(
         PublisherState.ready,
         'Frame admitted for processing. It has not been confirmed analyzed.',
@@ -549,6 +568,7 @@ class CandidatePublisherController extends ChangeNotifier {
 
   void _recover(int epoch, String reason) {
     if (!_current(epoch)) return;
+    _renewing = false;
     _clearConnection();
     if (!media.cameraReady) {
       pause();
@@ -607,6 +627,7 @@ class CandidatePublisherController extends ChangeNotifier {
     final socket = _socket;
     _socket = null;
     _ready = null;
+    _readySince = null;
     _deadline = null;
     _pendingSequence = null;
     try {

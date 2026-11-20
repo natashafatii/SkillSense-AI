@@ -71,15 +71,19 @@ class _ReportPanel extends StatelessWidget {
       border: Border.all(color: context.themeOutline(_border)),
       borderRadius: BorderRadius.circular(14),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (title case final title?) ...[
-          _SectionHeading(title, detail: detail),
-          const SizedBox(height: 14),
+    child: Material(
+      type: MaterialType.transparency,
+      textStyle: DefaultTextStyle.of(context).style,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (title case final title?) ...[
+            _SectionHeading(title, detail: detail),
+            const SizedBox(height: 14),
+          ],
+          child,
         ],
-        child,
-      ],
+      ),
     ),
   );
 }
@@ -191,152 +195,6 @@ class _Tag extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _CandidateHeading extends StatelessWidget {
-  const _CandidateHeading({
-    required this.application,
-    required this.rank,
-    required this.candidateCount,
-    required this.onPrevious,
-    required this.onNext,
-    required this.onReview,
-    required this.onRefresh,
-  });
-
-  final Application application;
-  final int? rank;
-  final int candidateCount;
-  final VoidCallback? onPrevious;
-  final VoidCallback? onNext;
-  final VoidCallback onReview;
-  final VoidCallback? onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final name = _candidateName(application);
-    final initials = name
-        .split(RegExp(r'\s+'))
-        .take(2)
-        .map((word) => word.characters.first.toUpperCase())
-        .join();
-    final identity = Row(
-      children: [
-        CircleAvatar(
-          radius: 30,
-          backgroundColor: _accent.withValues(alpha: .09),
-          foregroundColor: _accent,
-          child: Text(
-            initials,
-            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  fontFamily: 'Space Grotesk',
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  height: 1.15,
-                ),
-              ),
-              if (application.jobTitle.isNotEmpty)
-                Text(
-                  'Applied for ${application.jobTitle}',
-                  style: _mutedStyle(context),
-                ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _Tag(
-                    _statusLabel(application.status),
-                    color: switch (application.status) {
-                      ApplicationStatus.rejected ||
-                      ApplicationStatus.interviewFailed => _negative,
-                      ApplicationStatus.screened ||
-                      ApplicationStatus.decision => _positive,
-                      _ => _accent,
-                    },
-                  ),
-                  if (rank != null)
-                    Tooltip(
-                      message:
-                          'Ranked by resume match score among applications for this role.',
-                      child: _Tag(
-                        'Rank $rank of $candidateCount',
-                        color: _warning,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-    final navigation = [
-      if (candidateCount > 1) ...[
-        IconButton(
-          tooltip: 'Previous candidate',
-          onPressed: onPrevious,
-          icon: const Icon(Icons.chevron_left_rounded),
-        ),
-        IconButton(
-          tooltip: 'Next candidate',
-          onPressed: onNext,
-          icon: const Icon(Icons.chevron_right_rounded),
-        ),
-      ],
-      IconButton(
-        tooltip: 'Refresh report',
-        onPressed: onRefresh,
-        icon: const Icon(Icons.refresh_rounded),
-      ),
-    ];
-    final review = FilledButton(
-      onPressed: onReview,
-      child: const Text(
-        'Open interview evidence and decision',
-        textAlign: TextAlign.center,
-      ),
-    );
-    return _ReportPanel(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth >= 820 &&
-              MediaQuery.textScalerOf(context).scale(14) <= 16) {
-            return Row(
-              children: [
-                Expanded(child: identity),
-                const SizedBox(width: 10),
-                ...navigation,
-                const SizedBox(width: 8),
-                review,
-              ],
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              identity,
-              Align(
-                alignment: Alignment.centerRight,
-                child: Wrap(children: navigation),
-              ),
-              review,
-            ],
-          );
-        },
-      ),
-    );
-  }
 }
 
 String _normalizeSkill(String value) =>

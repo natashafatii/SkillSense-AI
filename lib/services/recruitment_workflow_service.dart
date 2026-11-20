@@ -196,7 +196,6 @@ class RecruitmentWorkflowService {
         ),
         request(
           '/interviews/${interview.id}/feedback-review/',
-          query: {'contract': 'feedback-v2'},
           cancelToken: cancelToken,
         ),
       ],

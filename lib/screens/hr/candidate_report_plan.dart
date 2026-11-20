@@ -55,6 +55,7 @@ class _DraftPlan extends StatelessWidget {
                 ),
             ],
             note: error ?? note,
+            showStatus: true,
             focusAreas: focusAreas,
             loading: busy,
             actions: [
@@ -113,6 +114,7 @@ class _InterviewPlan extends StatelessWidget {
     this.date,
     this.focusAreas = const [],
     this.loading = false,
+    this.showStatus = false,
     this.actions = const [],
   });
   final List<_PlanQuestion> questions;
@@ -120,6 +122,7 @@ class _InterviewPlan extends StatelessWidget {
   final DateTime? date;
   final List<String> focusAreas;
   final bool loading;
+  final bool showStatus;
   final List<Widget> actions;
 
   @override
@@ -152,31 +155,48 @@ class _InterviewPlan extends StatelessWidget {
               padding: EdgeInsets.only(top: 12),
               child: LinearProgressIndicator(minHeight: 2),
             ),
-          if (focusAreas.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text('Focus areas from screening', style: _labelStyle(context)),
-            const SizedBox(height: 6),
-            _SkillChips(focusAreas, color: _warning, outline: true),
-          ],
-          if (questions.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            LayoutBuilder(
-              builder: (context, constraints) => _ReportColumns(
-                width: constraints.maxWidth,
-                columns: constraints.maxWidth >= 865 ? 3 : 2,
-                gap: 12,
-                children: [
-                  for (var index = 0; index < questions.length; index++)
-                    _QuestionTile(
-                      number: index + 1,
-                      question: questions[index],
-                    ),
-                ],
+          if (questions.isNotEmpty || focusAreas.isNotEmpty)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: () => _showReportDetails(
+                  context,
+                  'Interview plan',
+                  (context) => [
+                    Text(detail, style: _mutedStyle(context)),
+                    const SizedBox(height: 10),
+                    if (focusAreas.isNotEmpty) ...[
+                      Text(
+                        'Focus areas from screening',
+                        style: _labelStyle(context),
+                      ),
+                      const SizedBox(height: 6),
+                      _SkillChips(focusAreas, color: _warning, outline: true),
+                      const SizedBox(height: 14),
+                    ],
+                    for (final (index, question) in questions.indexed)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _QuestionTile(
+                          number: index + 1,
+                          question: question,
+                        ),
+                      ),
+                    if (!showStatus) Text(note, style: _mutedStyle(context)),
+                  ],
+                ),
+                icon: const Icon(Icons.format_list_bulleted_rounded, size: 17),
+                label: Text(
+                  questions.isEmpty
+                      ? 'View screening focus areas'
+                      : 'View $count ${count == 1 ? 'question' : 'questions'}',
+                ),
               ),
             ),
+          if (questions.isEmpty || showStatus) ...[
+            const SizedBox(height: 8),
+            Text(note, style: _mutedStyle(context)),
           ],
-          const SizedBox(height: 12),
-          Text(note, style: _mutedStyle(context)),
         ],
       ),
     );

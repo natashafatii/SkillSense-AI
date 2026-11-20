@@ -23,3 +23,11 @@ abstract class RetellVoiceClient {
 abstract interface class RetellMicrophoneControl {
   bool setMicrophoneMuted(bool muted);
 }
+
+typedef LiveTranscriptTurn = ({String role, String text});
+typedef LiveTranscriptListener =
+    void Function(List<LiveTranscriptTurn> turns, bool agentTurn);
+
+abstract interface class RetellLiveTranscript {
+  set onTranscript(LiveTranscriptListener? listener);
+}

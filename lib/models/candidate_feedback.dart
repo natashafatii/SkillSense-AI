@@ -178,11 +178,19 @@ class CandidateFeedbackReport extends FeedbackContent {
 
 class CandidateFeedback {
   final String interviewId, applicationId;
+  final String? roleTitle;
+  final DateTime? interviewDate;
   final FeedbackState state;
   final CandidateFeedbackReport? report;
   CandidateFeedback.fromJson(Map<String, dynamic> data)
     : interviewId = _text(data['interview']),
       applicationId = _text(data['application']),
+      roleTitle =
+          data['role_title'] is String &&
+              (data['role_title'] as String).trim().isNotEmpty
+          ? (data['role_title'] as String).trim()
+          : null,
+      interviewDate = ApiValue.instant(data['interview_date']),
       state = FeedbackState.values.firstWhere(
         (state) => state.name == data['state']?.toString().toLowerCase(),
         orElse: () => FeedbackState.unknown,

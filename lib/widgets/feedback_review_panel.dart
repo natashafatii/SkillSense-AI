@@ -1,10 +1,16 @@
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../models/recruitment_evidence.dart';
 import '../services/recruitment_review_controller.dart';
 import 'feedback_content_view.dart';
 
 class FeedbackReviewPanel extends StatefulWidget {
-  const FeedbackReviewPanel({super.key, required this.controller});
+  const FeedbackReviewPanel({
+    super.key,
+    required this.controller,
+    this.availableHeight,
+  });
+  final double? availableHeight;
   final RecruitmentReviewController controller;
   @override
   State<FeedbackReviewPanel> createState() => _FeedbackReviewPanelState();
@@ -73,24 +79,46 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
   }
 
   Future<void> retract(FeedbackReviewRevision report) async {
-    if (reason.text.trim().isEmpty) return;
     final c = widget.controller;
     final captured = c.review!;
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Withdraw candidate feedback?'),
-        content: Text(
-          'Revision ${report.revision.value}, edit ${report.editVersion.value}. The candidate will lose access to this report. An older release will not be restored. Already-read content cannot be recalled.\nPrivate reason: ${reason.text}',
+        content: SizedBox(
+          width: 472,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Version ${report.revision.value} · The candidate will lose access to this report. An older release will not be restored. Already-read content cannot be recalled.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reason,
+                maxLength: 2000,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Private reason (required)',
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Withdraw report'),
+          ListenableBuilder(
+            listenable: reason,
+            builder: (context, _) => FilledButton(
+              onPressed: reason.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.pop(context, true),
+              child: const Text('Withdraw report'),
+            ),
           ),
         ],
       ),
@@ -103,6 +131,25 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
     }
   }
 
+  String _time(DateTime value) {
+    final local = value.toLocal();
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${local.day} ${months[local.month - 1]} ${local.year} · ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.controller, review = c.review!;
@@ -110,192 +157,279 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
     final latestRelease = review.feedback
         .where((f) => f.releasedAt != null)
         .firstOrNull;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Candidate feedback review',
-              style: Theme.of(context).textTheme.titleLarge,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (review.feedback.isEmpty)
+          const Text('No feedback projection is available.'),
+        for (final f in review.feedback)
+          Container(
+            constraints: BoxConstraints(
+              minHeight:
+                  widget.availableHeight == null || review.feedback.isEmpty
+                  ? 0
+                  : ((widget.availableHeight! -
+                                (review.feedback.length - 1) * 14) /
+                            review.feedback.length)
+                        .clamp(0.0, double.infinity),
             ),
-            const Text(
-              'Measured evidence is immutable. New unreleased revisions do not replace a previously released report.',
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+            decoration: BoxDecoration(
+              color: context.themeSurface(Colors.white),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: context.themeOutline(const Color(0xFFE2E8F2)),
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0816213A),
+                  blurRadius: 2,
+                  offset: Offset(0, 1),
+                ),
+              ],
             ),
-            if (review.feedback.isEmpty)
-              const Text('No feedback projection is available.'),
-            for (final f in review.feedback)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
-                      'Revision ${f.revision.value} · ${f.status} · Edit ${f.editVersion.value}',
-                    ),
-                    if (f.error == 'EVALUATION_UNAVAILABLE')
-                      const Text(
-                        'Feedback is blocked because the answer evaluation is unavailable. '
-                        'Review its failure details and request a new evaluation revision. '
-                        'This does not mean the candidate failed the interview.',
+                      'Version ${f.revision.value}',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
                       ),
-                    Text(
-                      f.retractedAt != null
-                          ? 'Withdrawn · cannot be released again'
-                          : f.releasedAt != null
-                          ? 'Released ${f.releasedAt!.toLocal()}${latestRelease?.id != f.id ? ' · superseded' : ''}'
-                          : 'Unreleased',
                     ),
-                    Text(
-                      'Evaluation ${f.evaluation ?? 'Unavailable'} · Hash ${f.hash}',
-                    ),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        if (f.content != null)
-                          OutlinedButton(
-                            onPressed: c.canCommand
-                                ? () => preview(f, release: false)
-                                : null,
-                            child: const Text('Preview candidate content'),
-                          ),
-                        if (f.content != null &&
-                            f.releasedAt == null &&
-                            f.retractedAt == null &&
-                            latest?.id == f.id &&
-                            f.evaluation == review.latestEvaluation?.id &&
-                            review.interview?.status == 'DONE' &&
-                            review.interview?.completedAt != null &&
-                            review.interview?.completionOutcome == 'USABLE' &&
-                            review.latestAttempt)
-                          FilledButton(
-                            onPressed: c.canCommand
-                                ? () => preview(f, release: true)
-                                : null,
-                            child: const Text('Review and release'),
-                          ),
-                        if (f.content != null &&
-                            f.releasedAt == null &&
-                            f.retractedAt == null)
-                          OutlinedButton(
-                            onPressed: c.canCommand
-                                ? () => setState(() {
-                                    editing = f.id;
-                                    acknowledged = false;
-                                    summary.text =
-                                        f.amendments['summary']?.toString() ??
-                                        '';
-                                    suggestions.text =
-                                        (f.amendments['improvement_suggestions']
-                                                    as List? ??
-                                                [])
-                                            .join('\n');
-                                  })
-                                : null,
-                            child: const Text('Edit public guidance'),
-                          ),
-                        if (f.releasedAt != null &&
-                            f.retractedAt == null &&
-                            latestRelease?.id == f.id)
-                          OutlinedButton(
-                            onPressed:
-                                c.canCommand && reason.text.trim().isNotEmpty
-                                ? () => retract(f)
-                                : null,
-                            child: const Text('Retract feedback'),
-                          ),
-                      ],
-                    ),
-                    if (editing == f.id &&
-                        f.releasedAt == null &&
-                        f.retractedAt == null) ...[
-                      TextField(
-                        controller: summary,
-                        maxLength: 2000,
-                        decoration: const InputDecoration(
-                          labelText: 'Public coaching summary',
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        color: context.themeSurface(
+                          f.error?.isNotEmpty == true
+                              ? const Color(0xFFFCEEF0)
+                              : f.releasedAt != null && f.retractedAt == null
+                              ? const Color(0xFFE4F5F0)
+                              : const Color(0xFFEEF2F8),
                         ),
                       ),
-                      TextField(
-                        controller: suggestions,
-                        maxLines: 5,
-                        decoration: const InputDecoration(
-                          labelText:
-                              'Public practice suggestions — one per line, up to 10',
+                      child: Text(
+                        f.retractedAt != null
+                            ? 'WITHDRAWN'
+                            : f.releasedAt != null
+                            ? 'SENT TO CANDIDATE'
+                            : f.error?.isNotEmpty == true
+                            ? 'NOT PREPARED'
+                            : f.status,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: context.themeForeground(
+                            f.error?.isNotEmpty == true
+                                ? const Color(0xFFA52F43)
+                                : f.releasedAt != null && f.retractedAt == null
+                                ? const Color(0xFF067A63)
+                                : const Color(0xFF3D4A63),
+                          ),
                         ),
                       ),
-                      CheckboxListTile(
-                        value: acknowledged,
-                        onChanged: (v) =>
-                            setState(() => acknowledged = v == true),
-                        title: const Text(
-                          'I understand this guidance will be visible to the candidate when released.',
+                    ),
+                    SizedBox(
+                      height: 24,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          minimumSize: const Size(0, 24),
                         ),
-                      ),
-                      FilledButton(
-                        onPressed:
-                            c.canCommand &&
-                                acknowledged &&
-                                reason.text.trim().isNotEmpty
-                            ? () async {
-                                final items = suggestions.text
-                                    .split('\n')
-                                    .map((v) => v.trim())
-                                    .where((v) => v.isNotEmpty)
-                                    .toList();
-                                if (items.length > 10 ||
-                                    items.any((v) => v.length > 500)) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Use up to 10 suggestions of 500 characters each.',
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                final ok = await c.command(
-                                  (r) => c.service.editFeedback(
-                                    r,
-                                    f,
-                                    commandReason: reason.text,
-                                    acknowledged: acknowledged,
-                                    amendments: {
-                                      if (summary.text.trim().isNotEmpty)
-                                        'summary': summary.text.trim(),
-                                      'improvement_suggestions': items,
-                                    },
-                                  ),
-                                );
-                                if (ok && mounted) {
-                                  setState(() {
-                                    editing = null;
-                                    acknowledged = false;
-                                  });
-                                }
-                              }
-                            : null,
-                        child: const Text(
-                          'Save public guidance — preview again before release',
+                        onPressed: () => showDialog<void>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: Text(
+                              'Version ${f.revision.value} · Report details',
+                            ),
+                            content: SelectableText(
+                              'Evaluation ${f.evaluation ?? 'Unavailable'} · Edit ${f.editVersion.value}\nHash ${f.hash}',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Close'),
+                              ),
+                            ],
+                          ),
                         ),
+                        icon: const Icon(Icons.info_outline, size: 14),
+                        label: const Text('Details'),
                       ),
-                    ],
+                    ),
                   ],
                 ),
-              ),
-            TextField(
-              controller: reason,
-              maxLength: 2000,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText:
-                    'Private reason for guidance edit or withdrawal (required)',
-              ),
+                Divider(
+                  height: 24,
+                  color: context.themeOutline(const Color(0xFFEDF1F7)),
+                ),
+                if (f.error == 'EVALUATION_UNAVAILABLE')
+                  const Text(
+                    'Feedback is blocked because the answer evaluation is unavailable. '
+                    'Review its failure details and request a new evaluation revision. '
+                    'This does not mean the candidate failed the interview.',
+                  ),
+                Text(
+                  f.retractedAt != null
+                      ? 'Withdrawn · cannot be released again'
+                      : f.releasedAt != null
+                      ? 'Sent to the candidate on ${_time(f.releasedAt!)}${latestRelease?.id != f.id ? ' · superseded' : ''}'
+                      : 'Unreleased',
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    if (f.content != null)
+                      OutlinedButton(
+                        onPressed: c.canCommand
+                            ? () => preview(f, release: false)
+                            : null,
+                        child: const Text('Preview candidate content'),
+                      ),
+                    if (f.content != null &&
+                        f.releasedAt == null &&
+                        f.retractedAt == null &&
+                        latest?.id == f.id &&
+                        f.evaluation == review.latestEvaluation?.id &&
+                        review.interview?.status == 'DONE' &&
+                        review.interview?.completedAt != null &&
+                        review.interview?.completionOutcome == 'USABLE' &&
+                        review.latestAttempt)
+                      FilledButton(
+                        onPressed: c.canCommand
+                            ? () => preview(f, release: true)
+                            : null,
+                        child: const Text('Review and release'),
+                      ),
+                    if (f.content != null &&
+                        f.releasedAt == null &&
+                        f.retractedAt == null)
+                      OutlinedButton(
+                        onPressed: c.canCommand
+                            ? () => setState(() {
+                                editing = f.id;
+                                acknowledged = false;
+                                summary.text =
+                                    f.amendments['summary']?.toString() ?? '';
+                                suggestions.text =
+                                    (f.amendments['improvement_suggestions']
+                                                as List? ??
+                                            [])
+                                        .join('\n');
+                              })
+                            : null,
+                        child: const Text('Edit public guidance'),
+                      ),
+                    if (f.releasedAt != null &&
+                        f.retractedAt == null &&
+                        latestRelease?.id == f.id)
+                      OutlinedButton(
+                        onPressed: c.canCommand ? () => retract(f) : null,
+                        child: const Text('Withdraw feedback'),
+                      ),
+                  ],
+                ),
+                if (editing == f.id &&
+                    f.releasedAt == null &&
+                    f.retractedAt == null) ...[
+                  TextField(
+                    controller: summary,
+                    maxLength: 2000,
+                    decoration: const InputDecoration(
+                      labelText: 'Public coaching summary',
+                    ),
+                  ),
+                  TextField(
+                    controller: suggestions,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      labelText:
+                          'Public practice suggestions — one per line, up to 10',
+                    ),
+                  ),
+                  CheckboxListTile(
+                    value: acknowledged,
+                    onChanged: (v) => setState(() => acknowledged = v == true),
+                    title: const Text(
+                      'I understand this guidance will be visible to the candidate when released.',
+                    ),
+                  ),
+                  FilledButton(
+                    onPressed:
+                        c.canCommand &&
+                            acknowledged &&
+                            reason.text.trim().isNotEmpty
+                        ? () async {
+                            final items = suggestions.text
+                                .split('\n')
+                                .map((v) => v.trim())
+                                .where((v) => v.isNotEmpty)
+                                .toList();
+                            if (items.length > 10 ||
+                                items.any((v) => v.length > 500)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Use up to 10 suggestions of 500 characters each.',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                            final ok = await c.command(
+                              (r) => c.service.editFeedback(
+                                r,
+                                f,
+                                commandReason: reason.text,
+                                acknowledged: acknowledged,
+                                amendments: {
+                                  if (summary.text.trim().isNotEmpty)
+                                    'summary': summary.text.trim(),
+                                  'improvement_suggestions': items,
+                                },
+                              ),
+                            );
+                            if (ok && mounted) {
+                              setState(() {
+                                editing = null;
+                                acknowledged = false;
+                              });
+                            }
+                          }
+                        : null,
+                    child: const Text(
+                      'Save public guidance — preview again before release',
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        if (editing != null)
+          TextField(
+            controller: reason,
+            maxLength: 2000,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText:
+                  'Private reason for guidance edit or withdrawal (required)',
+            ),
+          ),
+      ],
     );
   }
 }

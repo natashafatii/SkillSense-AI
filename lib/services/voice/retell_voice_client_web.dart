@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:js_interop';
 import '../../models/voice/voice_contract.dart';
 import 'retell_voice_client.dart';
@@ -16,10 +17,15 @@ extension type _RetellBridge._(JSObject _) implements JSObject {
 RetellVoiceClient createRetellVoiceClient() => BrowserRetellVoiceClient();
 
 class BrowserRetellVoiceClient
-    implements RetellVoiceClient, RetellMicrophoneControl {
+    implements
+        RetellVoiceClient,
+        RetellMicrophoneControl,
+        RetellLiveTranscript {
   _RetellBridge? _bridge;
   int _generation = 0;
   bool _disposed = false;
+  @override
+  LiveTranscriptListener? onTranscript;
   @override
   bool get supported => !_disposed && _module != null;
   @override
@@ -38,8 +44,17 @@ class BrowserRetellVoiceClient
     }
     final generation = _generation;
     final bridge = _module!.create(
-      ((JSString event) {
+      ((JSString event, JSString? payload, JSBoolean? agentTurn) {
         if (_disposed || generation != _generation) return;
+        if (event.toDart == 'transcript') {
+          if (payload == null || onTranscript == null) return;
+          final turns = (jsonDecode(payload.toDart) as List).cast<Map>();
+          onTranscript!([
+            for (final turn in turns)
+              (role: turn['role'] as String, text: turn['content'] as String),
+          ], agentTurn?.toDart ?? false);
+          return;
+        }
         final matches = RetellVoiceEvent.values.where(
           (value) => value.name == event.toDart,
         );

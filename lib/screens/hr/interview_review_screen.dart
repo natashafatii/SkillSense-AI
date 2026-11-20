@@ -8,6 +8,7 @@ import '../../services/api_exception.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../services/session_scope.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
+import '../../widgets/interview_review_top_bar.dart';
 import 'recruitment_review_screen.dart' show RecruitmentReviewScreen;
 
 class InterviewReviewScreen extends StatefulWidget {
@@ -626,107 +627,121 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
             )
           : null,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, bounds) {
-            final width = bounds.maxWidth.clamp(0.0, 1560.0).toDouble();
-            final padding = (width * .02).clamp(14.0, 28.0).toDouble();
-            final perRow = width >= 900
-                ? 4
-                : width >= 530
-                ? 2
-                : 1;
-            final cardWidth =
-                (width - 2 * padding - (perRow - 1) * _gap) / perRow;
-            return SingleChildScrollView(
-              child: Center(
-                child: SizedBox(
-                  width: width,
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(padding, 14, padding, 28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Interview evidence and decisions',
-                          style: _style(
-                            26,
-                            weight: FontWeight.w600,
-                            spacing: -.6,
+        child: Column(
+          children: [
+            InterviewReviewTopBar(
+              onRefresh: loading || notFound || token.isCancelled ? null : load,
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, bounds) {
+                  final width = bounds.maxWidth.clamp(0.0, 1560.0).toDouble();
+                  final padding = (width * .02).clamp(14.0, 28.0).toDouble();
+                  final perRow = width >= 900
+                      ? 4
+                      : width >= 530
+                      ? 2
+                      : 1;
+                  final cardWidth =
+                      (width - 2 * padding - (perRow - 1) * _gap) / perRow;
+                  return SingleChildScrollView(
+                    child: Center(
+                      child: SizedBox(
+                        width: width,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            padding,
+                            14,
+                            padding,
+                            28,
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Open an interview to review evidence, scores and record a decision.',
-                          style: _style(14, color: _sub),
-                        ),
-                        const SizedBox(height: 18),
-                        Wrap(
-                          spacing: _gap,
-                          runSpacing: _gap,
-                          children: [
-                            for (final (label, value, description) in [
-                              (
-                                'NEEDS DECISION',
-                                count(needsDecision),
-                                'Evaluated and waiting for you',
-                              ),
-                              (
-                                'COMPLETED INTERVIEWS',
-                                count(completed),
-                                'Ready for review',
-                              ),
-                              (
-                                'DECIDED',
-                                count(decided),
-                                'Hire or reject recorded',
-                              ),
-                              (
-                                'AVERAGE COMBINED SCORE',
-                                _percent(average),
-                                'Across all completed interviews',
-                              ),
-                            ])
-                              SizedBox(
-                                width: cardWidth,
-                                child: _kpi(label, value, description),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: _gap),
-                        _filters(needsDecision, decided),
-                        const SizedBox(height: _gap),
-                        if (loading)
-                          const LinearProgressIndicator(minHeight: 2),
-                        if (error != null)
-                          Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  error!,
-                                  style: _style(13, color: _sub),
+                              Text(
+                                'Interview evidence and decisions',
+                                style: _style(
+                                  26,
+                                  weight: FontWeight.w600,
+                                  spacing: -.6,
                                 ),
                               ),
-                              TextButton(
-                                onPressed: notFound || token.isCancelled
-                                    ? null
-                                    : load,
-                                child: const Text('Retry'),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Open an interview to review evidence, scores and record a decision.',
+                                style: _style(14, color: _sub),
+                              ),
+                              const SizedBox(height: 18),
+                              Wrap(
+                                spacing: _gap,
+                                runSpacing: _gap,
+                                children: [
+                                  for (final (label, value, description) in [
+                                    (
+                                      'NEEDS DECISION',
+                                      count(needsDecision),
+                                      'Evaluated and waiting for you',
+                                    ),
+                                    (
+                                      'COMPLETED INTERVIEWS',
+                                      count(completed),
+                                      'Ready for review',
+                                    ),
+                                    (
+                                      'DECIDED',
+                                      count(decided),
+                                      'Hire or reject recorded',
+                                    ),
+                                    (
+                                      'AVERAGE COMBINED SCORE',
+                                      _percent(average),
+                                      'Across all completed interviews',
+                                    ),
+                                  ])
+                                    SizedBox(
+                                      width: cardWidth,
+                                      child: _kpi(label, value, description),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: _gap),
+                              _filters(needsDecision, decided),
+                              const SizedBox(height: _gap),
+                              if (loading)
+                                const LinearProgressIndicator(minHeight: 2),
+                              if (error != null)
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        error!,
+                                        style: _style(13, color: _sub),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: notFound || token.isCancelled
+                                          ? null
+                                          : load,
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              _table(
+                                rows,
+                                (bounds.maxHeight - 335)
+                                    .clamp(138.0, 660.0)
+                                    .toDouble(),
                               ),
                             ],
                           ),
-                        _table(
-                          rows,
-                          (bounds.maxHeight - 335)
-                              .clamp(138.0, 660.0)
-                              .toDouble(),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );

@@ -24,6 +24,7 @@ class Interview {
   final String id, applicationId, status, workflowState;
   final DateTime? scheduledAt, completedAt;
   final QuestionReadiness questionReadiness;
+  final bool joinWindowRequired;
   const Interview({
     required this.id,
     required this.applicationId,
@@ -32,6 +33,7 @@ class Interview {
     this.workflowState = 'UNKNOWN',
     this.completedAt,
     this.questionReadiness = const QuestionReadiness(),
+    this.joinWindowRequired = true,
   });
   String get questionPreparationMode => '';
   String get questionFallbackReason => '';
@@ -42,10 +44,11 @@ class Interview {
       const {'SCHEDULED', 'IN_PROGRESS'}.contains(workflowState) &&
       (status == 'LIVE' ||
           (status == 'SCHEDULED' &&
-              scheduledAt != null &&
-              !now.isBefore(
-                scheduledAt!.subtract(const Duration(minutes: 15)),
-              )));
+              (!joinWindowRequired ||
+                  (scheduledAt != null &&
+                      !now.isBefore(
+                        scheduledAt!.subtract(const Duration(minutes: 15)),
+                      )))));
   factory Interview.fromJson(Map<String, dynamic> json) {
     final id = json['id']?.toString() ?? '';
     if (id.isEmpty) {
@@ -61,6 +64,7 @@ class Interview {
         json['scheduled_at'] ?? json['scheduled_time'],
       ),
       completedAt: ApiValue.instant(json['completed_at']),
+      joinWindowRequired: json['join_window_required'] != false,
       questionReadiness: json['question_readiness'] is Map
           ? QuestionReadiness.fromJson(
               Map<String, dynamic>.from(json['question_readiness'] as Map),
@@ -79,6 +83,7 @@ class Interview {
       workflowState = value.workflowState,
       scheduledAt = value.scheduledAt,
       completedAt = value.completedAt,
+      joinWindowRequired = value.joinWindowRequired,
       questionReadiness = value.questionReadiness;
 }
 

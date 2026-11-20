@@ -1,5 +1,6 @@
 import 'api_contract.dart';
 import 'screening_assessment.dart';
+import 'recruitment_evidence.dart';
 
 /// Application status enum matching Django [Application.Status].
 enum ApplicationStatus {
@@ -71,6 +72,7 @@ class Application {
   final double? behavioralScore;
   final double? communicationScore;
   final String? outcome;
+  final RecruiterDecision? recruiterDecision;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -97,6 +99,7 @@ class Application {
     this.behavioralScore,
     this.communicationScore,
     this.outcome,
+    this.recruiterDecision,
     required this.createdAt,
     this.updatedAt,
   });
@@ -143,6 +146,12 @@ class Application {
         json['communication_score'] ?? scores['communication'],
       ),
       outcome: json['outcome'] as String?,
+      recruiterDecision: switch (json['decision']) {
+        final Map value => RecruiterDecision.fromJson(
+          Map<String, dynamic>.from(value),
+        ),
+        _ => null,
+      },
       createdAt: ApiValue.instant(json['created_at'])!,
       updatedAt: json['updated_at'] != null
           ? ApiValue.instant(json['updated_at'])
@@ -178,6 +187,7 @@ class Application {
       behavioralScore: behavioralScore,
       communicationScore: communicationScore,
       outcome: outcome,
+      recruiterDecision: recruiterDecision,
       createdAt: createdAt,
       updatedAt: result['updated_at'] is String
           ? ApiValue.instant(result['updated_at']) ?? updatedAt

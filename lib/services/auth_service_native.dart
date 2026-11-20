@@ -14,7 +14,22 @@ AuthServiceInterface createAuthService() => AuthServiceNative();
 /// was here before the platform split — only the shape changed (instance
 /// methods implementing [AuthServiceInterface]).
 class AuthServiceNative
-    implements AuthServiceInterface, GoogleEmailVerification {
+    implements
+        AuthServiceInterface,
+        GoogleEmailVerification,
+        EmailVerificationService {
+  @override
+  bool? isEmailVerified(String email) {
+    if (!isSignedIn || email.trim().isEmpty) return null;
+    for (final address
+        in _auth?.client.user?.emailAddresses ?? <clerk.Email>[]) {
+      if (address.emailAddress.toLowerCase() == email.trim().toLowerCase()) {
+        return address.verification == null ? null : address.isVerified;
+      }
+    }
+    return null;
+  }
+
   @override
   bool isGoogleEmailVerified(String email) =>
       _auth?.client.user?.externalAccounts?.any(

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' show FontFeature, ImageFilter;
 
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
@@ -11,6 +13,8 @@ import '../screens/admin/aurora_tokens.dart';
 import '../services/media/interview_media_controller.dart';
 import '../services/publisher/candidate_publisher_controller.dart';
 import '../services/voice/interview_lifecycle_controller.dart';
+
+part 'candidate_interview_room.dart';
 
 const _ink = Color(0xFF172B3A);
 const _muted = Color(0xFF6D7E89);
@@ -50,6 +54,7 @@ class _CandidateInterviewWorkspaceState
   final _cameraAnchor = GlobalKey();
   final _previewKey = GlobalKey();
   final _previewControlFocus = FocusNode();
+  final _cameraHover = ValueNotifier(false);
   late final AnimationController _previewAnimation;
   Rect? _previewOrigin;
   bool _hideSelfView = false;
@@ -86,6 +91,7 @@ class _CandidateInterviewWorkspaceState
   void dispose() {
     _previewAnimation.dispose();
     _previewControlFocus.dispose();
+    _cameraHover.dispose();
     super.dispose();
   }
 
@@ -145,7 +151,10 @@ class _CandidateInterviewWorkspaceState
 
   bool get _completed => lifecycle.snapshot?.completed == true;
   bool get _wrapping =>
-      _completed || lifecycle.finishRequested || lifecycle.finishing;
+      _completed ||
+      lifecycle.finishRequested ||
+      lifecycle.finishing ||
+      lifecycle.state == InterviewLifecycleState.awaitingCompletion;
   bool get _live => lifecycle.state == InterviewLifecycleState.live;
   bool get _busy =>
       lifecycle.finishing ||
@@ -154,17 +163,20 @@ class _CandidateInterviewWorkspaceState
 
   @override
   Widget build(BuildContext context) {
-    final darkRoom = context.isDarkTheme && _roomVisible;
     final theme = ThemeData(
       useMaterial3: true,
-      brightness: Theme.of(context).brightness,
+      brightness: _roomVisible
+          ? Brightness.light
+          : Theme.of(context).brightness,
       fontFamily: 'Inter',
-      scaffoldBackgroundColor: darkRoom
-          ? _night.knob
+      scaffoldBackgroundColor: _roomVisible
+          ? _roomBackground
           : context.themeCanvas(const Color(0xFFF3F6FA)),
       colorScheme: ColorScheme.fromSeed(
         seedColor: _teal,
-        brightness: Theme.of(context).brightness,
+        brightness: _roomVisible
+            ? Brightness.light
+            : Theme.of(context).brightness,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: CandidateButtonStyle.primaryColors(
@@ -204,123 +216,56 @@ class _CandidateInterviewWorkspaceState
         data: theme,
         child: Scaffold(
           body: SafeArea(
-            child: Column(
-              children: [
-                _header(context, MediaQuery.sizeOf(context).width < 460),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final mobile = constraints.maxWidth < 760;
-                      final centerCompletion =
-                          !mobile && lifecycle.isCurrent && _wrapping;
-                      final padding = EdgeInsets.fromLTRB(
-                        mobile ? 18 : 36,
-                        mobile
-                            ? 24
-                            : centerCompletion
-                            ? 28
-                            : 32,
-                        mobile ? 18 : 36,
-                        28,
-                      );
-                      final content = DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: RadialGradient(
-                            center: const Alignment(0, -.15),
-                            radius: .65,
-                            colors: darkRoom
-                                ? [
-                                    Color.alphaBlend(
-                                      _night.hi.withValues(alpha: .11),
-                                      Color.alphaBlend(
-                                        _night.gd.withValues(alpha: .17),
-                                        _night.knob,
+            child: Builder(
+              builder: (context) => _roomVisible
+                  ? _interviewRoom(context)
+                  : Column(
+                      children: [
+                        _header(
+                          context,
+                          MediaQuery.sizeOf(context).width < 460,
+                        ),
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final mobile = constraints.maxWidth < 760;
+                              final padding = EdgeInsets.fromLTRB(
+                                mobile ? 18 : 36,
+                                mobile ? 24 : 28,
+                                mobile ? 18 : 36,
+                                28,
+                              );
+                              return MobileEdgeShadowWrapper(
+                                child: SingleChildScrollView(
+                                  padding: padding,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minHeight: mobile
+                                          ? 0
+                                          : padding
+                                                .deflateSize(
+                                                  constraints.biggest,
+                                                )
+                                                .height,
+                                    ),
+                                    child: Center(
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 1260,
+                                        ),
+                                        child: lifecycle.isCurrent
+                                            ? _completion(context, mobile)
+                                            : _signedOut(context),
                                       ),
                                     ),
-                                    Color.alphaBlend(
-                                      _night.gd.withValues(alpha: .08),
-                                      _night.knob,
-                                    ),
-                                    _night.knob,
-                                  ]
-                                : [
-                                    context.themeSurface(
-                                      const Color(0xFFDDEEF3),
-                                    ),
-                                    theme.scaffoldBackgroundColor,
-                                  ],
-                          ),
-                        ),
-                        child: MobileEdgeShadowWrapper(
-                          child: SingleChildScrollView(
-                            padding: padding,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minHeight: centerCompletion
-                                    ? padding
-                                          .deflateSize(constraints.biggest)
-                                          .height
-                                    : 0,
-                              ),
-                              child: Center(
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 1260,
                                   ),
-                                  child: !lifecycle.isCurrent
-                                      ? _signedOut(context)
-                                      : _wrapping
-                                      ? _completion(context, mobile)
-                                      : _room(context, mobile),
                                 ),
-                              ),
-                            ),
+                              );
+                            },
                           ),
                         ),
-                      );
-                      final origin = _previewOrigin;
-                      return Stack(
-                        key: _roomViewport,
-                        fit: StackFit.expand,
-                        children: [
-                          ExcludeFocus(
-                            excluding: origin != null,
-                            child: ExcludeSemantics(
-                              excluding: origin != null,
-                              child: IgnorePointer(
-                                ignoring: origin != null,
-                                child: content,
-                              ),
-                            ),
-                          ),
-                          if (origin != null)
-                            _focusedPreview(
-                              context,
-                              constraints.biggest,
-                              origin,
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                if (!_wrapping && lifecycle.isCurrent)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 22),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1260),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: _bottomBar(
-                            context,
-                            MediaQuery.sizeOf(context).width < 760,
-                          ),
-                        ),
-                      ),
+                      ],
                     ),
-                  ),
-              ],
             ),
           ),
         ),
@@ -418,243 +363,6 @@ class _CandidateInterviewWorkspaceState
     );
   }
 
-  Widget _room(BuildContext context, bool mobile) {
-    final snapshot = lifecycle.snapshot;
-    final question = snapshot?.questionText?.trim();
-    final number = snapshot?.questionNumber;
-    final count = snapshot?.questionCount;
-    final talking = _live && lifecycle.agentTalking;
-    final listening = _live && !talking && !lifecycle.microphoneMuted;
-    final helper = !_live
-        ? 'Join the interview to connect your audio.'
-        : lifecycle.microphoneMuted
-        ? 'Turn on your microphone to answer.'
-        : talking
-        ? 'Listen to your interviewer.'
-        : 'Speak when you’re ready.';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              children: [
-                if (number != null && count != null)
-                  _eyebrow(context, 'QUESTION $number OF $count'),
-                const SizedBox(height: 12),
-                Semantics(
-                  header: true,
-                  liveRegion: true,
-                  child: Text(
-                    question != null && question.isNotEmpty
-                        ? question
-                        : (_live ? 'Your interview is live' : 'Ready to join?'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: mobile ? 28 : 36,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
-                      letterSpacing: -0.8,
-                      color: context.isDarkTheme
-                          ? _night.tx
-                          : const Color(0xFF17243A),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 22),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    AnimatedContainer(
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : const Duration(milliseconds: 220),
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(
-                          color: (context.isDarkTheme ? _night.hifd : _teal)
-                              .withValues(alpha: .18),
-                          width: 7,
-                        ),
-                      ),
-                      child: Icon(
-                        talking ? Icons.graphic_eq : Icons.mic_none,
-                        color: _teal,
-                      ),
-                    ),
-                    Semantics(
-                      liveRegion: true,
-                      child: _tag(
-                        context,
-                        Icons.circle,
-                        listening
-                            ? 'Listening'
-                            : talking
-                            ? 'Speaking'
-                            : lifecycle.microphoneMuted && _live
-                            ? 'Muted'
-                            : _voiceLabel,
-                        listening ? _teal : _muted,
-                        listening ? const Color(0xFFE1F4ED) : Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                _eyebrow(context, 'YOUR ANSWER'),
-                const SizedBox(height: 10),
-                Text(
-                  helper,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: context.themeForeground(_muted),
-                  ),
-                ),
-                if (!_live) ...[const SizedBox(height: 16), _audioAction()],
-              ],
-            ),
-          ),
-        ),
-        if (lifecycle.videoRequired) ...[
-          const SizedBox(height: 20),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: SizedBox(
-              key: _cameraAnchor,
-              width: mobile ? 148 : 180,
-              height: mobile ? 106 : 134,
-              child: _previewOrigin == null ? _videoPreview(context) : null,
-            ),
-          ),
-        ],
-        if (media.cameraError case final failure?) ...[
-          const SizedBox(height: 12),
-          Text(
-            failure.message,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-        ],
-        if (!_live ||
-            (lifecycle.videoRequired &&
-                publisher.state != PublisherState.ready)) ...[
-          const SizedBox(height: 12),
-          _connectionNotice(context),
-        ],
-        const SizedBox(height: 12),
-        _details(context),
-      ],
-    );
-  }
-
-  Widget _focusedPreview(BuildContext context, Size size, Rect origin) {
-    final target = Offset.zero & size;
-    return AnimatedBuilder(
-      animation: _previewAnimation,
-      child: _videoPreview(context, focused: true),
-      builder: (context, preview) {
-        final progress = Curves.easeInOutCubic.transform(
-          _previewAnimation.value,
-        );
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            ColoredBox(color: Colors.black.withValues(alpha: progress)),
-            Positioned.fromRect(
-              rect: Rect.lerp(origin, target, progress)!,
-              child: preview!,
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _videoPreview(
-    BuildContext context, {
-    bool focused = false,
-  }) => KeyedSubtree(
-    key: _previewKey,
-    child: ClipRRect(
-      key: const Key('session-camera-stage'),
-      borderRadius: BorderRadius.circular(focused ? 0 : 16),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF172D38), Color(0xFF0D1C25)],
-              ),
-            ),
-          ),
-          // Keep the platform view mounted when camera readiness changes.
-          media.adapter.buildPreview(),
-          if (!media.cameraReady || _hideSelfView)
-            ColoredBox(
-              color: context.isDarkTheme
-                  ? Color.alphaBlend(
-                      _night.gd.withValues(alpha: .12),
-                      _night.knob,
-                    )
-                  : const Color(0xFFE3EAF5),
-              child: Center(
-                child: CircleAvatar(
-                  backgroundColor: Colors.white,
-                  foregroundColor: _ink,
-                  child: const Text('You'),
-                ),
-              ),
-            ),
-          if (lifecycle.videoRequired || focused)
-            Positioned(
-              top: 10,
-              right: 10,
-              child: IconButton(
-                focusNode: _previewControlFocus,
-                tooltip: focused ? 'Restore video' : 'Maximize video',
-                onPressed: focused ? _restorePreview : _maximizePreview,
-                style: IconButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  backgroundColor: const Color(0xE6233942),
-                ),
-                icon: Icon(focused ? Icons.fullscreen_exit : Icons.fullscreen),
-              ),
-            ),
-          Positioned(
-            bottom: 14,
-            left: 14,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: const Color(0xB3243942),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'You',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
   String get _voiceLabel => switch (lifecycle.state) {
     InterviewLifecycleState.loading ||
     InterviewLifecycleState.joining => 'Connecting',
@@ -667,9 +375,7 @@ class _CandidateInterviewWorkspaceState
     final interrupted = lifecycle.state == InterviewLifecycleState.interrupted;
     final unavailable = lifecycle.state == InterviewLifecycleState.unavailable;
     final videoIssue =
-        _live &&
-        publisher.state != PublisherState.ready &&
-        lifecycle.videoRequired;
+        _live && publisher.needsAttention && lifecycle.videoRequired;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -788,105 +494,141 @@ class _CandidateInterviewWorkspaceState
           label: Text(_busy ? 'Connecting…' : 'Join interview'),
         );
 
-  Widget _bottomBar(BuildContext context, bool mobile) => Center(
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        color: context.isDarkTheme
-            ? Color.alphaBlend(_night.glass, _night.knob)
-            : Colors.white,
-        border: Border.all(color: context.themeOutline(_line)),
-        borderRadius: BorderRadius.circular(40),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .09),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
+  void _toggleRoomCamera() {
+    if (_live && media.cameraReady) {
+      setState(() => _hideSelfView = !_hideSelfView);
+    } else if (media.cameraReady) {
+      media.stop();
+    } else {
+      media.requestCamera();
+    }
+  }
+
+  Widget _bottomBar(
+    BuildContext context,
+    bool mobile, {
+    required bool focused,
+  }) {
+    final cameraOn = media.cameraReady && !_hideSelfView;
+    final cameraLabel = _live && media.cameraReady
+        ? (_hideSelfView ? 'Show self-view' : 'Hide self-view')
+        : (cameraOn ? 'Turn camera off' : 'Turn camera on');
+    final canLeave = lifecycle.backend.available && !lifecycle.finishing;
+    final leave = FilledButton(
+      key: const Key('session-finish'),
+      onPressed: canLeave ? () => _confirmEnd(context) : null,
+      style:
+          FilledButton.styleFrom(
+            minimumSize: Size(mobile ? 48 : 0, 48),
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 0 : 20),
+            backgroundColor: const Color(0xFFD03E50),
+            textStyle: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+            ),
+            foregroundColor: Colors.white,
+            shape: const StadiumBorder(),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ).copyWith(
+            backgroundBuilder: (_, _, child) =>
+                child ?? const SizedBox.shrink(),
           ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _RoomIcon(
+            _leavePath,
+            color: Colors.white,
+            label: 'Leave interview',
+          ),
+          if (!mobile) ...[const SizedBox(width: 8), const Text('Leave')],
         ],
       ),
+    );
+    final dock = DecoratedBox(
+      decoration: BoxDecoration(
+        color: focused ? const Color(0xF0FFFFFF) : Colors.white,
+        border: Border.all(color: _roomLine),
+        borderRadius: BorderRadius.circular(99),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(7),
-        child: Wrap(
-          spacing: mobile ? 6 : 10,
-          runSpacing: 6,
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        padding: const EdgeInsets.all(9),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton.filledTonal(
-              style: _roomDeviceStyle(context),
-              tooltip: lifecycle.microphoneMuted
+            _roomControl(
+              active: _live && !lifecycle.microphoneMuted,
+              label: lifecycle.microphoneMuted
                   ? 'Unmute microphone'
                   : 'Mute microphone',
-              onPressed: lifecycle.canToggleMicrophone
+              icon: lifecycle.microphoneMuted
+                  ? const Icon(Icons.mic_off_outlined, size: 20)
+                  : const _RoomIcon(_micPath),
+              action: lifecycle.canToggleMicrophone
                   ? lifecycle.toggleMicrophone
                   : null,
-              icon: Icon(
-                lifecycle.microphoneMuted
-                    ? Icons.mic_off_outlined
-                    : Icons.mic_none,
-              ),
             ),
-            if (lifecycle.videoRequired)
-              IconButton.filledTonal(
-                style: _roomDeviceStyle(context),
-                tooltip: _live && media.cameraReady
-                    ? (_hideSelfView ? 'Show self-view' : 'Hide self-view')
-                    : (media.cameraReady
-                          ? 'Turn camera off'
-                          : 'Turn camera on'),
-                onPressed: media.busy || !lifecycle.canUseMedia || _busy
+            if (lifecycle.videoRequired) ...[
+              const SizedBox(width: 10),
+              _roomControl(
+                active: cameraOn,
+                label: cameraLabel,
+                icon: cameraOn
+                    ? const _RoomIcon(_cameraPath)
+                    : const Icon(Icons.videocam_off_outlined, size: 20),
+                action: media.busy || !lifecycle.canUseMedia || _busy
                     ? null
-                    : () {
-                        if (_live && media.cameraReady) {
-                          setState(() => _hideSelfView = !_hideSelfView);
-                        } else if (media.cameraReady) {
-                          media.stop();
-                        } else {
-                          media.requestCamera();
-                        }
-                      },
-                icon: Icon(
-                  media.cameraReady && !_hideSelfView
-                      ? Icons.videocam_outlined
-                      : Icons.videocam_off_outlined,
-                ),
+                    : _toggleRoomCamera,
               ),
-            FilledButton.icon(
-              key: const Key('session-finish'),
-              onPressed: lifecycle.backend.available && !lifecycle.finishing
-                  ? () => _confirmEnd(context)
-                  : null,
-              style:
-                  FilledButton.styleFrom(
-                    backgroundColor: context.isDarkTheme
-                        ? Color.alphaBlend(
-                            _night.pr.withValues(alpha: .36),
-                            ThemeData.light().colorScheme.error,
-                          )
-                        : Theme.of(context).colorScheme.error,
-                    foregroundColor: context.isDarkTheme
-                        ? Colors.white
-                        : Theme.of(context).colorScheme.onError,
-                    shape: const StadiumBorder(),
-                  ).copyWith(
-                    backgroundBuilder: (_, _, child) =>
-                        child ?? const SizedBox.shrink(),
-                  ),
-              icon: const Icon(Icons.logout, size: 18),
-              label: const Text('Leave'),
-            ),
+            ],
+            SizedBox(width: mobile ? 12 : 14),
+            Tooltip(message: 'Leave interview', child: leave),
           ],
         ),
       ),
-    ),
-  );
+    );
+    return Center(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(99),
+          boxShadow: const [_roomShadow],
+        ),
+        child: focused
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                  child: dock,
+                ),
+              )
+            : dock,
+      ),
+    );
+  }
 
-  ButtonStyle? _roomDeviceStyle(BuildContext context) => context.isDarkTheme
-      ? IconButton.styleFrom(
-          backgroundColor: Color.alphaBlend(_night.edge2, _night.knob),
-          foregroundColor: _night.tx,
-        )
-      : null;
+  Widget _roomControl({
+    required bool active,
+    required String label,
+    required Widget icon,
+    required VoidCallback? action,
+  }) => IconButton(
+    isSelected: active,
+    tooltip: label,
+    onPressed: action,
+    style: IconButton.styleFrom(
+      fixedSize: const Size.square(48),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      backgroundColor: active
+          ? const Color(0xFFE3F6F0)
+          : const Color(0xFFF1F5FA),
+      foregroundColor: active ? const Color(0xFF087F69) : _roomInk,
+      disabledBackgroundColor: const Color(0xFFF1F5FA),
+    ),
+    icon: icon,
+  );
 
   Widget _completion(BuildContext context, bool mobile) {
     final snapshot = lifecycle.snapshot;
@@ -1119,97 +861,98 @@ class _CandidateInterviewWorkspaceState
     ],
   );
 
-  Widget _details(BuildContext context, {Widget? completionActions}) =>
-      ExpansionTile(
-        key: const Key('session-connection-details'),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 4),
-        shape: const Border(),
-        collapsedShape: const Border(),
-        title: Text(
-          _wrapping ? 'Session details' : 'Connection details',
-          style: TextStyle(
-            color: context.themeForeground(_muted),
-            fontSize: 12,
-          ),
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SelectableText(
-                  'Session reference: ${widget.interviewId}',
-                  style: TextStyle(
-                    color: context.themeForeground(_muted),
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  lifecycle.notice,
-                  style: TextStyle(
-                    color: context.themeForeground(_muted),
-                    fontSize: 11,
-                    height: 1.6,
-                  ),
-                ),
-                if (completionActions != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    lifecycle.snapshot?.analysisStatus == AnalysisState.failed
-                        ? 'Behavioral processing is unavailable.'
-                        : lifecycle.snapshot?.reportReady == true
-                        ? 'Behavioral analysis is available to your recruiter.'
-                        : 'Behavioral analysis is processing or unavailable.',
-                    style: TextStyle(
-                      color: context.themeForeground(_muted),
-                      fontSize: 11,
-                      height: 1.6,
-                    ),
-                  ),
-                  completionActions,
-                ],
-                if (!_wrapping) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    publisher.notice,
-                    style: TextStyle(
-                      color: context.themeForeground(_muted),
-                      fontSize: 11,
-                      height: 1.6,
-                    ),
-                  ),
-                  Wrap(
-                    spacing: 10,
-                    children: [
-                      if (_live) _audioAction(),
-                      TextButton.icon(
-                        onPressed: lifecycle.restore,
-                        icon: const Icon(Icons.refresh_rounded, size: 16),
-                        label: const Text('Refresh connection'),
-                      ),
-                      TextButton(
-                        onPressed: media.cameraReady ? publisher.start : null,
-                        child: const Text('Reconnect video'),
-                      ),
-                      TextButton(
-                        onPressed: publisher.pause,
-                        child: const Text('Pause video connection'),
-                      ),
-                      if (!media.voiceOwnsMicrophone)
-                        TextButton(
-                          onPressed: media.busy ? null : media.checkMicrophone,
-                          child: const Text('Check microphone'),
-                        ),
-                    ],
-                  ),
-                ],
-              ],
+  Widget _details(
+    BuildContext context, {
+    Widget? completionActions,
+    bool initiallyExpanded = false,
+  }) => ExpansionTile(
+    key: const Key('session-connection-details'),
+    initiallyExpanded: initiallyExpanded,
+    tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+    shape: const Border(),
+    collapsedShape: const Border(),
+    title: Text(
+      _wrapping ? 'Session details' : 'Connection details',
+      style: TextStyle(color: context.themeForeground(_muted), fontSize: 12),
+    ),
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(
+              'Session reference: ${widget.interviewId}',
+              style: TextStyle(
+                color: context.themeForeground(_muted),
+                fontSize: 11,
+              ),
             ),
-          ),
-        ],
-      );
+            const SizedBox(height: 8),
+            Text(
+              lifecycle.notice,
+              style: TextStyle(
+                color: context.themeForeground(_muted),
+                fontSize: 11,
+                height: 1.6,
+              ),
+            ),
+            if (completionActions != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                lifecycle.snapshot?.analysisStatus == AnalysisState.failed
+                    ? 'Behavioral processing is unavailable.'
+                    : lifecycle.snapshot?.reportReady == true
+                    ? 'Behavioral analysis is available to your recruiter.'
+                    : 'Behavioral analysis is processing or unavailable.',
+                style: TextStyle(
+                  color: context.themeForeground(_muted),
+                  fontSize: 11,
+                  height: 1.6,
+                ),
+              ),
+              completionActions,
+            ],
+            if (!_wrapping) ...[
+              const SizedBox(height: 8),
+              Text(
+                publisher.notice,
+                style: TextStyle(
+                  color: context.themeForeground(_muted),
+                  fontSize: 11,
+                  height: 1.6,
+                ),
+              ),
+              Wrap(
+                spacing: 10,
+                children: [
+                  if (_live) _audioAction(),
+                  TextButton.icon(
+                    onPressed: lifecycle.restore,
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('Refresh connection'),
+                  ),
+                  TextButton(
+                    onPressed: media.cameraReady ? publisher.start : null,
+                    child: const Text('Reconnect video'),
+                  ),
+                  TextButton(
+                    onPressed: publisher.pause,
+                    child: const Text('Pause video connection'),
+                  ),
+                  if (!media.voiceOwnsMicrophone)
+                    TextButton(
+                      onPressed: media.busy ? null : media.checkMicrophone,
+                      child: const Text('Check microphone'),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    ],
+  );
 
   Widget _signedOut(BuildContext context) => _card(
     context,

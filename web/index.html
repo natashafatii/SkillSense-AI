@@ -46,43 +46,33 @@
   <!-- Required by clerk_flutter package on web (passkeys support) -->
   <script src="https://github.com/corbado/flutter-passkeys/releases/download/2.4.0/bundle.js"></script>
 
-  <!-- Clerk JS SDK bootstrap. The publishable key attribute makes the browser
-       bundle create the supported global Clerk singleton. Flutter waits for
-       __clerkReady before using it. -->
   <script>
-    window.__clerkReady = false;
-    window.__clerkError = null;
+    window.loadSkillSenseClerk = async function (publishableKey) {
+      const match = /^pk_(test|live)_([A-Za-z0-9+/]+={0,2})$/.exec(publishableKey);
+      if (!match) throw new Error('Invalid Clerk publishable key.');
 
-    async function initSkillSenseClerk() {
-      try {
-        if (!window.Clerk || typeof window.Clerk.load !== 'function') {
-          throw new Error('Clerk browser bundle loaded without a Clerk instance.');
-        }
-
-        await window.Clerk.load();
-        window.__clerkReady = true;
-        console.info('[SkillSense] Clerk initialized successfully.');
-      } catch (error) {
-        window.__clerkError = error instanceof Error
-          ? error.message
-          : String(error);
-        console.error('[SkillSense] Clerk initialization failed:', error);
+      const frontendApi = atob(match[2]);
+      if (!/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9]+\$$/i.test(frontendApi)) {
+        throw new Error('Invalid Clerk Frontend API domain.');
       }
-    }
 
-    function failSkillSenseClerk() {
-      window.__clerkError = 'Unable to download the Clerk JavaScript SDK.';
-      console.error('[SkillSense] Clerk browser bundle failed to download.');
-    }
-  </script>
-  <script
-    defer
-    crossorigin="anonymous"
-    data-clerk-publishable-key="pk_test_c3R1bm5pbmctc2x1Zy0xMy5jbGVyay5hY2NvdW50cy5kZXYk"
-    src="https://stunning-slug-13.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
-    onload="initSkillSenseClerk()"
-    onerror="failSkillSenseClerk()"
-    type="text/javascript">
+      const script = document.createElement('script');
+      script.crossOrigin = 'anonymous';
+      script.dataset.clerkPublishableKey = publishableKey;
+      script.src = 'https://' + frontendApi.slice(0, -1) +
+        '/npm/@clerk/clerk-js@6/dist/clerk.browser.js';
+
+      await new Promise((resolve, reject) => {
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('Unable to download the Clerk JavaScript SDK.'));
+        document.head.appendChild(script);
+      });
+      if (typeof window.Clerk?.load !== 'function') {
+        throw new Error('Clerk browser bundle loaded without a Clerk instance.');
+      }
+      await window.Clerk.load();
+      return window.Clerk;
+    };
   </script>
 </head>
 <body>

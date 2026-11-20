@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
-import '../../constants/app_colors.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../services/application_service.dart';
 import '../../services/media/interview_media_route_observer.dart';
 import '../../services/interview_service.dart';
@@ -18,10 +21,11 @@ import '../../services/voice/voice_lifecycle_backend.dart';
 import '../../models/voice/voice_contract.dart';
 import '../../utils/interview_testing.dart';
 import '../../widgets/camera_device_selector.dart';
-import '../../widgets/candidate_button_style.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'candidate_interview_session_screen.dart';
+
+part 'candidate_interview_lobby_visuals.dart';
 
 class CandidateInterviewLobbyScreen extends StatefulWidget {
   const CandidateInterviewLobbyScreen({
@@ -47,14 +51,18 @@ class _CandidateInterviewLobbyScreenState
     with WidgetsBindingObserver, RouteAware {
   final int _account = SessionScope.generation;
   Interview? _interview;
-  String? _roleLabel;
+  String? _jobTitle;
+  String? _company;
   InterviewSessionIdentity? _identity;
   String? _loadError;
   late final InterviewMediaController _media;
   ModalRoute<dynamic>? _route;
   Timer? _joinWindowTimer;
+  Timer? _countdownTimer;
 
-  DateTime? get _joinOpensAt => _interview?.status == 'SCHEDULED'
+  DateTime? get _joinOpensAt =>
+      _interview?.joinWindowRequired == true &&
+          _interview?.status == 'SCHEDULED'
       ? _interview?.scheduledAt?.subtract(const Duration(minutes: 15))
       : null;
 
@@ -119,10 +127,20 @@ class _CandidateInterviewLobbyScreenState
       if (matches.isNotEmpty) {
         final interview = matches.first;
         if (_interview?.applicationId != interview.applicationId) {
-          _roleLabel = null;
+          _jobTitle = null;
+          _company = null;
         }
         _interview = interview;
         _scheduleJoinWindowUpdate();
+        _countdownTimer?.cancel();
+        if (interview.status == 'SCHEDULED' && interview.scheduledAt != null) {
+          _countdownTimer = Timer.periodic(const Duration(seconds: 30), (
+            timer,
+          ) {
+            setState(() {});
+            if (!interview.scheduledAt!.isAfter(DateTime.now())) timer.cancel();
+          });
+        }
         if (mounted) {
           setState(() {
             _loadError = null;
@@ -130,7 +148,7 @@ class _CandidateInterviewLobbyScreenState
             _isLoading = false;
           });
         }
-        if (_roleLabel == null) _loadRoleLabel(interview.applicationId);
+        if (_jobTitle == null) _loadRoleLabel(interview.applicationId);
       } else {
         if (mounted) {
           setState(() {
@@ -161,11 +179,12 @@ class _CandidateInterviewLobbyScreenState
           _interview?.applicationId != applicationId) {
         return;
       }
-      final parts = [
-        application.jobTitle.trim(),
-        application.jobCompany.trim(),
-      ].where((part) => part.isNotEmpty);
-      if (parts.isNotEmpty) setState(() => _roleLabel = parts.join(' · '));
+      final title = application.jobTitle.trim();
+      final company = application.jobCompany.trim();
+      setState(() {
+        _jobTitle = title.isEmpty ? null : title;
+        _company = company.isEmpty ? null : company;
+      });
     } catch (_) {
       // The lobby can still show the schedule if role details are unavailable.
     }
@@ -237,7 +256,7 @@ class _CandidateInterviewLobbyScreenState
             startNow: immediately,
             cancelToken: _voiceRequests,
           )
-          .timeout(const Duration(seconds: 20));
+          .timeout(VoiceLifecycleBackend.startFlowTimeout);
       if (!mounted || _account != SessionScope.generation) return;
       final safeSnapshot = VoiceSessionSnapshot.withoutCredential(snapshot);
       _media.stop(); // Release the preview only once the room is ready.
@@ -345,12 +364,14 @@ class _CandidateInterviewLobbyScreenState
 
   void _clearSession() {
     _joinWindowTimer?.cancel();
+    _countdownTimer?.cancel();
     _voiceRequests.cancel('Account changed.');
     if (!mounted) return;
     setState(() {
       _identity = null;
       _interview = null;
-      _roleLabel = null;
+      _jobTitle = null;
+      _company = null;
       _hasInterview = false;
       _isLoading = false;
       _loadError = 'Your account session changed. Reopen the interview lobby.';
@@ -360,6 +381,7 @@ class _CandidateInterviewLobbyScreenState
   @override
   void dispose() {
     _joinWindowTimer?.cancel();
+    _countdownTimer?.cancel();
     interviewMediaRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _voiceRequests.cancel('Lobby disposed.');
@@ -407,66 +429,49 @@ class _CandidateInterviewLobbyScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final lobbyColors = theme.brightness == Brightness.light
-        ? colors.copyWith(
-            onSurface: const Color(0xFF17243A),
-            onSurfaceVariant: const Color(0xFF46566B),
-          )
-        : colors;
-    final interTextTheme = theme.textTheme.apply(fontFamily: 'Inter');
-    final bodyStyle = (interTextTheme.bodyMedium ?? const TextStyle()).copyWith(
-      fontSize: 15,
-      height: 1.5,
-      color: lobbyColors.onSurface,
-    );
-    const contentPadding = EdgeInsets.all(46);
+    final colors = _LobbyColors(theme.brightness == Brightness.dark);
     final interview = _hasInterview ? _interview : null;
     final hasMobileDock = MediaQuery.sizeOf(context).width < 900;
-
     return CandidateScaffold(
       currentRoute: '/candidate/interview-lobby',
       body: Column(
         children: [
           const RecruiterTopBar(pageTitle: 'Interview lobby', candidate: true),
           Expanded(
-            child: Theme(
-              data: theme.copyWith(
-                colorScheme: lobbyColors,
-                textTheme: interTextTheme.copyWith(bodyMedium: bodyStyle),
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final wide =
-                      constraints.maxWidth - contentPadding.horizontal >= 704;
-                  final colors = Theme.of(context).colorScheme;
-                  final padding = contentPadding.add(
-                    EdgeInsets.only(bottom: hasMobileDock ? 86 : 0),
-                  );
-                  return SingleChildScrollView(
-                    padding: padding,
-                    child: DefaultTextStyle(
-                      style: bodyStyle,
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1440),
-                          child: _isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : interview == null
-                              ? ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minHeight: padding
-                                        .deflateSize(constraints.biggest)
-                                        .height,
-                                  ),
-                                  child: _buildEmptyState(colors),
-                                )
-                              : _buildLobby(context, interview, wide: wide),
-                        ),
+            child: ColoredBox(
+              color: colors.canvas,
+              child: DefaultTextStyle(
+                style: _lobbyText(14, color: colors.ink),
+                child: _isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(color: colors.accent),
+                      )
+                    : interview == null
+                    ? _buildEmptyState(colors)
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final compact = constraints.maxWidth <= 700;
+                          final horizontal = compact ? 16.0 : 32.0;
+                          return SingleChildScrollView(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              compact ? 18 : 12,
+                              horizontal,
+                              (compact ? 18 : 16) +
+                                  (hasMobileDock
+                                      ? 86 +
+                                            MediaQuery.paddingOf(context).bottom
+                                      : 0),
+                            ),
+                            child: _buildLobby(
+                              interview,
+                              colors,
+                              constraints.biggest,
+                              compact: compact,
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                  );
-                },
               ),
             ),
           ),
@@ -475,109 +480,35 @@ class _CandidateInterviewLobbyScreenState
     );
   }
 
-  Widget _statusPill(ColorScheme colors, String status) {
-    final scheduled = status == 'SCHEDULED';
-    final light = colors.brightness == Brightness.light;
-    final (label, background, foreground) = switch (status) {
-      'SCHEDULED' => (
-        'Scheduled',
-        light ? const Color(0xFFEAF6F2) : const Color(0xFF15382F),
-        light ? const Color(0xFF087F6C) : const Color(0xFF34D4AC),
-      ),
-      'LIVE' => ('Live', colors.primaryContainer, colors.onPrimaryContainer),
-      'COMPLETED' => (
-        'Completed',
-        colors.surfaceContainerHigh,
-        colors.onSurfaceVariant,
-      ),
-      'CANCELLED' || 'CANCELED' => (
-        'Cancelled',
-        colors.surfaceContainerHigh,
-        colors.onSurfaceVariant,
-      ),
-      _ => (
-        'Unavailable',
-        colors.surfaceContainerHigh,
-        colors.onSurfaceVariant,
-      ),
-    };
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        border: Border.all(
-          color: scheduled && light
-              ? const Color(0xFFA9DFCA)
-              : foreground.withValues(alpha: 0.24),
-        ),
-        borderRadius: BorderRadius.circular(50),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 7,
-              height: 7,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: foreground,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: foreground,
-                fontFamily: 'Inter',
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(ColorScheme colors) {
+  Widget _buildEmptyState(_LobbyColors colors) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.event_outlined,
-              size: 36,
-              color: colors.brightness == Brightness.dark
-                  ? CandidateButtonStyle.teal
-                  : CandidateButtonStyle.deepTeal,
-            ),
+            Icon(Icons.event_outlined, size: 36, color: colors.accent),
             const SizedBox(height: 16),
             Text(
               _loadError ?? 'No interview scheduled',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              style: _lobbyText(20, weight: FontWeight.w700),
             ),
             if (_loadError == null) ...[
               const SizedBox(height: 8),
               Text(
                 'Interview invitations appear here.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: colors.onSurfaceVariant),
+                style: TextStyle(color: colors.secondary),
               ),
             ],
             const SizedBox(height: 20),
             FilledButton(
-              style: CandidateButtonStyle.primaryColors(
-                FilledButton.styleFrom(foregroundColor: Colors.white),
-              ),
               onPressed: () =>
                   Navigator.of(context).pushNamed('/candidate/applications'),
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.accent,
+                foregroundColor: colors.onAccent,
+              ),
               child: const Text('View applications'),
             ),
           ],
@@ -587,340 +518,18 @@ class _CandidateInterviewLobbyScreenState
   }
 
   Widget _buildLobby(
-    BuildContext context,
-    Interview interview, {
-    required bool wide,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    final border = BorderSide(
-      color: colors.brightness == Brightness.light
-          ? const Color(0xFFD8E1EC)
-          : colors.outlineVariant,
-    );
-    final sectionPadding = wide ? 30.0 : 22.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.end,
-          spacing: 16,
-          runSpacing: 10,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    'Ready for your interview?',
-                    style: TextStyle(
-                      color: colors.onSurface,
-                      fontFamily: 'Inter',
-                      fontSize: wide ? 27 : 26,
-                      height: 1.15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -1.15,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Check your devices before joining.',
-                  style: TextStyle(
-                    color: colors.onSurfaceVariant,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            _statusPill(colors, interview.status),
-          ],
-        ),
-        const SizedBox(height: 22),
-        Material(
-          color: colors.brightness == Brightness.light
-              ? Colors.white
-              : colors.surface,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(wide ? 18 : 14),
-            side: border,
-          ),
-          child: Stack(
-            children: [
-              if (wide)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: FractionallySizedBox(
-                      alignment: AlignmentDirectional.centerStart,
-                      widthFactor: 5 / 12,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          border: BorderDirectional(end: border),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              Flex(
-                direction: wide ? Axis.horizontal : Axis.vertical,
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: wide
-                    ? CrossAxisAlignment.start
-                    : CrossAxisAlignment.stretch,
-                children: [
-                  Flexible(
-                    flex: 5,
-                    fit: wide ? FlexFit.tight : FlexFit.loose,
-                    child: Padding(
-                      padding: EdgeInsets.all(sectionPadding),
-                      child: _buildAppointment(
-                        context,
-                        interview,
-                        border.color,
-                      ),
-                    ),
-                  ),
-                  Flexible(
-                    flex: 7,
-                    fit: wide ? FlexFit.tight : FlexFit.loose,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: wide ? null : Border(top: border),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.all(sectionPadding),
-                        child: _buildDeviceSetup(context, border.color),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 16,
-          children: [
-            Text(
-              'A quiet, well-lit space is recommended.',
-              style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
-            ),
-            TextButton(
-              onPressed: () => _showDeviceHelp(context),
-              child: const Text('Need help?'),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAppointment(
-    BuildContext context,
     Interview interview,
-    Color dividerColor,
-  ) {
-    final colors = Theme.of(context).colorScheme;
-    final localizations = MaterialLocalizations.of(context);
-    final scheduledAt = interview.scheduledAt?.toLocal();
-    final opensAt = _joinOpensAt?.toLocal();
-    final waiting = opensAt != null && opensAt.isAfter(DateTime.now());
-    final devicesReady = _media.cameraReady && _media.microphoneChecked;
-    final busy = _starting || _media.busy;
-    final canJoin =
-        _canResume || (devicesReady && !_startUncertain && !waiting);
-    final use24HourTime = MediaQuery.alwaysUse24HourFormatOf(context);
-    final appointmentMetaStyle = TextStyle(
-      color: colors.onSurfaceVariant,
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-    );
-    String time(DateTime value) => localizations.formatTimeOfDay(
-      TimeOfDay.fromDateTime(value),
-      alwaysUse24HourFormat: use24HourTime,
-    );
-
-    final joinNote = _canResume
-        ? 'Reconnect to your existing interview session.'
-        : waiting
-        ? 'Joining opens on ${localizations.formatMediumDate(opensAt)} at ${time(opensAt)} (${_utcOffset(opensAt)}). You can check your devices now.'
-        : !devicesReady
-        ? 'Check your camera and microphone to enable joining.'
-        : 'Your devices are ready.';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Your appointment', style: appointmentMetaStyle),
-        const SizedBox(height: 12),
-        Text(
-          scheduledAt == null
-              ? 'Time to be confirmed'
-              : localizations.formatFullDate(scheduledAt),
-          style: TextStyle(
-            color: colors.onSurface,
-            fontSize: 24,
-            height: 1.24,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
-          ),
-        ),
-        if (scheduledAt != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            time(scheduledAt),
-            style: TextStyle(
-              color: colors.onSurface,
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.5,
-            ),
-          ),
-          Text(
-            'Local time (${_utcOffset(scheduledAt)})',
-            style: appointmentMetaStyle,
-          ),
-        ],
-        if (_roleLabel case final roleLabel?) ...[
-          const SizedBox(height: 10),
-          Text(roleLabel, style: appointmentMetaStyle),
-        ],
-        const SizedBox(height: 24),
-        Divider(height: 1, thickness: 1, color: dividerColor),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            Icon(
-              Icons.videocam_outlined,
-              size: 20,
-              color: colors.brightness == Brightness.light
-                  ? const Color(0xFF087F6C)
-                  : AppColors.dashboardTeal,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'AI-guided video interview',
-                style: TextStyle(
-                  color: colors.onSurfaceVariant,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 30),
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 330),
-            child: FilledButton(
-              key: const ValueKey('start-interview-now'),
-              onPressed: canJoin && !busy ? _startFromLobby : null,
-              style: CandidateButtonStyle.primaryColors(
-                FilledButton.styleFrom(
-                  minimumSize: const Size(0, 52),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: const Color(0xFF79BAAF),
-                  disabledForegroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _starting
-                          ? 'Connecting…'
-                          : (_canResume
-                                ? 'Resume interview'
-                                : 'Join interview'),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (_starting)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    const Icon(Icons.arrow_forward_rounded, size: 20),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Semantics(
-          liveRegion: true,
-          child: Text(
-            joinNote,
-            style: TextStyle(
-              color: colors.onSurfaceVariant,
-              fontSize: 13,
-              height: 1.5,
-            ),
-          ),
-        ),
-        if (_startError case final error?) ...[
-          const SizedBox(height: 8),
-          Semantics(
-            liveRegion: true,
-            child: Text(error, style: TextStyle(color: colors.error)),
-          ),
-        ],
-        if (_allowImmediateTesting &&
-            !_canResume &&
-            !_startUncertain &&
-            interview.status == 'SCHEDULED')
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton(
-              onPressed: busy
-                  ? null
-                  : () => _startVideoInterview(immediately: true),
-              child: const Text('Start test interview now'),
-            ),
-          ),
-      ],
-    );
-  }
-
-  String _utcOffset(DateTime value) {
-    final offset = value.timeZoneOffset;
-    final hours = offset.inHours.abs().toString().padLeft(2, '0');
-    final minutes = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
-    return 'UTC${offset.isNegative ? '−' : '+'}$hours:$minutes';
-  }
-
-  Widget _buildDeviceSetup(BuildContext context, Color borderColor) {
-    final colors = Theme.of(context).colorScheme;
+    _LobbyColors colors,
+    Size viewport, {
+    required bool compact,
+  }) {
+    final largeText = MediaQuery.textScalerOf(context).scale(14) > 17;
+    final wide = viewport.width > 1100 && !largeText;
+    final sideWidth = (viewport.width * .28).clamp(380.0, 460.0);
     final cameraReady = _media.cameraReady;
     final micReady = _media.microphoneChecked;
-    final ready = cameraReady && micReady;
-    final enabled =
-        _media.isCurrent &&
-        _media.adapter.supported &&
-        !_media.busy &&
-        !_starting;
+    final busy = _starting || _media.busy;
+    final checksEnabled = _media.isCurrent && _media.adapter.supported && !busy;
     final errors = [
       _media.cameraError?.message,
       _media.microphoneError?.message,
@@ -931,187 +540,521 @@ class _CandidateInterviewLobbyScreenState
         ? errors.join('\n')
         : _media.busy
         ? 'Allow device access when prompted.'
-        : ready
+        : cameraReady && micReady
         ? 'Camera and microphone checks passed.'
         : micReady
         ? 'Microphone access confirmed. Check your camera next.'
         : cameraReady
         ? 'Camera is ready. Check your microphone next.'
         : 'Allow device access to check your setup.';
-    const previewBackground = Color(0xFF111B2B);
-    const previewForeground = Color(0xFFD5E0F1);
+    final preview = _LobbyPreview(
+      compact: compact,
+      largeText: largeText,
+      cameraReady: cameraReady,
+      micReady: micReady,
+      waitingForCamera: _media.camera == DeviceCheckState.checking,
+      video: cameraReady ? _media.adapter.buildPreview() : null,
+      cameraSelector: cameraReady && _media.adapter.cameras.length > 1
+          ? CameraDeviceSelector(media: _media)
+          : null,
+      onHelp: _showDeviceHelp,
+      onCamera: checksEnabled ? _media.requestCamera : null,
+      onMicrophone: checksEnabled ? _media.checkMicrophone : null,
+      message: message,
+      hasError: !_media.adapter.supported || errors.isNotEmpty,
+    );
+    final rail = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildAppointment(interview, colors),
+        const SizedBox(height: 14),
+        _buildChecklist(interview, colors, busy: busy),
+        const SizedBox(height: 14),
+        if (wide)
+          Flexible(fit: FlexFit.tight, child: _buildTips(colors, stretch: true))
+        else
+          _buildTips(colors, stretch: false),
+      ],
+    );
 
+    final titleSize = compact ? 23.0 : 28.0;
+    final titleHeight = MediaQuery.textScalerOf(context).scale(titleSize) * 1.2;
+    final subtitleHeight = MediaQuery.textScalerOf(context).scale(14) * 1.5;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 12,
-          runSpacing: 4,
-          children: [
-            Semantics(
-              header: true,
-              child: Text(
-                'Camera & microphone',
-                style: TextStyle(
-                  color: colors.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+        Semantics(
+          header: true,
+          child: Text.rich(
+            TextSpan(
+              text: 'Ready for your interview',
+              children: [
+                TextSpan(
+                  text: '?',
+                  style: TextStyle(color: colors.accent),
+                ),
+              ],
+            ),
+            style: _lobbyText(
+              titleSize,
+              weight: FontWeight.w800,
+              spacing: -.8,
+              height: 1.2,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Check your camera and microphone now so you can walk in calm on the day.',
+          style: TextStyle(color: colors.secondary),
+        ),
+        const SizedBox(height: 12),
+        if (wide)
+          Stack(
+            alignment: Alignment.topRight,
+            children: [
+              Positioned.fill(right: sideWidth + 24, child: preview),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: math.max(
+                    0,
+                    viewport.height - titleHeight - subtitleHeight - 42,
+                  ),
+                ),
+                child: SizedBox(
+                  width: sideWidth,
+                  child: IntrinsicHeight(child: rail),
                 ),
               ),
-            ),
+            ],
+          )
+        else ...[
+          preview,
+          const SizedBox(height: 24),
+          rail,
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAppointment(Interview interview, _LobbyColors colors) {
+    final scheduledAt = interview.scheduledAt?.toLocal();
+    final formattedTime = scheduledAt == null ? '' : _formatTime(scheduledAt);
+    final match = RegExp(
+      r'^(.*)\s+(AM|PM)$',
+      caseSensitive: false,
+    ).firstMatch(formattedTime);
+    final role = _jobTitle ?? 'AI-guided video interview';
+    final detail = [
+      if (_company case final company?) company,
+      if (_jobTitle != null) 'AI-guided video interview',
+    ].join(' · ');
+    final isScheduled = interview.status == 'SCHEDULED';
+    return _card(
+      colors,
+      leadingAccent: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              ready
-                  ? 'Devices ready'
-                  : (cameraReady || micReady
-                        ? '1 of 2 checked'
-                        : 'Not checked'),
-              style: TextStyle(
-                color: ready ? colors.primary : colors.onSurfaceVariant,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+              'YOUR INTERVIEW',
+              style: _lobbyText(
+                12,
+                color: colors.accent,
+                weight: FontWeight.w700,
+                spacing: .96,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              role,
+              style: _lobbyText(
+                18,
+                weight: FontWeight.w800,
+                spacing: -.3,
+                height: 1.25,
+              ),
+            ),
+            if (detail.isNotEmpty) ...[
+              const SizedBox(height: 1),
+              Text(detail, style: _lobbyText(13.5, color: colors.secondary)),
+            ],
+            const SizedBox(height: 12),
+            CustomPaint(
+              painter: _DashedRule(colors.line),
+              child: const SizedBox(width: double.infinity, height: 1),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        scheduledAt == null
+                            ? 'Time to be confirmed'
+                            : _formatDate(scheduledAt),
+                        style: _lobbyText(14.5, weight: FontWeight.w700),
+                      ),
+                      if (scheduledAt != null)
+                        Text(
+                          scheduledAt.timeZoneOffset == const Duration(hours: 5)
+                              ? 'Pakistan Standard Time'
+                              : 'Local time (${_utcOffset(scheduledAt)})',
+                          style: _lobbyText(
+                            12.5,
+                            color: colors.muted,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (scheduledAt != null) ...[
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(
+                        text: match?.group(1) ?? formattedTime,
+                        children: [
+                          if (match?.group(2) case final period?)
+                            TextSpan(
+                              text: '  $period',
+                              style: _lobbyText(
+                                14,
+                                color: colors.secondary,
+                                weight: FontWeight.w700,
+                              ),
+                            ),
+                        ],
+                      ),
+                      textAlign: TextAlign.end,
+                      style: _lobbyText(
+                        34,
+                        height: 1,
+                        weight: FontWeight.w800,
+                        spacing: -1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(minHeight: 38),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: colors.subtle,
+                border: Border.all(color: colors.line),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      isScheduled && scheduledAt != null
+                          ? 'Starts in'
+                          : 'Status',
+                      style: _lobbyText(
+                        13,
+                        color: colors.secondary,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      isScheduled && scheduledAt != null
+                          ? _countdown(scheduledAt)
+                          : switch (interview.status) {
+                              'LIVE' => 'Live',
+                              'COMPLETED' => 'Completed',
+                              'CANCELLED' || 'CANCELED' => 'Cancelled',
+                              'SCHEDULED' => 'Scheduled',
+                              _ => 'Unavailable',
+                            },
+                      textAlign: TextAlign.end,
+                      style: _lobbyText(
+                        13,
+                        color: colors.accent,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: LayoutBuilder(
-            builder: (context, constraints) => SizedBox(
-              key: const Key('interview-camera-preview'),
-              height: (constraints.maxWidth * 0.36)
-                  .clamp(170.0, 235.0)
-                  .toDouble(),
-              child: Stack(
-                fit: StackFit.expand,
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final day = const [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ][date.weekday - 1];
+    final month = const [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ][date.month - 1];
+    return '$day, ${date.day} $month ${date.year}';
+  }
+
+  String _countdown(DateTime scheduledAt) {
+    final remaining = scheduledAt.difference(DateTime.now());
+    final minutes = math.max(0, remaining.inMinutes);
+    return '${minutes ~/ 1440} days ${minutes ~/ 60 % 24} h ${minutes % 60} min';
+  }
+
+  String _formatTime(DateTime value) =>
+      MaterialLocalizations.of(context).formatTimeOfDay(
+        TimeOfDay.fromDateTime(value),
+        alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+      );
+
+  String _utcOffset(DateTime value) {
+    final offset = value.timeZoneOffset;
+    final hours = offset.inHours.abs().toString().padLeft(2, '0');
+    final minutes = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
+    return 'UTC${offset.isNegative ? '−' : '+'}$hours:$minutes';
+  }
+
+  Widget _buildChecklist(
+    Interview interview,
+    _LobbyColors colors, {
+    required bool busy,
+  }) {
+    final camera = _media.cameraReady;
+    final mic = _media.microphoneChecked;
+    final ready = camera && mic;
+    final opensAt = _joinOpensAt?.toLocal();
+    final waiting = _waitingForJoinWindow;
+    final canJoin = _canResume || (ready && !_startUncertain && !waiting);
+    final note = _canResume
+        ? 'Reconnect to your existing interview session.'
+        : !ready
+        ? 'Check your camera and microphone to continue.'
+        : waiting && opensAt != null
+        ? 'Joining opens at ${_formatTime(opensAt)}, 15 minutes before.'
+        : 'You are ready. Join when you are.';
+    final enabled = canJoin && !busy;
+    return _card(
+      colors,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: _sectionTitle('Before you join')),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    '${(camera ? 1 : 0) + (mic ? 1 : 0)} of 2 ready',
+                    textAlign: TextAlign.end,
+                    style: _lobbyText(
+                      13,
+                      color: colors.muted,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            _checkRow(colors, 'Camera', 'Your face is clearly visible', camera),
+            _checkRow(
+              colors,
+              'Microphone',
+              'Your voice is picked up clearly',
+              mic,
+            ),
+            const SizedBox(height: 12),
+            FilledButton(
+              key: const ValueKey('start-interview-now'),
+              onPressed: enabled ? _startFromLobby : null,
+              style:
+                  FilledButton.styleFrom(
+                    backgroundColor: colors.accent,
+                    disabledBackgroundColor: colors.accent.withValues(
+                      alpha: .5,
+                    ),
+                    foregroundColor: colors.onAccent,
+                    disabledForegroundColor: colors.onAccent.withValues(
+                      alpha: .5,
+                    ),
+                    minimumSize: const Size(0, 50),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ).copyWith(
+                    backgroundColor: WidgetStateProperty.resolveWith(
+                      (states) => !enabled
+                          ? colors.accent.withValues(alpha: .5)
+                          : states.contains(WidgetState.hovered)
+                          ? colors.accentHover
+                          : colors.accent,
+                    ),
+                  ),
+              child: Row(
                 children: [
-                  ColoredBox(color: previewBackground),
-                  if (_media.adapter.supported) _media.adapter.buildPreview(),
-                  if (!cameraReady)
-                    ColoredBox(
-                      color: previewBackground,
-                      child: Center(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.videocam_off_outlined,
-                                color: const Color(0xFFABB9CC),
-                                size: 32,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                _media.camera == DeviceCheckState.checking
-                                    ? 'Waiting for camera access'
-                                    : 'Camera preview is off',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: previewForeground,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                  Expanded(
+                    child: Text(
+                      _starting
+                          ? 'Connecting…'
+                          : _canResume
+                          ? 'Resume interview'
+                          : 'Join interview',
+                      style: _lobbyText(15.5, weight: FontWeight.w700),
+                    ),
+                  ),
+                  if (_starting)
+                    SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colors.onAccent,
+                      ),
+                    )
+                  else
+                    ExcludeSemantics(
+                      child: Text(
+                        '→',
+                        style: _lobbyText(15.5, weight: FontWeight.w700),
                       ),
                     ),
                 ],
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stacked =
-                constraints.maxWidth <
-                325 * MediaQuery.textScalerOf(context).scale(13) / 13;
-            final cameraButton = _deviceButton(
-              colors,
-              borderColor: borderColor,
-              icon: Icons.videocam_outlined,
-              label: cameraReady ? 'Camera ready' : 'Check camera',
-              ready: cameraReady,
-              onPressed: enabled ? _media.requestCamera : null,
-            );
-            final micButton = _deviceButton(
-              colors,
-              borderColor: borderColor,
-              icon: Icons.mic_none_rounded,
-              label: micReady ? 'Microphone ready' : 'Check microphone',
-              ready: micReady,
-              onPressed: enabled ? _media.checkMicrophone : null,
-            );
-            return stacked
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      cameraButton,
-                      const SizedBox(height: 8),
-                      micButton,
-                    ],
-                  )
-                : Row(
-                    children: [
-                      Expanded(child: cameraButton),
-                      const SizedBox(width: 10),
-                      Expanded(child: micButton),
-                    ],
-                  );
-          },
-        ),
-        if (cameraReady && _media.adapter.cameras.length > 1) ...[
-          const SizedBox(height: 12),
-          CameraDeviceSelector(media: _media),
-        ],
-        const SizedBox(height: 10),
-        Semantics(
-          liveRegion: true,
-          child: Text(
-            message,
-            style: TextStyle(
-              color: errors.isEmpty ? colors.onSurfaceVariant : colors.error,
-              fontSize: 13,
-              height: 1.5,
+            const SizedBox(height: 10),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                note,
+                textAlign: TextAlign.center,
+                style: _lobbyText(13, color: colors.secondary),
+              ),
             ),
-          ),
+            if (_startError case final error?) ...[
+              const SizedBox(height: 8),
+              Semantics(
+                liveRegion: true,
+                child: Text(error, style: _lobbyText(13, color: colors.error)),
+              ),
+            ],
+            if (_allowImmediateTesting &&
+                !_canResume &&
+                !_startUncertain &&
+                interview.status == 'SCHEDULED')
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton(
+                  onPressed: busy
+                      ? null
+                      : () => _startVideoInterview(immediately: true),
+                  style: TextButton.styleFrom(foregroundColor: colors.accent),
+                  child: const Text('Start test interview now'),
+                ),
+              ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _deviceButton(
-    ColorScheme colors, {
-    required Color borderColor,
-    required IconData icon,
-    required String label,
-    required bool ready,
-    required VoidCallback? onPressed,
-  }) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: ready ? colors.onPrimaryContainer : colors.onSurface,
-        backgroundColor: ready ? colors.primaryContainer : Colors.transparent,
-        minimumSize: const Size(0, 46),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        side: BorderSide(color: ready ? colors.primary : borderColor),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+  Widget _checkRow(
+    _LobbyColors colors,
+    String title,
+    String detail,
+    bool ready,
+  ) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 60),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: colors.line)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(ready ? Icons.check_rounded : icon, size: 20),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: ready ? colors.accent : null,
+              border: Border.all(
+                color: ready ? colors.accent : colors.line,
+                width: 2,
+              ),
+            ),
+            child: ready
+                ? Center(
+                    child: _lobbyIcon(
+                      _LobbyGlyph.check,
+                      colors.onAccent,
+                      size: 16,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: _lobbyText(15, weight: FontWeight.w700)),
+                Text(
+                  detail,
+                  style: _lobbyText(
+                    13,
+                    color: colors.secondary,
+                    weight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(width: 8),
-          Flexible(
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 78),
             child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ready ? 'Ready' : 'Not checked',
+              textAlign: TextAlign.end,
+              style: _lobbyText(
+                12.5,
+                color: ready ? colors.accent : colors.muted,
+                weight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -1119,7 +1062,88 @@ class _CandidateInterviewLobbyScreenState
     );
   }
 
-  void _showDeviceHelp(BuildContext context) {
+  Widget _buildTips(_LobbyColors colors, {required bool stretch}) {
+    const tips = [
+      (
+        _LobbyGlyph.quiet,
+        'Find a quiet spot',
+        'Close doors and mute other apps.',
+      ),
+      (
+        _LobbyGlyph.sun,
+        'Face the light',
+        'Sit with a window or lamp in front of you.',
+      ),
+      (
+        _LobbyGlyph.wifi,
+        'Stay connected',
+        'Use a stable network and keep this tab open.',
+      ),
+    ];
+    return _card(
+      colors,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _sectionTitle('Tips for a great interview'),
+            const SizedBox(height: 8),
+            for (final (index, (icon, title, detail)) in tips.indexed)
+              if (stretch)
+                Flexible(child: _tipRow(colors, index, icon, title, detail))
+              else
+                _tipRow(colors, index, icon, title, detail),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tipRow(
+    _LobbyColors colors,
+    int index,
+    _LobbyGlyph icon,
+    String title,
+    String detail,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      decoration: BoxDecoration(
+        border: index == 0 ? null : Border(top: BorderSide(color: colors.line)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: colors.blueSurface,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(child: _lobbyIcon(icon, colors.blue)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: _lobbyText(14, weight: FontWeight.w700)),
+                const SizedBox(height: 1),
+                Text(
+                  detail,
+                  style: _lobbyText(13, color: colors.secondary, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeviceHelp() {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1136,4 +1160,9 @@ class _CandidateInterviewLobbyScreenState
       ),
     );
   }
+
+  Widget _sectionTitle(String title) => Semantics(
+    header: true,
+    child: Text(title, style: _lobbyText(14.5, weight: FontWeight.w700)),
+  );
 }

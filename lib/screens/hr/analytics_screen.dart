@@ -1,1063 +1,1083 @@
-import 'package:skillsense_ai/constants/adaptive_colors.dart';
-import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
-import '../../widgets/mobile_edge_shadow_wrapper.dart';
-import '../../widgets/recruiter_mobile_nav.dart';
-import 'dart:async';
 import 'dart:math' as math;
-
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import '../dashboard/command_deck_screen.dart' show GridPainter;
-import 'package:google_fonts/google_fonts.dart';
-
-import '../../services/auth_service.dart';
+import '../../constants/adaptive_colors.dart';
+import '../../models/application.dart';
+import '../../models/interview.dart';
+import '../../models/job.dart';
+import '../../models/recruitment_evidence.dart';
+import '../../services/application_service.dart';
+import '../../services/interview_service.dart';
+import '../../services/job_service.dart';
+import '../../services/recruitment_workflow_service.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import '../../widgets/recruiter_top_bar.dart';
+part 'analytics_overview.dart';
 
-const _surface = Color(0xFFFAFBFD);
-const _edge = Color(0xFFE7EBF2);
-const _text = Color(0xFF1B2740);
-const _text2 = Color(0xFF4A5875);
-const _text3 = Color(0xFF8290AD);
-const _accent = Color(0xFF3E6FF0);
-const _green = Color(0xFF0BB489);
-const _amber = Color(0xFFEBA738);
-const _red = Color(0xFFEC5C5A);
-const _track = Color(0xFFE6E8EC);
+const _edge = Color(0xFFDFE6F2),
+    _text = Color(0xFF17243D),
+    _muted = Color(0xFF536381),
+    _accent = Color(0xFF335ADD),
+    _green = Color(0xFF13AD8B),
+    _amber = Color(0xFF8A5017),
+    _track = Color(0xFFF7F9FE);
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key, this.loadOverview});
-
   final Future<dynamic> Function()? loadOverview;
-
   @override
   State<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
-class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  _AnalyticsOverview? _overview;
-  bool _loading = true;
-  String? _error;
-  int _requestId = 0;
-  Timer? _emptyRefresh;
-  bool _initialLoadStarted = false;
-  bool _overviewNotFound = false;
-  ModalRoute<dynamic>? _route;
+class RecruiterAnalyticsRecords {
+  const RecruiterAnalyticsRecords({
+    required this.jobs,
+    required this.applications,
+    required this.interviews,
+    this.scores = const {},
+  });
+  final List<Job> jobs;
+  final List<Application> applications;
+  final List<Interview> interviews;
+  final Map<String, double> scores;
+}
 
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  bool _loading = true, _scoresUnavailable = false;
+  String? _error, _job, _pipelineDetail, _activityDetail, _scoreDetail;
+  int _weeks = 4;
+  List<Job> _jobs = [];
+  List<Application> _applications = [];
+  List<Interview> _interviews = [];
+  Map<String, double> _scores = {};
+  _AnalyticsOverview? _injected;
   @override
   void initState() {
     super.initState();
-    if (widget.loadOverview == null) {
-      _overview = _AnalyticsOverview.reference;
-      _initialLoadStarted = true;
-      _loading = false;
-      return;
-    }
-    _emptyRefresh = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted &&
-          _route?.isCurrent == true &&
-          !_overviewNotFound &&
-          !_loading &&
-          _error == null &&
-          _overview?.hasData != true) {
-        _load();
-      }
-    });
+    _load();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _route = ModalRoute.of(context);
-    if (_initialLoadStarted || _route?.isCurrent != true) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _initialLoadStarted || _route?.isCurrent != true) {
-        return;
-      }
-      _initialLoadStarted = true;
-      _load();
-    });
-  }
-
-  @override
-  void dispose() {
-    _emptyRefresh?.cancel();
-    super.dispose();
-  }
-
+  bool _completed(Interview i) =>
+      i.status == 'DONE' &&
+      (i is! RecruiterInterview || i.completionOutcome == 'USABLE');
   Future<void> _load() async {
-    if (_overviewNotFound || !mounted || _route?.isCurrent != true) {
-      return;
-    }
-    final requestId = ++_requestId;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final payload = await widget.loadOverview!();
-      if (!mounted || requestId != _requestId) return;
-      setState(() {
-        _overview = _AnalyticsOverview.fromResponse(payload);
-        _loading = false;
-      });
-    } on DioException catch (error) {
-      if (!mounted || requestId != _requestId) return;
-      if (error.response?.statusCode == 401) {
-        await AuthService.signOut(context);
-        return;
-      }
-      if (error.response?.statusCode == 404) {
-        if (!_overviewNotFound) {
-          debugPrint(
-            'Analytics overview endpoint returned 404; stopping refreshes.',
+      if (widget.loadOverview != null) {
+        final payload = await widget.loadOverview!();
+        if (payload is RecruiterAnalyticsRecords) {
+          _jobs = payload.jobs;
+          _applications = payload.applications;
+          _interviews = payload.interviews;
+          _scores = payload.scores;
+        } else {
+          _injected = _AnalyticsOverview.fromResponse(payload);
+        }
+      } else {
+        final jobs = await JobService.listAllJobs();
+        final rows = await Future.wait([
+          for (final j in jobs) ApplicationService.listAllForJob(j.id),
+        ]);
+        final applications = rows.expand((r) => r).toList();
+        // The list endpoint omits decisions; hydrate decided records from detail.
+        final decided = [
+          for (var i = 0; i < applications.length; i++)
+            if (applications[i].status == ApplicationStatus.decision) i,
+        ];
+        for (var start = 0; start < decided.length; start += 6) {
+          await Future.wait(
+            decided.skip(start).take(6).map((index) async {
+              applications[index] = await ApplicationService.getApplication(
+                applications[index].id,
+              );
+            }),
           );
         }
-        _overviewNotFound = true;
+        final ids = applications.map((a) => a.id).toSet();
+        final interviews = (await InterviewService.listAll())
+            .where((i) => ids.contains(i.applicationId))
+            .toList();
+        final completed = interviews.where(_completed).toList();
+        final scores = <String, double>{};
+        var unavailable = false;
+        final service = RecruitmentWorkflowService();
+        // Bound concurrent reads and retain only published server evaluations.
+        for (var start = 0; start < completed.length; start += 6) {
+          await Future.wait(
+            completed.skip(start).take(6).map((i) async {
+              try {
+                final history = EvaluationHistory.fromJson(
+                  await service.request('/interviews/${i.id}/evaluations/'),
+                );
+                final latest = history.revisions.firstOrNull;
+                if (latest?.status == 'READY' &&
+                    latest?.publishedAt != null &&
+                    latest?.score != null) {
+                  scores[i.id] = latest!.score!;
+                }
+              } catch (_) {
+                unavailable = true;
+              }
+            }),
+          );
+        }
+        if (!mounted) return;
+        _jobs = jobs;
+        _applications = applications;
+        _interviews = interviews;
+        _scores = scores;
+        _scoresUnavailable = unavailable;
       }
-      // 404 or unpopulated analytics -> treat as empty state
-      setState(() {
-        _overview = null;
-        _loading = false;
-      });
+      if (mounted) setState(() => _loading = false);
     } catch (_) {
-      if (!mounted || requestId != _requestId) return;
-      setState(() {
-        _overview = null;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Could not load recruiting analytics. Please try again.';
+        });
+      }
     }
   }
 
-  static const _mobileBreakpoint = 760.0;
+  DateTime get _end {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day + 1);
+  }
 
-  bool get _mobile => MediaQuery.sizeOf(context).width < _mobileBreakpoint;
+  DateTime get _start => _end.subtract(Duration(days: _weeks * 7));
+  bool _inPeriod(DateTime? d) =>
+      d != null && !d.isBefore(_start) && d.isBefore(_end);
+  List<Application> get _cohort => _applications
+      .where((a) => (_job == null || a.job == _job) && _inPeriod(a.createdAt))
+      .toList();
+  List<Interview> get _attempts {
+    final ids = _applications
+        .where((a) => _job == null || a.job == _job)
+        .map((a) => a.id)
+        .toSet();
+    return _interviews
+        .where((i) => ids.contains(i.applicationId) && _inPeriod(i.scheduledAt))
+        .toList();
+  }
+
+  Set<String> get _interviewed =>
+      _interviews.where(_completed).map((i) => i.applicationId).toSet();
+  bool _reviewed(Application a) =>
+      _interviewed.contains(a.id) && a.recruiterDecision != null;
+  List<_AnalyticsPoint> get _funnel =>
+      _injected?.funnel ??
+      [
+        _AnalyticsPoint('Applied', _cohort.length),
+        _AnalyticsPoint(
+          'Screened',
+          _cohort
+              .where(
+                (a) =>
+                    a.assessment != null ||
+                    a.status != ApplicationStatus.applied &&
+                        a.status != ApplicationStatus.unknown &&
+                        a.status != ApplicationStatus.rejected,
+              )
+              .length,
+        ),
+        _AnalyticsPoint(
+          'Interviewed',
+          _cohort.where((a) => _interviewed.contains(a.id)).length,
+        ),
+        _AnalyticsPoint('Reviewed', _cohort.where(_reviewed).length),
+        _AnalyticsPoint(
+          'Advanced',
+          _cohort
+              .where(
+                (a) => _reviewed(a) && a.recruiterDecision?.outcome == 'HIRE',
+              )
+              .length,
+        ),
+      ];
+  String get _median {
+    final durations = <double>[];
+    for (final a in _cohort.where(_reviewed)) {
+      final date = a.recruiterDecision?.createdAt;
+      if (date != null &&
+          !date.isBefore(a.createdAt) &&
+          _interviews.any(
+            (i) =>
+                i.applicationId == a.id &&
+                _completed(i) &&
+                i.completedAt != null &&
+                !i.completedAt!.isAfter(date),
+          )) {
+        durations.add(date.difference(a.createdAt).inMinutes / 1440);
+      }
+    }
+    durations.sort();
+    return durations.isEmpty
+        ? '—'
+        : '${((durations[(durations.length - 1) ~/ 2] + durations[durations.length ~/ 2]) / 2).toStringAsFixed(1)} days';
+  }
+
+  TextStyle _style(
+    double size, {
+    Color color = _text,
+    bool bold = false,
+    bool display = false,
+  }) => TextStyle(
+    fontFamily: display ? 'Space Grotesk' : 'Inter',
+    fontSize: size,
+    height: 1.3,
+    color: context.themeForeground(color),
+    fontWeight: bold
+        ? (display ? FontWeight.w700 : FontWeight.w600)
+        : FontWeight.w400,
+  );
+  String _date(DateTime d) =>
+      '${d.day} ${const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.month - 1]}';
+  void _clearDetails() {
+    _pipelineDetail = null;
+    _activityDetail = null;
+    _scoreDetail = null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final mobile = _mobile;
+    final mobile = MediaQuery.sizeOf(context).width < 760;
     return Scaffold(
-      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
-      body: Stack(
-        children: [
-          // ── BASE GRADIENT ──
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    context.themeSurface(const Color(0xFFF1F4FC)),
-                    context.themeSurface(const Color(0xFFF5F7FC)),
-                  ],
-                ),
+      backgroundColor: context.themeCanvas(const Color(0xFFF0F3FB)),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(
+              height: 58,
+              child: RecruiterTopBar(
+                pageTitle: 'Analytics',
+                breadcrumbSegments: ['Analytics'],
+                mobileBreakpoint: 760,
               ),
             ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, style: _style(13)),
+                          TextButton(
+                            onPressed: _load,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _content(mobile),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: mobile
+          ? const RecruiterMobileNav(currentRoute: '/recruiter/analytics')
+          : null,
+    );
+  }
+
+  Widget _content(bool mobile) => SingleChildScrollView(
+    child: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1450),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            (MediaQuery.sizeOf(context).width * .04).clamp(16.0, 52.0),
+            27,
+            (MediaQuery.sizeOf(context).width * .04).clamp(16.0, 52.0),
+            52,
           ),
-
-          // ── GRID PATTERN OVERLAY (Web Only) ──
-          if (!mobile)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: GridPainter(
-                  color: context.themeOutline(const Color(0xFFE2E8F0)),
-                ),
-              ),
-            ),
-
-          // ── MAIN CONTENT ──
-          SafeArea(
-            bottom: false,
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final narrow = box.maxWidth < 690;
+              final completed =
+                  _injected?.interviewsRun ??
+                  _attempts.where(_completed).length;
+              final booked = _attempts.length;
+              final heading = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Recruiting analytics',
+                    style: _style(
+                      mobile ? 29 : 42,
+                      bold: true,
+                      display: true,
+                    ).copyWith(letterSpacing: -1.8, height: 1.05),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${_date(_start)}–${_date(_end.subtract(const Duration(days: 1)))} ${_end.subtract(const Duration(days: 1)).year}',
+                    style: _style(13, color: _muted),
+                  ),
+                ],
+              );
+              final filters = Row(
+                children: [
+                  Expanded(
+                    child: _filter<String>(
+                      'Job',
+                      _job == null
+                          ? 'All jobs'
+                          : _jobs.firstWhere((j) => j.id == _job).title,
+                      Icons.work_outline,
+                      [
+                        const PopupMenuItem(value: '', child: Text('All jobs')),
+                        for (final j in _jobs)
+                          PopupMenuItem(value: j.id, child: Text(j.title)),
+                      ],
+                      (v) => setState(() {
+                        _job = v == '' ? null : v;
+                        _clearDetails();
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _filter<int>(
+                      'Date range',
+                      'Last $_weeks weeks',
+                      Icons.calendar_today_outlined,
+                      [
+                        for (final w in [2, 4, 8])
+                          PopupMenuItem(value: w, child: Text('Last $w weeks')),
+                      ],
+                      (v) => setState(() {
+                        _weeks = v;
+                        _clearDetails();
+                      }),
+                    ),
+                  ),
+                ],
+              );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (box.maxWidth < 1000) ...[
+                    heading,
+                    const SizedBox(height: 13),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(width: 396, child: filters),
+                    ),
+                  ] else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(child: heading),
+                        SizedBox(width: 396, child: filters),
+                      ],
+                    ),
+                  const SizedBox(height: 19),
+                  _grid(box.maxWidth, narrow ? 2 : 4, [
+                    _kpi(
+                      'Applications received',
+                      '${_funnel.firstOrNull?.count ?? 0}',
+                      'Applications in this period',
+                      Icons.people_outline,
+                    ),
+                    _kpi(
+                      'Interviews completed',
+                      '$completed',
+                      'Completed interview attempts',
+                      Icons.mic_none,
+                    ),
+                    _kpi(
+                      'Interview completion',
+                      booked == 0
+                          ? '—'
+                          : '${(completed / booked * 100).round()}%',
+                      '$completed of $booked booked',
+                      Icons.check_circle_outline,
+                      highlight: true,
+                    ),
+                    _kpi(
+                      'Median time to decision',
+                      _median,
+                      'Application to first post-interview decision',
+                      Icons.schedule,
+                    ),
+                  ]),
+                  const SizedBox(height: 14),
+                  if (narrow) ...[
+                    _pipeline(),
+                    const SizedBox(height: 14),
+                    _activity(),
+                  ] else
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(flex: 100, child: _pipeline()),
+                          const SizedBox(width: 14),
+                          Expanded(flex: 115, child: _activity()),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                  if (box.maxWidth < 850) ...[
+                    _roles(),
+                    const SizedBox(height: 14),
+                    _distribution(),
+                  ] else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _roles()),
+                        const SizedBox(width: 14),
+                        Expanded(child: _distribution()),
+                      ],
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    ),
+  );
+  Widget _filter<T>(
+    String caption,
+    String value,
+    IconData icon,
+    List<PopupMenuEntry<T>> items,
+    ValueChanged<T> selected,
+  ) => PopupMenuButton<T>(
+    onSelected: selected,
+    itemBuilder: (_) => items,
+    tooltip: 'Filter by ${caption.toLowerCase()}',
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: context.themeSurface(Colors.white),
+        border: Border.all(color: context.themeOutline(_edge)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          _icon(icon, 28),
+          const SizedBox(width: 8),
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  height: mobile ? 58 : 49,
-                  child: RecruiterTopBar(
-                    pageTitle: 'Analytics',
-                    breadcrumbSegments: const ['Analytics'],
-                    showTrailingButton: !mobile,
-                    mobileBreakpoint: _mobileBreakpoint,
-                  ),
-                ),
-                Expanded(
-                  child: MobileEdgeShadowWrapper(
-                    child: _loading
-                        ? const Center(
-                            child: CircularProgressIndicator(color: _accent),
-                          )
-                        : _error != null
-                        ? _errorState()
-                        : _overview?.hasData == true
-                        ? _liveLayout(_overview!, mobile)
-                        : _emptyState(mobile),
-                  ),
+                Text(caption, style: _style(11, color: _muted)),
+                Text(
+                  value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _style(13, bold: true),
                 ),
               ],
             ),
           ),
+          const Icon(Icons.keyboard_arrow_down, size: 15),
+        ],
+      ),
+    ),
+  );
+  Widget _icon(IconData icon, double size) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: context.themeSurface(const Color(0xFFE5ECFF)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Icon(icon, size: 15, color: context.themeForeground(_accent)),
+  );
+  Widget _grid(double width, int columns, List<Widget> children) => Column(
+    children: [
+      for (var start = 0; start < children.length; start += columns) ...[
+        if (start > 0) const SizedBox(height: 12),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (
+                var i = start;
+                i < math.min(start + columns, children.length);
+                i++
+              ) ...[
+                if (i > start) const SizedBox(width: 12),
+                Expanded(child: children[i]),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ],
+  );
+  Widget _card(Widget child, {bool highlight = false}) => Container(
+    decoration: BoxDecoration(
+      color: context.themeSurface(Colors.white),
+      gradient: highlight
+          ? LinearGradient(
+              colors: [
+                context.themeSurface(Colors.white),
+                context.themeSurface(const Color(0xFFE5ECFF)),
+              ],
+            )
+          : null,
+      border: Border.all(
+        color: context.themeOutline(
+          highlight ? const Color(0xFFCAD7FF) : _edge,
+        ),
+      ),
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x1834518A),
+          blurRadius: 36,
+          spreadRadius: -26,
+          offset: Offset(0, 14),
+        ),
+      ],
+    ),
+    child: child,
+  );
+  Widget _kpi(
+    String label,
+    String value,
+    String note,
+    IconData icon, {
+    bool highlight = false,
+  }) => _card(
+    Container(
+      constraints: const BoxConstraints(minHeight: 139),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: _style(12, color: _muted, bold: true),
+                ),
+              ),
+              const SizedBox(width: 4),
+              _icon(icon, 29),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            value,
+            style: _style(
+              34,
+              bold: true,
+            ).copyWith(height: 1.14, letterSpacing: -1.2),
+          ),
+          const SizedBox(height: 8),
+          Text(note, style: _style(12, color: _muted).copyWith(height: 1.45)),
+        ],
+      ),
+    ),
+    highlight: highlight,
+  );
+  Widget _panel(
+    String title,
+    String subtitle,
+    Widget child, {
+    Widget? action,
+    double? height,
+  }) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(17, 16, 17, 11),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: _style(
+                        18,
+                        bold: true,
+                        display: true,
+                      ).copyWith(letterSpacing: -.45, height: 1.15),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      subtitle,
+                      style: _style(12, color: _muted).copyWith(height: 1.45),
+                    ),
+                  ],
+                ),
+              ),
+              if (action != null) action,
+            ],
+          ),
+        ),
+        if (height != null)
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(17, 0, 17, 15),
+              child: child,
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(17, 0, 17, 15),
+            child: child,
+          ),
+      ],
+    );
+    return _card(
+      height == null ? content : SizedBox(height: height, child: content),
+    );
+  }
 
-          // ── MOBILE FLOATING BOTTOM DOCK ──
-          if (mobile)
-            Positioned(left: 0, right: 0, bottom: 0, child: _mobileDock()),
+  Widget _note(String text) => Container(
+    width: double.infinity,
+    margin: const EdgeInsets.only(top: 9),
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+    decoration: BoxDecoration(
+      color: context.themeSurface(_track),
+      border: Border.all(color: context.themeOutline(_edge)),
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Text(text, style: _style(12, color: _muted).copyWith(height: 1.55)),
+  );
+  Widget _pipeline() {
+    final steps = _funnel;
+    final maximum = steps.fold<int>(1, (a, b) => math.max(a, b.count));
+    return _panel(
+      'Pipeline conversion',
+      'Progression of applicants who applied in this period',
+      Column(
+        children: [
+          Row(
+            children: [
+              const Spacer(),
+              SizedBox(
+                width: 44,
+                child: Text(
+                  'Count',
+                  textAlign: TextAlign.right,
+                  style: _style(11, color: _muted),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 66,
+                child: Text(
+                  'From prior',
+                  textAlign: TextAlign.right,
+                  style: _style(11, color: _muted),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          for (final (index, stage) in steps.indexed)
+            InkWell(
+              onTap: () => setState(
+                () => _pipelineDetail =
+                    '${stage.count} applicants reached ${stage.label.toLowerCase()}.',
+              ),
+              borderRadius: BorderRadius.circular(7),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 90,
+                      child: Text(stage.label, style: _style(12, bold: true)),
+                    ),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: stage.count / maximum,
+                          minHeight: 9,
+                          color: index < 2 ? _accent : _green,
+                          backgroundColor: context.themeSurface(_track),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 44,
+                      child: Text(
+                        '${stage.count}',
+                        textAlign: TextAlign.right,
+                        style: _style(12, bold: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 58,
+                      child: Text(
+                        index == 0 || steps[index - 1].count == 0
+                            ? '—'
+                            : '${(stage.count / steps[index - 1].count * 100).round()}%',
+                        textAlign: TextAlign.right,
+                        style: _style(12, color: _muted, bold: true),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          _note(
+            _pipelineDetail ?? 'Select a stage to inspect cohort progression.',
+          ),
         ],
       ),
     );
   }
 
-  // ── CENTERED EMPTY STATE ───────────────────────────────────────────────────
-  Widget _emptyState(bool mobile) => LayoutBuilder(
-    builder: (context, constraints) => SingleChildScrollView(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: constraints.maxHeight),
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 24,
-              bottom: mobile ? 84 : 24,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+  Widget _activity() {
+    final bins = List.generate(_weeks, (index) {
+      final start = _start.add(Duration(days: index * 7));
+      final end = start.add(const Duration(days: 7));
+      final rows = _attempts.where(
+        (i) => !i.scheduledAt!.isBefore(start) && i.scheduledAt!.isBefore(end),
+      );
+      return (_date(start), rows.length, rows.where(_completed).length);
+    });
+    return _panel(
+      'Interview activity',
+      'Interview attempts by scheduled week',
+      Column(
+        children: [
+          if (MediaQuery.sizeOf(context).width < 1000)
+            Row(
               children: [
-                // Icon tile (◈, 64px web / 54px mobile)
-                Container(
-                  width: mobile ? 54 : 64,
-                  height: mobile ? 54 : 64,
-                  decoration: BoxDecoration(
-                    color: context.themeSurface(const Color(0xFFF1F5F9)),
-                    border: Border.all(
-                      color: context.themeOutline(const Color(0xFFE3EAF4)),
-                    ),
-                    borderRadius: BorderRadius.circular(mobile ? 17 : 20),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '◈',
-                    style: TextStyle(
-                      fontSize: mobile ? 20 : 24,
-                      color: context.themeForeground(const Color(0xFF8190A8)),
-                      height: 1.0,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Heading
-                Text(
-                  mobile ? 'No data yet' : 'No analytics yet',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    fontSize: mobile ? 15 : 18,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: mobile ? -0.2 : -0.45,
-                    color: context.themeForeground(const Color(0xFF17233B)),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Helper text
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: mobile ? 280 : 380),
-                  child: Text(
-                    mobile
-                        ? 'Metrics appear after your first interviews.'
-                        : 'Hiring funnel, score trends and time-to-hire appear once your first candidates move through a role.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: mobile ? 11 : 12.5,
-                      height: 1.65,
-                      color: context.themeForeground(const Color(0xFF8190A8)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Primary CTA — indigo gradient
-                Container(
-                  height: mobile ? 38 : 40,
-                  decoration: BoxDecoration(
-                    gradient: RecruiterButtonStyle.primaryGradient,
-                    borderRadius: BorderRadius.circular(11),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4D7BFA).withValues(alpha: 0.28),
-                        blurRadius: 14,
-                        spreadRadius: 1,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    key: const Key('analytics-job-listings'),
-                    style: RecruiterButtonStyle.primary(
-                      ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: mobile ? 22 : 26,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                      ),
-                    ),
-                    onPressed: () => Navigator.of(
-                      context,
-                    ).pushNamed('/recruiter/job-listings'),
-                    child: Text(
-                      'Go to job listings',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                if (!mobile) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Charts unlock after the first interviews finish',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: 10.5,
-                      color: context.themeForeground(const Color(0xFF94A3B8)),
-                    ),
-                  ),
-                ],
+                _legend('Booked', const Color(0xFFE5ECFF)),
+                const SizedBox(width: 13),
+                _legend('Completed', _green),
               ],
             ),
+          const SizedBox(height: 11),
+          _plot(
+            bins,
+            158,
+            (i) => setState(
+              () => _activityDetail =
+                  '${bins[i].$1}: ${bins[i].$2} booked · ${bins[i].$3} completed.',
+            ),
           ),
+          _note(
+            _activityDetail ??
+                '${_attempts.length} booked · ${_attempts.where(_completed).length} completed in this period.',
+          ),
+        ],
+      ),
+      action: MediaQuery.sizeOf(context).width < 1000
+          ? null
+          : Wrap(
+              spacing: 13,
+              runSpacing: 6,
+              children: [
+                _legend('Booked', const Color(0xFFE5ECFF)),
+                _legend('Completed', _green),
+              ],
+            ),
+    );
+  }
+
+  Widget _legend(String text, Color color) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          color: color,
+          border: Border.all(color: color == _green ? _green : _accent),
+          borderRadius: BorderRadius.circular(2),
         ),
       ),
-    ),
-  );
-
-  Widget _errorState() => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          _error!,
-          style: GoogleFonts.inter(color: context.themeForeground(_text2)),
-        ),
-        TextButton(onPressed: _load, child: const Text('Retry')),
-      ],
-    ),
-  );
-
-  // ── MOBILE FLOATING BOTTOM DOCK ────────────────────────────────────────────
-  Widget _mobileDock() => const RecruiterMobileNav(
-    currentRoute: '/recruiter/analytics',
-    margin: EdgeInsets.fromLTRB(16, 0, 16, 18),
-    radius: 24,
-  );
-
-  Widget _liveLayout(_AnalyticsOverview data, bool mobile) =>
-      SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(14, 18, 14, mobile ? 110 : 48),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 620;
-                final distribution = _histogram(data);
-                final funnel = _funnel(data.funnel);
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _grid(
-                      width: constraints.maxWidth,
-                      columns: wide
-                          ? 4
-                          : constraints.maxWidth >= 300
-                          ? 2
-                          : 1,
-                      gap: 11,
-                      children: [
-                        _kpi(
-                          'TIME TO HIRE',
-                          data.timeToHire == null
-                              ? '—'
-                              : '${data.timeToHire!.toStringAsFixed(1)}d',
-                          data.timeToHireNote,
-                          highlight: true,
-                        ),
-                        _kpi(
-                          'INTERVIEWS RUN',
-                          data.interviewsRun?.toString() ?? '—',
-                          data.interviewsNote,
-                          favorable: false,
-                        ),
-                        _kpi(
-                          'COST PER HIRE',
-                          data.costPerHire ?? '—',
-                          data.costNote,
-                        ),
-                        _kpi(
-                          'OFFER ACCEPT',
-                          data.offerAcceptance ?? '—',
-                          data.offerNote,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 11),
-                    if (wide)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: distribution),
-                          const SizedBox(width: 11),
-                          Expanded(child: funnel),
-                        ],
-                      )
-                    else ...[
-                      distribution,
-                      const SizedBox(height: 11),
-                      funnel,
-                    ],
-                    const SizedBox(height: 11),
-                    _roleHealth(data.roleHealth),
-                    if (identical(data, _AnalyticsOverview.reference))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 9, right: 4),
-                        child: Text(
-                          'Sample data',
-                          textAlign: TextAlign.right,
-                          style: _bodyStyle(9, color: _text3),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-      );
-
-  Widget _grid({
-    required double width,
-    required int columns,
-    required double gap,
-    required List<Widget> children,
-  }) => Wrap(
-    spacing: gap,
-    runSpacing: gap,
-    children: [
-      for (final child in children)
-        SizedBox(width: (width - (columns - 1) * gap) / columns, child: child),
+      const SizedBox(width: 5),
+      Text(text, style: _style(11, color: _muted)),
     ],
   );
-
-  Widget _card(Widget child, {bool highlight = false}) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: highlight
-          ? context.themeSurface(Colors.white)
-          : context.themeSurface(_surface),
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: highlight ? const Color(0x343E6FF0) : const Color(0x140F172A),
-          blurRadius: highlight ? 23 : 15,
-          offset: const Offset(0, 7),
-        ),
-      ],
-    ),
-    child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
-  );
-
-  Widget _kpi(
-    String label,
-    String value,
-    String? note, {
-    bool highlight = false,
-    bool favorable = true,
-  }) => _card(
-    Stack(
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 88),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(15, 12, 13, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: _eyebrow()),
-                const SizedBox(height: 5),
-                Text(
-                  value,
-                  style: _bodyStyle(
-                    24,
-                    family: 'JetBrains Mono',
-                    weight: FontWeight.w700,
-                  ),
-                ),
-                if (note != null && note.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    note,
-                    style: _bodyStyle(
-                      9,
-                      color: favorable ? _green : _text3,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
+  Widget _plot(
+    List<(String, int, int?)> bins,
+    double height,
+    ValueChanged<int> select,
+  ) {
+    final maximum = bins.fold<int>(
+      2,
+      (a, b) => math.max(a, math.max(b.$2, b.$3 ?? 0)),
+    );
+    return SizedBox(
+      height: height,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 27,
+            child: SizedBox(
+              height: height - 22,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (final n in [maximum, maximum ~/ 2, 0])
+                    Text('$n', style: _style(11, color: _muted)),
                 ],
-              ],
+              ),
             ),
           ),
-        ),
-        if (highlight)
-          const Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: SizedBox(
-              height: 2,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.transparent,
-                      _accent,
-                      Color(0xFF8176F5),
-                      Colors.transparent,
+          const SizedBox(width: 6),
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  bottom: 22,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      for (var i = 0; i < 3; i++)
+                        Divider(height: 1, color: context.themeOutline(_edge)),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ),
-      ],
-    ),
-    highlight: highlight,
-  );
-
-  Widget _panel(String title, Widget body, {Widget? badge, Widget? action}) =>
-      _card(
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              constraints: const BoxConstraints(minHeight: 37),
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: context.themeOutline(_edge)),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            style: _bodyStyle(11, weight: FontWeight.w700),
-                          ),
-                        ),
-                        if (badge != null) ...[const SizedBox(width: 6), badge],
-                      ],
-                    ),
-                  ),
-                  if (action != null) action,
-                ],
-              ),
-            ),
-            body,
-          ],
-        ),
-      );
-
-  Widget _histogram(_AnalyticsOverview data) {
-    final bins = data.histogram;
-    final maximum = bins.fold<int>(1, (max, bin) => math.max(max, bin.count));
-    final total = data.interviewsRun;
-    return _panel(
-      'Score distribution',
-      SizedBox(
-        height: 135,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(15, 12, 15, 12),
-          child: Column(
-            children: [
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Row(
                   children: [
                     for (final (index, bin) in bins.indexed)
                       Expanded(
-                        child: Tooltip(
-                          message: '${bin.label}: ${bin.count}',
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 5),
-                            child: FractionallySizedBox(
-                              heightFactor:
-                                  bin.count.clamp(0, maximum) / maximum,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: context.themeForeground(
-                                    [_red, _amber, _accent, _green][index % 4],
-                                  ),
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(4),
+                        child: InkWell(
+                          onTap: () => select(index),
+                          child: Tooltip(
+                            message:
+                                '${bin.$1}: ${bin.$2}${bin.$3 == null ? '' : ' booked, ${bin.$3} completed'}',
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      _plotBar(
+                                        bin.$2,
+                                        maximum,
+                                        height - 22,
+                                        bin.$3 == null
+                                            ? _accent
+                                            : const Color(0xFFE5ECFF),
+                                        outline: bin.$3 != null,
+                                      ),
+                                      if (bin.$3 != null) ...[
+                                        const SizedBox(width: 3),
+                                        _plotBar(
+                                          bin.$3!,
+                                          maximum,
+                                          height - 22,
+                                          _green,
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
-                              ),
+                                SizedBox(
+                                  height: 22,
+                                  child: Center(
+                                    child: Text(
+                                      bin.$1,
+                                      style: _style(10, color: _muted),
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
                       ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 7),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  for (final label in ['0', '40', '55', '70', '100'])
-                    Text(label, style: _eyebrow()),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-      badge: total == null
-          ? null
-          : Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(
-                color: context.themeSurface(const Color(0xFFE4ECFF)),
-                border: Border.all(
-                  color: context.themeOutline(const Color(0xFFCEDAFF)),
-                ),
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Text(
-                '$total INTERVIEWS',
-                style: _eyebrow(color: const Color(0xFF3755C6), size: 7),
-              ),
+              ],
             ),
-    );
-  }
-
-  Widget _funnel(List<_AnalyticsPoint> steps) {
-    final maximum = steps.fold<int>(
-      1,
-      (max, step) => math.max(max, step.count),
-    );
-    return _panel(
-      'Pipeline conversion',
-      ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 135),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(15, 8, 15, 12),
-          child: Column(
-            children: [
-              if (steps.isEmpty)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'No pipeline data',
-                    style: _bodyStyle(10, color: _text3),
-                  ),
-                ),
-              for (final (index, step) in steps.indexed)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 80,
-                        child: Text(
-                          step.label.toUpperCase(),
-                          style: _eyebrow(),
-                        ),
-                      ),
-                      Expanded(
-                        child: _bar(
-                          step.count.clamp(0, maximum) / maximum,
-                          index < 2 ? _accent : _green,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        width: 27,
-                        child: Text(
-                          '${step.count}',
-                          textAlign: TextAlign.right,
-                          style: _bodyStyle(
-                            9,
-                            color: _text2,
-                            family: 'JetBrains Mono',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _roleHealth(List<_RoleHealth> roles) => _panel(
-    'Role health',
-    Padding(
-      padding: const EdgeInsets.fromLTRB(15, 4, 15, 13),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          return roles.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  child: Text(
-                    'No role health data',
-                    style: _bodyStyle(10, color: _text3),
-                  ),
-                )
-              : _grid(
-                  width: width,
-                  columns: width >= 580
-                      ? 4
-                      : width >= 270
-                      ? 2
-                      : 1,
-                  gap: 9,
-                  children: [for (final role in roles) _roleCard(role)],
-                );
-        },
-      ),
-    ),
-    action: TextButton(
-      onPressed: () =>
-          Navigator.of(context).pushNamed('/recruiter/job-listings'),
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        minimumSize: Size.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: Text(
-        'All roles ›',
-        style: _bodyStyle(9, color: _text3, weight: FontWeight.w600),
-      ),
-    ),
-  );
-
-  Widget _roleCard(_RoleHealth role) {
-    final (statusColor, defaultBar) = switch (role.status
-        .toLowerCase()
-        .split('·')
-        .first
-        .trim()) {
-      'healthy' => (const Color(0xFF087C63), _green),
-      'slow' => (const Color(0xFFA36618), _amber),
-      'at risk' || 'at_risk' => (const Color(0xFFB83C3D), _red),
-      _ => (_text3, _accent),
-    };
-    final barColor = role.barColor ?? defaultBar;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
-      decoration: BoxDecoration(
-        border: Border.all(color: context.themeOutline(_edge)),
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            role.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _bodyStyle(10, weight: FontWeight.w600),
-          ),
-          Text(
-            role.daysOpen == null
-                ? role.status
-                : '${role.status} · ${role.daysOpen}d open',
-            style: _bodyStyle(9, color: statusColor, weight: FontWeight.w500),
-          ),
-          const SizedBox(height: 7),
-          _bar(role.progress ?? 0, barColor),
         ],
       ),
     );
   }
 
-  Widget _bar(double value, Color color) => ClipRRect(
-    borderRadius: BorderRadius.circular(4),
-    child: LinearProgressIndicator(
-      value: value.clamp(0.0, 1.0),
-      color: context.themeForeground(color),
-      backgroundColor: context.themeChartTrack(_track),
-      minHeight: 3,
-      trackGap: 0,
-      borderRadius: BorderRadius.circular(4),
+  Widget _plotBar(
+    int count,
+    int maximum,
+    double height,
+    Color color, {
+    bool outline = false,
+  }) => Flexible(
+    child: Container(
+      width: 25,
+      height: height * count / maximum,
+      decoration: BoxDecoration(
+        color: color,
+        border: outline && count > 0 ? Border.all(color: _accent) : null,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+      ),
     ),
   );
-
-  TextStyle _eyebrow({Color color = _text3, double size = 8}) => _bodyStyle(
-    size,
-    color: color,
-    family: 'Space Grotesk',
-    weight: FontWeight.w700,
-  ).copyWith(letterSpacing: 1);
-
-  TextStyle _bodyStyle(
-    double size, {
-    Color color = _text,
-    String family = 'Inter',
-    FontWeight weight = FontWeight.w400,
-  }) => TextStyle(
-    fontFamily: family,
-    fontSize: size,
-    color: context.themeForeground(color),
-    fontWeight: weight,
-  );
-}
-
-class _AnalyticsOverview {
-  const _AnalyticsOverview({
-    required this.interviewsRun,
-    required this.timeToHire,
-    required this.costPerHire,
-    required this.hires,
-    required this.pipelineMovement,
-    required this.histogram,
-    required this.funnel,
-    required this.roleHealth,
-    this.offerAcceptance,
-    this.timeToHireNote,
-    this.interviewsNote,
-    this.costNote,
-    this.offerNote,
-  });
-
-  static const reference = _AnalyticsOverview(
-    interviewsRun: 142,
-    timeToHire: 11.2,
-    costPerHire: 'PKR 8.4k',
-    offerAcceptance: '83%',
-    timeToHireNote: '−3.1d vs manual',
-    interviewsNote: 'this quarter',
-    costNote: '−62% vs agency',
-    offerNote: '+9pts',
-    hires: 12,
-    pipelineMovement: null,
-    histogram: [],
-    funnel: [
-      _AnalyticsPoint('Applied', 412),
-      _AnalyticsPoint('Screened', 268),
-      _AnalyticsPoint('Interviewed', 142),
-      _AnalyticsPoint('Selected', 19),
-      _AnalyticsPoint('Hired', 12),
-    ],
-    roleHealth: [
-      _RoleHealth('Senior Django Dev', 'healthy', daysOpen: 11, progress: .74),
-      _RoleHealth('Frontend (React)', 'slow', daysOpen: 26, progress: .42),
-      _RoleHealth('ML / AI Engineer', 'at risk', daysOpen: 34, progress: .24),
-      _RoleHealth(
-        'Full Stack Dev',
-        'healthy',
-        daysOpen: 8,
-        progress: .66,
-        barColor: _accent,
+  Widget _roles() {
+    final roles = _jobs.where((j) => _job == null || j.id == _job).toList();
+    return _panel(
+      'Role health',
+      'Applicant cohorts and outstanding recruiter decisions',
+      height: 340,
+      LayoutBuilder(
+        builder: (context, box) => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: box.maxWidth),
+            child: DataTable(
+              horizontalMargin: 7,
+              columnSpacing: 14,
+              headingRowHeight: 32,
+              dataRowMinHeight: 55,
+              dataRowMaxHeight: 55,
+              headingTextStyle: _style(11, color: _muted, bold: true),
+              dataTextStyle: _style(12, bold: true),
+              dividerThickness: .6,
+              columns: const [
+                DataColumn(label: Text('Job')),
+                DataColumn(label: Text('Applied'), numeric: true),
+                DataColumn(label: Text('Interviewed'), numeric: true),
+                DataColumn(label: Text('Review queue')),
+              ],
+              rows: [
+                for (final j in roles) _roleRow(j),
+                if (roles.isEmpty)
+                  const DataRow(
+                    cells: [
+                      DataCell(Text('No jobs in this period')),
+                      DataCell(Text('0')),
+                      DataCell(Text('0')),
+                      DataCell(Text('—')),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
-    ],
-  );
-
-  final int? interviewsRun, hires, pipelineMovement;
-  final double? timeToHire;
-  final String? costPerHire, offerAcceptance;
-  final String? timeToHireNote, interviewsNote, costNote, offerNote;
-  final List<_AnalyticsPoint> histogram, funnel;
-  final List<_RoleHealth> roleHealth;
-
-  bool get hasHistogram => histogram.any((point) => point.count > 0);
-  bool get hasData =>
-      (interviewsRun ?? 0) > 0 ||
-      (hires ?? 0) > 0 ||
-      (pipelineMovement ?? 0) > 0 ||
-      (timeToHire ?? 0) > 0 ||
-      (costPerHire?.isNotEmpty ?? false) ||
-      offerAcceptance != null ||
-      roleHealth.isNotEmpty ||
-      hasHistogram ||
-      funnel.any(
-        (point) => point.label.toUpperCase() != 'APPLIED' && point.count > 0,
-      );
-
-  factory _AnalyticsOverview.fromResponse(dynamic response) {
-    var root = _map(response);
-    if (root['data'] is Map) root = _map(root['data']);
-    if (root['overview'] is Map) root = _map(root['overview']);
-    final metrics = _map(root['metrics'] ?? root['kpis']);
-    dynamic read(List<String> names) {
-      for (final name in names) {
-        if (metrics.containsKey(name)) return metrics[name];
-        if (root.containsKey(name)) return root[name];
-      }
-      return null;
-    }
-
-    final interviewRecords = read(['interviews', 'interview_data']);
-    final completedRecords = interviewRecords is List
-        ? interviewRecords
-              .where(
-                (item) =>
-                    item is Map &&
-                    [
-                      'COMPLETED',
-                      'DECIDED',
-                    ].contains(item['status']?.toString().toUpperCase()),
-              )
-              .length
-        : 0;
-    final offer = read([
-      'offer_acceptance_percentage',
-      'offer_acceptance_rate',
-      'offer_acceptance',
-    ]);
-    final offerValue = _number(offer);
-    final isRate =
-        read(['offer_acceptance_percentage']) == null &&
-        read(['offer_acceptance_rate']) != null;
-    return _AnalyticsOverview(
-      interviewsRun:
-          _number(
-            read([
-              'interviews_completed',
-              'completed_interviews',
-              'interviews_run',
-              'total_interviews',
-              'interview_count',
-            ]),
-          )?.toInt() ??
-          (completedRecords > 0 ? completedRecords : null),
-      timeToHire: _number(
-        read([
-          'time_to_hire_days',
-          'average_time_to_hire_days',
-          'avg_time_to_hire',
-          'time_to_hire',
-        ]),
-      )?.toDouble(),
-      costPerHire: read(['cost_per_hire', 'average_cost_per_hire'])?.toString(),
-      offerAcceptance: offer is String && offer.endsWith('%')
-          ? offer
-          : offerValue == null
+      action: _job == null
           ? null
-          : '${(offerValue * (isRate && offerValue <= 1 ? 100 : 1)).toStringAsFixed(0)}%',
-      timeToHireNote: read(['time_to_hire_note'])?.toString(),
-      interviewsNote: read(['interviews_note'])?.toString(),
-      costNote: read(['cost_per_hire_note'])?.toString(),
-      offerNote: read(['offer_acceptance_note'])?.toString(),
-      hires: _number(read(['hires', 'total_hires', 'hired_count']))?.toInt(),
-      pipelineMovement: _number(
-        read(['pipeline_movement', 'candidates_advanced', 'stage_transitions']),
-      )?.toInt(),
-      histogram: _points(
-        read([
-          'score_distribution',
-          'score_histogram',
-          'histogram',
-          'match_score_distribution',
-        ]),
-      ),
-      funnel: _points(
-        read(['pipeline_funnel', 'funnel', 'pipeline_conversion', 'pipeline']),
-      ),
-      roleHealth: _roles(read(['role_health', 'roles_health'])),
+          : TextButton(
+              onPressed: () => setState(() {
+                _job = null;
+                _clearDetails();
+              }),
+              child: Text('Show all jobs', style: _style(11, color: _accent)),
+            ),
     );
   }
 
-  static Map<String, dynamic> _map(dynamic value) => value is Map
-      ? value.map((key, item) => MapEntry(key.toString(), item))
-      : <String, dynamic>{};
-
-  static num? _number(dynamic value) {
-    if (value is num) return value;
-    if (value is String) return num.tryParse(value.replaceAll(',', ''));
-    if (value is Map) return _number(value['value'] ?? value['count']);
-    return null;
-  }
-
-  static List<_AnalyticsPoint> _points(dynamic value) {
-    if (value is Map) {
-      for (final key in ['bins', 'steps', 'stages', 'results', 'data']) {
-        if (value[key] is List) return _points(value[key]);
-      }
-      return value.entries
-          .map(
-            (entry) => _AnalyticsPoint(
-              entry.key.toString(),
-              _number(entry.value)?.toInt() ?? 0,
+  DataRow _roleRow(Job j) {
+    final rows = _cohort.where((a) => a.job == j.id).toList();
+    final interviewed = rows.where((a) => _interviewed.contains(a.id)).length;
+    final pending = rows
+        .where((a) => _interviewed.contains(a.id) && !_reviewed(a))
+        .length;
+    return DataRow(
+      cells: [
+        DataCell(
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 230),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  j.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _style(13, bold: true),
+                ),
+                Text(
+                  '${DateTime.now().difference(j.createdAt).inDays}d open',
+                  style: _style(12, color: _muted),
+                ),
+              ],
             ),
-          )
-          .toList();
-    }
-    if (value is! List) return const [];
-    return [
-      for (final raw in value)
-        if (raw is Map)
-          _AnalyticsPoint(
-            (raw['label'] ??
-                    raw['range'] ??
-                    raw['bucket'] ??
-                    raw['score_range'] ??
-                    raw['stage'] ??
-                    raw['status'] ??
-                    '')
-                .toString(),
-            _number(
-                  raw['count'] ??
-                      raw['value'] ??
-                      raw['total'] ??
-                      raw['applications'],
-                )?.toInt() ??
-                0,
           ),
-    ];
+          onTap: () => setState(() {
+            _job = j.id;
+            _clearDetails();
+          }),
+        ),
+        DataCell(Text('${rows.length}')),
+        DataCell(Text('$interviewed')),
+        DataCell(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.circle, size: 6, color: pending > 0 ? _amber : _green),
+              const SizedBox(width: 6),
+              Text(
+                pending > 0 ? '$pending awaiting' : 'Up to date',
+                style: _style(12, color: _muted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
-  static List<_RoleHealth> _roles(dynamic value) {
-    if (value is! List) return const [];
-    return [
-      for (final raw in value)
-        if (raw is Map)
-          _RoleHealth(
-            (raw['title'] ?? raw['role'] ?? raw['job_title'] ?? '').toString(),
-            (raw['status'] ?? raw['health'] ?? '').toString(),
-            daysOpen: _number(raw['days_open'])?.toInt(),
-            progress: _number(raw['progress'])?.toDouble(),
+  Widget _distribution() {
+    final scores = _attempts
+        .where(_completed)
+        .map((i) => _scores[i.id])
+        .whereType<double>()
+        .toList();
+    final bins = List.generate(
+      5,
+      (i) => (
+        '${i * 20}–${i == 4 ? 100 : i * 20 + 19}',
+        scores.where((s) => (s / 20).floor().clamp(0, 4) == i).length,
+        null,
+      ),
+    );
+    final injected = _injected?.histogram;
+    final plotted = injected != null && injected.isNotEmpty
+        ? [for (final p in injected) (p.label, p.count, null)]
+        : bins;
+    return _panel(
+      'Interview score distribution',
+      '${scores.length} published scores · out of 100',
+      height: 340,
+      Column(
+        children: [
+          const SizedBox(height: 11),
+          _plot(
+            plotted,
+            103,
+            (i) => setState(
+              () => _scoreDetail =
+                  '${plotted[i].$2} interviews scored ${plotted[i].$1}.',
+            ),
           ),
-    ];
+          _note(
+            _scoreDetail ??
+                (_scoresUnavailable
+                    ? 'Some evaluation scores could not load. Refresh to retry.'
+                    : scores.isEmpty
+                    ? 'No published scores in this period.'
+                    : '${scores.length} scored interviews. Unpublished scores are excluded.'),
+          ),
+        ],
+      ),
+    );
   }
-}
-
-class _AnalyticsPoint {
-  const _AnalyticsPoint(this.label, this.count);
-  final String label;
-  final int count;
-}
-
-class _RoleHealth {
-  const _RoleHealth(
-    this.title,
-    this.status, {
-    this.daysOpen,
-    this.progress,
-    this.barColor,
-  });
-  final String title, status;
-  final int? daysOpen;
-  final double? progress;
-  final Color? barColor;
 }

@@ -215,6 +215,10 @@ class EvaluationRevision {
           ? null
           : AnswerExtraction.fromJson(object(j['extraction']));
   bool get pending => const {'QUEUED', 'PROCESSING'}.contains(status);
+  int get assessedCount =>
+      answers.where((answer) => answer.scoreOutOfTen != null).length;
+  int get questionCount =>
+      questions.isNotEmpty ? questions.length : answers.length;
   bool get terminal =>
       const {'READY', 'FAILED', 'UNAVAILABLE'}.contains(status);
   TranscriptRevision? frozenTranscript(TranscriptHistory history) {

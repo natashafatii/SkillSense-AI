@@ -76,7 +76,6 @@ class _CandidateInterviewSessionScreenState
   Future<void> _joinInterview() async {
     final lifecycle = _lifecycle;
     final media = _media;
-    final publisher = _publisher;
     if (!lifecycle.canUseMedia || media.busy) return;
     // Recheck terminal video/audio before acquiring devices for a retry.
     await lifecycle.restore();
@@ -94,12 +93,6 @@ class _CandidateInterviewSessionScreenState
     }
     if (lifecycle.videoRequired && !media.cameraReady) return;
     await lifecycle.joinVoice();
-    if (mounted &&
-        identical(lifecycle, _lifecycle) &&
-        lifecycle.state == InterviewLifecycleState.live &&
-        lifecycle.videoRequired) {
-      publisher.start();
-    }
   }
 
   void _initializeControllers() {
@@ -138,7 +131,6 @@ class _CandidateInterviewSessionScreenState
   Future<void> _startImmediately() async {
     final lifecycle = _lifecycle;
     final media = _media;
-    final publisher = _publisher;
     bool current() =>
         mounted && identical(lifecycle, _lifecycle) && lifecycle.isCurrent;
     await lifecycle.restore();
@@ -146,11 +138,6 @@ class _CandidateInterviewSessionScreenState
     if (lifecycle.videoRequired) await media.requestCamera();
     if (!current() || (lifecycle.videoRequired && !media.cameraReady)) return;
     await lifecycle.joinVoice();
-    if (current() &&
-        lifecycle.state == InterviewLifecycleState.live &&
-        lifecycle.videoRequired) {
-      publisher.start();
-    }
   }
 
   @override

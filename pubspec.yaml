@@ -89,6 +89,12 @@ flutter:
     - assets/images/logo.svg
     - assets/icons/
   fonts:
+    - family: Geist
+      fonts:
+        - asset: assets/fonts/Geist.ttf
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans.ttf
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter.ttf

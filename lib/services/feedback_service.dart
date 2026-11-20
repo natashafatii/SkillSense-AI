@@ -11,13 +11,17 @@ class FeedbackService {
     String? interviewId,
     String? applicationId,
     Dio? client,
+    bool releasedOnly = false,
+    Future<PaginatedResponse<CandidateFeedback>> Function(int page)? loadPage,
   }) async {
     final matches = <CandidateFeedback>[];
     for (var page = 1; page <= 100; page++) {
-      final result = await list(page: page, client: client);
+      final result =
+          await (loadPage?.call(page) ?? list(page: page, client: client));
       matches.addAll(
         result.results.where(
           (row) =>
+              (!releasedOnly || row.state == FeedbackState.released) &&
               (interviewId == null || row.interviewId == interviewId) &&
               (applicationId == null || row.applicationId == applicationId),
         ),
@@ -32,10 +36,7 @@ class FeedbackService {
   static Future<CandidateFeedback> detail(String id, {Dio? client}) async {
     try {
       final dio = client ?? await ApiClient.getInstance();
-      final response = await dio.get(
-        '/feedback/${Uri.encodeComponent(id)}/',
-        queryParameters: {'contract': 'feedback-v2'},
-      );
+      final response = await dio.get('/feedback/${Uri.encodeComponent(id)}/');
       return CandidateFeedback.fromJson(
         Map<String, dynamic>.from(response.data as Map),
       );
@@ -54,7 +55,7 @@ class FeedbackService {
         '/feedback/',
         queryParameters: {
           'candidate': 'me',
-          'contract': 'feedback-v2',
+          'contract': 'feedback-v1',
           'page': page,
         },
       );

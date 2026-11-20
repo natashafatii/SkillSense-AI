@@ -43,7 +43,6 @@ const recruiterSections = <RecruiterSection>[
   ]),
   RecruiterSection('INTELLIGENCE & WORKSPACE', Icons.diamond_outlined, [
     RecruiterDestination('Analytics', '/recruiter/analytics'),
-    RecruiterDestination('Score provenance', '/recruiter/scoring-model'),
   ]),
 ];
 
@@ -78,7 +77,6 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
     '/recruiter/live-monitor': Icons.videocam_outlined,
     '/recruiter/interview-review': Icons.checklist_rounded,
     '/recruiter/analytics': Icons.bar_chart_rounded,
-    '/recruiter/scoring-model': Icons.tune_rounded,
   };
 
   static final Map<String, bool> _expandedByUser = {};

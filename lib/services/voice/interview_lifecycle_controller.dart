@@ -9,6 +9,7 @@ import '../interview_analysis_service.dart';
 import '../publisher/candidate_publisher_controller.dart';
 import '../session_scope.dart';
 import '../api_exception.dart';
+import 'live_interview_exchange.dart';
 import 'retell_voice_client.dart';
 import 'retell_voice_client_factory.dart';
 import 'voice_lifecycle_backend.dart';
@@ -36,10 +37,12 @@ class InterviewLifecycleController extends ChangeNotifier {
     VoiceSessionSnapshot? initialSnapshot,
     this.pollInterval = const Duration(seconds: 2),
     this.maxPolls = 12,
-    this.requestTimeout = const Duration(seconds: 20),
+    Duration? requestTimeout,
   }) : backend = backend ?? VoiceLifecycleBackend(),
        analysis = analysis ?? InterviewAnalysisService(),
        voice = voice ?? createRetellVoiceClient(),
+       requestTimeout = requestTimeout ?? const Duration(seconds: 20),
+       _joinTimeout = requestTimeout ?? VoiceLifecycleBackend.startFlowTimeout,
        _account = SessionScope.generation {
     if (initialSnapshot != null) _apply(initialSnapshot);
     SessionScope.invalidations.addListener(_logout);
@@ -51,6 +54,7 @@ class InterviewLifecycleController extends ChangeNotifier {
   final InterviewAnalysisService analysis;
   final RetellVoiceClient voice;
   final Duration pollInterval, requestTimeout;
+  final Duration _joinTimeout;
   final int maxPolls, _account;
   final CancelToken _requests = CancelToken();
   bool _disposed = false,
@@ -82,6 +86,11 @@ class InterviewLifecycleController extends ChangeNotifier {
   String get notice => _notice;
   String? get dataError => _dataError;
   bool get agentTalking => _agentTalking;
+  List<LiveTranscriptTurn> _transcript = const [];
+  bool _agentTurn = false;
+  LiveInterviewExchange _exchange = (number: null, question: null, answer: '');
+  LiveInterviewExchange get exchange => _exchange;
+  bool get agentThinking => _agentTurn && !_agentTalking;
   bool _microphoneMuted = false;
   bool get microphoneMuted => _microphoneMuted;
   bool get canToggleMicrophone =>
@@ -126,15 +135,16 @@ class InterviewLifecycleController extends ChangeNotifier {
       !_finishWanted &&
       _snapshot?.audioEndedAt == null &&
       !(_snapshot?.videoRequired == true && _snapshot?.videoSealed == true) &&
+      _state != InterviewLifecycleState.awaitingCompletion &&
       _state != InterviewLifecycleState.completed;
   void _emit() {
     if (!_disposed) notifyListeners();
   }
 
-  Future<T> _bounded<T>(Future<T> operation) {
+  Future<T> _bounded<T>(Future<T> operation, {Duration? timeout}) {
     final completion = Completer<T>();
     late final Timer timer;
-    timer = Timer(requestTimeout, () {
+    timer = Timer(timeout ?? requestTimeout, () {
       _deadlines.remove(timer);
       completion.completeError(
         TimeoutException('Lifecycle request timed out.'),
@@ -182,6 +192,7 @@ class InterviewLifecycleController extends ChangeNotifier {
       throw const FormatException('Immutable session mode changed.');
     }
     _snapshot = VoiceSessionSnapshot.withoutCredential(result);
+    _exchange = liveInterviewExchange(_snapshot, _transcript);
     _finishWanted |= result.finishRequested || result.completed;
     _finishIntentConfirmed |= result.finishRequested;
     _audioStopConfirmed |= result.audioEndedAt != null;
@@ -273,7 +284,8 @@ class InterviewLifecycleController extends ChangeNotifier {
       if (!current.videoRequired || _finishWanted || current.videoSealed) {
         _localStop();
       }
-      if (current.completed && !_processingTerminal(current.workflowState)) {
+      if (_state == InterviewLifecycleState.awaitingCompletion ||
+          (current.completed && !_processingTerminal(current.workflowState))) {
         _schedulePoll();
       }
     } on VoiceContractUnavailable catch (error) {
@@ -350,15 +362,19 @@ class InterviewLifecycleController extends ChangeNotifier {
           'Start the real camera preview before joining this video-enabled session.',
         );
       }
+      // Establish video as soon as the backend confirms an open session and
+      // the camera is ready. Provider credential and audio setup can be slow.
+      if (result.videoRequired) publisher.start();
       if (result.credential == null) {
         _needsSync = true;
-        result = await backend
-            .join(
-              identity,
-              videoRequired: result.videoRequired,
-              cancelToken: _requests,
-            )
-            .bounded(this);
+        result = await _bounded(
+          backend.join(
+            identity,
+            videoRequired: result.videoRequired,
+            cancelToken: _requests,
+          ),
+          timeout: _joinTimeout,
+        );
         if (!isCurrent || epoch != _voiceEpoch) return;
         _needsSync = false;
         _apply(result);
@@ -374,6 +390,18 @@ class InterviewLifecycleController extends ChangeNotifier {
         );
       }
       media.handoffToVoice(preserveCamera: true);
+      final client = voice;
+      if (client is RetellLiveTranscript) {
+        (client as RetellLiveTranscript).onTranscript = (turns, agentTurn) {
+          if (!isCurrent || epoch != _voiceEpoch || _finishWanted) return;
+          _transcript = turns;
+          final exchange = liveInterviewExchange(_snapshot, turns);
+          if (_exchange == exchange && _agentTurn == agentTurn) return;
+          _exchange = exchange;
+          _agentTurn = agentTurn;
+          _emit();
+        };
+      }
       await voice
           .start(credential, (event) => _voiceEvent(epoch, event))
           .bounded(this);
@@ -425,13 +453,17 @@ class InterviewLifecycleController extends ChangeNotifier {
             'Voice provider connected. Camera and frame transport remain independent.';
         _schedulePoll();
       case RetellVoiceEvent.audioReady:
-        _notice =
-            'Provider audio is available. Use Enable audio if browser playback is blocked.';
+        _notice = 'Interview audio is ready.';
       case RetellVoiceEvent.agentStartedTalking:
         if (_state == InterviewLifecycleState.live) _agentTalking = true;
       case RetellVoiceEvent.agentStoppedTalking:
         _agentTalking = false;
       case RetellVoiceEvent.ended:
+        _localStop();
+        _state = InterviewLifecycleState.awaitingCompletion;
+        _notice =
+            'The conversation has ended. Confirming your interview status…';
+        unawaited(reconcile());
       case RetellVoiceEvent.error:
         _localStop();
         _state = InterviewLifecycleState.interrupted;
@@ -480,7 +512,6 @@ class InterviewLifecycleController extends ChangeNotifier {
           _notice =
               'Backend completion is still pending; report readiness remains separate.';
         }
-        _schedulePoll();
       }
     } on VoiceContractUnavailable catch (error) {
       if (isCurrent) _notice = error.message;
@@ -490,7 +521,10 @@ class InterviewLifecycleController extends ChangeNotifier {
             'Backend status could not be verified. Local media is stopped; retry status or finish explicitly.';
       }
     }
-    if (isCurrent) _emit();
+    if (isCurrent) {
+      _schedulePoll();
+      _emit();
+    }
   }
 
   Future<void> finish() {
@@ -684,6 +718,13 @@ class InterviewLifecycleController extends ChangeNotifier {
         return;
       }
       _apply(result);
+      // The provider webhook may arrive after call_ended reconciliation. Keep
+      // polling and seal video as soon as authoritative audio completion lands.
+      if (_snapshot!.audioEndedAt != null &&
+          _snapshot!.videoRequired &&
+          !_videoSealConfirmed) {
+        await _sealVideo();
+      }
     } on ApiException catch (error) {
       if (!isCurrent ||
           _paused ||
@@ -726,9 +767,16 @@ class InterviewLifecycleController extends ChangeNotifier {
 
   void _localStop() {
     _microphoneMuted = false;
+    _transcript = const [];
+    _agentTurn = false;
+    _exchange = (number: null, question: null, answer: '');
     _voiceEpoch++;
     _joining = false;
     _agentTalking = false;
+    final client = voice;
+    if (client is RetellLiveTranscript) {
+      (client as RetellLiveTranscript).onTranscript = null;
+    }
     try {
       voice.stop();
     } catch (_) {

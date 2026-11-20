@@ -45,7 +45,6 @@ import 'screens/hr/live_monitor_screen.dart';
 import 'screens/hr/recruiter_observation_screen.dart';
 import 'screens/hr/rankings_screen.dart';
 import 'screens/hr/schedule_interview_screen.dart';
-import 'screens/hr/settings_screen.dart';
 
 import 'screens/hr/job_listings_screen.dart';
 import 'screens/hr/recruiter_job_detail_screen.dart';
@@ -541,13 +540,6 @@ class SkillSenseApp extends StatelessWidget {
                 child: InterviewReviewScreen(),
               );
               break;
-            case '/settings':
-            case '/recruiter/scoring-model':
-              builder = const RoleGuard(
-                allowedRoles: [EnvConfig.roleRecruiter],
-                child: SettingsScreen(),
-              );
-              break;
             case '/recruiter/profile':
               builder = const RoleGuard(
                 allowedRoles: [EnvConfig.roleRecruiter],
@@ -672,7 +664,6 @@ class SkillSenseApp extends StatelessWidget {
           '/rankings': '/recruiter/rankings',
           '/analytics': '/recruiter/analytics',
           '/review': '/recruiter/interview-review',
-          '/settings': '/recruiter/scoring-model',
         };
         final canonicalRecruiterRoute =
             recruiterAliases[settings.name] ?? settings.name;

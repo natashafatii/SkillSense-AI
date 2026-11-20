@@ -27,6 +27,8 @@ class ResumeDetail {
   final DateTime? uploadedAt;
   final ResumeStatus status;
   final String? processingError;
+  final String? processingCode;
+  final bool canRetryParsing;
   final List<String>? skills;
   final List<Map<String, dynamic>>? education;
   final List<Map<String, dynamic>>? experience;
@@ -44,6 +46,8 @@ class ResumeDetail {
     this.uploadedAt,
     required this.status,
     this.processingError,
+    this.processingCode,
+    this.canRetryParsing = false,
     this.skills,
     this.education,
     this.experience,
@@ -67,6 +71,8 @@ class ResumeDetail {
       uploadedAt: DateTime.tryParse(json['uploaded_at']?.toString() ?? ''),
       status: ResumeStatus.fromString(json['status'] as String? ?? 'PENDING'),
       processingError: json['processing_error'] as String?,
+      processingCode: json['processing_code'] as String?,
+      canRetryParsing: json['can_retry_parsing'] == true,
       skills: (json['skills'] as List<dynamic>?)
           ?.map((e) => e.toString())
           .toList(),

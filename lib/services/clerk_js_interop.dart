@@ -20,33 +20,9 @@ import 'dart:js_interop_unsafe';
 // Top-level accessors
 // ═══════════════════════════════════════════════════════════════════════
 
-/// Returns the global `window.Clerk` object installed by the clerk-js
-/// script tag.  Will be `null` until the script has loaded.
-@JS('Clerk')
-external ClerkJS? get _clerkGlobal;
-
-/// Check if window.__clerkReady has been set to true by the JS script in index.html.
-@JS('__clerkReady')
-external bool? get _isClerkReady;
-
-bool get isClerkReady => _isClerkReady == true;
-
-@JS('__clerkError')
-external String? get clerkBootstrapError;
-
-/// Safe accessor that throws a descriptive error when clerk-js has not
-/// finished loading yet.
-ClerkJS get clerkInstance {
-  final c = _clerkGlobal;
-  if (c == null) {
-    throw StateError(
-      'Clerk JS SDK is not available on window. '
-      'Ensure the clerk-js <script> tag is present in web/index.html '
-      'and has finished loading before calling this.',
-    );
-  }
-  return c;
-}
+/// Load Clerk using the same build-time publishable key as Flutter.
+@JS('loadSkillSenseClerk')
+external JSPromise<ClerkJS> loadSkillSenseClerk(String publishableKey);
 
 // ═══════════════════════════════════════════════════════════════════════
 // Clerk (root instance)
@@ -198,6 +174,7 @@ extension type ClerkSession._(JSObject _) implements JSObject {
 
 @JS()
 extension type ClerkUser._(JSObject _) implements JSObject {
+  external JSArray<ClerkEmailAddress>? get emailAddresses;
   external JSArray<ClerkGoogleAccount>? get externalAccounts;
   external String? get id;
   external String? get firstName;
@@ -208,6 +185,11 @@ extension type ClerkUser._(JSObject _) implements JSObject {
 
   /// `user.unsafeMetadata` — readable & writable from client.
   external JSObject? get unsafeMetadata;
+}
+
+extension type ClerkEmailAddress._(JSObject _) implements JSObject {
+  external String? get emailAddress;
+  external ClerkExternalVerification? get verification;
 }
 
 extension type ClerkGoogleAccount._(JSObject _) implements JSObject {

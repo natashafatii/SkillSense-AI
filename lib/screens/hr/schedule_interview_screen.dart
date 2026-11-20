@@ -64,7 +64,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   Color get _surface => _dark ? _colors.surface : Colors.white;
   Color get _blue => _colors.primary;
   Color get _activeFill => _colors.primaryContainer;
-  final _message = TextEditingController();
   bool _inAppInvitation = true;
   bool _emailInvitation = true;
   final _reviewKey = GlobalKey();
@@ -133,7 +132,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _approvedQuestionSet = null;
       _approvedQuestionRevision = null;
       _error = 'Account session changed. Reopen scheduling.';
-      _message.clear();
       _reviewExpanded = false;
     });
     for (final controller in _questionTexts.values) {
@@ -156,7 +154,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   void dispose() {
     _openDropdown.dispose();
     SessionScope.invalidations.removeListener(_clearSession);
-    _message.dispose();
     for (final controller in _questionTexts.values) {
       controller.dispose();
     }
@@ -349,7 +346,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _selectedSlot = null;
       _rowErrors.clear();
       _interview = null;
-      _message.clear();
       _reviewExpanded = false;
     });
     _loadAwaiting();
@@ -449,7 +445,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         _booked = [...?_booked, interview];
         _applicationId = null;
         _selectedSlot = null;
-        _message.clear();
         _reviewExpanded = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -703,12 +698,22 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                       const SizedBox(height: 16),
                     ],
                     if (split)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Table(
+                        columnWidths: const {
+                          0: FlexColumnWidth(),
+                          1: FixedColumnWidth(20),
+                          2: FlexColumnWidth(),
+                        },
+                        defaultVerticalAlignment:
+                            TableCellVerticalAlignment.intrinsicHeight,
                         children: [
-                          Expanded(flex: 2, child: form),
-                          const SizedBox(width: 20),
-                          Expanded(child: _invitationPanel()),
+                          TableRow(
+                            children: [
+                              form,
+                              const SizedBox.shrink(),
+                              _invitationPanel(),
+                            ],
+                          ),
                         ],
                       )
                     else ...[
@@ -1031,29 +1036,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     },
   );
 
-  InputDecoration _inputDecoration() => InputDecoration(
-    filled: true,
-    fillColor: _surface,
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: _edge),
-    ),
-    disabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: _edge),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: _blue, width: 1.5),
-    ),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: _edge),
-    ),
-  );
-
   Widget _availabilityPanel(bool compact) => Column(
     key: const Key('schedule-availability-card'),
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1239,20 +1221,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
               _heading('Invitation details'),
               const SizedBox(height: 7),
               _body('Review the details before sending.'),
-              const SizedBox(height: 12),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: _edge),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
-                  ),
-                  child: _body('DRAFT', size: 10),
-                ),
-              ),
             ],
           ),
         ),
@@ -1301,30 +1269,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 _emailInvitation,
                 (value) => setState(() => _emailInvitation = value),
               ),
-              const SizedBox(height: 5),
-              _body(
-                'Delivery preferences are a draft. The server manages actual delivery.',
-                size: 12,
-              ),
-              const SizedBox(height: 18),
-              _label('Optional message to candidate'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _message,
-                minLines: 3,
-                maxLines: 5,
-                style: GoogleFonts.inter(color: _ink, fontSize: 12),
-                decoration: _inputDecoration().copyWith(
-                  hintText: 'We look forward to speaking with you.',
-                  hintStyle: TextStyle(color: _muted),
-                ),
-              ),
-              const SizedBox(height: 6),
-              _body(
-                'Preview draft only. Invitations currently use the standard message.',
-                size: 10,
-              ),
-              const SizedBox(height: 10),
               if (_applicationId != null &&
                   _rowErrors[_applicationId] != null) ...[
                 const SizedBox(height: 12),
@@ -1525,12 +1469,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                   '${_time(slot)} ${DateTime.now().timeZoneName}',
                 ),
                 _summaryRow('Interview type', 'Retell AI · Voice'),
-                if (_message.text.trim().isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  _label('Message draft (preview only)'),
-                  const SizedBox(height: 8),
-                  _body(_message.text.trim()),
-                ],
                 const SizedBox(height: 16),
                 _body(
                   'Confirm to schedule this interview using the approved question revision and send the standard invitation.',
@@ -1568,7 +1506,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _approvedQuestionSet = null;
       _approvedQuestionRevision = null;
       _reviewExpanded = false;
-      _message.clear();
     });
   }
 
@@ -1668,7 +1605,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         ),
       ],
     ),
-    child: child,
+    child: Material(type: MaterialType.transparency, child: child),
   );
 
   Widget _heading(String text) => Text(
