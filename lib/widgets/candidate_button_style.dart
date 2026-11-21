@@ -17,8 +17,7 @@ class CandidateButtonStyle {
     colors: [teal, deepTeal],
   );
 
-  /// Apply the reference green gradient without changing a button's geometry,
-  /// text styling, or disabled appearance.
+  /// Apply the shared green gradient to candidate primary actions.
   static ButtonStyle primaryColors(ButtonStyle base) => base.copyWith(
     backgroundColor: WidgetStateProperty.resolveWith(
       (states) => states.contains(WidgetState.disabled)
@@ -34,16 +33,29 @@ class CandidateButtonStyle {
       return DecoratedBox(
         decoration: ShapeDecoration(
           gradient: primaryGradient,
-          shape: base.shape?.resolve(states) ?? const StadiumBorder(),
+          shape: const StadiumBorder(),
         ),
         child: child,
       );
     },
+    shape: const WidgetStatePropertyAll(StadiumBorder()),
+    foregroundColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.disabled)
+          ? base.foregroundColor?.resolve(states)
+          : Colors.white,
+    ),
+    textStyle: WidgetStateProperty.resolveWith(
+      (states) =>
+          base.textStyle?.resolve(states)?.copyWith(
+            fontWeight: FontWeight.w700,
+          ) ??
+          const TextStyle(fontWeight: FontWeight.w700),
+    ),
   );
 
-  static BoxDecoration primaryDecoration({double radius = 12}) => BoxDecoration(
+  static BoxDecoration primaryDecoration() => BoxDecoration(
     gradient: primaryGradient,
-    borderRadius: BorderRadius.circular(radius),
+    borderRadius: BorderRadius.circular(999),
     boxShadow: [
       BoxShadow(
         color: teal.withValues(alpha: .22),
@@ -53,7 +65,7 @@ class CandidateButtonStyle {
     ],
   );
 
-  static ButtonStyle primary(ButtonStyle base, {double radius = 12}) =>
+  static ButtonStyle primary(ButtonStyle base) =>
       base.merge(
         ButtonStyle(
           backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
@@ -61,6 +73,13 @@ class CandidateButtonStyle {
             (states) => states.contains(WidgetState.disabled)
                 ? secondaryText
                 : Colors.white,
+          ),
+          textStyle: WidgetStateProperty.resolveWith(
+            (states) =>
+                base.textStyle?.resolve(states)?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ) ??
+                const TextStyle(fontWeight: FontWeight.w700),
           ),
           shadowColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.disabled)
@@ -74,12 +93,8 @@ class CandidateButtonStyle {
                 ? 0
                 : (states.contains(WidgetState.hovered) ? 5 : 3),
           ),
-          overlayColor: WidgetStatePropertyAll(
-            Colors.white.withValues(alpha: .08),
-          ),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
-          ),
+          overlayColor: WidgetStatePropertyAll(Colors.white.withValues(alpha: .08)),
+          shape: const WidgetStatePropertyAll(StadiumBorder()),
           backgroundBuilder: (context, states, child) => DecoratedBox(
             decoration: BoxDecoration(
               color: states.contains(WidgetState.disabled)
@@ -88,7 +103,7 @@ class CandidateButtonStyle {
               gradient: states.contains(WidgetState.disabled)
                   ? null
                   : primaryGradient,
-              borderRadius: BorderRadius.circular(radius),
+              borderRadius: BorderRadius.circular(999),
             ),
             child: child,
           ),

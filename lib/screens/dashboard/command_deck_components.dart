@@ -73,14 +73,14 @@ Widget _button(
   bool trailing = false,
   bool white = false,
 }) {
-  final radius = BorderRadius.circular(12);
+  final radius = BorderRadius.circular(white ? 12 : 999);
   final ink = white ? const Color(0xFF2743A8) : Colors.white;
   final glyph = icon == null ? null : _DeckIcon(icon, size: 16, color: ink);
   return DecoratedBox(
     decoration: BoxDecoration(
       borderRadius: radius,
       color: white ? Colors.white : null,
-      gradient: white ? null : c.primary,
+      gradient: white ? null : RecruiterButtonStyle.primaryGradient,
       boxShadow: white
           ? const [
               BoxShadow(
@@ -108,7 +108,11 @@ Widget _button(
           Flexible(
             child: Text(
               label,
-              style: c.text(14, color: ink, weight: FontWeight.w600),
+              style: c.text(
+                14,
+                color: ink,
+                weight: white ? FontWeight.w600 : FontWeight.w700,
+              ),
             ),
           ),
           if (glyph != null && trailing) ...[const SizedBox(width: 8), glyph],

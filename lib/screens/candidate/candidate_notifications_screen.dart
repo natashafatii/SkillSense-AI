@@ -10,6 +10,7 @@ import '../../widgets/notification_list_skeleton.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/candidate_side_nav.dart';
+import '../../widgets/green_gradient_background.dart';
 import '../../models/app_notification.dart';
 import '../../models/paginated_response.dart';
 import '../../services/notification_service.dart';
@@ -211,6 +212,7 @@ class _CandidateNotificationsScreenState
       backgroundColor: bgBase,
       body: Stack(
         children: [
+          const GreenGradientBackground(),
           // ── GRID BACKGROUND ──────────────────────────────────────────────────
           Positioned.fill(
             child: CustomPaint(

@@ -2309,7 +2309,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'Inter'),
       ),
       child: Scaffold(
-        backgroundColor: context.themeCanvas(const Color(0xfff5f7fb)),
+        backgroundColor: Colors.transparent,
         appBar: dashboard
             ? null
             : AppBar(

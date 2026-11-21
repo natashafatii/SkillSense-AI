@@ -95,8 +95,34 @@ class _HomeDashboard extends StatelessWidget {
   final ValueChanged<Job> onJob;
   final ValueChanged<Interview> onInterview;
 
+  List<({String label, bool complete})> _profileReadinessItems() {
+    final current = profile;
+    if (current == null) return const [];
+    final fullName = [current.user.firstName, current.user.lastName]
+        .where((part) => (part ?? '').trim().isNotEmpty)
+        .join(' ')
+        .trim();
+    return [
+      (label: 'Full name', complete: fullName.isNotEmpty),
+      (label: 'Email address', complete: current.user.email.trim().isNotEmpty),
+      (label: 'Add a phone number', complete: current.phone.trim().isNotEmpty),
+      (label: 'Add a location', complete: current.location.trim().isNotEmpty),
+      (label: 'Add a LinkedIn link', complete: current.linkedinUrl.trim().isNotEmpty),
+      (label: 'Add a GitHub link', complete: current.githubUrl.trim().isNotEmpty),
+      (label: 'Add a portfolio link', complete: current.portfolioUrl.trim().isNotEmpty),
+    ];
+  }
+
+  int? get _profileCompletion {
+    if (profileError != null || profile == null) return null;
+    final items = _profileReadinessItems();
+    if (items.isEmpty) return null;
+    return (items.where((item) => item.complete).length * 100 / items.length)
+        .round();
+  }
+
   bool get _profileComplete =>
-      profileError == null && profile?.completionPercentage == 100;
+      profileError == null && _profileCompletion == 100;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -132,7 +158,7 @@ class _HomeDashboard extends StatelessWidget {
         ),
       ], gap: 22);
       return _stack([
-        _greeting(compact),
+        _greeting(context),
         if (wide)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,7 +190,7 @@ class _HomeDashboard extends StatelessWidget {
     ],
   );
 
-  Widget _greeting(bool compact) {
+  Widget _greeting(BuildContext context) {
     final first = name.split(RegExp(r'\s+')).first;
     final dayPart = now.hour < 12
         ? 'Good morning'
@@ -178,12 +204,7 @@ class _HomeDashboard extends StatelessWidget {
           onboarding
               ? 'Welcome to SkillSense${first.isEmpty ? '' : ', $first'}'
               : '$dayPart${first.isEmpty ? '' : ', $first'}',
-          style: _homeText(
-            compact ? 22 : 26,
-            weight: FontWeight.w700,
-            spacing: -.6,
-            height: 1.2,
-          ),
+          style: pageHeadingStyle(context),
         ),
       ),
       Text(
@@ -519,10 +540,18 @@ class _HomeDashboard extends StatelessWidget {
   );
 
   Widget _profileCard({required bool checklist, required double minHeight}) {
-    final completion = profileError == null
-        ? profile?.completionPercentage
-        : null;
+    final completion = _profileCompletion;
     final currentProfile = profile;
+    final readinessItems = _profileReadinessItems();
+    final incomplete = readinessItems.where((item) => !item.complete).toList();
+    final incompleteToShow = incomplete.take(3).toList();
+    final visibleItems = <({String label, bool complete})>[
+      ...incompleteToShow,
+      ...readinessItems
+          .where((item) => item.complete)
+          .take(3 - incompleteToShow.length),
+    ];
+    final moreIncomplete = incomplete.length > 3 ? incomplete.length - 3 : 0;
     return _card(
       padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
       onTap: onProfile,
@@ -560,22 +589,34 @@ class _HomeDashboard extends StatelessWidget {
         ),
         if (checklist && currentProfile != null && completion != null) ...[
           const SizedBox(height: 16),
-          _profileTask(
-            emailVerified == null
-                ? 'Email verification unavailable'
-                : emailVerified!
-                ? 'Email verified'
-                : 'Verify your email',
-            emailVerified,
-          ),
-          _profileTask(
-            'Add a phone number',
-            currentProfile.phone.trim().isNotEmpty,
-          ),
-          _profileTask(
-            'Add a portfolio link',
-            currentProfile.portfolioUrl.trim().isNotEmpty,
-          ),
+          for (final (index, item) in visibleItems.indexed)
+            _profileTask(
+              item.label,
+              item.complete,
+              onAdd: item.complete ? null : onProfile,
+              divider: index > 0,
+            ),
+          if (moreIncomplete > 0)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onProfile,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.only(top: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  foregroundColor: colors.tealInk,
+                ),
+                child: Text(
+                  '+$moreIncomplete more',
+                  style: _homeText(
+                    12.5,
+                    color: colors.tealInk,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
         ],
       ], gap: 0),
     );
@@ -626,11 +667,16 @@ class _HomeDashboard extends StatelessWidget {
     ),
   );
 
-  Widget _profileTask(String label, bool? complete) => Container(
+  Widget _profileTask(
+    String label,
+    bool complete, {
+    VoidCallback? onAdd,
+    required bool divider,
+  }) => Container(
     constraints: const BoxConstraints(minHeight: 48),
     padding: const EdgeInsets.symmetric(vertical: 10),
     decoration: BoxDecoration(
-      border: Border(top: BorderSide(color: colors.border)),
+      border: divider ? Border(top: BorderSide(color: colors.border)) : null,
     ),
     child: Row(
       children: [
@@ -639,16 +685,14 @@ class _HomeDashboard extends StatelessWidget {
           height: 22,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: complete == true ? colors.mint : null,
+            color: complete ? colors.mint : null,
           ),
           child: Icon(
-            complete == true
+            complete
                 ? Icons.check_rounded
-                : complete == null
-                ? Icons.info_outline
                 : Icons.radio_button_unchecked,
-            size: complete == true ? 14 : 19,
-            color: complete == true ? colors.tealInk : colors.muted,
+            size: complete ? 14 : 19,
+            color: complete ? colors.tealInk : colors.muted,
           ),
         ),
         const SizedBox(width: 12),
@@ -657,15 +701,28 @@ class _HomeDashboard extends StatelessWidget {
             label,
             style: _homeText(
               14,
-              color: complete == false ? colors.ink : colors.body,
-              weight: complete == false ? FontWeight.w600 : FontWeight.w500,
+              color: complete ? colors.body : colors.ink,
+              weight: complete ? FontWeight.w500 : FontWeight.w600,
             ),
           ),
         ),
-        if (complete == false)
-          Text(
-            'Add',
-            style: _homeText(13.5, color: colors.blue, weight: FontWeight.w600),
+        if (!complete)
+          TextButton(
+            onPressed: onAdd,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: colors.tealInk,
+            ),
+            child: Text(
+              'Add',
+              style: _homeText(
+                13.5,
+                color: colors.tealInk,
+                weight: FontWeight.w600,
+              ),
+            ),
           ),
       ],
     ),
@@ -1080,9 +1137,8 @@ class _HomeDashboard extends StatelessWidget {
     bool white = false,
     bool arrow = false,
     bool candidateAccent = false,
-  }) => FilledButton(
-    onPressed: callback,
-    style: FilledButton.styleFrom(
+  }) {
+    final baseStyle = FilledButton.styleFrom(
       backgroundColor: white
           ? Colors.white
           : candidateAccent
@@ -1096,21 +1152,27 @@ class _HomeDashboard extends StatelessWidget {
       minimumSize: const Size(0, 44),
       visualDensity: VisualDensity.standard,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      textStyle: _homeText(13, weight: FontWeight.w600),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Flexible(child: Text(label, textAlign: TextAlign.center)),
-        if (arrow) ...[
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right_rounded, size: 16),
+      shape: white
+          ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+          : const StadiumBorder(),
+      textStyle: _homeText(13, weight: FontWeight.w700),
+    );
+    return FilledButton(
+      onPressed: callback,
+      style: white ? baseStyle : CandidateButtonStyle.primary(baseStyle),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(child: Text(label, textAlign: TextAlign.center)),
+          if (arrow) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right_rounded, size: 16),
+          ],
         ],
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
   Widget _badge(String text, Color ink, Color fill) => Container(
     padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),

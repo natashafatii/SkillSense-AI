@@ -9,6 +9,7 @@ import '../../services/recruitment_workflow_service.dart';
 import '../../services/session_scope.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import '../../widgets/interview_review_top_bar.dart';
+import '../../widgets/page_heading_style.dart';
 import 'recruitment_review_screen.dart' show RecruitmentReviewScreen;
 
 class InterviewReviewScreen extends StatefulWidget {
@@ -620,7 +621,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
     String count(int value) => loading && interviews.isEmpty ? '—' : '$value';
 
     return Scaffold(
-      backgroundColor: context.themeCanvas(const Color(0xFFF5F7FB)),
+      backgroundColor: Colors.transparent,
       bottomNavigationBar: MediaQuery.sizeOf(context).width < 900
           ? const RecruiterMobileNav(
               currentRoute: '/recruiter/interview-review',
@@ -660,11 +661,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                             children: [
                               Text(
                                 'Interview evidence and decisions',
-                                style: _style(
-                                  26,
-                                  weight: FontWeight.w600,
-                                  spacing: -.6,
-                                ),
+                                style: pageHeadingStyle(context),
                               ),
                               const SizedBox(height: 4),
                               Text(

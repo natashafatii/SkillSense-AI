@@ -336,47 +336,11 @@ class FeedbackBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = FeedbackPalette(context);
     return ColoredBox(
-      color: palette.canvas,
-      child: CustomPaint(painter: _BackdropPainter(palette.dark), child: child),
+      color: Colors.transparent,
+      child: child,
     );
   }
-}
-
-class _BackdropPainter extends CustomPainter {
-  const _BackdropPainter(this.dark);
-
-  final bool dark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final w = size.width;
-    final h = size.height;
-    void glow(double x, double y, double rx, double ry, Color color) {
-      canvas.save();
-      canvas.translate(w * x, h * y);
-      canvas.scale(w * rx, h * ry);
-      canvas.drawCircle(
-        Offset.zero,
-        1,
-        Paint()
-          ..shader = ui.Gradient.radial(Offset.zero, 1, [
-            color,
-            color.withAlpha(0),
-          ]),
-      );
-      canvas.restore();
-    }
-
-    glow(.82, -.08, .46 * .65, .34 * .65, const Color(0x292E63F0));
-    glow(-.06, .46, .36 * .60, .30 * .60, const Color(0x1F6C5CE7));
-    glow(.60, 1.12, .50 * .60, .36 * .60, const Color(0x142E63F0));
-  }
-
-  @override
-  bool shouldRepaint(_BackdropPainter old) => old.dark != dark;
 }
 
 /// Reference gauge uses a 140-unit dial with a 52-unit score ring.

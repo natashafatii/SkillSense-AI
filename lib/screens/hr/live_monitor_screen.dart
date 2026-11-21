@@ -230,7 +230,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
     }
     final mobile = _mobile;
     return Scaffold(
-      backgroundColor: context.themeCanvas(_background),
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         child: Stack(
@@ -320,7 +320,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: RecruiterButtonStyle.primaryGradient,
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(999),
               boxShadow: [
                 BoxShadow(
                   color: _accent.withValues(alpha: .24),
@@ -339,14 +339,14 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.symmetric(horizontal: mobile ? 22 : 26),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(11),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
                 child: Text(
                   'View schedule',
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: Colors.white,
                   ),
                 ),

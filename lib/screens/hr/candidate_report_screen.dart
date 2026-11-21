@@ -23,6 +23,7 @@ import '../../services/session_scope.dart';
 import '../../widgets/notification_unread_scope.dart';
 import '../../widgets/question_preparation_panel.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
+import '../../widgets/page_heading_style.dart';
 import 'recruitment_review_screen.dart';
 import 'schedule_interview_screen.dart';
 
@@ -612,11 +613,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
                 header: true,
                 child: Text(
                   'Candidate report',
-                  style: _reportDisplay((viewport * .03).clamp(26.0, 34.0))
-                      .copyWith(
-                        letterSpacing:
-                            -(viewport * .03).clamp(26.0, 34.0) * .035,
-                      ),
+                  style: pageHeadingStyle(context),
                 ),
               );
               return RefreshIndicator(
@@ -731,7 +728,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
         ),
       ),
       child: Scaffold(
-        backgroundColor: palette.canvas,
+        backgroundColor: Colors.transparent,
         body: DefaultTextStyle.merge(
           style: TextStyle(
             fontFamily: 'Inter',

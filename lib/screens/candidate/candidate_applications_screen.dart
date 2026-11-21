@@ -6,12 +6,14 @@ import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/page_heading_style.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../models/application.dart';
 import '../../models/paginated_response.dart';
 import '../../services/application_service.dart';
 import '../../widgets/candidate_side_nav.dart';
+import '../../widgets/green_gradient_background.dart';
 
 /// The candidate's server-backed application list.
 class CandidateApplicationsScreen extends StatefulWidget {
@@ -107,6 +109,7 @@ class _CandidateApplicationsScreenState
       backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: Stack(
         children: [
+          const GreenGradientBackground(),
           SafeArea(
             bottom: false,
             child: Row(
@@ -190,11 +193,7 @@ class _CandidateApplicationsScreenState
           children: [
             Text(
               'Applications',
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: context.themeForeground(const Color(0xFF1E293B)),
-              ),
+              style: pageHeadingStyle(context),
             ),
             const SizedBox(height: 4),
             Text(
@@ -394,10 +393,10 @@ class _CandidateApplicationsScreenState
               height: 40,
               decoration: BoxDecoration(
                 gradient: CandidateButtonStyle.primaryGradient,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(999),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF14B584).withValues(alpha: 0.25),
+                    color: CandidateButtonStyle.teal.withValues(alpha: 0.25),
                     blurRadius: 12,
                     spreadRadius: 2,
                     offset: const Offset(0, 4),
@@ -410,7 +409,7 @@ class _CandidateApplicationsScreenState
                   shadowColor: Colors.transparent,
                   padding: EdgeInsets.symmetric(horizontal: isMobile ? 22 : 26),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(11),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
                 onPressed: () {
@@ -421,7 +420,7 @@ class _CandidateApplicationsScreenState
                   style: GoogleFonts.inter(
                     color: Colors.white,
                     fontSize: 14,
-                    fontWeight: FontWeight.w600, // approximations for 550
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),

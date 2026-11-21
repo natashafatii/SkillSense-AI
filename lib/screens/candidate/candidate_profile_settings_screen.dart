@@ -19,6 +19,7 @@ import '../../services/profile_service.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/candidate_avatar_image.dart';
 import '../../widgets/notification_unread_scope.dart';
+import '../../widgets/recruiter_top_bar.dart';
 
 part 'candidate_profile_chrome.dart';
 
@@ -102,12 +103,14 @@ class _CandidateProfileSettingsScreenState
     extends State<CandidateProfileSettingsScreen> {
   CandidateProfile? _profile;
   final Map<String, String> _values = {
+    'full_name': '',
     for (final detail in _details) detail.key: '',
   };
   bool _profileLoading = true;
   bool _profileError = false;
   bool _savingContacts = false;
   final _contactDraft = <String, TextEditingController>{};
+  final _contactFocus = FocusNode();
   final _contactKey = GlobalKey();
   CountryData? _phoneCountry;
   final _phoneFocus = FocusNode();
@@ -169,6 +172,7 @@ class _CandidateProfileSettingsScreenState
       draft.dispose();
     }
     _phoneFocus.dispose();
+    _contactFocus.dispose();
     _mobileScroll.dispose();
     super.dispose();
   }
@@ -784,6 +788,10 @@ class _CandidateProfileSettingsScreenState
   void _applyProfile(CandidateProfile profile) {
     _profile = profile;
     _values.addAll({
+      'full_name': [profile.user.firstName, profile.user.lastName]
+          .where((part) => (part ?? '').trim().isNotEmpty)
+          .map((part) => part!.trim())
+          .join(' '),
       'headline': profile.headline,
       'phone': profile.phone,
       'location': profile.location,
@@ -837,6 +845,8 @@ class _CandidateProfileSettingsScreenState
           _phoneCountry != null &&
           _contactDraft.containsKey(key)) {
         _phoneFocus.requestFocus();
+      } else if (mounted && key != 'phone' && _contactDraft.containsKey(key)) {
+        _contactFocus.requestFocus();
       }
       if (mounted && target != null) {
         Scrollable.ensureVisible(
@@ -859,6 +869,10 @@ class _CandidateProfileSettingsScreenState
 
   Future<void> _saveContacts() async {
     if (_savingContacts || _contactDraft.isEmpty) return;
+    if (_contactDraft.containsKey('full_name')) {
+      await _saveFullName();
+      return;
+    }
     final patch = <String, dynamic>{};
     for (final entry in _contactDraft.entries) {
       var value = entry.value.text.trim();
@@ -909,6 +923,51 @@ class _CandidateProfileSettingsScreenState
     }
   }
 
+  Future<void> _saveFullName() async {
+    final fullName = _contactDraft['full_name']!.text.trim();
+    final parts = fullName
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    setState(() => _savingContacts = true);
+    try {
+      await AuthService.updateUserProfile(
+        firstName: parts.isEmpty ? '' : parts.first,
+        lastName: parts.length < 2 ? '' : parts.skip(1).join(' '),
+      );
+      if (!_current) return;
+      final profile = await ProfileService.getCandidateProfile(
+        forceRefresh: true,
+      );
+      if (!_current) return;
+      setState(() {
+        if (profile != null) {
+          _applyProfile(profile);
+        } else {
+          _values['full_name'] = fullName;
+        }
+        _clearDraft();
+      });
+      _showToast('Full name saved.');
+    } on ApiException catch (error) {
+      if (_current) {
+        if (error.statusCode == 401) {
+          await _signOut();
+        } else {
+          _showToast(
+            error.message.isNotEmpty
+                ? error.message
+                : 'Could not save full name.',
+          );
+        }
+      }
+    } catch (_) {
+      if (_current) _showToast('Could not save full name.');
+    } finally {
+      if (_current) setState(() => _savingContacts = false);
+    }
+  }
+
   bool get _googleVerified {
     final auth = AuthService.instance;
     final email = _profile?.user.email ?? '';
@@ -924,6 +983,12 @@ class _CandidateProfileSettingsScreenState
     final base = _profileText(14, c.text, height: 1.55);
     final profile = _profile;
     final steps = <(String, bool, String, VoidCallback)>[
+      (
+        'Full name',
+        _values['full_name']!.trim().isNotEmpty,
+        'Add',
+        () => _editContacts('full_name'),
+      ),
       (
         'Email address',
         profile?.user.email.trim().isNotEmpty ?? false,
@@ -959,10 +1024,10 @@ class _CandidateProfileSettingsScreenState
     return CandidateScaffold(
       currentRoute: '/candidate/profile',
       body: ColoredBox(
-        color: c.bg,
+        color: Colors.transparent,
         child: Column(
           children: [
-            _ProfileTopBar(colors: c),
+            const RecruiterTopBar(pageTitle: 'Profile', candidate: true),
             Expanded(
               child: DefaultTextStyle(
                 style: base,
@@ -1279,17 +1344,12 @@ class _CandidateProfileSettingsScreenState
         children: [
           for (final (index, label) in [
             'Profile',
-            'Notifications',
             'Preferences & account',
           ].indexed)
             Semantics(
               selected: _mobileTab == index,
               child: InkWell(
                 onTap: () {
-                  if (index == 1) {
-                    Navigator.of(context).pushNamed('/candidate/notifications');
-                    return;
-                  }
                   setState(() => _mobileTab = index);
                   if (_mobileScroll.hasClients) _mobileScroll.jumpTo(0);
                 },
@@ -1332,12 +1392,9 @@ class _CandidateProfileSettingsScreenState
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _heading(c, 'Contact and links'),
-          const SizedBox(height: 3),
-          Text(
-            'Recruiters use these to reach you.',
-            style: _profileText(13, c.text3),
-          ),
+          _heading(c, 'Personal details'),
+          const SizedBox(height: 10),
+          Divider(height: 1, thickness: 1, color: c.border),
           const SizedBox(height: 14),
           if (_profileLoading)
             const LinearProgressIndicator()
@@ -1347,210 +1404,135 @@ class _CandidateProfileSettingsScreenState
               onPressed: () => _loadProfile(forceRefresh: true),
               child: const Text('Retry'),
             ),
-          ] else
-            LayoutBuilder(
-              builder: (context, bounds) {
-                final singleColumn =
-                    MediaQuery.sizeOf(context).width < 780 ||
-                    bounds.maxWidth < 380 ||
-                    MediaQuery.textScalerOf(context).scale(14) > 21;
-                final width = singleColumn
-                    ? bounds.maxWidth
-                    : (bounds.maxWidth - 28) / 2;
-                return Wrap(
-                  spacing: 28,
-                  children: [
-                    SizedBox(
-                      width: width,
-                      child: _contactField(
-                        c,
-                        'Email',
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _profile?.user.email ?? '',
-                              style: _profileText(
-                                14,
-                                c.text,
-                                weight: FontWeight.w600,
-                              ),
-                            ),
-                            if (_googleVerified)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.check,
-                                      size: 13,
-                                      color: c.accent,
-                                    ),
-                                    const SizedBox(width: 5),
-                                    Flexible(
-                                      child: Text(
-                                        'Verified through Google',
-                                        style: _profileText(
-                                          12,
-                                          c.accent,
-                                          weight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    for (final key in [
-                      'phone',
-                      'location',
-                      'linkedin_url',
-                      'github_url',
-                      'portfolio_url',
-                    ])
-                      SizedBox(
-                        width: width,
-                        child: _contactRow(
-                          c,
-                          _details.firstWhere((field) => field.key == key),
-                        ),
-                      ),
-                  ],
-                );
-              },
+          ] else ...[
+            _contactRow(
+              c,
+              const _Detail('full_name', 'Full name', 'Your full name'),
             ),
+            _contactRow(c, const _Detail('email', 'Email', '')),
+            for (final key in [
+              'phone', 'location', 'linkedin_url', 'github_url', 'portfolio_url',
+            ])
+              _contactRow(c, _details.firstWhere((field) => field.key == key)),
+          ],
         ],
       ),
-    ),
-  );
-
-  Widget _contactField(_Colors c, String label, Widget child) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 15),
-    constraints: const BoxConstraints(minHeight: 82),
-    decoration: BoxDecoration(
-      border: Border(bottom: BorderSide(color: c.border)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          label,
-          style: _profileText(12.5, c.text3, weight: FontWeight.w600),
-        ),
-        const SizedBox(height: 5),
-        child,
-      ],
     ),
   );
 
   Widget _contactRow(_Colors c, _Detail field) {
+    final isEmail = field.key == 'email';
     final isPhone = field.key == 'phone';
     final draft = _contactDraft[field.key];
-    final value = _values[field.key]!;
+    final value = isEmail ? (_profile?.user.email ?? '') : _values[field.key]!;
+    Widget editor = const SizedBox.shrink();
     if (draft == null) {
-      return _contactField(
-        c,
-        field.label,
-        Align(
-          alignment: Alignment.centerLeft,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(4),
-            onTap: _savingContacts ? null : () => _editContacts(field.key),
-            child: Semantics(
-              button: true,
-              label: 'Edit ${field.label}',
-              child: Text(
-                value.isEmpty ? '+ Add ${field.label.toLowerCase()}' : value,
-                style: _profileText(
-                  value.isEmpty ? 13 : 14,
-                  value.isEmpty ? _blue(c) : c.text,
-                  weight: FontWeight.w600,
-                ),
-              ),
-            ),
+      editor = Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text(value.isEmpty ? 'Not added' : value, textAlign: TextAlign.end, style: _profileText(13.5, value.isEmpty ? c.text3 : c.text, weight: FontWeight.w700)),
+          if (isEmail && _googleVerified)
+            Text('✓ Verified through Google', textAlign: TextAlign.end, style: _profileText(11.5, c.accent, weight: FontWeight.w600)),
+        ])),
+        if (!isEmail) ...[
+          const SizedBox(width: 6),
+          IconButton(tooltip: 'Edit ${field.label}', onPressed: _savingContacts ? null : () => _editContacts(field.key), visualDensity: VisualDensity.compact, constraints: const BoxConstraints(), padding: const EdgeInsets.all(4), icon: Icon(Icons.edit_outlined, size: 16, color: c.accent)),
+        ],
+      ]);
+    } else {
+      final radius = BorderRadius.circular(10);
+      final focus = isPhone && _phoneCountry != null ? _phoneFocus : _contactFocus;
+      final input = ListenableBuilder(
+        listenable: focus,
+        builder: (context, _) => DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            boxShadow: focus.hasFocus && !(isPhone && _phoneCountry != null)
+                ? [BoxShadow(color: c.accent.withValues(alpha: .16), spreadRadius: 3)]
+                : null,
           ),
+          child: isPhone && _phoneCountry != null
+              ? CountryCodePhoneField(
+                  controller: draft,
+                  focusNode: _phoneFocus,
+                  initialCountry: _phoneCountry,
+                  enabled: !_savingContacts,
+                  requiredPhone: false,
+                  focusColor: c.accent,
+                  focusGlowSpread: 1,
+                  focusGlowOpacity: .07,
+                  label: field.label,
+                  labelStyle: _profileText(12, c.text3, weight: FontWeight.w500),
+                  onPhoneChanged: (value) => _phoneDraft = value,
+                )
+              : TextField(
+                  key: ValueKey(field.key),
+                  controller: draft,
+                  focusNode: focus,
+                  enabled: !_savingContacts,
+                  keyboardType: isPhone
+                      ? TextInputType.phone
+                      : field.key.endsWith('_url')
+                      ? TextInputType.url
+                      : TextInputType.text,
+                  onSubmitted: (_) => _saveContacts(),
+                  style: _profileText(14, c.text, weight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    labelText: field.label,
+                    isDense: true,
+                    filled: true,
+                    fillColor: c.surface2,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: radius),
+                    enabledBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: c.border)),
+                    focusedBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: c.accent.withValues(alpha: .72))),
+                  ),
+                ),
         ),
       );
-    }
-    return _contactField(
-      c,
-      field.label,
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (isPhone && _phoneCountry != null)
-            CountryCodePhoneField(
-              controller: draft,
-              focusNode: _phoneFocus,
-              initialCountry: _phoneCountry,
-              enabled: !_savingContacts,
-              requiredPhone: false,
-              focusColor: _blue(c),
-              onPhoneChanged: (value) => _phoneDraft = value,
-            )
-          else
-            TextField(
-              key: ValueKey(field.key),
-              controller: draft,
-              autofocus: true,
-              enabled: !_savingContacts,
-              keyboardType: isPhone
-                  ? TextInputType.phone
-                  : field.key.endsWith('_url')
-                  ? TextInputType.url
-                  : TextInputType.text,
-              onSubmitted: (_) => _saveContacts(),
-              style: _profileText(14, c.text, weight: FontWeight.w600),
-              decoration: InputDecoration(
-                hintText: field.placeholder,
-                filled: true,
-                fillColor: c.surface2,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 11,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: c.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _blue(c)),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.end,
-            children: [
-              OutlinedButton(
-                onPressed: _savingContacts
-                    ? null
-                    : () {
-                        FocusScope.of(context).unfocus();
-                        setState(_clearDraft);
-                      },
-                style: _outlineStyle(c),
-                child: const Text('Cancel'),
-              ),
-              _primary(
-                c,
-                _savingContacts ? 'Saving…' : 'Save',
-                _savingContacts ? null : _saveContacts,
-              ),
-            ],
+      editor = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: input),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: _savingContacts ? null : _saveContacts,
+            style: CandidateButtonStyle.primary(FilledButton.styleFrom(
+              backgroundColor: c.accent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              minimumSize: const Size(0, 40),
+              shape: const StadiumBorder(),
+            )),
+            child: Text(_savingContacts ? 'Saving…' : 'Save'),
           ),
-        ],
-      ),
+          const SizedBox(width: 6),
+          OutlinedButton(
+            onPressed: _savingContacts ? null : () {
+              FocusScope.of(context).unfocus();
+              setState(_clearDraft);
+            },
+            style: OutlinedButton.styleFrom(
+              backgroundColor: c.surface,
+              foregroundColor: c.text,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              minimumSize: const Size(0, 40),
+              side: BorderSide(color: c.border),
+              shape: RoundedRectangleBorder(borderRadius: radius),
+            ),
+            child: const Text('Cancel'),
+          ),
+        ]),
+      ]);
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.border))),
+      child: draft == null
+          ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(flex: 2, child: Text(field.label, style: _profileText(13, c.text3))),
+              const SizedBox(width: 12),
+              Expanded(flex: 3, child: Align(alignment: Alignment.centerRight, child: editor)),
+            ])
+          : editor,
     );
   }
 
@@ -1847,16 +1829,14 @@ class _CandidateProfileSettingsScreenState
   Widget _primary(_Colors c, String label, VoidCallback? onPressed) =>
       FilledButton(
         onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: _blue(c),
+        style: CandidateButtonStyle.primary(FilledButton.styleFrom(
+          backgroundColor: c.accent,
           foregroundColor: Colors.white,
           minimumSize: const Size(0, 40),
           padding: const EdgeInsets.symmetric(horizontal: 18),
-          textStyle: _profileText(13.5, Colors.white, weight: FontWeight.w600),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+          textStyle: _profileText(13.5, Colors.white, weight: FontWeight.w700),
+          shape: const StadiumBorder(),
+        )),
         child: Text(label),
       );
 

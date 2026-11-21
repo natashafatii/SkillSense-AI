@@ -13,6 +13,8 @@ import '../../models/job.dart';
 import '../../models/application.dart';
 import '../../models/interview.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/recruiter_button_style.dart';
+import '../../widgets/page_heading_style.dart';
 import '../../widgets/recruiter_side_nav.dart';
 import '../../widgets/applicant_avatar_image.dart';
 import '../application_screening_screen.dart';

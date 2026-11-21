@@ -10,7 +10,7 @@ import '../../services/session_scope.dart';
 import '../../services/media/interview_media_route_observer.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/candidate_button_style.dart';
-import '../../widgets/feedback_top_bar.dart';
+import '../../widgets/recruiter_top_bar.dart';
 
 class CandidateFeedbackReportScreen extends StatefulWidget {
   final Future<PaginatedResponse<CandidateFeedback>> Function(int page)?
@@ -214,13 +214,29 @@ class _CandidateFeedbackReportScreenState
             body: SafeArea(
               child: Column(
                 children: [
-                  FeedbackTopBar(
-                    searchController: _search,
-                    searchFocus: _searchFocus,
-                    onSearchChanged: (_) => setState(() {}),
-                    onRefresh: () {
+                  RecruiterTopBar(
+                    pageTitle: 'Feedback',
+                    candidate: true,
+                    showTrailingButton: true,
+                    trailingIcon: Icons.refresh_rounded,
+                    trailingTooltip: 'Refresh feedback',
+                    onTrailingTap: () {
                       if (!_loading) _load(keepVisible: true);
                     },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                    child: TextField(
+                      controller: _search,
+                      focusNode: _searchFocus,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        hintText: 'Search feedback',
+                        prefixIcon: Icon(Icons.search_rounded),
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                   ),
                   Expanded(child: FeedbackBackdrop(child: _body())),
                 ],
@@ -683,7 +699,7 @@ class _CandidateFeedbackReportScreenState
         collapsedIconColor: palette.meta,
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
-        expandedAlignment: AlignmentDirectional.centerStart,
+        expandedAlignment: Alignment.centerLeft,
         title: Text(
           report == null ? 'Attempt details' : 'Report details',
           style: palette.text(size: 15, weight: FontWeight.w700),

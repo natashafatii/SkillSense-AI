@@ -1,5 +1,5 @@
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
-import 'package:skillsense_ai/widgets/pre_auth_button_style.dart';
+import 'package:skillsense_ai/widgets/candidate_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +9,7 @@ import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/country_code_phone_field.dart';
+import '../../widgets/auth_role_switcher.dart';
 import 'terms_privacy_screen.dart';
 
 /// Signup-specific web HR registration screen.
@@ -35,6 +36,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
   final VoidCallback onRegister;
   final VoidCallback onGoogleSignIn;
   final VoidCallback onLoginTap;
+  final ValueChanged<String> onRoleChanged;
 
   const CandidateRegisterScreenWeb({
     super.key,
@@ -60,6 +62,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
     required this.onRegister,
     required this.onGoogleSignIn,
     required this.onLoginTap,
+    required this.onRoleChanged,
   });
 
   @override
@@ -428,6 +431,11 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             ),
                                           ),
                                           const SizedBox(height: 16),
+                                          AuthRoleSwitcher(
+                                            selectedRole: 'candidate',
+                                            onSelected: onRoleChanged,
+                                          ),
+                                          const SizedBox(height: 16),
 
                                           // Google Button
                                           _GoogleSignInButton(
@@ -602,7 +610,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               onPressed: isLoading
                                                   ? null
                                                   : onRegister,
-                                              style: PreAuthButtonStyle.active(
+                                              style: CandidateButtonStyle.primary(
                                                 ElevatedButton.styleFrom(
                                                   backgroundColor: AppColors
                                                       .candidatePrimary,
@@ -633,7 +641,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                     )
                                                   : Text(
                                                       AppConstants
-                                                          .hrRegisterCtaText,
+                                                          .candidateRegisterCtaText,
                                                       style: GoogleFonts.inter(
                                                         fontSize: 15,
                                                         fontWeight:
@@ -666,8 +674,9 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                     text:
                                                         'Terms and Privacy Policy',
                                                     style: GoogleFonts.inter(
-                                                      color: PreAuthButtonStyle
-                                                          .blue,
+                                                      color:
+                                                          CandidateButtonStyle
+                                                              .deepTeal,
                                                       fontWeight:
                                                           FontWeight.w600,
                                                       decoration: TextDecoration
@@ -719,8 +728,8 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                             .loginLinkText,
                                                         style: GoogleFonts.inter(
                                                           color:
-                                                              PreAuthButtonStyle
-                                                                  .blue,
+                                                              CandidateButtonStyle
+                                                                  .deepTeal,
                                                           fontWeight:
                                                               FontWeight.w600,
                                                         ),

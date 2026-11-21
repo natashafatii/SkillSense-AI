@@ -12,6 +12,7 @@ import 'email_verification_screen.dart';
 import 'terms_privacy_screen.dart';
 import '../../widgets/country_code_phone_field.dart';
 import '../../widgets/candidate_button_style.dart';
+import '../../widgets/auth_role_switcher.dart';
 
 const _green = CandidateButtonStyle.deepTeal;
 
@@ -293,6 +294,11 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
     );
   }
 
+  void _switchSignupRole(String role) {
+    if (role == 'candidate') return;
+    Navigator.of(context).pushReplacementNamed('/signup/hr');
+  }
+
   // ── Animated glow wrapper ──────────────────────────────────────────────────
   Widget _glow({required Widget child, required bool focused}) {
     return AnimatedContainer(
@@ -450,6 +456,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
             onPhoneValidityChanged: (valid) =>
                 setState(() => _phoneValid = valid),
             onRegister: () => _register(isWeb: true),
+            onRoleChanged: _switchSignupRole,
             onGoogleSignIn: _googleSignUp,
             onLoginTap: () {
               Navigator.pushReplacementNamed(
@@ -563,6 +570,11 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                               fontSize: 14,
                               color: _green,
                             ),
+                          ),
+                          const SizedBox(height: 16),
+                          AuthRoleSwitcher(
+                            selectedRole: 'candidate',
+                            onSelected: _switchSignupRole,
                           ),
                           const SizedBox(height: 26),
                         ],
@@ -964,25 +976,15 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                 Container(
                                   height: 56,
                                   decoration: BoxDecoration(
-                                    gradient: _isLoading
-                                        ? const LinearGradient(
-                                            colors: [
-                                              Color(0xFF81E291),
-                                              Color(0xFF34C759),
-                                              Color(0xFF248C3D),
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          )
-                                        : CandidateButtonStyle.primaryGradient,
-                                    borderRadius: BorderRadius.circular(16),
+                                    gradient:
+                                        CandidateButtonStyle.primaryGradient,
+                                    borderRadius: BorderRadius.circular(999),
                                     boxShadow: [
                                       BoxShadow(
                                         color: _isLoading
-                                            ? const Color(
-                                                0xFF34C759,
-                                              ).withValues(alpha: .45)
-                                            : CandidateButtonStyle.teal
+                                            ? CandidateButtonStyle.deepTeal
+                                                  .withValues(alpha: .45)
+                                            : CandidateButtonStyle.deepTeal
                                                   .withValues(alpha: .24),
                                         blurRadius: 18,
                                         offset: const Offset(0, 7),
@@ -997,7 +999,7 @@ class _CandidateRegisterScreenState extends State<CandidateRegisterScreen> {
                                       elevation: 0,
                                       shadowColor: Colors.transparent,
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
+                                        borderRadius: BorderRadius.circular(999),
                                       ),
                                     ),
                                     child: _isLoading

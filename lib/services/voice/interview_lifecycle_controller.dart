@@ -206,9 +206,10 @@ class InterviewLifecycleController extends ChangeNotifier {
     if (result.completed) {
       _localStop();
       _state = InterviewLifecycleState.completed;
-      _notice =
-          'The call ended. Evidence processing: ${result.workflowState}. Evaluation readiness is confirmed separately.';
-      if (_processingTerminal(result.workflowState)) _pollTimer?.cancel();
+      _notice = result.reportReady
+          ? 'The call ended. Evidence processing: ${result.workflowState}. Report availability is confirmed separately.'
+          : 'The call ended. Evidence processing: ${result.workflowState}. The report is still processing or unavailable.';
+      if (result.reportReady) _pollTimer?.cancel();
     }
   }
 
@@ -261,8 +262,9 @@ class InterviewLifecycleController extends ChangeNotifier {
       final current = _snapshot!;
       if (current.completed) {
         _state = InterviewLifecycleState.completed;
-        _notice =
-            'The call ended. Evidence processing: ${current.workflowState}.';
+        _notice = current.reportReady
+            ? 'The call ended. Evidence processing: ${current.workflowState}. Report availability is confirmed separately.'
+            : 'The call ended. Evidence processing: ${current.workflowState}. The report is still processing or unavailable.';
       }
       if (_state != InterviewLifecycleState.completed) {
         _state = _finishWanted
@@ -285,7 +287,9 @@ class InterviewLifecycleController extends ChangeNotifier {
         _localStop();
       }
       if (_state == InterviewLifecycleState.awaitingCompletion ||
-          (current.completed && !_processingTerminal(current.workflowState))) {
+          (current.completed &&
+              (!current.reportReady ||
+                  !_processingTerminal(current.workflowState)))) {
         _schedulePoll();
       }
     } on VoiceContractUnavailable catch (error) {
@@ -651,7 +655,7 @@ class InterviewLifecycleController extends ChangeNotifier {
     if (!isCurrent ||
         _paused ||
         (_snapshot?.completed == true &&
-            _processingTerminal(_snapshot!.workflowState))) {
+            _snapshot?.reportReady == true)) {
       return;
     }
     if (_state == InterviewLifecycleState.live && !_finishWanted) {
@@ -665,7 +669,7 @@ class InterviewLifecycleController extends ChangeNotifier {
     _pollDeadline ??= DateTime.now().add(const Duration(minutes: 2));
     if (_polls >= maxPolls || !DateTime.now().isBefore(_pollDeadline!)) {
       _notice = _snapshot?.completed == true
-          ? 'The call ended; evidence processing is not yet confirmed. Refresh status later.'
+          ? 'The call ended; evidence processing or report availability is not yet confirmed. Refresh status later.'
           : 'Completion is still unconfirmed. Retry status or finish; the report is not assumed ready.';
       return;
     }

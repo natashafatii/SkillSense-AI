@@ -14,6 +14,7 @@ import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/page_heading_style.dart';
 import 'role_skill_picker.dart';
 
 @immutable
@@ -403,7 +404,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         child: _isMobile
             ? _mobileScaffold()
             : Scaffold(
-                backgroundColor: c.background,
+                backgroundColor: Colors.transparent,
                 body: SafeArea(
                   child: Column(
                     children: [
@@ -438,7 +439,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
                                       children: [
-                                        _pageIntro(constraints.maxWidth < 640),
+                                        _pageIntro(),
                                         _formCard(constraints.maxWidth < 640),
                                         const SizedBox(height: 24),
                                         _aside(),
@@ -466,7 +467,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          _pageIntro(false),
+                                          _pageIntro(),
                                           SizedBox(
                                             width: formWidth,
                                             child: _formCard(false),
@@ -512,7 +513,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
 
   Widget _mobileScaffold() {
     return Scaffold(
-      backgroundColor: _c.background,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -1070,14 +1071,12 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     onBellTap: () =>
         Navigator.of(context).pushNamed('/recruiter/notifications'),
   );
-  Widget _pageIntro(bool compact) => Column(
+  Widget _pageIntro() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(
         widget.initialJob == null ? 'New job posting' : 'Edit role',
-        style: _heading(
-          compact ? 26 : 30,
-        ).copyWith(letterSpacing: compact ? -.52 : -.6),
+        style: pageHeadingStyle(context),
       ),
       const SizedBox(height: 6),
       ConstrainedBox(
@@ -2453,7 +2452,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: RecruiterButtonStyle.primaryGradient,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(999),
               boxShadow: [
                 BoxShadow(
                   color: _c.accent.withValues(alpha: .3),
@@ -2467,6 +2466,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               onPressed: _saving
                   ? null
                   : () => _saveRole(publish: widget.initialJob == null),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                shape: const StadiumBorder(),
+                textStyle: _body(14.5, weight: FontWeight.w700),
+              ),
               child: Text(
                 _saving
                     ? 'Saving…'
@@ -2476,7 +2480,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                 maxLines: 1,
                 style: _body(
                   14.5,
-                  weight: FontWeight.w600,
+                  weight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),

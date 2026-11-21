@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'recruiter_mobile_nav.dart';
 import 'recruiter_side_nav.dart';
 import 'recruiter_button_style.dart';
+import 'recruiter_gradient_background.dart';
 
 /// Keeps one navigation surface around every recruiter route.
 class RecruiterScaffold extends StatelessWidget {
@@ -25,7 +26,12 @@ class RecruiterScaffold extends StatelessWidget {
     if (isMobile) {
       return Scaffold(
         backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
-        body: SafeArea(bottom: false, child: themedBody),
+        body: SafeArea(
+          bottom: false,
+          child: Stack(
+            children: [const RecruiterGradientBackground(), themedBody],
+          ),
+        ),
         bottomNavigationBar: currentRoute == '/recruiter/profile'
             ? RecruiterMobileNav(currentRoute: currentRoute)
             : null,
@@ -45,7 +51,9 @@ class RecruiterScaffold extends StatelessWidget {
             Expanded(
               child: ClipRect(
                 key: const Key('recruiter-main-canvas'),
-                child: themedBody,
+                child: Stack(
+                  children: [const RecruiterGradientBackground(), themedBody],
+                ),
               ),
             ),
           ],

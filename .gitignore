@@ -91,4 +91,10 @@ tooling/browser_qa/run_flutter_tests.mjs
 *.[mM][dD]
 docs/
 **/docs/
+
+# Retain the focused interview lifecycle regression.
+!test/
+test/*
+!test/interview_ended_rejoin_test.dart
+
 .vscode/
