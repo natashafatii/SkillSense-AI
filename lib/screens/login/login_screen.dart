@@ -18,6 +18,8 @@ import 'check_email_screen_web.dart';
 import 'set_new_password_screen_web.dart';
 import '../signup/email_verification_screen.dart';
 import '../../widgets/profile_name_prompt_dialog.dart';
+import '../../widgets/auth_role_switcher.dart';
+import '../../widgets/candidate_button_style.dart';
 
 /// Login screen for SkillSense AI.
 /// Background: identical gradient to WelcomeScreen & RoleSelectionScreen.
@@ -46,6 +48,22 @@ class _LoginScreenState extends State<LoginScreen>
         'RECRUITER' => 'Recruiter sign in',
         _ => 'Sign in',
       };
+
+  String get _roleSwitcherSelection =>
+      AuthService.normalizeRole(widget.selectedRole) == 'RECRUITER'
+      ? 'recruiter'
+      : 'candidate';
+
+  Color get _loginAccent => _roleSwitcherSelection == 'candidate'
+      ? CandidateButtonStyle.deepTeal
+      : AppColors.buttonBlue;
+
+  void _switchAuthRole(String role) {
+    if (role == _roleSwitcherSelection) return;
+    Navigator.of(context).pushReplacementNamed(
+      role == 'recruiter' ? '/login/recruiter' : '/login/candidate',
+    );
+  }
 
   Future<void> _googleSignIn() async {
     if (_isLoading) return;
@@ -360,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen>
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: AppColors.buttonBlue, width: 1.5),
+        borderSide: BorderSide(color: _loginAccent, width: 1.5),
       ),
       suffixIcon: suffix,
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -374,6 +392,9 @@ class _LoginScreenState extends State<LoginScreen>
         if (constraints.maxWidth >= 900) {
           return LoginScreenWeb(
             title: _signInTitle,
+            selectedRole: _roleSwitcherSelection,
+            isCandidate: _roleSwitcherSelection == 'candidate',
+            onRoleChanged: _switchAuthRole,
             onGoogleSignIn: _googleSignIn,
             isLoading: _isLoading,
             emailController: _emailController,
@@ -463,7 +484,12 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 28),
+                              const SizedBox(height: 18),
+                              AuthRoleSwitcher(
+                                selectedRole: _roleSwitcherSelection,
+                                onSelected: _switchAuthRole,
+                              ),
+                              const SizedBox(height: 22),
 
                               if (_loginError != null) ...[
                                 Container(
@@ -567,7 +593,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           height: 24,
                                           child: Checkbox(
                                             value: _rememberMe,
-                                            activeColor: AppColors.buttonBlue,
+                                            activeColor: _loginAccent,
                                             materialTapTargetSize:
                                                 MaterialTapTargetSize
                                                     .shrinkWrap,
@@ -612,7 +638,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       style: GoogleFonts.publicSans(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w500,
-                                        color: AppColors.linkBlue,
+                                        color: _loginAccent,
                                       ),
                                     ),
                                   ),
@@ -625,16 +651,24 @@ class _LoginScreenState extends State<LoginScreen>
                                 height: 56,
                                 child: ElevatedButton(
                                   onPressed: _isLoading ? null : _login,
-                                  style: PreAuthButtonStyle.active(
-                                    ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.buttonBlue,
-                                      foregroundColor: Colors.white,
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                    ),
-                                  ),
+                                  style: _roleSwitcherSelection == 'candidate'
+                                      ? CandidateButtonStyle.primary(
+                                          ElevatedButton.styleFrom(
+                                            foregroundColor: Colors.white,
+                                            elevation: 0,
+                                            shape: const StadiumBorder(),
+                                          ),
+                                        )
+                                      : PreAuthButtonStyle.active(
+                                          ElevatedButton.styleFrom(
+                                            backgroundColor: AppColors.buttonBlue,
+                                            foregroundColor: Colors.white,
+                                            elevation: 0,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(14),
+                                            ),
+                                          ),
+                                        ),
                                   child: _isLoading
                                       ? const SizedBox(
                                           width: 24,
@@ -799,7 +833,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       style: GoogleFonts.publicSans(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,
-                                        color: AppColors.linkBlue,
+                                        color: _loginAccent,
                                       ),
                                     ),
                                   ),

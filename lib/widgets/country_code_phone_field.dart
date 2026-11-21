@@ -54,7 +54,12 @@ class CountryCodePhoneField extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final String hintText;
+  final String? label;
+  final TextStyle? labelStyle;
+  final double focusGlowSpread;
+  final double focusGlowOpacity;
   final ValueChanged<String>? onPhoneChanged;
+  final ValueChanged<CountryData>? onCountryChanged;
   final ValueChanged<bool>? onValidityChanged;
   final Color focusColor;
   final bool anchoredMobilePicker;
@@ -77,7 +82,12 @@ class CountryCodePhoneField extends StatefulWidget {
     required this.controller,
     required this.focusNode,
     this.hintText = 'Enter your phone number',
+    this.label,
+    this.labelStyle,
+    this.focusGlowSpread = 3,
+    this.focusGlowOpacity = 0.13,
     this.onPhoneChanged,
+    this.onCountryChanged,
     this.onValidityChanged,
     this.focusColor = const Color(0xFF0F172A),
     this.anchoredMobilePicker = false,
@@ -288,6 +298,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
     _closeDesktopPicker(validateOnClose: false);
     if (!mounted) return;
     setState(() => _selectedCountry = country);
+    widget.onCountryChanged?.call(country);
     widget.controller.clear();
     _onTextChanged();
     widget.focusNode.requestFocus();
@@ -323,6 +334,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
       if (!mounted) return;
       if (country != null) {
         setState(() => _selectedCountry = country);
+        widget.onCountryChanged?.call(country);
         widget.controller.clear();
         _onTextChanged();
         widget.focusNode.requestFocus();
@@ -418,6 +430,16 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.label != null) ...[
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 5),
+                child: Text(
+                  widget.label!,
+                  style: widget.labelStyle ??
+                      GoogleFonts.inter(fontSize: 12, color: hintColor),
+                ),
+              ),
+            ],
             CompositedTransformTarget(
               link: _fieldLink,
               child: Container(
@@ -442,14 +464,16 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                       ? [
                           BoxShadow(
                             color: errorColor.withValues(alpha: 0.12),
-                            spreadRadius: 3,
+                            spreadRadius: widget.focusGlowSpread,
                           ),
                         ]
                       : widget.focusNode.hasFocus
                       ? [
                           BoxShadow(
-                            color: widget.focusColor.withValues(alpha: 0.13),
-                            spreadRadius: 3,
+                            color: widget.focusColor.withValues(
+                              alpha: widget.focusGlowOpacity,
+                            ),
+                            spreadRadius: widget.focusGlowSpread,
                           ),
                         ]
                       : [],

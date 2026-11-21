@@ -32,34 +32,31 @@ extension _DeckView on _CommandDeckScreenState {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor: c.canvas,
-          body: CustomPaint(
-            painter: _DeckBackdrop(c.dark),
-            child: SafeArea(
-              bottom: !mobile,
-              child: Column(
-                children: [
-                  RecruiterTopBar(
-                    pageTitle: 'Command deck',
-                    onSearchTap: () => _search(c),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(
-                        gutter,
-                        mobile ? 0 : 4,
-                        gutter,
-                        16,
-                      ),
-                      child: _loadingDashboard
-                          ? _loading()
-                          : _dashboardError != null && !_hasData
-                          ? _error(c, 'Could not load Command Deck.')
-                          : _dashboard(c, mobile, width),
+          backgroundColor: Colors.transparent,
+          body: SafeArea(
+            bottom: !mobile,
+            child: Column(
+              children: [
+                RecruiterTopBar(
+                  pageTitle: 'Command deck',
+                  onSearchTap: () => _search(c),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      gutter,
+                      mobile ? 0 : 4,
+                      gutter,
+                      16,
                     ),
+                    child: _loadingDashboard
+                        ? _loading()
+                        : _dashboardError != null && !_hasData
+                        ? _error(c, 'Could not load Command Deck.')
+                        : _dashboard(c, mobile, width),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           bottomNavigationBar: mobile ? _dock(c) : null,
@@ -315,12 +312,7 @@ extension _DeckView on _CommandDeckScreenState {
       children: [
         Text(
           _hasData ? '$greeting, $name' : 'Welcome to SkillSense, $name',
-          style: c.text(
-            mobile ? 22 : 26,
-            weight: FontWeight.w700,
-            tracking: -.6,
-            height: 1.2,
-          ),
+          style: pageHeadingStyle(context),
         ),
         const SizedBox(height: 4),
         Text(summary, style: c.text(14, color: c.body)),
@@ -1266,18 +1258,17 @@ extension _DeckView on _CommandDeckScreenState {
         shortlisted.update(app.job, (n) => n + 1, ifAbsent: () => 1);
       }
     }
-    final jobs = _activeJobs;
+    final jobs = _activeJobs.toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final visibleJobs = jobs.take(5).toList();
+    final hiddenJobs = jobs.length - visibleJobs.length;
     final available = !_loadingApplications && _applicationsError == null;
     return _card(
       c,
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _section(
-            c,
-            'Open roles',
-            action: _link(c, 'Manage', '/recruiter/job-listings'),
-          ),
+          _section(c, 'Open roles'),
           if (jobs.isEmpty)
             _empty(
               c,
@@ -1291,7 +1282,7 @@ extension _DeckView on _CommandDeckScreenState {
               padding: const EdgeInsets.fromLTRB(22, 2, 22, 8),
               child: Column(
                 children: [
-                  for (final (index, job) in jobs.indexed)
+                  for (final (index, job) in visibleJobs.indexed)
                     _row(
                       c,
                       divided: index > 0,
@@ -1305,23 +1296,44 @@ extension _DeckView on _CommandDeckScreenState {
                           child: Row(
                             children: [
                               Expanded(
-                                child: _person(
-                                  c,
-                                  job.title,
-                                  available
-                                      ? '${counts[job.id] ?? 0} ${counts[job.id] == 1 ? 'applicant' : 'applicants'} · ${shortlisted[job.id] ?? 0} shortlisted'
-                                      : _loadingApplications
-                                      ? 'Loading applicant counts…'
-                                      : 'Applicant counts unavailable',
-                                  size: 14,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      job.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: c.text(
+                                        14,
+                                        weight: FontWeight.w700,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                    Text(
+                                      available
+                                          ? '${shortlisted[job.id] ?? 0} shortlisted'
+                                          : _loadingApplications
+                                          ? 'Loading applicant counts…'
+                                          : 'Applicant counts unavailable',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: c.text(
+                                        12.5,
+                                        color: c.muted,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(width: 12),
                               _pill(
                                 c,
-                                available ? '${counts[job.id] ?? 0}' : '—',
+                                available
+                                    ? '${counts[job.id] ?? 0} applicants'
+                                    : '—',
                                 c.ink,
-                                c.canvas,
+                                c.blueSoft,
                               ),
                             ],
                           ),
@@ -1331,6 +1343,54 @@ extension _DeckView on _CommandDeckScreenState {
                 ],
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: c.line)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    if (hiddenJobs > 0)
+                      Expanded(
+                        child: Text(
+                          '+$hiddenJobs more roles',
+                          style: c.text(12.5, color: c.muted),
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    TextButton(
+                      onPressed: () => _go('/recruiter/job-listings'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: c.blue,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'View all roles',
+                            style: c.text(
+                              13,
+                              color: c.blue,
+                              weight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_forward_rounded, size: 16),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

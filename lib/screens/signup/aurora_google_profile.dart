@@ -569,11 +569,13 @@ class AuroraGoogleProfile extends StatelessWidget {
   );
 
   Widget _submitButton() {
-    final ink = recruiter ? Colors.white : const Color(0xff07251f);
-    final shadowColor = recruiter ? RecruiterButtonStyle.blue : _glow;
+    const ink = Colors.white;
+    final shadowColor = recruiter
+        ? RecruiterButtonStyle.blue
+        : CandidateButtonStyle.deepTeal;
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
             color: shadowColor.withValues(alpha: .65),
@@ -593,7 +595,7 @@ class AuroraGoogleProfile extends StatelessWidget {
           minimumSize: const Size.fromHeight(45),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(999),
             side: const BorderSide(color: Color(0x14ffffff)),
           ),
         ),

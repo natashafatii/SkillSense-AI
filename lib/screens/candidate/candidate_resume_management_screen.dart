@@ -16,6 +16,7 @@ import '../../services/resume_manager.dart';
 import '../../services/resume_service.dart';
 import '../../services/api_exception.dart';
 import '../../widgets/candidate_side_nav.dart';
+import '../../widgets/green_gradient_background.dart';
 
 class CandidateResumeManagementScreen extends StatefulWidget {
   const CandidateResumeManagementScreen({super.key});
@@ -553,6 +554,7 @@ class _CandidateResumeManagementScreenState
       backgroundColor: context.themeCanvas(const Color(0xFFF4F6FA)),
       body: Stack(
         children: [
+          const GreenGradientBackground(),
           // Background subtle grid & aurora
           Positioned.fill(
             child: CustomPaint(
@@ -835,7 +837,7 @@ class _CandidateResumeManagementScreenState
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                             decoration: BoxDecoration(
                               gradient: CandidateButtonStyle.primaryGradient,
-                              borderRadius: BorderRadius.circular(11),
+                              borderRadius: BorderRadius.circular(999),
                               boxShadow: const [
                                 BoxShadow(
                                   color: Color.fromRGBO(20, 181, 132, 0.22),
@@ -853,7 +855,7 @@ class _CandidateResumeManagementScreenState
                                   style: GoogleFonts.inter(
                                     color: Colors.white,
                                     fontSize: 10.5,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ],
@@ -910,7 +912,7 @@ class _CandidateResumeManagementScreenState
                                     const Color(0xFF4B3AB8),
                                   ),
                                   fontSize: 9,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
@@ -1241,14 +1243,14 @@ class _CandidateResumeManagementScreenState
                         onTap: _canUpload
                             ? _startUploadFlowFromButton
                             : (_parseCompleted ? _commitStagedResume : null),
-                        borderRadius: BorderRadius.circular(11),
+                        borderRadius: BorderRadius.circular(999),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           height: 32,
                           width: double.infinity,
                           decoration: BoxDecoration(
                             gradient: CandidateButtonStyle.primaryGradient,
-                            borderRadius: BorderRadius.circular(11),
+                            borderRadius: BorderRadius.circular(999),
                             boxShadow: (_parseCompleted || _canUpload)
                                 ? const [
                                     BoxShadow(

@@ -7,6 +7,7 @@ import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'mobile_edge_shadow_wrapper.dart';
 import 'candidate_button_style.dart';
 import 'package:flutter/material.dart';
+import 'green_gradient_background.dart';
 import 'package:flutter/services.dart';
 import '../models/interview_analysis_contract.dart';
 import '../screens/admin/aurora_tokens.dart';
@@ -215,7 +216,10 @@ class _CandidateInterviewWorkspaceState
       child: Theme(
         data: theme,
         child: Scaffold(
-          body: SafeArea(
+          body: Stack(
+            children: [
+              const GreenGradientBackground(),
+              SafeArea(
             child: Builder(
               builder: (context) => _roomVisible
                   ? _interviewRoom(context)
@@ -267,6 +271,8 @@ class _CandidateInterviewWorkspaceState
                       ],
                     ),
             ),
+              ),
+            ],
           ),
         ),
       ),

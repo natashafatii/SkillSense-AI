@@ -6,6 +6,7 @@ import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/page_heading_style.dart';
 import '../../widgets/notification_list_skeleton.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -31,6 +32,152 @@ enum _JobSort {
 
   const _JobSort(this.label);
   final String label;
+}
+
+class _JobSortMenuOption extends StatefulWidget {
+  final String label;
+  final bool selected;
+
+  const _JobSortMenuOption({required this.label, required this.selected});
+
+  @override
+  State<_JobSortMenuOption> createState() => _JobSortMenuOptionState();
+}
+
+class _JobSortMenuOptionState extends State<_JobSortMenuOption> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const blue = Color(0xFF2563EB);
+    final selected = widget.selected;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Container(
+        width: 208,
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFFEAF1FF)
+              : _hovered
+              ? const Color(0xFFF3F4F6)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              child: selected
+                  ? const Icon(Icons.check_rounded, size: 17, color: blue)
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              widget.label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                color: selected
+                    ? blue
+                    : context.themeForeground(const Color(0xFF334155)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _JobActionTrigger extends StatefulWidget {
+  const _JobActionTrigger();
+
+  @override
+  State<_JobActionTrigger> createState() => _JobActionTriggerState();
+}
+
+class _JobActionTriggerState extends State<_JobActionTrigger> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _hovered = true),
+    onExit: (_) => setState(() => _hovered = false),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 130),
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _hovered ? const Color(0xFFF1F5F9) : Colors.transparent,
+        border: Border.all(
+          color: _hovered ? const Color(0xFFE2E8F0) : Colors.transparent,
+        ),
+      ),
+      child: Icon(
+        Icons.more_horiz_rounded,
+        size: 20,
+        color: context.themeForeground(const Color(0xFF64748B)),
+      ),
+    ),
+  );
+}
+
+class _JobActionMenuOption extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool destructive;
+
+  const _JobActionMenuOption({
+    required this.label,
+    required this.icon,
+    this.destructive = false,
+  });
+
+  @override
+  State<_JobActionMenuOption> createState() => _JobActionMenuOptionState();
+}
+
+class _JobActionMenuOptionState extends State<_JobActionMenuOption> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = widget.destructive
+        ? const Color(0xFFDC2626)
+        : context.themeForeground(const Color(0xFF334155));
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Container(
+        width: 172,
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: _hovered ? const Color(0xFFF3F4F6) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(widget.icon, size: 17, color: ink),
+            const SizedBox(width: 10),
+            Text(
+              widget.label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class JobListingsScreen extends StatefulWidget {
@@ -274,19 +421,47 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
       key: Key('job-actions-${job.id}'),
       tooltip: 'Actions for ${job.title}',
       enabled: _busyJobId == null,
-      icon: const Icon(Icons.more_horiz, size: 20),
+      position: PopupMenuPosition.under,
+      offset: Offset.zero,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 188, maxWidth: 188),
+      color: context.themeSurface(Colors.white),
+      surfaceTintColor: Colors.transparent,
+      shadowColor: const Color(0xFF0F172A).withValues(alpha: 0.16),
+      elevation: 14,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: context.themeOutline(const Color(0xFFE2E8F0)),
+        ),
+      ),
+      menuPadding: const EdgeInsets.all(6),
       onSelected: (action) => _handleAction(job, action),
+      child: const _JobActionTrigger(),
       itemBuilder: (_) => [
         for (final action in actions)
           PopupMenuItem(
             value: action,
-            child: Text(switch (action) {
-              _JobAction.edit => 'Edit',
-              _JobAction.close => 'Close',
-              _JobAction.view => 'View',
-              _JobAction.publish => 'Publish',
-              _JobAction.delete => 'Delete',
-            }),
+            height: 42,
+            padding: EdgeInsets.zero,
+            child: _JobActionMenuOption(
+              label: switch (action) {
+                _JobAction.edit => 'Edit',
+                _JobAction.close => 'Close',
+                _JobAction.view => 'View',
+                _JobAction.publish => 'Publish',
+                _JobAction.delete => 'Delete',
+              },
+              icon: switch (action) {
+                _JobAction.edit => Icons.edit_outlined,
+                _JobAction.close => Icons.close_rounded,
+                _JobAction.view => Icons.visibility_outlined,
+                _JobAction.publish => Icons.publish_outlined,
+                _JobAction.delete => Icons.delete_outline_rounded,
+              },
+              destructive:
+                  action == _JobAction.close || action == _JobAction.delete,
+            ),
           ),
       ],
     );
@@ -339,7 +514,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
     final isMobile = MediaQuery.sizeOf(context).width < 900;
 
     return Scaffold(
-      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           SafeArea(
@@ -384,12 +559,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                   'Job listings',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.48,
-                    color: context.themeForeground(const Color(0xFF0F172A)),
-                  ),
+                  style: pageHeadingStyle(context),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -414,7 +584,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
   Widget _buildNewRoleButton() => DecoratedBox(
     decoration: BoxDecoration(
       gradient: RecruiterButtonStyle.primaryGradient,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(999),
     ),
     child: TextButton(
       onPressed: () =>
@@ -424,7 +594,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         minimumSize: const Size(0, 36),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: const StadiumBorder(),
       ),
       child: Text(
         '＋ New role',
@@ -552,19 +722,65 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                   padding: EdgeInsets.zero,
                   initialValue: _sort,
                   onSelected: (value) => setState(() => _sort = value),
+                  color: context.themeSurface(Colors.white),
+                  surfaceTintColor: Colors.transparent,
+                  shadowColor: const Color(0xFF0F172A).withValues(alpha: 0.14),
+                  elevation: 12,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(
+                      color: context.themeOutline(const Color(0xFFE2E8F0)),
+                    ),
+                  ),
+                  constraints: const BoxConstraints(minWidth: 224, maxWidth: 224),
+                  menuPadding: const EdgeInsets.all(8),
+                  offset: const Offset(0, 8),
                   itemBuilder: (_) => [
                     for (final option in _JobSort.values)
-                      CheckedPopupMenuItem(
+                      PopupMenuItem(
                         value: option,
-                        checked: option == _sort,
-                        child: Text(option.label),
+                        height: 44,
+                        padding: EdgeInsets.zero,
+                        child: _JobSortMenuOption(
+                          label: option.label,
+                          selected: option == _sort,
+                        ),
                       ),
                   ],
-                  child: Text(
-                    'Sort: ${_sort.label}',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: context.themeForeground(const Color(0xFF64748B)),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.themeSurface(Colors.white),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(
+                        color: context.themeOutline(const Color(0xFFD8E0ED)),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Sort: ${_sort.label}',
+                          style: GoogleFonts.inter(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: context.themeForeground(
+                              const Color(0xFF334155),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                          color: context.themeForeground(
+                            const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -643,8 +859,9 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
                       maxLines: isMobile ? 2 : 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
-                        fontSize: 10.5,
-                        color: context.themeForeground(const Color(0xFF64748B)),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: context.themeForeground(const Color(0xFF4A5875)),
                       ),
                     ),
                   ],
@@ -717,8 +934,9 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
   Widget _buildApplicantCount(int count, {required bool isMobile}) => Text(
     '$count applicants',
     style: GoogleFonts.jetBrainsMono(
-      fontSize: isMobile ? 10 : 12,
-      color: context.themeForeground(const Color(0xFF64748B)),
+      fontSize: isMobile ? 11 : 12,
+      fontWeight: FontWeight.w500,
+      color: context.themeForeground(const Color(0xFF4A5875)),
     ),
   );
 
@@ -1065,7 +1283,7 @@ class _RecruiterNotificationsScreenState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
+    backgroundColor: Colors.transparent,
     body: Column(
       children: [
         RecruiterTopBar(

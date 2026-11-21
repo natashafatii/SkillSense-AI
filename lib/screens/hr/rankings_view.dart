@@ -129,7 +129,7 @@ extension _RankingsView on _RankingsScreenState {
       ),
     ),
     child: Scaffold(
-      backgroundColor: context.themeCanvas(const Color(0xFFF5F6F8)),
+      backgroundColor: Colors.transparent,
       bottomNavigationBar: MediaQuery.sizeOf(context).width < 900
           ? const RecruiterMobileNav(currentRoute: '/recruiter/rankings')
           : null,
@@ -187,12 +187,8 @@ extension _RankingsView on _RankingsScreenState {
       children: [
         Flexible(
           child: Text(
-            'Applicant rankings',
-            style: _text(
-              24,
-              weight: FontWeight.w700,
-              height: 1.2,
-            ).copyWith(letterSpacing: -.48),
+            'Applicant Rankings',
+            style: pageHeadingStyle(context),
           ),
         ),
         const SizedBox(width: 4),

@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/candidate_button_style.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/page_heading_style.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../models/job.dart';
@@ -14,6 +15,7 @@ import '../../models/paginated_response.dart';
 import '../../services/job_service.dart';
 import '../../services/resume_service.dart';
 import '../../widgets/candidate_side_nav.dart';
+import '../../widgets/green_gradient_background.dart';
 import 'widgets/candidate_job_card.dart';
 
 class CandidateJobFeedScreen extends StatefulWidget {
@@ -184,6 +186,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
       backgroundColor: bgBase,
       body: Stack(
         children: [
+          const GreenGradientBackground(),
           // ── GRID PATTERN OVERLAY ───────────────────────────────────────────
           Positioned.fill(
             child: CustomPaint(
@@ -327,12 +330,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                     children: [
                       Text(
                         'Job feed',
-                        style: GoogleFonts.spaceGrotesk(
-                          color: textPrimary,
-                          fontSize: 19,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.025,
-                        ),
+                        style: pageHeadingStyle(context),
                       ),
                     ],
                   ),
@@ -491,10 +489,10 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               height: 40,
               decoration: BoxDecoration(
                 gradient: CandidateButtonStyle.primaryGradient,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(999),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF14B584).withValues(alpha: 0.25),
+                    color: CandidateButtonStyle.teal.withValues(alpha: 0.25),
                     blurRadius: 12,
                     spreadRadius: 2,
                     offset: const Offset(0, 4),
@@ -507,7 +505,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   shadowColor: Colors.transparent,
                   padding: EdgeInsets.symmetric(horizontal: isMobile ? 22 : 26),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(11),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
                 onPressed: () {
@@ -518,7 +516,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   style: GoogleFonts.inter(
                     color: Colors.white,
                     fontSize: 14,
-                    fontWeight: FontWeight.w600, // approximations for 550
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),

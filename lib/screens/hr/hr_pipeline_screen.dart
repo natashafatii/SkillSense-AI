@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter;
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/page_heading_style.dart';
 import '../../widgets/applicant_avatar_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -489,11 +490,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                 job?.title ?? 'Applicant pipeline',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.spaceGrotesk(
-                  color: context.themeForeground(const Color(0xFF17233B)),
-                  fontSize: 25,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: pageHeadingStyle(context),
               ),
             ),
             const SizedBox(width: 5),
@@ -505,11 +502,12 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
           ],
         ),
       ),
+      const SizedBox(height: 4),
       Text(
         '${_applications.length} applicants',
         style: GoogleFonts.inter(
-          color: context.themeForeground(const Color(0xFF8290AB)),
-          fontSize: 12,
+          color: context.themeForeground(const Color(0xFF64748B)),
+          fontSize: 13,
         ),
       ),
     ],
@@ -555,25 +553,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
     final hasJobs = _jobs.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Background gradient
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    context.themeSurface(const Color(0xFFF8FAFC)),
-                    context.themeSurface(const Color(0xFFF1F5F9)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           // Grid pattern overlay (Web Only)
           if (!compact)
             Positioned.fill(
@@ -715,7 +697,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                     height: compact ? 38 : 40,
                     decoration: BoxDecoration(
                       gradient: RecruiterButtonStyle.primaryGradient,
-                      borderRadius: BorderRadius.circular(11),
+                      borderRadius: BorderRadius.circular(999),
                       boxShadow: [
                         BoxShadow(
                           color: const Color(
@@ -737,7 +719,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                             horizontal: compact ? 22 : 26,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(11),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                         ),
                       ),
@@ -749,7 +731,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                         style: GoogleFonts.inter(
                           color: Colors.white,
                           fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -778,7 +760,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
   // ── KANBAN BOARD ───────────────────────────────────────────────────────────
   Widget _buildKanbanBoard(bool compact) => LayoutBuilder(
     builder: (context, constraints) {
-      final width = ((constraints.maxWidth - 48 - 48) / 5).clamp(225.0, 300.0);
+      final width = ((constraints.maxWidth - 48 - 48) / 5)
+          .clamp(280.0, 320.0)
+          .toDouble();
       return MobileEdgeShadowWrapper(
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -788,20 +772,18 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
             compact ? 16 : 24,
             compact ? 84 : 16,
           ),
-          child: SizedBox(
-            height: constraints.maxHeight - (compact ? 84 : 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var index = 0; index < _stages.length; index++) ...[
-                  SizedBox(
-                    width: width,
-                    child: _column(_stages[index], _stageColors[index]),
-                  ),
-                  if (index < _stages.length - 1) const SizedBox(width: 12),
-                ],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var index = 0; index < _stages.length; index++) ...[
+                SizedBox(
+                  width: width,
+                  child: _column(_stages[index], _stageColors[index]),
+                ),
+                if (index < _stages.length - 1) const SizedBox(width: 12),
               ],
-            ),
+            ],
           ),
         ),
       );
@@ -820,76 +802,96 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final shown = _expanded.contains(stage) ? apps : apps.take(2).toList();
     final more = apps.length - shown.length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
-          child: Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.35),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  '$stage · ${apps.length}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: context.themeForeground(const Color(0xFF27344C)),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: apps.isEmpty
-              ? Container(
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.themeSurface(const Color(0xFFF8FAFC)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 2, 2, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
                   decoration: BoxDecoration(
-                    color: context
-                        .themeSurface(Colors.white)
-                        .withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: context.themeOutline(const Color(0xFFE2E8F0)),
-                      strokeAlign: BorderSide.strokeAlignInside,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'No candidates yet',
-                      style: GoogleFonts.inter(
-                        color: context.themeForeground(const Color(0xFF94A3B8)),
-                        fontSize: 11,
+                    color: color,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.35),
+                        blurRadius: 6,
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    '$stage · ${apps.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: context.themeForeground(const Color(0xFF27344C)),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                )
-              : ListView.separated(
-                  padding: EdgeInsets.zero,
-                  itemCount: shown.length + (more > 0 ? 1 : 0),
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) => index < shown.length
-                      ? _card(shown[index], stage)
-                      : _moreButton(stage, more),
                 ),
-        ),
-      ],
+              ],
+            ),
+          ),
+          if (apps.isEmpty)
+            CustomPaint(
+              painter: _PipelineDashedBorder(
+                context.themeOutline(const Color(0xFFD9E1EC)),
+              ),
+              child: SizedBox(
+                height: 96,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.group_outlined,
+                        size: 24,
+                        color: context.themeForeground(
+                          const Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No candidates yet',
+                        style: GoogleFonts.inter(
+                          color: context.themeForeground(
+                            const Color(0xFF64748B),
+                          ),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else ...[
+            for (final (index, app) in shown.indexed) ...[
+              if (index > 0) const SizedBox(height: 12),
+              _card(app, stage),
+            ],
+            if (more > 0) ...[
+              const SizedBox(height: 12),
+              _moreButton(stage, more),
+            ],
+          ],
+        ],
+      ),
     );
   }
 
@@ -919,6 +921,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
   Widget _card(Application app, String stage) {
     final name = _candidateName(app);
     final initials = _initials(name);
+    final compact = MediaQuery.sizeOf(context).width < 600;
     final scored = stage == 'INTERVIEWED';
     final date = (scored ? (app.updatedAt ?? app.createdAt) : app.createdAt)
         .toLocal();
@@ -930,7 +933,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
         borderRadius: BorderRadius.circular(20),
         onTap: () => _showApplication(app),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(compact ? 14 : 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
@@ -948,6 +951,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
                     radius: 18,
@@ -964,39 +968,59 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: context.themeForeground(
-                              const Color(0xFF27344C),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FittedBox(
+                            alignment: Alignment.centerLeft,
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              softWrap: false,
+                              style: GoogleFonts.inter(
+                                fontSize: compact ? 12 : 13,
+                                fontWeight: FontWeight.w600,
+                                color: context.themeForeground(
+                                  const Color(0xFF27344C),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                        Text(
-                          '${scored ? 'Scored' : 'Applied'} ${_timeAgo(date)}',
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            color: context.themeForeground(
-                              const Color(0xFF8290AB),
+                        const SizedBox(height: 3),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FittedBox(
+                            alignment: Alignment.centerLeft,
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '${scored ? 'Scored' : 'Applied'} ${_timeAgo(date)}',
+                              maxLines: 1,
+                              softWrap: false,
+                              style: GoogleFonts.inter(
+                                fontSize: compact ? 10.5 : 11.5,
+                                color: context.themeForeground(
+                                  const Color(0xFF64748B),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  if (app.resumeScore != null) _scoreRing(app.resumeScore!),
+                  if (app.resumeScore != null) ...[
+                    const SizedBox(width: 12),
+                    _scoreRing(app.resumeScore!),
+                  ],
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               _cardFooter(app, stage),
             ],
           ),

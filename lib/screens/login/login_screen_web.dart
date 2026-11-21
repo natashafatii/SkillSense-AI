@@ -7,9 +7,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/auth_role_switcher.dart';
+import '../../widgets/candidate_button_style.dart';
 
 class LoginScreenWeb extends StatelessWidget {
   final String title;
+  final String selectedRole;
+  final bool isCandidate;
+  final ValueChanged<String> onRoleChanged;
   final VoidCallback onGoogleSignIn;
   final bool isLoading;
   final TextEditingController emailController;
@@ -29,6 +34,9 @@ class LoginScreenWeb extends StatelessWidget {
   const LoginScreenWeb({
     super.key,
     required this.title,
+    required this.selectedRole,
+    required this.isCandidate,
+    required this.onRoleChanged,
     required this.onGoogleSignIn,
     required this.isLoading,
     required this.emailController,
@@ -45,6 +53,10 @@ class LoginScreenWeb extends StatelessWidget {
     required this.onForgotPassword,
     required this.onCreateAccount,
   });
+
+  Color get _accentColor => isCandidate
+      ? CandidateButtonStyle.deepTeal
+      : AppColors.webLoginButton;
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +359,12 @@ class LoginScreenWeb extends StatelessWidget {
                                               height: 1.5,
                                             ),
                                           ),
-                                          const SizedBox(height: 32),
+                                          const SizedBox(height: 18),
+                                          AuthRoleSwitcher(
+                                            selectedRole: selectedRole,
+                                            onSelected: onRoleChanged,
+                                          ),
+                                          const SizedBox(height: 24),
 
                                           // Error banner (shown on bad credentials)
                                           if (errorMessage != null) ...[
@@ -411,6 +428,7 @@ class LoginScreenWeb extends StatelessWidget {
                                                 'Enter your email address',
                                             keyboardType:
                                                 TextInputType.emailAddress,
+                                            accentColor: _accentColor,
                                           ),
                                           const SizedBox(height: 20),
 
@@ -423,6 +441,7 @@ class LoginScreenWeb extends StatelessWidget {
                                             focusNode: passwordFocus,
                                             hintText: 'Enter your password',
                                             obscureText: obscurePassword,
+                                            accentColor: _accentColor,
                                             suffixIcon: MouseRegion(
                                               cursor: SystemMouseCursors.click,
                                               child: PointerGestureDetector(
@@ -435,8 +454,7 @@ class LoginScreenWeb extends StatelessWidget {
                                                         ? 'Show'
                                                         : 'Hide',
                                                     style: GoogleFonts.inter(
-                                                      color: AppColors
-                                                          .webLoginButton,
+                                                      color: _accentColor,
                                                       fontSize: 13,
                                                       fontWeight:
                                                           FontWeight.w600,
@@ -463,8 +481,7 @@ class LoginScreenWeb extends StatelessWidget {
                                                       value: rememberMe,
                                                       onChanged:
                                                           onRememberMeChanged,
-                                                      activeColor: AppColors
-                                                          .webLoginButton,
+                                                      activeColor: _accentColor,
                                                       shape: RoundedRectangleBorder(
                                                         borderRadius:
                                                             BorderRadius.circular(
@@ -503,8 +520,7 @@ class LoginScreenWeb extends StatelessWidget {
                                                       fontSize: 13,
                                                       fontWeight:
                                                           FontWeight.w600,
-                                                      color: AppColors
-                                                          .webLoginButton,
+                                                      color: _accentColor,
                                                     ),
                                                   ),
                                                 ),
@@ -521,25 +537,25 @@ class LoginScreenWeb extends StatelessWidget {
                                               onPressed: isLoading
                                                   ? null
                                                   : onLogin,
-                                              style: PreAuthButtonStyle.active(
-                                                ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      AppColors.webLoginButton,
-                                                  foregroundColor: Colors.white,
-                                                  disabledBackgroundColor:
-                                                      AppColors.webLoginButton
-                                                          .withValues(
-                                                            alpha: 0.5,
-                                                          ),
-                                                  elevation: 0,
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          25,
+                                              style: isCandidate
+                                                  ? CandidateButtonStyle.primary(
+                                                      ElevatedButton.styleFrom(
+                                                        foregroundColor: Colors.white,
+                                                        elevation: 0,
+                                                        shape: const StadiumBorder(),
+                                                      ),
+                                                    )
+                                                  : PreAuthButtonStyle.active(
+                                                      ElevatedButton.styleFrom(
+                                                        backgroundColor: AppColors.webLoginButton,
+                                                        foregroundColor: Colors.white,
+                                                        disabledBackgroundColor: AppColors.webLoginButton.withValues(alpha: 0.5),
+                                                        elevation: 0,
+                                                        shape: RoundedRectangleBorder(
+                                                          borderRadius: BorderRadius.circular(25),
                                                         ),
-                                                  ),
-                                                ),
-                                              ),
+                                                      ),
+                                                    ),
                                               child: isLoading
                                                   ? const SizedBox(
                                                       width: 20,
@@ -615,8 +631,7 @@ class LoginScreenWeb extends StatelessWidget {
                                                         text: AppConstants
                                                             .loginWebCreateAccountLink,
                                                         style: GoogleFonts.inter(
-                                                          color: AppColors
-                                                              .webLoginButton,
+                                                          color: _accentColor,
                                                           fontWeight:
                                                               FontWeight.w600,
                                                         ),
@@ -766,6 +781,7 @@ class _CustomTextField extends StatelessWidget {
   final bool obscureText;
   final Widget? suffixIcon;
   final TextInputType keyboardType;
+  final Color accentColor;
 
   const _CustomTextField({
     required this.controller,
@@ -774,6 +790,7 @@ class _CustomTextField extends StatelessWidget {
     this.obscureText = false,
     this.suffixIcon,
     this.keyboardType = TextInputType.text,
+    required this.accentColor,
   });
 
   @override
@@ -785,9 +802,9 @@ class _CustomTextField extends StatelessWidget {
         boxShadow: focusNode.hasFocus
             ? [
                 BoxShadow(
-                  color: AppColors.webLoginButton.withValues(alpha: 0.12),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  color: accentColor.withValues(alpha: 0.12),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
               ]
             : [],
@@ -827,8 +844,8 @@ class _CustomTextField extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(
-              color: AppColors.webLoginButton,
+            borderSide: BorderSide(
+              color: accentColor,
               width: 1.5,
             ),
           ),

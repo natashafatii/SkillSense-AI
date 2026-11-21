@@ -11,6 +11,7 @@ import '../../services/job_service.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/page_heading_style.dart';
 part 'analytics_overview.dart';
 
 const _edge = Color(0xFFDFE6F2),
@@ -244,7 +245,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget build(BuildContext context) {
     final mobile = MediaQuery.sizeOf(context).width < 760;
     return Scaffold(
-      backgroundColor: context.themeCanvas(const Color(0xFFF0F3FB)),
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Column(
           children: [
@@ -306,11 +307,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 children: [
                   Text(
                     'Recruiting analytics',
-                    style: _style(
-                      mobile ? 29 : 42,
-                      bold: true,
-                      display: true,
-                    ).copyWith(letterSpacing: -1.8, height: 1.05),
+                    style: pageHeadingStyle(context),
                   ),
                   const SizedBox(height: 8),
                   Text(

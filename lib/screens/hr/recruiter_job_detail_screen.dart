@@ -1086,7 +1086,7 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     final mobile = MediaQuery.sizeOf(context).width < 900;
     final job = _job;
     return Scaffold(
-      backgroundColor: context.themeCanvas(const Color(0xFFF5F7FC)),
+      backgroundColor: Colors.transparent,
       body: Column(
         children: [
           mobile

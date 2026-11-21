@@ -22,7 +22,9 @@ import '../../models/voice/voice_contract.dart';
 import '../../utils/interview_testing.dart';
 import '../../widgets/camera_device_selector.dart';
 import '../../widgets/candidate_scaffold.dart';
+import '../../widgets/candidate_button_style.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/page_heading_style.dart';
 import 'candidate_interview_session_screen.dart';
 
 part 'candidate_interview_lobby_visuals.dart';
@@ -439,7 +441,7 @@ class _CandidateInterviewLobbyScreenState
           const RecruiterTopBar(pageTitle: 'Interview lobby', candidate: true),
           Expanded(
             child: ColoredBox(
-              color: colors.canvas,
+              color: Colors.transparent,
               child: DefaultTextStyle(
                 style: _lobbyText(14, color: colors.ink),
                 child: _isLoading
@@ -505,10 +507,11 @@ class _CandidateInterviewLobbyScreenState
             FilledButton(
               onPressed: () =>
                   Navigator.of(context).pushNamed('/candidate/applications'),
-              style: FilledButton.styleFrom(
+              style: CandidateButtonStyle.primary(FilledButton.styleFrom(
                 backgroundColor: colors.accent,
                 foregroundColor: colors.onAccent,
-              ),
+                shape: const StadiumBorder(),
+              )),
               child: const Text('View applications'),
             ),
           ],
@@ -577,7 +580,7 @@ class _CandidateInterviewLobbyScreenState
       ],
     );
 
-    final titleSize = compact ? 23.0 : 28.0;
+    const titleSize = 28.0;
     final titleHeight = MediaQuery.textScalerOf(context).scale(titleSize) * 1.2;
     final subtitleHeight = MediaQuery.textScalerOf(context).scale(14) * 1.5;
     return Column(
@@ -585,22 +588,9 @@ class _CandidateInterviewLobbyScreenState
       children: [
         Semantics(
           header: true,
-          child: Text.rich(
-            TextSpan(
-              text: 'Ready for your interview',
-              children: [
-                TextSpan(
-                  text: '?',
-                  style: TextStyle(color: colors.accent),
-                ),
-              ],
-            ),
-            style: _lobbyText(
-              titleSize,
-              weight: FontWeight.w800,
-              spacing: -.8,
-              height: 1.2,
-            ),
+          child: Text(
+            'Ready for your interview?',
+            style: pageHeadingStyle(context),
           ),
         ),
         const SizedBox(height: 2),
@@ -898,7 +888,7 @@ class _CandidateInterviewLobbyScreenState
             FilledButton(
               key: const ValueKey('start-interview-now'),
               onPressed: enabled ? _startFromLobby : null,
-              style:
+              style: CandidateButtonStyle.primary(
                   FilledButton.styleFrom(
                     backgroundColor: colors.accent,
                     disabledBackgroundColor: colors.accent.withValues(
@@ -914,9 +904,7 @@ class _CandidateInterviewLobbyScreenState
                       vertical: 8,
                     ),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    shape: const StadiumBorder(),
                   ).copyWith(
                     backgroundColor: WidgetStateProperty.resolveWith(
                       (states) => !enabled
@@ -926,6 +914,7 @@ class _CandidateInterviewLobbyScreenState
                           : colors.accent,
                     ),
                   ),
+              ),
               child: Row(
                 children: [
                   Expanded(

@@ -2,6 +2,7 @@ import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'candidate_mobile_nav.dart';
 import 'candidate_side_nav.dart';
+import 'green_gradient_background.dart';
 
 class CandidateScaffold extends StatelessWidget {
   final String currentRoute;
@@ -25,7 +26,7 @@ class CandidateScaffold extends StatelessWidget {
     if (hideSideNav) {
       return Scaffold(
         backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
-        body: body,
+        body: Stack(children: [const GreenGradientBackground(), body]),
       );
     }
 
@@ -33,6 +34,7 @@ class CandidateScaffold extends StatelessWidget {
       backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: Stack(
         children: [
+          const GreenGradientBackground(),
           // Background layout
           SafeArea(
             bottom: false,

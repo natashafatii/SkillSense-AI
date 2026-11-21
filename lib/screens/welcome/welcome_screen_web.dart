@@ -391,7 +391,7 @@ class WelcomeScreenWeb extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 20),
+                                  const SizedBox(height: 12),
 
                                   // Divider Line
                                   Container(
@@ -400,7 +400,7 @@ class WelcomeScreenWeb extends StatelessWidget {
                                       const Color(0xFFEFF3F8),
                                     ),
                                     margin: const EdgeInsets.symmetric(
-                                      vertical: 16,
+                                      vertical: 10,
                                     ),
                                   ),
 

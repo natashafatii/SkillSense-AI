@@ -1,4 +1,5 @@
 import '../../widgets/phone_country_picker.dart';
+import '../../widgets/country_code_phone_field.dart';
 import '../../widgets/theme_switcher.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'dart:async';
@@ -1373,7 +1374,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       builder: (context, _) => DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: radius,
-          boxShadow: _editFocus.hasFocus
+          boxShadow: _editFocus.hasFocus && !isPhone
               ? [
                   BoxShadow(
                     color: c.accent.withValues(alpha: .16),
@@ -1382,7 +1383,40 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                 ]
               : null,
         ),
-        child: TextField(
+        child: isPhone
+            ? CountryCodePhoneField(
+                controller: _editController,
+                focusNode: _editFocus,
+                initialCountry: kSupportedCountries.firstWhere(
+                  (country) =>
+                      country.dialCode == '+${_phoneCountry.dial}' &&
+                      country.flag == _phoneCountry.flag,
+                  orElse: () => kSupportedCountries.first,
+                ),
+                enabled: !_saving,
+                requiredPhone: false,
+                focusColor: c.accent,
+                focusGlowSpread: 1,
+                focusGlowOpacity: .07,
+                label: label,
+                labelStyle: _style(c, 12, color: c.text3),
+                onCountryChanged: (country) {
+                  _phoneCountry = phoneCountries.firstWhere(
+                    (option) =>
+                        option.dial == country.dialCode.replaceFirst('+', '') &&
+                        option.flag == country.flag,
+                    orElse: () => phoneCountries.firstWhere(
+                      (option) =>
+                          option.dial == country.dialCode.replaceFirst('+', ''),
+                      orElse: () => phoneCountries.first,
+                    ),
+                  );
+                },
+                onPhoneChanged: (_) {
+                  if (_editError != null) setState(() => _editError = null);
+                },
+              )
+            : TextField(
           key: ValueKey('recruiter-inline-$key'),
           controller: _editController,
           focusNode: _editFocus,
@@ -1756,7 +1790,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         : _setup.where((step) => step['complete'] == true).length /
               _setup.length;
     return Scaffold(
-      backgroundColor: c.bg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         child: Stack(

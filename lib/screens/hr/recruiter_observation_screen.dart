@@ -13,7 +13,7 @@ class RecruiterObservationScreen extends StatelessWidget {
   final RecruiterObservationTarget target;
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: context.themeCanvas(const Color(0xFFF5F7FC)),
+    backgroundColor: Colors.transparent,
     body: SafeArea(
       child: Column(
         children: [

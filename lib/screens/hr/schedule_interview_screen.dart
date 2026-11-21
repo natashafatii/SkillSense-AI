@@ -550,9 +550,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 900;
     return Scaffold(
-      backgroundColor: _dark
-          ? Theme.of(context).scaffoldBackgroundColor
-          : const Color(0xFFF7F8FB),
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         child: Column(

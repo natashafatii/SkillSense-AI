@@ -58,7 +58,7 @@ class _ProfileTopBar extends StatelessWidget {
                   tooltip: 'More workspace destinations',
                   icon: Icon(Icons.more_horiz, size: 18, color: c.text2),
                   onSelected: (route) => Navigator.of(context).pushNamed(route),
-                  itemBuilder: (_) => const [
+                  itemBuilder: (_) => [
                     PopupMenuItem(
                       value: '/candidate/applications',
                       child: Text('Applications'),

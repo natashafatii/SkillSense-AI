@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Primary action colors shared by recruiter screens. Other styling is retained.
+/// Shared recruiter primary button treatment.
 class RecruiterButtonStyle {
   static const blue = Color(0xFF1A368A);
   static const primaryGradient = LinearGradient(
@@ -31,18 +31,23 @@ class RecruiterButtonStyle {
           return DecoratedBox(
             decoration: ShapeDecoration(
               gradient: primaryGradient,
-              shape:
-                  local?.shape?.resolve(states) ??
-                  base.shape?.resolve(states) ??
-                  const StadiumBorder(),
+              shape: const StadiumBorder(),
             ),
             child: child,
           );
         },
+        shape: const WidgetStatePropertyAll(StadiumBorder()),
         foregroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.disabled)
               ? base.foregroundColor?.resolve(states)
               : Colors.white,
+        ),
+        textStyle: WidgetStateProperty.resolveWith(
+          (states) =>
+              base.textStyle?.resolve(states)?.copyWith(
+                fontWeight: FontWeight.w700,
+              ) ??
+              const TextStyle(fontWeight: FontWeight.w700),
         ),
       );
 

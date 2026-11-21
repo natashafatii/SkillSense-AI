@@ -12,6 +12,7 @@ import '../../services/auth_service.dart';
 import 'hr_register_screen_web.dart';
 import 'email_verification_screen.dart';
 import 'terms_privacy_screen.dart';
+import '../../widgets/auth_role_switcher.dart';
 
 const _blue = AppColors.buttonBlue;
 
@@ -417,6 +418,11 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
     color: focused ? _blue : context.themeForeground(const Color(0xFFBDBDBD)),
   );
 
+  void _switchSignupRole(String role) {
+    if (role == 'recruiter') return;
+    Navigator.of(context).pushReplacementNamed('/signup/candidate');
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -441,6 +447,7 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
             onObscureConfirmToggle: () =>
                 setState(() => _obscureConfirm = !_obscureConfirm),
             onRegister: () => _register(isWeb: true),
+            onRoleChanged: _switchSignupRole,
             onGoogleSignIn: _googleSignUp,
             onLoginTap: () {
               Navigator.pushReplacementNamed(
@@ -560,6 +567,11 @@ class _HrRegisterScreenState extends State<HrRegisterScreen> {
                                 const Color(0xFF555577),
                               ),
                             ),
+                          ),
+                          const SizedBox(height: 16),
+                          AuthRoleSwitcher(
+                            selectedRole: 'recruiter',
+                            onSelected: _switchSignupRole,
                           ),
                           const SizedBox(height: 26),
                         ],

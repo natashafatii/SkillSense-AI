@@ -10,7 +10,9 @@ import '../../services/feedback_service.dart';
 import '../../services/interview_service.dart';
 import '../../services/session_scope.dart';
 import '../../widgets/candidate_scaffold.dart';
+import '../../widgets/candidate_button_style.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/page_heading_style.dart';
 import '../application_screening_screen.dart';
 
 class CandidateInterviewHistoryScreen extends StatefulWidget {
@@ -204,9 +206,7 @@ class _CandidateInterviewHistoryScreenState
         const RecruiterTopBar(pageTitle: 'Interview history', candidate: true),
         Expanded(
           child: ColoredBox(
-            color: _dark
-                ? Theme.of(context).scaffoldBackgroundColor
-                : const Color(0xFFF8F9FB),
+            color: Colors.transparent,
             child: Theme(
               data: Theme.of(context).copyWith(
                 textTheme: Theme.of(
@@ -260,13 +260,7 @@ class _CandidateInterviewHistoryScreenState
             children: [
               Text(
                 'Interview history',
-                style: TextStyle(
-                  fontFamily: 'Space Grotesk',
-                  fontSize: 30,
-                  height: 1.15,
-                  fontWeight: FontWeight.w600,
-                  color: _ink,
-                ),
+                style: pageHeadingStyle(context),
               ),
               if (_error == null) ...[
                 const SizedBox(height: 4),
@@ -783,15 +777,13 @@ class _CandidateInterviewHistoryScreenState
                               'applicationId': entry.interview.applicationId,
                             },
                           ),
-                    style: FilledButton.styleFrom(
+                    style: CandidateButtonStyle.primary(FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF285FD0),
                       foregroundColor: Colors.white,
                       minimumSize: const Size(0, 44),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: const StadiumBorder(),
                       textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
+                    )),
                     child: Text(
                       entry.interrupted && entry.report == null
                           ? 'Go to interview lobby'

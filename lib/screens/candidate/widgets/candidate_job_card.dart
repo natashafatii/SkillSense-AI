@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../constants/app_colors.dart';
 import '../../../models/job.dart';
 
 class CandidateJobCard extends StatefulWidget {
@@ -15,13 +16,13 @@ class CandidateJobCard extends StatefulWidget {
   final VoidCallback onApply;
 
   const CandidateJobCard({
-    super.key,
+    Key? key,
     required this.job,
     required this.isMobile,
     required this.isHot,
     required this.hasUploadedResume,
     required this.onApply,
-  });
+  }) : super(key: key);
 
   @override
   State<CandidateJobCard> createState() => _CandidateJobCardState();
@@ -84,6 +85,19 @@ class _CandidateJobCardState extends State<CandidateJobCard>
     if (score >= 70) return const Color(0xFF14B8A6);
     if (score >= 55) return const Color(0xFFF59E0B);
     return const Color(0xFFEF4444);
+  }
+
+  // Generate a mock salary based on experience to match design
+  String _getSalaryStr() {
+    switch (widget.job.experienceLevel) {
+      case ExperienceLevel.senior:
+        return 'PKR 250–350k';
+      case ExperienceLevel.entry:
+        return 'PKR 120–180k';
+      case ExperienceLevel.mid:
+      default:
+        return 'PKR 180–260k';
+    }
   }
 
   @override
@@ -465,7 +479,7 @@ class _ApplyButtonState extends State<_ApplyButton> {
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(999),
                 color: widget.isApplied
                     ? context.themeSurface(const Color(0xFFE2E8F0))
                     : null,
@@ -477,7 +491,7 @@ class _ApplyButtonState extends State<_ApplyButton> {
                     : _hovered
                     ? [
                         BoxShadow(
-                          color: const Color(0xFF14B584).withValues(alpha: 0.4),
+                          color: CandidateButtonStyle.teal.withValues(alpha: 0.4),
                           blurRadius: 22,
                           spreadRadius: -6,
                           offset: Offset.zero,
@@ -485,9 +499,9 @@ class _ApplyButtonState extends State<_ApplyButton> {
                       ]
                     : [
                         BoxShadow(
-                          color: const Color(
-                            0xFF14B584,
-                          ).withValues(alpha: 0.22),
+                          color: CandidateButtonStyle.teal.withValues(
+                            alpha: 0.22,
+                          ),
                           blurRadius: 14,
                           offset: const Offset(0, 5),
                         ),

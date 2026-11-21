@@ -9,6 +9,7 @@ import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/candidate_side_nav.dart';
+import '../../widgets/green_gradient_background.dart';
 import 'candidate_resume_management_screen.dart';
 
 import 'dart:typed_data';
@@ -542,6 +543,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       backgroundColor: bgBase,
       body: Stack(
         children: [
+          const GreenGradientBackground(),
           // Grid Pattern Background
           Positioned.fill(
             child: CustomPaint(

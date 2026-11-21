@@ -17,6 +17,8 @@ import '../../services/resume_service.dart';
 import '../../services/session_scope.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/candidate_button_style.dart';
+import '../../widgets/page_heading_style.dart';
 
 import '../application_screening_screen.dart';
 
@@ -315,7 +317,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen>
           const RecruiterTopBar(pageTitle: 'Home', candidate: true),
           Expanded(
             child: ColoredBox(
-              color: colors.canvas,
+              color: Colors.transparent,
               child: DefaultTextStyle(
                 style: _homeText(14, color: colors.ink),
                 child: !_current

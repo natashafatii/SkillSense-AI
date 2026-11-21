@@ -8,6 +8,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/auth_role_switcher.dart';
 import 'terms_privacy_screen.dart';
 
 /// Signup-specific web HR registration screen.
@@ -30,6 +31,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
   final VoidCallback onRegister;
   final VoidCallback onGoogleSignIn;
   final VoidCallback onLoginTap;
+  final ValueChanged<String> onRoleChanged;
 
   const HrRegisterScreenWeb({
     super.key,
@@ -51,6 +53,7 @@ class HrRegisterScreenWeb extends StatelessWidget {
     required this.onRegister,
     required this.onGoogleSignIn,
     required this.onLoginTap,
+    required this.onRoleChanged,
   });
 
   @override
@@ -411,6 +414,11 @@ class HrRegisterScreenWeb extends StatelessWidget {
                                               ),
                                               height: 1.5,
                                             ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          AuthRoleSwitcher(
+                                            selectedRole: 'recruiter',
+                                            onSelected: onRoleChanged,
                                           ),
                                           const SizedBox(height: 16),
 
