@@ -10,6 +10,9 @@ import '../models/application.dart';
 import '../services/application_service.dart';
 import '../services/api_exception.dart';
 import '../services/question_preparation_service.dart';
+import 'screening_visuals.dart';
+
+part 'compact_question_preparation.dart';
 
 typedef QuestionPreviewBuilder =
     Widget Function(
@@ -31,11 +34,13 @@ class QuestionPreparationPanel extends StatefulWidget {
     this.client,
     this.application,
     this.previewBuilder,
+    this.onSchedule,
   });
   final String applicationId;
   final Dio? client;
   final Application? application;
   final QuestionPreviewBuilder? previewBuilder;
+  final VoidCallback? onSchedule;
   final void Function(String? setId, int? revision) onApprovalChanged;
   @override
   State<QuestionPreparationPanel> createState() =>
@@ -228,7 +233,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
     final resourceEpoch = _resourceEpoch;
     final fields = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => const _AddQuestionDialog(),
+      builder: (_) => _AddQuestionDialog(compact: widget.onSchedule != null),
     );
     if (!mounted ||
         resourceEpoch != _resourceEpoch ||
@@ -257,7 +262,10 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
     final resourceEpoch = _resourceEpoch;
     final fields = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => _AddQuestionDialog(initial: question),
+      builder: (_) => _AddQuestionDialog(
+        initial: question,
+        compact: widget.onSchedule != null,
+      ),
     );
     if (!mounted ||
         resourceEpoch != _resourceEpoch ||
@@ -285,24 +293,59 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
 
   Future<void> _regenerate() async {
     final resourceEpoch = _resourceEpoch;
+    const title = 'Regenerate this unapproved draft?';
+    const detail =
+        'Unedited generated and template questions will be archived. '
+        'Manual questions and recruiter-edited wording are preserved. '
+        'Review and approve the resulting revision again.';
+    final compact = widget.onSchedule != null;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Regenerate this unapproved draft?'),
-        content: const Text(
-          'Unedited generated and template questions will be archived. Manual questions and recruiter-edited wording are preserved. Review and approve the resulting revision again.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Regenerate draft'),
-          ),
-        ],
-      ),
+      barrierColor: compact ? const Color(0x800b1730) : null,
+      builder: (context) {
+        if (compact) {
+          return ScreeningDialog(
+            title: title,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(detail),
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ScreeningButton(
+                      'Cancel',
+                      onPressed: () => Navigator.pop(context, false),
+                    ),
+                    ScreeningButton(
+                      'Regenerate draft',
+                      kind: ScreeningButtonKind.primary,
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }
+        return AlertDialog(
+          title: const Text(title),
+          content: const Text(detail),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Regenerate draft'),
+            ),
+          ],
+        );
+      },
     );
     if (confirmed == true &&
         mounted &&
@@ -462,6 +505,16 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
         regenerate: canRegenerate ? _regenerate : null,
       );
     }
+    if (widget.onSchedule != null) {
+      return _compactQuestions(
+        state,
+        label,
+        questions,
+        approved,
+        frozen,
+        canChange,
+      );
+    }
     final ink = context.themeForeground(const Color(0xFF17233B));
     final muted = context.themeForeground(const Color(0xFF64748B));
     const teal = Color(0xFF087F72);
@@ -608,79 +661,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                     style: TextStyle(color: muted, fontSize: 12),
                   ),
                 ),
-              if (_data?['fallback_reason'] != null &&
-                  _data!['fallback_reason'] != '')
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    'Fallback reason: ${_data!['fallback_reason']}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: context.themeForeground(const Color(0xFF9A6700)),
-                    ),
-                  ),
-                ),
-              if (_unsavedAdd != null)
-                Text('Unsaved question: ${_unsavedAdd!['text'] ?? ''}'),
-              if (_reviewRequired)
-                TextButton(
-                  onPressed: _busy || _stale
-                      ? null
-                      : () {
-                          setState(() => _reviewRequired = false);
-                          _accept(_data!);
-                        },
-                  child: const Text('I reviewed the refreshed draft'),
-                ),
-              if (_unsavedAdd != null && canChange)
-                TextButton(
-                  onPressed: () => _command(_unsavedOperation, _unsavedAdd!),
-                  child: const Text('Submit preserved question'),
-                ),
-              if (_unsavedAdd != null && !_busy)
-                TextButton(
-                  onPressed: () async {
-                    final edited = await showDialog<Map<String, dynamic>>(
-                      context: context,
-                      builder: (_) => _AddQuestionDialog(initial: _unsavedAdd),
-                    );
-                    if (edited != null && mounted) {
-                      setState(
-                        () => _unsavedAdd = {
-                          if (_unsavedAdd!['id'] != null)
-                            'id': _unsavedAdd!['id'],
-                          ...edited,
-                        },
-                      );
-                    }
-                  },
-                  child: const Text('Edit preserved wording'),
-                ),
-              if (_unsavedAdd != null && !_busy)
-                TextButton(
-                  onPressed: () {
-                    setState(() => _unsavedAdd = null);
-                    if (_data != null) _accept(_data!);
-                  },
-                  child: const Text('Discard preserved changes'),
-                ),
-              if (_unsavedAdd != null &&
-                  _unsavedOperation == 'edit' &&
-                  canChange &&
-                  !questions.any((q) => (q as Map)['id'] == _unsavedAdd!['id']))
-                TextButton(
-                  onPressed: () => _command('add', {
-                    'text': _unsavedAdd!['text'],
-                    'category': _unsavedAdd!['category'],
-                  }),
-                  child: const Text('Add preserved wording as a new question'),
-                ),
-              if (_data?['error_code'] != null && _data!['error_code'] != '')
-                Text('Generation error: ${_data!['error_code']}'),
-              if (_data?['next_attempt_at'] != null)
-                Text(
-                  'Next generation attempt: ${ApiValue.instant(_data!['next_attempt_at'])?.toLocal()}',
-                ),
+              ..._draftNotices(questions, canChange),
               if (_error != null)
                 Container(
                   width: double.infinity,
@@ -814,6 +795,83 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
       ),
     );
   }
+
+  List<Widget> _draftNotices(List<dynamic> questions, bool canChange) => [
+    if (_data?['fallback_reason'] != null && _data!['fallback_reason'] != '')
+      Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Text(
+          'Fallback reason: ${_data!['fallback_reason']}',
+          style: TextStyle(
+            fontSize: 12,
+            color: context.themeForeground(const Color(0xFF9A6700)),
+          ),
+        ),
+      ),
+    if (_unsavedAdd != null)
+      Text('Unsaved question: ${_unsavedAdd!['text'] ?? ''}'),
+    if (_reviewRequired)
+      TextButton(
+        onPressed: _busy || _stale
+            ? null
+            : () {
+                setState(() => _reviewRequired = false);
+                _accept(_data!);
+              },
+        child: const Text('I reviewed the refreshed draft'),
+      ),
+    if (_unsavedAdd != null && canChange)
+      TextButton(
+        onPressed: () => _command(_unsavedOperation, _unsavedAdd!),
+        child: const Text('Submit preserved question'),
+      ),
+    if (_unsavedAdd != null && !_busy)
+      TextButton(
+        onPressed: () async {
+          final edited = await showDialog<Map<String, dynamic>>(
+            context: context,
+            builder: (_) => _AddQuestionDialog(
+              initial: _unsavedAdd,
+              compact: widget.onSchedule != null,
+            ),
+          );
+          if (edited != null && mounted) {
+            setState(
+              () => _unsavedAdd = {
+                if (_unsavedAdd!['id'] != null) 'id': _unsavedAdd!['id'],
+                ...edited,
+              },
+            );
+          }
+        },
+        child: const Text('Edit preserved wording'),
+      ),
+    if (_unsavedAdd != null && !_busy)
+      TextButton(
+        onPressed: () {
+          setState(() => _unsavedAdd = null);
+          if (_data != null) _accept(_data!);
+        },
+        child: const Text('Discard preserved changes'),
+      ),
+    if (_unsavedAdd != null &&
+        _unsavedOperation == 'edit' &&
+        canChange &&
+        !questions.any((q) => (q as Map)['id'] == _unsavedAdd!['id']))
+      TextButton(
+        onPressed: () => _command('add', {
+          'text': _unsavedAdd!['text'],
+          'category': _unsavedAdd!['category'],
+        }),
+        child: const Text('Add preserved wording as a new question'),
+      ),
+    if (_data?['error_code'] != null && _data!['error_code'] != '')
+      Text('Generation error: ${_data!['error_code']}'),
+    if (_data?['next_attempt_at'] != null)
+      Text(
+        'Next generation attempt: ${ApiValue.instant(_data!['next_attempt_at'])?.toLocal()}',
+      ),
+  ];
 
   Widget _badge(String text, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -950,7 +1008,8 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
 }
 
 class _AddQuestionDialog extends StatefulWidget {
-  const _AddQuestionDialog({this.initial});
+  const _AddQuestionDialog({this.initial, this.compact = false});
+  final bool compact;
   final Map<String, dynamic>? initial;
   @override
   State<_AddQuestionDialog> createState() => _AddQuestionDialogState();
@@ -974,103 +1033,112 @@ class _AddQuestionDialogState extends State<_AddQuestionDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => Theme(
-    data: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF087F72),
-        brightness: Theme.of(context).brightness,
-      ),
-    ),
-    child: AlertDialog(
-      backgroundColor: context.themeSurface(Colors.white),
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      title: Text(
-        widget.initial == null ? 'Add your own question' : 'Edit question',
-      ),
-      content: SizedBox(
-        width: 480,
-        child: SingleChildScrollView(
-          child: Form(
-            key: _form,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Ask about a skill or experience you want to explore.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: context.themeForeground(const Color(0xFF64748B)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                DropdownButtonFormField<String>(
-                  initialValue: _category,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'TECHNICAL',
-                      child: Text('Technical'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'BEHAVIORAL',
-                      child: Text('Behavioral'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'SITUATIONAL',
-                      child: Text('Situational'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) _category = value;
-                  },
-                ),
-                const SizedBox(height: 18),
-                TextFormField(
-                  controller: _text,
-                  minLines: 4,
-                  maxLines: 8,
-                  maxLength: 10000,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Question',
-                    hintText: 'What would you like to ask the candidate?',
-                    alignLabelWithHint: true,
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Enter a question.'
-                      : null,
-                ),
-              ],
+  Widget build(BuildContext context) => widget.compact
+      ? _compactEditor(context)
+      : Theme(
+          data: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF087F72),
+              brightness: Theme.of(context).brightness,
             ),
           ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (_form.currentState!.validate()) {
-              Navigator.pop(context, {
-                'text': _text.text.trim(),
-                'category': _category,
-              });
-            }
-          },
-          child: Text(
-            widget.initial == null ? 'Add question' : 'Save question',
+          child: AlertDialog(
+            backgroundColor: context.themeSurface(Colors.white),
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: Text(
+              widget.initial == null
+                  ? 'Add your own question'
+                  : 'Edit question',
+            ),
+            content: SizedBox(
+              width: 480,
+              child: SingleChildScrollView(
+                child: Form(
+                  key: _form,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ask about a skill or experience you want to explore.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: context.themeForeground(
+                            const Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      DropdownButtonFormField<String>(
+                        initialValue: _category,
+                        decoration: const InputDecoration(
+                          labelText: 'Category',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'TECHNICAL',
+                            child: Text('Technical'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'BEHAVIORAL',
+                            child: Text('Behavioral'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'SITUATIONAL',
+                            child: Text('Situational'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) _category = value;
+                        },
+                      ),
+                      const SizedBox(height: 18),
+                      TextFormField(
+                        controller: _text,
+                        minLines: 4,
+                        maxLines: 8,
+                        maxLength: 10000,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Question',
+                          hintText: 'What would you like to ask the candidate?',
+                          alignLabelWithHint: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Enter a question.'
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (_form.currentState!.validate()) {
+                    Navigator.pop(context, {
+                      'text': _text.text.trim(),
+                      'category': _category,
+                    });
+                  }
+                },
+                child: Text(
+                  widget.initial == null ? 'Add question' : 'Save question',
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
-    ),
-  );
+        );
 }

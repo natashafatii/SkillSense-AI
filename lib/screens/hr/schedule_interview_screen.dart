@@ -1,28 +1,35 @@
-import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
-import '../../widgets/recruiter_mobile_nav.dart';
-import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/question_preparation_panel.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../models/application.dart';
 import '../../models/interview.dart';
 import '../../models/job.dart';
+import '../../models/question_set.dart';
 import '../../services/api_exception.dart';
 import '../../services/application_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/interview_service.dart';
 import '../../services/job_service.dart';
 import '../../services/session_scope.dart';
+import '../../widgets/question_preparation_panel.dart';
+import '../../widgets/recruiter_button_style.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
+import '../../widgets/recruiter_scaffold.dart';
+import '../../widgets/recruiter_top_bar.dart';
+import '../../widgets/screening_visuals.dart';
 import 'recruitment_review_screen.dart';
+
+part 'schedule_interview_layout.dart';
+part 'compact_screening_schedule.dart';
 
 /// Recruiter scheduling console for shortlisted applications.
 class ScheduleInterviewScreen extends StatefulWidget {
   final String? jobId;
   final String? applicationId;
+  final bool compactScreening;
   final Dio? questionClient;
+  final Dio? interviewClient;
   final Future<List<Job>> Function()? loadJobs;
   final Future<List<Application>> Function(String jobId)? loadForJob;
   final Future<Application> Function(String applicationId)? loadApplication;
@@ -39,7 +46,9 @@ class ScheduleInterviewScreen extends StatefulWidget {
     super.key,
     this.jobId,
     this.applicationId,
+    this.compactScreening = false,
     this.questionClient,
+    this.interviewClient,
     this.loadJobs,
     this.loadForJob,
     this.loadApplication,
@@ -56,28 +65,18 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   final _openDropdown = ValueNotifier<Key?>(null);
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
   ColorScheme get _colors => Theme.of(context).colorScheme;
-  Color get _ink => _colors.onSurface;
-  Color get _muted => _colors.onSurfaceVariant;
+  Color get _ink => _dark ? _colors.onSurface : const Color(0xFF201F2B);
+  Color get _muted =>
+      _dark ? _colors.onSurfaceVariant : const Color(0xFF575C70);
   Color get _edge => _dark
       ? _colors.outlineVariant.withValues(alpha: .55)
-      : const Color(0xFFE0E5ED);
+      : const Color(0xFFDCE2ED);
   Color get _surface => _dark ? _colors.surface : Colors.white;
-  Color get _blue => _colors.primary;
-  Color get _activeFill => _colors.primaryContainer;
-  bool _inAppInvitation = true;
-  bool _emailInvitation = true;
+  Color get _blue => _dark ? _colors.primary : const Color(0xFF1A368A);
   final _reviewKey = GlobalKey();
   bool _reviewExpanded = false;
-  static const _slots = <(int, int)>[
-    (9, 0),
-    (10, 30),
-    (11, 30),
-    (13, 0),
-    (14, 0),
-    (15, 30),
-    (17, 0),
-  ];
-  static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _recruiterOffset = Duration(hours: 5);
+  static const _zone = 'Pakistan Standard Time · UTC+05:00';
 
   List<Job> _jobs = [];
   List<Application> _awaiting = [];
@@ -93,9 +92,32 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   final _session = SessionScope.generation;
   final Set<String> _scheduleReviewRequired = {};
   int _questionReload = 0;
-  late DateTime _monday;
-  late int _selectedDay;
-  DateTime? _selectedSlot;
+  bool _flexible = false;
+  bool _notifyInApp = true;
+  bool _notifyEmail = true;
+  bool get _hasDelivery => _notifyInApp || _notifyEmail;
+  String get _timingType =>
+      _flexible ? 'Flexible deadline' : 'Specific date & time';
+  String get _dateField => _flexible ? 'Deadline date' : 'Interview date';
+  String get _timeField => _flexible ? 'Deadline time' : 'Interview time';
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
+
+  DateTime? get _selectedSlot {
+    final day = _selectedDate;
+    final time = _selectedTime;
+    if (day == null || time == null) return null;
+    return DateTime.utc(
+      day.year,
+      day.month,
+      day.day,
+      time.hour,
+      time.minute,
+    ).subtract(_recruiterOffset);
+  }
+
+  DateTime _inRecruiterZone(DateTime instant) =>
+      instant.toUtc().add(_recruiterOffset);
 
   Interview? _interview;
   List<InterviewQuestion> _questions = [];
@@ -112,8 +134,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     super.initState();
     _jobId = widget.jobId;
     _applicationId = widget.applicationId;
-    _monday = _weekStart(DateTime.now());
-    _selectedDay = _initialDay();
     SessionScope.invalidations.addListener(_clearSession);
     _loadJobs();
   }
@@ -128,10 +148,16 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _questions = [];
       _interview = null;
       _applicationId = null;
+      _selectedDate = null;
+      _selectedTime = null;
       _approvedQuestionApplication = null;
       _approvedQuestionSet = null;
       _approvedQuestionRevision = null;
       _error = 'Account session changed. Reopen scheduling.';
+      _loading = false;
+      _flexible = false;
+      _notifyInApp = true;
+      _notifyEmail = true;
       _reviewExpanded = false;
     });
     for (final controller in _questionTexts.values) {
@@ -145,7 +171,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     if (oldWidget.jobId != widget.jobId) {
       _jobId = widget.jobId;
       _applicationId = widget.applicationId;
-      _selectedSlot = null;
+      _selectedDate = null;
+      _selectedTime = null;
       _loadJobs();
     }
   }
@@ -158,28 +185,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       controller.dispose();
     }
     super.dispose();
-  }
-
-  DateTime _weekStart(DateTime now) {
-    final monday = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(Duration(days: now.weekday - 1));
-    if (now.weekday > 5 || (now.weekday == 5 && now.hour >= 17)) {
-      return monday.add(const Duration(days: 7));
-    }
-    return monday;
-  }
-
-  int _initialDay() {
-    final now = DateTime.now();
-    for (var day = 0; day < 5; day++) {
-      final date = _monday.add(Duration(days: day));
-      final last = DateTime(date.year, date.month, date.day, 17);
-      if (last.isAfter(now)) return day;
-    }
-    return 4;
   }
 
   Future<void> _loadJobs() async {
@@ -221,6 +226,27 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     }
   }
 
+  Future<List<Interview>?> _loadBookings(String jobId) async {
+    try {
+      final interviews =
+          await (widget.loadBooked?.call(jobId) ??
+              InterviewService.listForJob(
+                jobId,
+                client: widget.interviewClient,
+              ));
+      return interviews
+          .where(
+            (interview) =>
+                interview.scheduledAt != null &&
+                const {'SCHEDULED', 'LIVE'}.contains(interview.status),
+          )
+          .toList();
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) rethrow;
+      return null;
+    }
+  }
+
   Future<void> _loadAwaiting() async {
     final request = ++_request;
     final jobId = _jobId;
@@ -238,15 +264,14 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _booked = null;
     });
     try {
-      final results = await Future.wait<Object>([
+      final results = await Future.wait<Object?>([
         widget.loadForJob?.call(jobId) ??
             ApplicationService.listAllForJob(jobId, eligibleForInterview: true),
-        widget.loadBooked?.call(jobId) ??
-            InterviewService.listForJob(jobId, status: 'SCHEDULED'),
+        _loadBookings(jobId),
       ]);
       if (!mounted || request != _request || jobId != _jobId) return;
       final applications = results[0] as List<Application>;
-      final booked = results[1] as List<Interview>;
+      final booked = results[1] as List<Interview>?;
       final shortlisted =
           applications
               .where(
@@ -261,9 +286,14 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                   b.updatedAt?.compareTo(a.updatedAt ?? a.createdAt) ??
                   b.createdAt.compareTo(a.createdAt),
             );
-      if (_applicationId != null &&
-          !shortlisted.any((app) => app.id == _applicationId)) {
-        final id = _applicationId!;
+      final requestedApplication =
+          _applicationId ??
+          (widget.compactScreening && _interview == null
+              ? widget.applicationId
+              : null);
+      if (requestedApplication != null &&
+          !shortlisted.any((app) => app.id == requestedApplication)) {
+        final id = requestedApplication;
         // Keep the loaded job selector usable while a deep-linked detail waits.
         setState(() {
           _awaiting = shortlisted;
@@ -284,8 +314,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       setState(() {
         _awaiting = shortlisted;
         _booked = booked;
-        if (!shortlisted.any((app) => app.id == _applicationId)) {
-          _applicationId = shortlisted.length == 1
+        if (shortlisted.any((app) => app.id == requestedApplication)) {
+          _applicationId = requestedApplication;
+        } else {
+          _applicationId = !widget.compactScreening && shortlisted.length == 1
               ? shortlisted.single.id
               : null;
         }
@@ -343,7 +375,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _approvedQuestionApplication = null;
       _approvedQuestionSet = null;
       _approvedQuestionRevision = null;
-      _selectedSlot = null;
+      _selectedDate = null;
+      _selectedTime = null;
       _rowErrors.clear();
       _interview = null;
       _reviewExpanded = false;
@@ -351,40 +384,26 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     _loadAwaiting();
   }
 
-  DateTime _dateFor(int day) => _monday.add(Duration(days: day));
-
-  DateTime _slotFor(int day, (int, int) time) {
-    final date = _dateFor(day);
-    return DateTime(date.year, date.month, date.day, time.$1, time.$2);
-  }
-
-  bool _sameMinute(DateTime a, DateTime b) =>
-      a.year == b.year &&
-      a.month == b.month &&
-      a.day == b.day &&
-      a.hour == b.hour &&
-      a.minute == b.minute;
-
   bool _taken(DateTime slot) =>
       _booked?.any((interview) {
-        final at = interview.scheduledAt?.toLocal();
-        return at != null && _sameMinute(at, slot);
+        final at = interview.scheduledAt;
+        return at != null &&
+            at.millisecondsSinceEpoch ~/ 60000 ==
+                slot.millisecondsSinceEpoch ~/ 60000;
       }) ??
       false;
 
-  int _bookedCount(int day) =>
-      _booked?.where((interview) {
-        final at = interview.scheduledAt?.toLocal();
-        final date = _dateFor(day);
-        return at != null &&
-            at.year == date.year &&
-            at.month == date.month &&
-            at.day == date.day;
-      }).length ??
-      0;
-
-  String _time(DateTime date) =>
-      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  String? get _timingError {
+    final slot = _selectedSlot;
+    if (slot == null) return null;
+    if (!slot.isAfter(DateTime.now())) {
+      return 'Choose a date and time in the future.';
+    }
+    if (!_flexible && _taken(slot)) {
+      return 'An interview is already booked at this time. Choose another time.';
+    }
+    return null;
+  }
 
   bool _canSchedule(Application app) =>
       _isShortlisted(app) &&
@@ -407,9 +426,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     final setId = _approvedQuestionSet!, revision = _approvedQuestionRevision!;
     final slot = _selectedSlot;
     if (slot == null ||
-        _booked == null ||
-        _taken(slot) ||
-        !slot.isAfter(DateTime.now())) {
+        (!_flexible && _booked == null) ||
+        _timingError != null ||
+        !_hasDelivery) {
       setState(() => _rowErrors[app.id] = 'Choose an available future slot.');
       return;
     }
@@ -426,10 +445,16 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     try {
       final interview =
           // Approval remains a server-enforced gate; these are the reviewed revision.
-          await (widget.sendInvite?.call(app.id, slot, setId, revision) ??
+          await ((!_flexible && _notifyInApp && _notifyEmail
+                  ? widget.sendInvite?.call(app.id, slot, setId, revision)
+                  : null) ??
               InterviewService.schedule(
+                client: widget.interviewClient,
                 applicationId: app.id,
-                scheduledAt: slot,
+                scheduledAt: _flexible ? null : slot,
+                deadlineAt: _flexible ? slot : null,
+                notifyInApp: _notifyInApp,
+                notifyEmail: _notifyEmail,
                 questionSetId: setId,
                 expectedRevision: revision,
               ));
@@ -444,7 +469,8 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         _awaiting.removeWhere((item) => item.id == app.id);
         _booked = [...?_booked, interview];
         _applicationId = null;
-        _selectedSlot = null;
+        _selectedDate = null;
+        _selectedTime = null;
         _reviewExpanded = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -520,332 +546,29 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   Application? get _selectedApplication =>
       _awaiting.where((app) => app.id == _applicationId).firstOrNull;
 
-  String _dateLabel(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${_days[date.weekday - 1]}, ${date.day} ${months[date.month - 1]} ${date.year}';
-  }
+  void _updateSchedule(VoidCallback change) => setState(change);
 
-  String get _zone {
-    final offset = DateTime.now().timeZoneOffset;
-    final minutes = offset.inMinutes.abs();
-    return '${DateTime.now().timeZoneName} · UTC${offset.isNegative ? '-' : '+'}'
-        '${(minutes ~/ 60).toString().padLeft(2, '0')}:'
-        '${(minutes % 60).toString().padLeft(2, '0')}';
+  void _recordQuestionApproval(
+    String applicationId,
+    String? setId,
+    int? revision,
+  ) {
+    if (!mounted ||
+        _applicationId != applicationId ||
+        _session != SessionScope.generation) {
+      return;
+    }
+    setState(() {
+      _approvedQuestionApplication = setId == null ? null : applicationId;
+      _approvedQuestionSet = setId;
+      _approvedQuestionRevision = revision;
+      if (setId != null) _scheduleReviewRequired.remove(applicationId);
+    });
   }
 
   @override
-  Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 900;
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            if (compact)
-              _mobileHeader()
-            else
-              RecruiterTopBar(
-                pageTitle: 'Schedule interview',
-                mobileTitle: 'Schedule interview',
-                dark: _dark,
-                breadcrumbSegments: const ['Recruitment', 'Interviews'],
-              ),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _workspace(compact),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: compact
-          ? const RecruiterMobileNav(
-              currentRoute: '/recruiter/schedule-interview',
-              key: Key('schedule-mobile-dock'),
-            )
-          : null,
-    );
-  }
-
-  Widget _mobileHeader() => Container(
-    height: 64,
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    decoration: BoxDecoration(
-      color: _surface,
-      border: Border(bottom: BorderSide(color: _edge)),
-    ),
-    child: Row(
-      children: [
-        SvgPicture.asset('assets/images/logo.svg', width: 24, height: 24),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            'Schedule interview',
-            style: GoogleFonts.inter(
-              color: _ink,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: _surface,
-            border: Border.all(color: _edge),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            'STEP 1–3',
-            style: GoogleFonts.inter(
-              color: _muted,
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _workspace(bool compact) {
-    final typography = Theme.of(context).textTheme.apply(fontFamily: 'Inter');
-    final bodyStyle = (typography.bodyMedium ?? const TextStyle()).copyWith(
-      fontSize: 14,
-      fontWeight: FontWeight.w500,
-      height: 1.52,
-      color: _ink,
-    );
-    return Theme(
-      data: Theme.of(
-        context,
-      ).copyWith(textTheme: typography.copyWith(bodyMedium: bodyStyle)),
-      child: DefaultTextStyle(
-        style: bodyStyle,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            compact ? 16 : 28,
-            compact ? 16 : 24,
-            compact ? 16 : 28,
-            0,
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final split = constraints.maxWidth >= 720;
-              final narrowForm = !split || constraints.maxWidth < 950;
-              final form = _panel(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _candidatePanel(),
-                    Divider(height: 36, color: _edge),
-                    _availabilityPanel(narrowForm),
-                  ],
-                ),
-              );
-              final review = Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _questionReview(),
-                  if (_interview != null) ...[
-                    const SizedBox(height: 16),
-                    _questionPanel(),
-                  ],
-                ],
-              );
-              return SingleChildScrollView(
-                key: const Key('schedule-scroll'),
-                primary: false,
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _pageHeader(),
-                    const SizedBox(height: 18),
-                    if (_error case final error?) ...[
-                      _panel(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                error,
-                                style: TextStyle(color: _colors.error),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: _loadJobs,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    if (split)
-                      Table(
-                        columnWidths: const {
-                          0: FlexColumnWidth(),
-                          1: FixedColumnWidth(20),
-                          2: FlexColumnWidth(),
-                        },
-                        defaultVerticalAlignment:
-                            TableCellVerticalAlignment.intrinsicHeight,
-                        children: [
-                          TableRow(
-                            children: [
-                              form,
-                              const SizedBox.shrink(),
-                              _invitationPanel(),
-                            ],
-                          ),
-                        ],
-                      )
-                    else ...[
-                      form,
-                      const SizedBox(height: 16),
-                      _invitationPanel(),
-                    ],
-                    const SizedBox(height: 16),
-                    review,
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _pageHeader() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Semantics(
-        header: true,
-        child: Text(
-          'Schedule an interview',
-          style: TextStyle(
-            color: _ink,
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            height: 1.25,
-            letterSpacing: -.65,
-          ),
-        ),
-      ),
-      const SizedBox(height: 7),
-      _body('Choose a shortlisted candidate and reserve an interview time.'),
-      const SizedBox(height: 14),
-      Divider(height: 1, color: _edge),
-    ],
-  );
-
-  Widget _candidatePanel() => Column(
-    key: const Key('schedule-candidate-card'),
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _sectionHeading('01', 'Candidate & role'),
-      const SizedBox(height: 6),
-      _body('Only shortlisted candidates are available for scheduling.'),
-      const SizedBox(height: 18),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final job = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _label('Job opening'),
-              const SizedBox(height: 8),
-              _dropdown(
-                key: const Key('schedule-job-dropdown'),
-                value: _jobId,
-                hint: 'Select a job opening',
-                items: [
-                  for (final job in _jobs)
-                    (
-                      id: job.id,
-                      title: job.title,
-                      subtitle: job.id == _jobId && _booked != null
-                          ? _shortlistLabel
-                          : job.department.trim(),
-                    ),
-                ],
-                onChanged: _busyApplicationId == null ? _changeJob : null,
-              ),
-            ],
-          );
-          final candidate = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _label('Candidate'),
-              const SizedBox(height: 8),
-              _dropdown(
-                key: const Key('schedule-candidate-dropdown'),
-                value: _selectedApplication?.id,
-                hint: _jobId == null
-                    ? 'Select a job first'
-                    : 'Select a shortlisted candidate',
-                items: [
-                  for (final app in _awaiting)
-                    (
-                      id: app.id,
-                      title: _candidateName(app),
-                      subtitle: app.resumeScore == null
-                          ? app.candidateEmail
-                          : '${_scoreText(app.resumeScore!)}% match',
-                    ),
-                ],
-                onChanged: _busyApplicationId != null
-                    ? null
-                    : (id) {
-                        final app = _awaiting
-                            .where((app) => app.id == id)
-                            .firstOrNull;
-                        if (app != null) _selectForReview(app);
-                      },
-              ),
-            ],
-          );
-          return constraints.maxWidth >= 460
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: job),
-                    const SizedBox(width: 16),
-                    Expanded(child: candidate),
-                  ],
-                )
-              : Column(children: [job, const SizedBox(height: 16), candidate]);
-        },
-      ),
-      if (_jobId != null && _awaiting.isEmpty) ...[
-        const SizedBox(height: 12),
-        _body(
-          _jobs.isEmpty
-              ? 'Create an active role to begin scheduling.'
-              : 'No eligible shortlisted candidates for this role.',
-        ),
-        TextButton(
-          onPressed: () =>
-              Navigator.of(context).pushNamed('/recruiter/pipeline'),
-          child: const Text('Go to pipeline'),
-        ),
-      ],
-    ],
-  );
+  Widget build(BuildContext context) =>
+      widget.compactScreening ? _buildCompactSchedule() : _buildSchedule();
 
   String get _shortlistLabel => switch (_awaiting.length) {
     0 => 'No shortlisted candidates available',
@@ -865,10 +588,10 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       final selected = items.where((item) => item.id == value).firstOrNull;
       final activeInk = _dark
           ? _colors.onPrimaryContainer
-          : const Color(0xFF2563EB);
+          : const Color(0xFF1A368A);
       final activeFill = _dark
           ? _colors.primaryContainer
-          : const Color(0xFFF0F4FF);
+          : const Color(0xFFEDF2FC);
       final hoverFill = _dark
           ? _colors.surfaceContainerHighest
           : const Color(0xFFF5F7FA);
@@ -995,11 +718,17 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                           : controller.open()
                     : null,
                 style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  side: BorderSide(color: open ? focusColor : _edge),
+                  minimumSize: const Size(0, 42),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 9,
+                  ),
+                  side: BorderSide(color: open ? _blue : _fieldEdge),
                   foregroundColor: selected == null ? _muted : _ink,
                   backgroundColor: _surface,
+                  disabledBackgroundColor: _subtle,
+                  disabledForegroundColor: _muted,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(9),
                   ),
@@ -1011,18 +740,13 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                         selected?.title ?? hint,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: _type(14, weight: FontWeight.w500),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Icon(
-                      open
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      size: 18,
+                    RotatedBox(
+                      quarterTurns: open ? 2 : 0,
+                      child: _icon(_collapseArrow, size: 18, color: _muted),
                     ),
                   ],
                 ),
@@ -1032,397 +756,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         ),
       );
     },
-  );
-
-  Widget _availabilityPanel(bool compact) => Column(
-    key: const Key('schedule-availability-card'),
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _sectionHeading('02', 'Date & time'),
-      const SizedBox(height: 7),
-      _body(_zone),
-      const SizedBox(height: 16),
-      Row(
-        children: [
-          for (var day = 0; day < _days.length; day++) ...[
-            if (day > 0) const SizedBox(width: 6),
-            Expanded(child: _dayCard(day, compact)),
-          ],
-        ],
-      ),
-      const SizedBox(height: 16),
-      _label('Available times'),
-      const SizedBox(height: 9),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = compact ? 3 : 4;
-          final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
-          return Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final time in _slots)
-                SizedBox(
-                  width: width,
-                  child: _slotChip(_slotFor(_selectedDay, time)),
-                ),
-            ],
-          );
-        },
-      ),
-      const SizedBox(height: 12),
-      _body(
-        'Booked and past times remain visible but cannot be selected.',
-        size: 10,
-      ),
-    ],
-  );
-
-  Widget _dayCard(int day, bool compact) {
-    final date = _dateFor(day), selected = day == _selectedDay;
-    final available =
-        date.weekday <= DateTime.friday &&
-        _slotFor(day, _slots.last).isAfter(DateTime.now());
-    return Semantics(
-      selected: selected,
-      button: true,
-      child: InkWell(
-        key: ValueKey('schedule-day-$day'),
-        onTap: _busyApplicationId == null && available
-            ? () => setState(() {
-                _selectedDay = day;
-                _selectedSlot = null;
-              })
-            : null,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          height: compact ? 66 : 82,
-          decoration: BoxDecoration(
-            color: selected ? _activeFill : _surface,
-            border: Border.all(
-              color: selected ? _blue : _edge,
-              width: selected ? 1.5 : 1,
-            ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                _days[day].toUpperCase(),
-                style: GoogleFonts.inter(
-                  color: available ? _muted : _muted.withValues(alpha: .6),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                '${date.day}',
-                style: GoogleFonts.inter(
-                  color: selected
-                      ? _colors.onPrimaryContainer
-                      : available
-                      ? _ink
-                      : _muted.withValues(alpha: .6),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (!compact) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _booked == null ? '—' : '${_bookedCount(day)} booked',
-                  style: GoogleFonts.inter(color: _muted, fontSize: 9),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _slotChip(DateTime slot) {
-    final taken =
-        _booked == null || _taken(slot) || !slot.isAfter(DateTime.now());
-    final selected = _selectedSlot != null && _sameMinute(_selectedSlot!, slot);
-    return SizedBox(
-      height: 38,
-      child: OutlinedButton(
-        key: ValueKey('schedule-slot-${_time(slot)}'),
-        onPressed: taken || _busyApplicationId != null
-            ? null
-            : () => setState(() {
-                _selectedSlot = slot;
-                _rowErrors.clear();
-              }),
-        style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.zero,
-          foregroundColor: selected ? _colors.onPrimaryContainer : _ink,
-          disabledForegroundColor: _muted.withValues(alpha: 0.45),
-          backgroundColor: selected ? _activeFill : _surface,
-          side: BorderSide(
-            color: selected ? _blue : _edge,
-            width: selected ? 1.5 : 1,
-          ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-        ),
-        child: Text(
-          _time(slot),
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            decoration: taken ? TextDecoration.lineThrough : null,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _summaryRow(String label, String value) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 11),
-    decoration: BoxDecoration(
-      border: Border(bottom: BorderSide(color: _edge)),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: GoogleFonts.inter(color: _muted, fontSize: 13)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: GoogleFonts.inter(
-              color: _ink,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _invitationPanel() => _panel(
-    key: const Key('schedule-invitation-card'),
-    padding: EdgeInsets.zero,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _heading('Invitation details'),
-              const SizedBox(height: 7),
-              _body('Review the details before sending.'),
-            ],
-          ),
-        ),
-        Divider(height: 1, color: _edge),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
-          child: Column(
-            children: [
-              _summaryRow(
-                'Candidate',
-                _selectedApplication == null
-                    ? 'Not selected'
-                    : _candidateName(_selectedApplication!),
-              ),
-              _summaryRow(
-                'Role',
-                _jobs.where((job) => job.id == _jobId).firstOrNull?.title ??
-                    'Select a role',
-              ),
-              _summaryRow('Date', _dateLabel(_dateFor(_selectedDay))),
-              _summaryRow(
-                'Time',
-                _selectedSlot == null
-                    ? 'Select a time'
-                    : '${_time(_selectedSlot!)} ${DateTime.now().timeZoneName}',
-              ),
-              _summaryRow('Duration', 'Determined by interview agent'),
-              _summaryRow('Format', 'AI-guided voice interview'),
-            ],
-          ),
-        ),
-        Divider(height: 1, color: _edge),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _label('Send invitation via'),
-              _deliveryOption(
-                'In-app invitation',
-                _inAppInvitation,
-                (value) => setState(() => _inAppInvitation = value),
-              ),
-              _deliveryOption(
-                'Email invitation',
-                _emailInvitation,
-                (value) => setState(() => _emailInvitation = value),
-              ),
-              if (_applicationId != null &&
-                  _rowErrors[_applicationId] != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _rowErrors[_applicationId]!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 18),
-              _sendButton(),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _deliveryOption(
-    String label,
-    bool selected,
-    ValueChanged<bool> onChanged,
-  ) => CheckboxListTile(
-    contentPadding: EdgeInsets.zero,
-    controlAffinity: ListTileControlAffinity.leading,
-    dense: true,
-    value: selected,
-    onChanged: _busyApplicationId == null
-        ? (value) => onChanged(value ?? false)
-        : null,
-    activeColor: const Color(0xFF087B67),
-    checkColor: Colors.white,
-    side: BorderSide(color: _colors.outline),
-    checkboxShape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(3),
-    ),
-    title: Text(label, style: TextStyle(color: _ink, fontSize: 14)),
-  );
-
-  Widget _sectionHeading(String number, String title) => Row(
-    children: [
-      Container(
-        width: 28,
-        height: 28,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: _dark ? _colors.primaryContainer : const Color(0xFFEEF2F9),
-          border: Border.all(color: _edge),
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: Text(
-          number,
-          style: TextStyle(
-            color: _dark ? _colors.onPrimaryContainer : const Color(0xFF49658E),
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      const SizedBox(width: 10),
-      Expanded(child: _heading(title)),
-    ],
-  );
-
-  Widget _sendButton() => FilledButton(
-    key: const Key('schedule-review-send'),
-    onPressed:
-        !_loading &&
-            _error == null &&
-            _selectedApplication != null &&
-            _selectedSlot != null &&
-            _booked != null &&
-            !_taken(_selectedSlot!) &&
-            _selectedSlot!.isAfter(DateTime.now()) &&
-            _busyApplicationId == null
-        ? _reviewAndSend
-        : null,
-    style: RecruiterButtonStyle.primary(
-      FilledButton.styleFrom(
-        backgroundColor: _blue,
-        disabledBackgroundColor: _colors.surfaceContainerHighest,
-        disabledForegroundColor: _muted,
-        minimumSize: const Size(0, 46),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    ),
-    child: _busyApplicationId != null
-        ? const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.white,
-            ),
-          )
-        : Text(
-            'Send invitation',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-          ),
-  );
-
-  Widget _questionReview() => KeyedSubtree(
-    key: _reviewKey,
-    child: _panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: _selectedApplication == null
-                ? null
-                : () => setState(() => _reviewExpanded = !_reviewExpanded),
-            child: Row(
-              children: [
-                Expanded(child: _heading('Review interview questions')),
-                Icon(
-                  _reviewExpanded ? Icons.expand_less : Icons.expand_more,
-                  color: _muted,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 9),
-          _body(
-            _selectedApplication == null
-                ? 'Select a candidate to review their interview questions.'
-                : _canSchedule(_selectedApplication!)
-                ? 'Current question revision approved.'
-                : 'Question approval is required before sending.',
-          ),
-          if (_reviewExpanded && _selectedApplication != null) ...[
-            const SizedBox(height: 12),
-            QuestionPreparationPanel(
-              key: ValueKey('$_applicationId-$_questionReload'),
-              application: _selectedApplication,
-              applicationId: _applicationId!,
-              client: widget.questionClient,
-              onApprovalChanged: (setId, revision) {
-                setState(() {
-                  _approvedQuestionApplication = setId == null
-                      ? null
-                      : _applicationId;
-                  _approvedQuestionSet = setId;
-                  _approvedQuestionRevision = revision;
-                  if (setId != null) {
-                    _scheduleReviewRequired.remove(_applicationId);
-                  }
-                });
-              },
-            ),
-          ],
-        ],
-      ),
-    ),
   );
 
   Future<void> _reviewAndSend() async {
@@ -1461,15 +794,22 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _summaryRow('Candidate', _candidateName(app)),
-                _summaryRow('Date', _dateLabel(slot)),
+                _summaryRow(_dateField, _dateLabel(_inRecruiterZone(slot))),
                 _summaryRow(
-                  'Time',
-                  '${_time(slot)} ${DateTime.now().timeZoneName}',
+                  _timeField,
+                  '${_timeLabel(_inRecruiterZone(slot))} PKT',
                 ),
-                _summaryRow('Interview type', 'Retell AI · Voice'),
+                _summaryRow('Invitation type', _timingType),
+                _summaryRow(
+                  'Send via',
+                  [
+                    if (_notifyInApp) 'In-app',
+                    if (_notifyEmail) 'Email',
+                  ].join(' and '),
+                ),
                 const SizedBox(height: 16),
                 _body(
-                  'Confirm to schedule this interview using the approved question revision and send the standard invitation.',
+                  'Confirm to schedule this interview using the approved question revision and notify the candidate through the selected channels.',
                 ),
               ],
             ),
@@ -1542,14 +882,36 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                 ),
               ),
             );
-            if (mounted) _refreshQuestions();
+            if (!mounted || _interview?.id != interview.id) return;
+            try {
+              final refreshed = await InterviewService.getInterview(
+                interview.id,
+                client: widget.interviewClient,
+                role: 'RECRUITER',
+              );
+              if (!mounted || _interview?.id != interview.id) return;
+              setState(() => _interview = refreshed);
+              if (_jobId case final jobId?) {
+                final bookings = await _loadBookings(jobId);
+                if (mounted &&
+                    _jobId == jobId &&
+                    _interview?.id == interview.id) {
+                  setState(() => _booked = bookings);
+                }
+              }
+            } catch (_) {
+              // Frozen questions can still be refreshed if the timing read fails.
+            }
+            if (mounted && _interview?.id == interview.id) _refreshQuestions();
           },
-          child: const Text(
-            'Review evidence, reschedule or schedule another attempt',
+          child: Text(
+            _interview!.isFlexible
+                ? 'Review evidence or extend the deadline'
+                : 'Review evidence, reschedule or schedule another attempt',
           ),
         ),
         Text(
-          'Workflow: ${_interview!.workflowState} · ${_interview!.scheduledAt?.toLocal()} ${DateTime.now().timeZoneName}',
+          'Workflow: ${_interview!.workflowState} · ${_interview!.isFlexible ? 'Start by ' : ''}${_interview!.timingAt?.toLocal()} ${DateTime.now().timeZoneName}',
         ),
         Text('Preparation: ${_interview!.questionPreparationMode}'),
         if (_interview!.questionFallbackReason.isNotEmpty)
@@ -1557,7 +919,11 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         const SizedBox(height: 7),
         Text(
           'Interview ID: ${_interview!.id}',
-          style: GoogleFonts.jetBrainsMono(color: _muted, fontSize: 10),
+          style: TextStyle(
+            fontFamily: 'JetBrains Mono',
+            color: _muted,
+            fontSize: 10,
+          ),
         ),
         if (_questionNotice != null) Text(_questionNotice!),
         if (_questionError != null)
@@ -1580,55 +946,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
             ),
           ),
       ],
-    ),
-  );
-
-  Widget _panel({
-    Key? key,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(18),
-    required Widget child,
-  }) => Container(
-    key: key,
-    width: double.infinity,
-    padding: padding,
-    decoration: BoxDecoration(
-      color: _surface,
-      border: Border.all(color: _edge),
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: _dark ? 0.10 : 0.025),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    ),
-    child: Material(type: MaterialType.transparency, child: child),
-  );
-
-  Widget _heading(String text) => Text(
-    text,
-    style: GoogleFonts.inter(
-      color: _ink,
-      fontSize: 16,
-      fontWeight: FontWeight.w700,
-    ),
-  );
-  Widget _label(String text) => Text(
-    text,
-    style: GoogleFonts.inter(
-      color: _muted,
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-    ),
-  );
-  Widget _body(String text, {double size = 14}) => Text(
-    text,
-    style: GoogleFonts.inter(
-      color: _muted,
-      fontSize: size,
-      height: 1.52,
-      fontWeight: FontWeight.w500,
     ),
   );
 }

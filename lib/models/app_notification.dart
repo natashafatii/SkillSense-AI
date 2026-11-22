@@ -61,21 +61,56 @@ class NotificationLinks {
       );
 }
 
+class NotificationDetails {
+  const NotificationDetails({
+    this.jobTitle,
+    this.companyName,
+    this.candidateName,
+    this.currentApplicationStatus,
+    this.scheduledAt,
+    this.deadlineAt,
+  });
+
+  final String? jobTitle, companyName, candidateName, currentApplicationStatus;
+  final DateTime? scheduledAt, deadlineAt;
+
+  factory NotificationDetails.fromJson(Object? value) {
+    if (value is! Map) return const NotificationDetails();
+    String? readText(String key) {
+      final field = value[key];
+      if (field is! String || field.trim().isEmpty) return null;
+      return field.trim();
+    }
+
+    final scheduledAt = readText('scheduled_at');
+    final deadlineAt = readText('deadline_at');
+    return NotificationDetails(
+      jobTitle: readText('job_title'),
+      companyName: readText('company_name'),
+      candidateName: readText('candidate_name'),
+      currentApplicationStatus: readText('current_application_status'),
+      scheduledAt: scheduledAt == null ? null : DateTime.tryParse(scheduledAt),
+      deadlineAt: deadlineAt == null ? null : DateTime.tryParse(deadlineAt),
+    );
+  }
+}
+
 class AppNotification {
   final String id;
   final String type;
   final NotificationLinks links;
+  final NotificationDetails details;
   NotificationEvent get event => NotificationEvent.parse(type);
   String get displayType => switch (event) {
     NotificationEvent.applicationReceived => 'Application received',
     NotificationEvent.applicationStatusChanged => 'Application update',
     NotificationEvent.interviewScheduled => 'Interview scheduled',
-    NotificationEvent.questionReviewReady => 'Questions ready',
-    NotificationEvent.evaluationReady => 'Evaluation ready',
-    NotificationEvent.evaluationFailed => 'Evaluation unavailable',
-    NotificationEvent.scoreReady => 'Score ready',
-    NotificationEvent.feedbackReleased => 'Feedback released',
-    NotificationEvent.feedbackRetracted => 'Feedback withdrawn',
+    NotificationEvent.questionReviewReady => 'Interview questions ready',
+    NotificationEvent.evaluationReady => 'Interview evaluation ready',
+    NotificationEvent.evaluationFailed => 'Interview evaluation unavailable',
+    NotificationEvent.scoreReady => 'Combined score ready',
+    NotificationEvent.feedbackReleased => 'Interview feedback released',
+    NotificationEvent.feedbackRetracted => 'Interview feedback withdrawn',
     NotificationEvent.unknown => 'Notification',
   };
   final String message;
@@ -84,6 +119,7 @@ class AppNotification {
 
   const AppNotification({
     this.links = const NotificationLinks.empty(),
+    this.details = const NotificationDetails(),
     required this.id,
     required this.type,
     required this.message,
@@ -94,6 +130,7 @@ class AppNotification {
   factory AppNotification.fromJson(Map<String, dynamic> json) =>
       AppNotification(
         links: NotificationLinks.fromJson(json['links']),
+        details: NotificationDetails.fromJson(json['details']),
         id: json['id'] as String,
         type: json['type'] as String,
         message: json['message'] as String,
@@ -105,6 +142,7 @@ class AppNotification {
     final age = DateTime.now().difference(createdAt.toLocal());
     if (age.inDays > 0) return '${age.inDays}d ago';
     if (age.inHours > 0) return '${age.inHours}h ago';
-    return '${age.inMinutes < 1 ? 0 : age.inMinutes}m ago';
+    if (age.inMinutes > 0) return '${age.inMinutes}m ago';
+    return 'Just now';
   }
 }

@@ -64,16 +64,22 @@ class _CandidateInterviewLobbyScreenState
 
   DateTime? get _joinOpensAt =>
       _interview?.joinWindowRequired == true &&
-          _interview?.status == 'SCHEDULED'
+          _interview?.status == 'SCHEDULED' &&
+          _interview?.isFlexible != true
       ? _interview?.scheduledAt?.subtract(const Duration(minutes: 15))
       : null;
 
   bool get _waitingForJoinWindow =>
       _joinOpensAt?.isAfter(DateTime.now()) ?? false;
 
+  bool get _deadlinePassed =>
+      _interview?.deadlinePassedAt(DateTime.now()) ?? false;
+
   void _scheduleJoinWindowUpdate() {
     _joinWindowTimer?.cancel();
-    final opensAt = _joinOpensAt;
+    final opensAt = _interview?.status == 'SCHEDULED'
+        ? _interview?.deadlineAt ?? _joinOpensAt
+        : null;
     if (opensAt == null) return;
     final delay = opensAt.difference(DateTime.now());
     if (delay <= Duration.zero) return;
@@ -135,12 +141,12 @@ class _CandidateInterviewLobbyScreenState
         _interview = interview;
         _scheduleJoinWindowUpdate();
         _countdownTimer?.cancel();
-        if (interview.status == 'SCHEDULED' && interview.scheduledAt != null) {
+        if (interview.status == 'SCHEDULED' && interview.timingAt != null) {
           _countdownTimer = Timer.periodic(const Duration(seconds: 30), (
             timer,
           ) {
             setState(() {});
-            if (!interview.scheduledAt!.isAfter(DateTime.now())) timer.cancel();
+            if (!interview.timingAt!.isAfter(DateTime.now())) timer.cancel();
           });
         }
         if (mounted) {
@@ -202,7 +208,7 @@ class _CandidateInterviewLobbyScreenState
       return;
     }
     if (_startUncertain) return;
-    if (_waitingForJoinWindow) return;
+    if (_waitingForJoinWindow || _deadlinePassed) return;
     if (!_media.cameraReady || !_media.microphoneChecked) {
       setState(() {
         _startError = 'Check your camera and microphone before starting.';
@@ -276,6 +282,8 @@ class _CandidateInterviewLobbyScreenState
         setState(() {
           _startError = error.fieldErrors?.containsKey('scheduled_at') == true
               ? 'You can join from 15 minutes before the scheduled time.'
+              : error.fieldErrors?.containsKey('deadline_at') == true
+              ? 'The interview deadline has passed. Ask the recruiter for a new deadline.'
               : error.message;
           _startUncertain = error.voiceStartNeedsRecovery;
         });
@@ -628,7 +636,7 @@ class _CandidateInterviewLobbyScreenState
   }
 
   Widget _buildAppointment(Interview interview, _LobbyColors colors) {
-    final scheduledAt = interview.scheduledAt?.toLocal();
+    final scheduledAt = interview.timingAt?.toLocal();
     final formattedTime = scheduledAt == null ? '' : _formatTime(scheduledAt);
     final match = RegExp(
       r'^(.*)\s+(AM|PM)$',
@@ -688,7 +696,7 @@ class _CandidateInterviewLobbyScreenState
                       Text(
                         scheduledAt == null
                             ? 'Time to be confirmed'
-                            : _formatDate(scheduledAt),
+                            : '${interview.isFlexible ? 'Start by ' : ''}${_formatDate(scheduledAt)}',
                         style: _lobbyText(14.5, weight: FontWeight.w700),
                       ),
                       if (scheduledAt != null)
@@ -749,7 +757,7 @@ class _CandidateInterviewLobbyScreenState
                   Expanded(
                     child: Text(
                       isScheduled && scheduledAt != null
-                          ? 'Starts in'
+                          ? (interview.isFlexible ? 'Deadline' : 'Starts in')
                           : 'Status',
                       style: _lobbyText(
                         13,
@@ -762,7 +770,11 @@ class _CandidateInterviewLobbyScreenState
                   Flexible(
                     child: Text(
                       isScheduled && scheduledAt != null
-                          ? _countdown(scheduledAt)
+                          ? (interview.isFlexible
+                                ? (_deadlinePassed
+                                      ? 'Passed'
+                                      : 'Start anytime before the deadline')
+                                : _countdown(scheduledAt))
                           : switch (interview.status) {
                               'LIVE' => 'Live',
                               'COMPLETED' => 'Completed',
@@ -843,9 +855,13 @@ class _CandidateInterviewLobbyScreenState
     final ready = camera && mic;
     final opensAt = _joinOpensAt?.toLocal();
     final waiting = _waitingForJoinWindow;
-    final canJoin = _canResume || (ready && !_startUncertain && !waiting);
+    final canJoin =
+        _canResume ||
+        (ready && !_startUncertain && !waiting && !_deadlinePassed);
     final note = _canResume
         ? 'Reconnect to your existing interview session.'
+        : _deadlinePassed
+        ? 'The interview deadline has passed. Ask the recruiter for a new deadline.'
         : !ready
         ? 'Check your camera and microphone to continue.'
         : waiting && opensAt != null

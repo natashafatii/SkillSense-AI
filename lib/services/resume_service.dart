@@ -59,6 +59,7 @@ class ResumeService {
     required List<int> fileBytes,
     required String fileName,
     ProgressCallback? onSendProgress,
+    CancelToken? cancelToken,
   }) async {
     try {
       final dio = await ApiClient.getInstance();
@@ -70,6 +71,7 @@ class ResumeService {
         '/candidates/resumes/',
         data: formData,
         onSendProgress: onSendProgress,
+        cancelToken: cancelToken,
         options: Options(
           // Let Dio set the correct multipart Content-Type with boundary.
           contentType: 'multipart/form-data',

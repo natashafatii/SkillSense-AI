@@ -468,7 +468,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
   );
 
   Widget _dateCell(RecruiterInterview interview) {
-    final date = (interview.completedAt ?? interview.scheduledAt)?.toLocal();
+    final date = (interview.completedAt ?? interview.timingAt)?.toLocal();
     if (date == null) return _twoLines('Unavailable', '');
     final localizations = MaterialLocalizations.of(context);
     return _twoLines(

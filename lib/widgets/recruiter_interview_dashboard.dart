@@ -8,6 +8,7 @@ import '../models/recruitment_evidence.dart';
 import '../services/media/interview_media_route_observer.dart';
 import '../services/recruitment_workflow_service.dart';
 import '../services/session_scope.dart';
+import 'screening_visuals.dart';
 
 Color reviewAnswerScoreColor(double? score) => switch (score) {
   null => const Color(0xFF687893),
@@ -75,12 +76,14 @@ class RecruiterInterviewDashboard extends StatefulWidget {
     required this.service,
     required this.refreshVersion,
     this.viewportHeight,
+    this.compactScreening = false,
   });
 
   final RecruitmentReview review;
   final RecruitmentWorkflowService service;
   final int refreshVersion;
   final double? viewportHeight;
+  final bool compactScreening;
 
   @override
   State<RecruiterInterviewDashboard> createState() =>
@@ -220,12 +223,14 @@ class _RecruiterInterviewDashboardState
 
   @override
   Widget build(BuildContext context) => DefaultTextStyle.merge(
-    style: TextStyle(
-      color: context.themeForeground(_ink),
-      fontSize: 13,
-      height: 1.45,
-      fontFamily: 'Inter',
-    ),
+    style: widget.compactScreening
+        ? ScreeningStyle.text(13)
+        : TextStyle(
+            color: context.themeForeground(_ink),
+            fontSize: 13,
+            height: 1.45,
+            fontFamily: 'Inter',
+          ),
     child: LayoutBuilder(
       builder: (context, size) {
         final answers = _evidenceAnswers();
@@ -989,7 +994,12 @@ class _RecruiterInterviewDashboardState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+          padding: EdgeInsets.fromLTRB(
+            widget.compactScreening ? ScreeningStyle.inset(context) : 20,
+            15,
+            widget.compactScreening ? ScreeningStyle.inset(context) : 20,
+            widget.compactScreening ? 10 : 15,
+          ),
           child: Wrap(
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -998,10 +1008,12 @@ class _RecruiterInterviewDashboardState
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: widget.compactScreening
+                    ? ScreeningStyle.title()
+                    : const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
               ),
               if (badge != null) badge,
               if (trailing != null) trailing,
@@ -1013,19 +1025,31 @@ class _RecruiterInterviewDashboardState
     ),
   );
 
-  Widget _surface(Widget child) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: context.themeSurface(Colors.white),
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: context.themeOutline(const Color(0xFFE2E8F2))),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x0A0F172A),
-          blurRadius: 4,
-          offset: Offset(0, 2),
-        ),
-      ],
-    ),
-    child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
-  );
+  Widget _surface(Widget child) => widget.compactScreening
+      ? ScreeningPanel(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: child,
+          ),
+        )
+      : DecoratedBox(
+          decoration: BoxDecoration(
+            color: context.themeSurface(Colors.white),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: context.themeOutline(const Color(0xFFE2E8F2)),
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0A0F172A),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: child,
+          ),
+        );
 }

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../models/interview.dart';
+import '../models/api_contract.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
 import 'application_service.dart';
@@ -95,13 +96,18 @@ class InterviewService {
 
   static Future<Interview> schedule({
     required String applicationId,
-    required DateTime scheduledAt,
+    DateTime? scheduledAt,
+    DateTime? deadlineAt,
+    bool notifyInApp = true,
+    bool notifyEmail = true,
     String? questionSetId,
     int? expectedRevision,
     Dio? client,
   }) async {
     if (applicationId.isEmpty ||
-        !scheduledAt.isAfter(DateTime.now()) ||
+        (scheduledAt == null) == (deadlineAt == null) ||
+        !(deadlineAt ?? scheduledAt!).isAfter(DateTime.now()) ||
+        !(notifyInApp || notifyEmail) ||
         questionSetId == null ||
         questionSetId.isEmpty ||
         expectedRevision == null ||
@@ -118,7 +124,11 @@ class InterviewService {
         '/interviews/',
         data: {
           'application': applicationId,
-          'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+          if (scheduledAt != null)
+            'scheduled_at': ApiValue.timestamp(scheduledAt),
+          if (deadlineAt != null) 'deadline_at': ApiValue.timestamp(deadlineAt),
+          if (!notifyInApp) 'notify_in_app': false,
+          if (!notifyEmail) 'notify_email': false,
           'question_set': questionSetId,
           'expected_revision': expectedRevision,
         },
