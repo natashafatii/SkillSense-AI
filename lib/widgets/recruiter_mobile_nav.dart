@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
@@ -18,7 +19,7 @@ class RecruiterMobileNav extends StatefulWidget {
     this.backgroundColor = Colors.white,
     this.borderColor = const Color(0xFFE2E8F0),
     this.foregroundColor = const Color(0xFF64748B),
-    this.accentColor = const Color(0xFF4D7BFA),
+    this.accentColor = TypographyColors.recruiterAccent,
   });
 
   final String currentRoute;
@@ -39,15 +40,23 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
   final _link = LayerLink();
   int? _expanded;
   static const _tabLabels = ['Overview', 'Pipeline', 'Interviews', 'Workspace'];
+  static const _profile = RecruiterDestination(
+    'Profile & settings',
+    '/recruiter/profile',
+  );
+
+  List<RecruiterDestination> _destinations(int index) => [
+    if (index == recruiterSections.length - 1) _profile,
+    ...recruiterSections[index].items,
+  ];
 
   int? get _active {
     final route = switch (widget.currentRoute) {
       '/recruiter/job-detail' => '/recruiter/job-listings',
-      '/recruiter/profile' => '/recruiter/analytics',
       final route => route,
     };
     for (var index = 0; index < recruiterSections.length; index++) {
-      if (recruiterSections[index].items.any((item) => item.route == route)) {
+      if (_destinations(index).any((item) => item.route == route)) {
         return index;
       }
     }
@@ -138,8 +147,7 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           child: Row(
                             children: [
-                              for (final item
-                                  in recruiterSections[_expanded!].items)
+                              for (final item in _destinations(_expanded!))
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 4,
@@ -174,9 +182,7 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
                       child: IconButton(
                         tooltip: 'Close subcategories',
                         onPressed: _close,
-                        color: context.themeForeground(
-                          const Color(0xFF475569),
-                        ),
+                        color: context.themeForeground(const Color(0xFF475569)),
                         icon: const Icon(Icons.close_rounded, size: 18),
                       ),
                     ),

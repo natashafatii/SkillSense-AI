@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -6,7 +7,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/job.dart';
@@ -14,7 +14,6 @@ import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/page_heading_style.dart';
 import 'role_skill_picker.dart';
 
 @immutable
@@ -357,24 +356,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     super.dispose();
   }
 
-  TextStyle _body(
-    double size, {
-    FontWeight weight = FontWeight.w400,
-    Color? color,
-  }) => GoogleFonts.inter(
-    fontSize: size,
-    fontWeight: weight,
-    color: color ?? _c.text,
-  );
-  TextStyle _heading(
-    double size, {
-    FontWeight weight = FontWeight.w700,
-    Color? color,
-  }) => GoogleFonts.spaceGrotesk(
-    fontSize: size,
-    fontWeight: weight,
-    color: color ?? _c.text,
-  );
+  TextStyle _body(AppType type, {Color? color}) =>
+      type.style(context, color: color ?? _c.text);
+  TextStyle _heading(AppType type, {Color? color}) =>
+      type.style(context, color: color ?? _c.text);
   BoxDecoration _cardDecoration({double radius = 16}) => BoxDecoration(
     color: _c.surface,
     borderRadius: BorderRadius.circular(radius),
@@ -415,12 +400,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                             final horizontalPadding = constraints.maxWidth < 640
                                 ? 16.0
                                 : 28.0;
-                            final width = math.min(
-                              1200.0,
-                              math.max(
-                                0.0,
-                                constraints.maxWidth - horizontalPadding * 2,
-                              ),
+                            final width = math.max(
+                              0.0,
+                              constraints.maxWidth - horizontalPadding * 2,
                             );
                             final wide = constraints.maxWidth >= 980;
                             if (!wide) {
@@ -644,13 +626,19 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                                     child: Text(
                                       'Missing a requirement flags the applicant.',
                                       maxLines: 2,
-                                      style: _body(12.5, color: _c.text3),
+                                      style: _body(
+                                        AppType.caption,
+                                        color: _c.text3,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
                                     '${_requirements.text.length} / 500',
-                                    style: _body(12.5, color: _c.text3),
+                                    style: _body(
+                                      AppType.caption,
+                                      color: _c.text3,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -704,15 +692,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          title,
-          style: _body(
-            17,
-            weight: FontWeight.w600,
-          ).copyWith(letterSpacing: -.17),
-        ),
+        Text(title, style: _body(AppType.h3)),
         const SizedBox(height: 2),
-        Text(subtitle, style: _body(13.5, color: _c.text3)),
+        Text(subtitle, style: _body(AppType.bodySm, color: _c.text3)),
         const SizedBox(height: 16),
         for (var i = 0; i < fields.length; i++) ...[
           if (i > 0)
@@ -754,7 +736,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
-              textStyle: _body(16, weight: FontWeight.w600),
+              textStyle: _body(AppType.button),
             ),
           ),
         ),
@@ -782,7 +764,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                     : widget.initialJob == null
                     ? 'Publish role'
                     : 'Save changes',
-                style: _body(16, weight: FontWeight.w600, color: Colors.white),
+                style: _body(AppType.button, color: Colors.white),
               ),
             ),
           ),
@@ -802,14 +784,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             _thresholdLabel,
             key: const Key('create-role-threshold-value'),
             style: _heading(
-              36,
+              AppType.display,
             ).copyWith(fontFeatures: [const FontFeature.tabularFigures()]),
           ),
           const SizedBox(width: 10),
-          Text(
-            _thresholdBand,
-            style: _body(13.5, weight: FontWeight.w600, color: _c.success),
-          ),
+          Text(_thresholdBand, style: _body(AppType.bodySm, color: _c.success)),
         ],
       ),
       const SizedBox(height: 16),
@@ -859,9 +838,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       const SizedBox(height: 8),
       Row(
         children: [
-          Text('0 Open', style: _body(12.5, color: _c.text3)),
+          Text('0 Open', style: _body(AppType.caption, color: _c.text3)),
           const Spacer(),
-          Text('100 Strict', style: _body(12.5, color: _c.text3)),
+          Text('100 Strict', style: _body(AppType.caption, color: _c.text3)),
         ],
       ),
       const SizedBox(height: 18),
@@ -873,15 +852,12 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Auto-shortlist',
-                  style: _body(15, weight: FontWeight.w600),
-                ),
+                Text('Auto-shortlist', style: _body(AppType.h4)),
                 Text(
                   _autoShortlist
                       ? 'Applicants scoring $_thresholdLabel+ who meet every requirement are shortlisted.'
                       : 'Off. You review every applicant yourself.',
-                  style: _body(13, color: _c.text3),
+                  style: _body(AppType.caption, color: _c.text3),
                 ),
               ],
             ),
@@ -938,7 +914,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text('Live preview', style: _heading(18)),
+                Text('Live preview', style: _heading(AppType.h3)),
                 const SizedBox(height: 14),
                 _mobilePreviewJob(),
                 const SizedBox(height: 16),
@@ -969,11 +945,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                       widget.initialJob == null
                           ? 'Publish role'
                           : 'Save changes',
-                      style: _body(
-                        16,
-                        weight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
+                      style: _body(AppType.button, color: Colors.white),
                     ),
                   ),
                 ),
@@ -1002,8 +974,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: _heading(
-              18,
-              weight: FontWeight.w600,
+              AppType.h3,
               color: _title.text.trim().isEmpty ? _c.text3 : _c.text,
             ),
           ),
@@ -1012,14 +983,14 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             _previewMeta(),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: _body(13.5, color: _c.text2),
+            style: _body(AppType.bodySm, color: _c.text2),
           ),
           const SizedBox(height: 10),
           Text(
             hasSalary
                 ? 'PKR ${_salaryMin.text} – ${_salaryMax.text} / month'
                 : 'Salary range',
-            style: _body(15, weight: FontWeight.w600),
+            style: _body(AppType.h4),
           ),
           if (_skills.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -1042,7 +1013,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     return estimate == null
         ? Text(
             'Add a title and skills to see an applicant estimate.',
-            style: _body(14, color: _c.text2),
+            style: _body(AppType.bodySm, color: _c.text2),
           )
         : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1050,11 +1021,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               Text(
                 '${estimate.$1}–${estimate.$2} applicants',
                 key: const Key('create-role-estimate'),
-                style: _heading(20, weight: FontWeight.w600),
+                style: _heading(AppType.h3),
               ),
               Text(
                 'expected in week one, based on similar roles',
-                style: _body(14, color: _c.text2),
+                style: _body(AppType.bodySm, color: _c.text2),
               ),
             ],
           );
@@ -1076,14 +1047,14 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     children: [
       Text(
         widget.initialJob == null ? 'New job posting' : 'Edit role',
-        style: pageHeadingStyle(context),
+        style: context.text.headlineLarge,
       ),
       const SizedBox(height: 6),
       ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 650),
         child: Text(
           'Describe the role and pick the skills that matter. SkillSense uses them to match, screen and interview candidates.',
-          style: _body(15, color: _c.text2),
+          style: _body(AppType.body, color: _c.text2),
         ),
       ),
       const SizedBox(height: 24),
@@ -1199,13 +1170,13 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   child: Text(
                     'Candidates missing a requirement are flagged for review.',
                     maxLines: 2,
-                    style: _body(12.5, color: _c.text3),
+                    style: _body(AppType.caption, color: _c.text3),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   '${_requirements.text.length} / 500',
-                  style: _body(12.5, color: _c.text3),
+                  style: _body(AppType.caption, color: _c.text3),
                 ),
               ],
             ),
@@ -1247,15 +1218,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          title,
-          style: _body(
-            17,
-            weight: FontWeight.w600,
-          ).copyWith(letterSpacing: title == 'Skills' ? -.17 : null),
-        ),
+        Text(title, style: _body(AppType.h3)),
         const SizedBox(height: 4),
-        Text(subtitle, style: _body(13.5, color: _c.text3)),
+        Text(subtitle, style: _body(AppType.bodySm, color: _c.text3)),
         SizedBox(height: contentGap),
         ...children,
       ],
@@ -1283,17 +1248,15 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
     padding: const EdgeInsets.only(bottom: 8),
     child: Row(
       children: [
-        Expanded(
-          child: Text(title, style: _body(13.5, weight: FontWeight.w500)),
-        ),
+        Expanded(child: Text(title, style: _body(AppType.h4))),
         if (trailing != null)
-          Text(trailing, style: _body(12.5, color: _c.text3)),
+          Text(trailing, style: _body(AppType.caption, color: _c.text3)),
       ],
     ),
   );
   Widget _errorText(String text) => Padding(
     padding: const EdgeInsets.only(top: 6),
-    child: Text(text, style: _body(12.5, color: _c.error)),
+    child: Text(text, style: _body(AppType.caption, color: _c.error)),
   );
   BoxDecoration _inputBox(bool focused, bool errored, {double radius = 10}) =>
       BoxDecoration(
@@ -1350,12 +1313,12 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                 minLines: minLines,
                 maxLines: maxLines,
                 maxLength: maxLength,
-                style: _body(14.5),
+                style: _body(AppType.body),
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
                   hintText: hint,
-                  hintStyle: _body(14.5, color: _c.text3),
+                  hintStyle: _body(AppType.caption, color: _c.text3),
                   contentPadding: EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: minLines > 1 ? 12 : (_isMobile ? 14 : 13),
@@ -1403,9 +1366,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   ),
                   hint: Text(
                     'Select a city',
-                    style: _body(14.5, color: _c.text3),
+                    style: _body(AppType.bodySm, color: _c.text3),
                   ),
-                  style: _body(14.5),
+                  style: _body(AppType.bodySm),
                   items: [
                     if (_location != null && !_cities.contains(_location))
                       DropdownMenuItem(
@@ -1483,8 +1446,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                       child: Text(
                         value,
                         style: _body(
-                          13.5,
-                          weight: FontWeight.w500,
+                          AppType.bodySm,
                           color: value == selected ? _c.text : _c.text2,
                         ),
                       ),
@@ -1532,11 +1494,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                     ),
                     child: Text(
                       'PKR',
-                      style: _body(
-                        12.5,
-                        weight: FontWeight.w600,
-                        color: _c.text2,
-                      ),
+                      style: _body(AppType.overline, color: _c.text2),
                     ),
                   ),
                   Expanded(
@@ -1548,14 +1506,14 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                       focusNode: focus,
                       keyboardType: TextInputType.number,
                       inputFormatters: const [_SalaryFormatter()],
-                      style: _body(14.5).copyWith(
+                      style: _body(AppType.bodySm).copyWith(
                         fontFeatures: [const FontFeature.tabularFigures()],
                       ),
                       decoration: InputDecoration(
                         border: InputBorder.none,
                         isDense: true,
                         hintText: hint,
-                        hintStyle: _body(14.5, color: _c.text3),
+                        hintStyle: _body(AppType.caption, color: _c.text3),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 13,
@@ -1601,11 +1559,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         ),
         child: Text(
           range.$1,
-          style: _body(
-            _isMobile ? 13.5 : 13,
-            weight: FontWeight.w500,
-            color: selected ? _c.accent : _c.text2,
-          ),
+          style: _body(AppType.bodySm, color: selected ? _c.accent : _c.text2),
         ),
       ),
     );
@@ -1709,7 +1663,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                         ? 'Select a closing date'
                         : _dateLabel(_deadline!),
                     style: _body(
-                      14.5,
+                      AppType.bodySm,
                       color: _deadline == null ? _c.text3 : _c.text,
                     ),
                   ),
@@ -1771,7 +1725,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           const Spacer(),
           Text(
             '${_skills.length} of ${RoleSkillPicker.maxSkills}',
-            style: _body(12.5, color: _c.text3),
+            style: _body(AppType.caption, color: _c.text3),
           ),
         ],
       ),
@@ -1779,7 +1733,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 34),
         child: _skills.isEmpty
-            ? Text('No skills added yet.', style: _body(13.5, color: _c.text3))
+            ? Text(
+                'No skills added yet.',
+                style: _body(AppType.bodySm, color: _c.text3),
+              )
             : Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -1795,7 +1752,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             if (_suggested.any((name) => !_hasSkill(name)))
-              Text('Suggested:', style: _body(13, color: _c.text3)),
+              Text(
+                'Suggested:',
+                style: _body(AppType.caption, color: _c.text3),
+              ),
             for (final name in _suggested)
               if (!_hasSkill(name))
                 _SuggestedSkillChip(
@@ -1815,7 +1775,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             scrollDirection: Axis.horizontal,
             children: [
               Center(
-                child: Text('Suggested', style: _body(13, color: _c.text3)),
+                child: Text(
+                  'Suggested',
+                  style: _body(AppType.caption, color: _c.text3),
+                ),
               ),
               const SizedBox(width: 8),
               for (final name in _suggested)
@@ -1860,7 +1823,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               skill,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _body(13.5, weight: FontWeight.w500, color: _c.accent),
+              style: _body(AppType.bodySm, color: _c.accent),
             ),
           ),
         ),
@@ -1869,10 +1832,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           onTap: () => setState(() => _skills.remove(skill)),
           child: Padding(
             padding: const EdgeInsets.only(left: 2, right: 10),
-            child: Text(
-              '✕',
-              style: _body(12.5, weight: FontWeight.w600, color: _c.accent),
-            ),
+            child: Text('✕', style: _body(AppType.caption, color: _c.accent)),
           ),
         ),
       ],
@@ -1931,10 +1891,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _mixNames[i],
-                      style: _body(14, weight: FontWeight.w600),
-                    ),
+                    Text(_mixNames[i], style: _body(AppType.bodySm)),
                     Text(
                       _isMobile
                           ? const [
@@ -1945,7 +1902,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                           : _mixDetails[i],
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: _body(12.5, color: _c.text3),
+                      style: _body(AppType.caption, color: _c.text3),
                     ),
                   ],
                 ),
@@ -1970,7 +1927,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                             ? null
                             : () => _changeMix(i, -1, _mixFocus[i * 2]),
                         style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                        child: Text('−', style: _body(17, color: _c.text2)),
+                        child: Text(
+                          '−',
+                          style: _body(AppType.button, color: _c.text2),
+                        ),
                       ),
                     ),
                     SizedBox(
@@ -1978,7 +1938,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                       child: Text(
                         _mix[i].toString(),
                         textAlign: TextAlign.center,
-                        style: _body(14.5, weight: FontWeight.w600).copyWith(
+                        style: _body(AppType.bodySm).copyWith(
                           fontFeatures: [const FontFeature.tabularFigures()],
                         ),
                       ),
@@ -1992,7 +1952,10 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                             ? null
                             : () => _changeMix(i, 1, _mixFocus[i * 2 + 1]),
                         style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                        child: Text('+', style: _body(17, color: _c.text2)),
+                        child: Text(
+                          '+',
+                          style: _body(AppType.button, color: _c.text2),
+                        ),
                       ),
                     ),
                   ],
@@ -2005,12 +1968,12 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       Row(
         children: [
           Expanded(
-            child: Text('Total questions', style: _body(12.5, color: _c.text3)),
+            child: Text(
+              'Total questions',
+              style: _body(AppType.caption, color: _c.text3),
+            ),
           ),
-          Text(
-            _totalQuestions.toString(),
-            style: _body(14.5, weight: FontWeight.w700),
-          ),
+          Text(_totalQuestions.toString(), style: _body(AppType.bodySm)),
         ],
       ),
     ],
@@ -2030,7 +1993,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       Text(
         'Goes live immediately. Candidates can apply right away.',
         textAlign: TextAlign.center,
-        style: _body(12.5, color: _c.text3),
+        style: _body(AppType.caption, color: _c.text3),
       ),
     ],
   );
@@ -2064,9 +2027,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
 
   Widget _panelHeader(String title, {String? tag}) => Row(
     children: [
-      Expanded(
-        child: Text(title, style: _body(15, weight: FontWeight.w600)),
-      ),
+      Expanded(child: Text(title, style: _body(AppType.h4))),
       if (tag != null)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -2074,10 +2035,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
             color: _c.accentSoft,
             borderRadius: BorderRadius.circular(99),
           ),
-          child: Text(
-            tag,
-            style: _body(12, weight: FontWeight.w600, color: _c.accent),
-          ),
+          child: Text(tag, style: _body(AppType.badge, color: _c.accent)),
         ),
     ],
   );
@@ -2120,8 +2078,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: _heading(
-                    17,
-                    weight: FontWeight.w600,
+                    AppType.h3,
                     color: _title.text.trim().isEmpty ? _c.text3 : _c.text,
                   ),
                 ),
@@ -2130,14 +2087,14 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                   _previewMeta(),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: _body(13, color: _c.text2),
+                  style: _body(AppType.caption, color: _c.text2),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   salarySet
                       ? 'PKR ${_salaryMin.text} – ${_salaryMax.text} / month'
                       : 'Salary range',
-                  style: _body(15, weight: FontWeight.w600),
+                  style: _body(AppType.h4),
                 ),
                 if (_skills.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -2163,7 +2120,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                 child: estimate == null
                     ? Text(
                         'Add a title and skills to see an applicant estimate.',
-                        style: _body(13.5, color: _c.text2),
+                        style: _body(AppType.bodySm, color: _c.text2),
                       )
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2171,11 +2128,11 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                           Text(
                             '${estimate.$1}–${estimate.$2} applicants',
                             key: const Key('create-role-estimate'),
-                            style: _heading(20, weight: FontWeight.w600),
+                            style: _heading(AppType.h3),
                           ),
                           Text(
                             'expected in week one, based on similar roles',
-                            style: _body(13.5, color: _c.text2),
+                            style: _body(AppType.bodySm, color: _c.text2),
                           ),
                         ],
                       ),
@@ -2203,7 +2160,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
       text,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: _body(12.5, color: _c.text2),
+      style: _body(AppType.caption, color: _c.text2),
     ),
   );
 
@@ -2226,13 +2183,13 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               _thresholdLabel,
               key: const Key('create-role-threshold-value'),
               style: _heading(
-                34,
+                AppType.h1,
               ).copyWith(fontFeatures: [const FontFeature.tabularFigures()]),
             ),
             const SizedBox(width: 10),
             Text(
               _thresholdBand,
-              style: _body(13, weight: FontWeight.w600, color: _c.success),
+              style: _body(AppType.caption, color: _c.success),
             ),
           ],
         ),
@@ -2283,9 +2240,9 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         const SizedBox(height: 8),
         Row(
           children: [
-            Text('40 · Open', style: _body(12, color: _c.text3)),
+            Text('40 · Open', style: _body(AppType.caption, color: _c.text3)),
             const Spacer(),
-            Text('90 · Strict', style: _body(12, color: _c.text3)),
+            Text('90 · Strict', style: _body(AppType.caption, color: _c.text3)),
           ],
         ),
         const SizedBox(height: 18),
@@ -2297,15 +2254,12 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Auto-shortlist',
-                    style: _body(14, weight: FontWeight.w600),
-                  ),
+                  Text('Auto-shortlist', style: _body(AppType.bodySm)),
                   Text(
                     _autoShortlist
                         ? 'Applicants scoring $_thresholdLabel+ who meet every requirement are shortlisted.'
                         : 'Off. You review every applicant manually.',
-                    style: _body(12.5, color: _c.text3),
+                    style: _body(AppType.caption, color: _c.text3),
                   ),
                 ],
               ),
@@ -2411,7 +2365,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         Expanded(
           child: Text(
             item.$1,
-            style: _body(13, color: item.$2 ? _c.text2 : _c.text3),
+            style: _body(AppType.caption, color: item.$2 ? _c.text2 : _c.text3),
           ),
         ),
       ],
@@ -2438,7 +2392,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               child: Text(
                 'Save draft',
                 maxLines: 1,
-                style: _body(14.5, weight: FontWeight.w600),
+                style: _body(AppType.button),
               ),
             ),
           ),
@@ -2469,7 +2423,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
                 shape: const StadiumBorder(),
-                textStyle: _body(14.5, weight: FontWeight.w700),
+                textStyle: _body(AppType.button),
               ),
               child: Text(
                 _saving
@@ -2478,11 +2432,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
                     ? 'Publish role'
                     : 'Save changes',
                 maxLines: 1,
-                style: _body(
-                  14.5,
-                  weight: FontWeight.w700,
-                  color: Colors.white,
-                ),
+                style: _body(AppType.button, color: Colors.white),
               ),
             ),
           ),
@@ -2600,7 +2550,7 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
         content: Text(
           message,
           textAlign: TextAlign.center,
-          style: _body(13.5, weight: FontWeight.w500, color: _c.background),
+          style: _body(AppType.bodySm, color: _c.background),
         ),
         duration: const Duration(milliseconds: 2400),
         behavior: SnackBarBehavior.floating,
@@ -2856,8 +2806,8 @@ class _SuggestedSkillChipState extends State<_SuggestedSkillChip> {
                   maxLines: 1,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 12.5,
+                  style: AppType.caption.style(
+                    context,
                     color: _hovered ? widget.accentColor : widget.textColor,
                   ),
                 ),
@@ -2969,9 +2919,8 @@ class _CalendarPopover extends StatefulWidget {
   final DateTime? selected;
   final DateTime today;
   final CreateRoleTokens tokens;
-  final TextStyle Function(double, {Color? color, FontWeight weight}) bodyStyle;
-  final TextStyle Function(double, {Color? color, FontWeight weight})
-  headingStyle;
+  final TextStyle Function(AppType, {Color? color}) bodyStyle;
+  final TextStyle Function(AppType, {Color? color}) headingStyle;
   final ValueChanged<DateTime> onSelect;
   final VoidCallback onClear;
   final VoidCallback onDismiss;
@@ -3121,9 +3070,7 @@ class _CalendarPopoverState extends State<_CalendarPopover>
                             Expanded(
                               child: Text(
                                 '${_monthNames[_month.month - 1]} ${_month.year}',
-                                style: widget
-                                    .headingStyle(15, weight: FontWeight.w700)
-                                    .copyWith(letterSpacing: -.2),
+                                style: widget.headingStyle(AppType.h3),
                               ),
                             ),
                             // Up / prev month
@@ -3168,8 +3115,7 @@ class _CalendarPopoverState extends State<_CalendarPopover>
                                   child: Text(
                                     day,
                                     style: widget.bodyStyle(
-                                      12,
-                                      weight: FontWeight.w600,
+                                      AppType.bodySm,
                                       color: c.text3,
                                     ),
                                   ),
@@ -3225,8 +3171,7 @@ class _CalendarPopoverState extends State<_CalendarPopover>
                               child: Text(
                                 'Clear',
                                 style: widget.bodyStyle(
-                                  13.5,
-                                  weight: FontWeight.w500,
+                                  AppType.bodySm,
                                   color: c.accent,
                                 ),
                               ),
@@ -3246,8 +3191,7 @@ class _CalendarPopoverState extends State<_CalendarPopover>
                               child: Text(
                                 'Today',
                                 style: widget.bodyStyle(
-                                  13.5,
-                                  weight: FontWeight.w500,
+                                  AppType.bodySm,
                                   color: c.accent,
                                 ),
                               ),
@@ -3281,7 +3225,7 @@ class _DayCell extends StatelessWidget {
   final DateTime? selected;
   final DateTime today;
   final CreateRoleTokens tokens;
-  final TextStyle Function(double, {Color? color, FontWeight weight}) bodyStyle;
+  final TextStyle Function(AppType, {Color? color}) bodyStyle;
   final ValueChanged<DateTime> onTap;
 
   @override
@@ -3317,11 +3261,7 @@ class _DayCell extends StatelessWidget {
           alignment: Alignment.center,
           child: Text(
             '${d.day}',
-            style: bodyStyle(
-              13,
-              weight: isSelected ? FontWeight.w700 : FontWeight.w400,
-              color: textColor,
-            ),
+            style: bodyStyle(AppType.numeric, color: textColor),
           ),
         ),
       ),

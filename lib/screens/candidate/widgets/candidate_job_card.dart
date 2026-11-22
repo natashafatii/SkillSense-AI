@@ -1,11 +1,10 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/candidate_button_style.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../constants/app_colors.dart';
 import '../../../models/job.dart';
 
 class CandidateJobCard extends StatefulWidget {
@@ -252,11 +251,10 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                           ),
                           Text(
                             score == null ? '—' : '${score.round()}',
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                            style: AppType.bodySm.style(
+                              context,
                               color: context.themeForeground(
-                                const Color(0xFF0F172A),
+                                TypographyColors.primary,
                               ),
                             ),
                           ),
@@ -280,12 +278,11 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                     children: [
                                       Text(
                                         title,
-                                        style: GoogleFonts.inter(
+                                        style: AppType.h4.style(
+                                          context,
                                           color: context.themeForeground(
-                                            const Color(0xFF0F172A),
+                                            TypographyColors.primary,
                                           ),
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -293,12 +290,11 @@ class _CandidateJobCardState extends State<CandidateJobCard>
                                       const SizedBox(height: 2),
                                       Text(
                                         '$company · $location · ${widget.job.salaryLabel}',
-                                        style: GoogleFonts.inter(
+                                        style: AppType.caption.style(
+                                          context,
                                           color: context.themeForeground(
-                                            const Color(0xFF64748B),
+                                            TypographyColors.secondary,
                                           ),
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w400,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -386,10 +382,9 @@ class _CandidateJobCardState extends State<CandidateJobCard>
           ),
           child: Text(
             '+$remaining',
-            style: GoogleFonts.inter(
-              color: context.themeForeground(const Color(0xFF64748B)),
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
+            style: AppType.caption.style(
+              context,
+              color: context.themeForeground(TypographyColors.secondary),
             ),
           ),
         ),
@@ -430,10 +425,9 @@ class _SkillChipState extends State<_SkillChip> {
         ),
         child: Text(
           widget.skill,
-          style: GoogleFonts.inter(
-            color: context.themeForeground(const Color(0xFF475569)),
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
+          style: AppType.caption.style(
+            context,
+            color: context.themeForeground(TypographyColors.secondary),
           ),
         ),
       ),
@@ -491,7 +485,9 @@ class _ApplyButtonState extends State<_ApplyButton> {
                     : _hovered
                     ? [
                         BoxShadow(
-                          color: CandidateButtonStyle.teal.withValues(alpha: 0.4),
+                          color: CandidateButtonStyle.teal.withValues(
+                            alpha: 0.4,
+                          ),
                           blurRadius: 22,
                           spreadRadius: -6,
                           offset: Offset.zero,
@@ -509,12 +505,11 @@ class _ApplyButtonState extends State<_ApplyButton> {
               ),
               child: Text(
                 widget.isApplied ? 'Applied' : 'Apply',
-                style: GoogleFonts.inter(
+                style: AppType.caption.style(
+                  context,
                   color: widget.isApplied
-                      ? context.themeForeground(const Color(0xFF64748B))
+                      ? context.themeForeground(TypographyColors.secondary)
                       : Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
                 ),
               ),
             ),

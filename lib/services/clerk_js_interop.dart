@@ -165,7 +165,11 @@ extension type ClerkSession._(JSObject _) implements JSObject {
   external JSPromise<JSAny?> remove();
 
   /// `session.getToken()` — returns the session JWT.
-  external JSPromise<JSString?> getToken();
+  external JSPromise<JSString?> getToken([ClerkTokenOptions options]);
+}
+
+extension type ClerkTokenOptions._(JSObject _) implements JSObject {
+  external ClerkTokenOptions({bool skipCache});
 }
 
 // ═══════════════════════════════════════════════════════════════════════

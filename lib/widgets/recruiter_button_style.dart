@@ -42,13 +42,6 @@ class RecruiterButtonStyle {
               ? base.foregroundColor?.resolve(states)
               : Colors.white,
         ),
-        textStyle: WidgetStateProperty.resolveWith(
-          (states) =>
-              base.textStyle?.resolve(states)?.copyWith(
-                fontWeight: FontWeight.w700,
-              ) ??
-              const TextStyle(fontWeight: FontWeight.w700),
-        ),
       );
 
   static ThemeData theme(ThemeData base) => base.copyWith(

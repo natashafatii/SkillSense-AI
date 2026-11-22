@@ -3,7 +3,7 @@ part of 'recruitment_review_screen.dart';
 extension _CompactInterviewReview on _RecruitmentReviewScreenState {
   Widget _compactReview(RecruitmentReview? review) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme.apply(fontFamily: 'Plus Jakarta Sans');
+    final textTheme = theme.textTheme;
     final width = MediaQuery.sizeOf(context).width;
     final gutter = ScreeningStyle.gutter(width);
     final compact = width <= 640;
@@ -18,12 +18,7 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
       children: [
         Text(
           'Interview evidence & decisions',
-          style: ScreeningStyle.text(
-            (width * .024).clamp(22.0, 26.0),
-            weight: 800,
-            height: 1.15,
-            spacing: -.7,
-          ),
+          style: ScreeningStyle.text(context, AppType.h1),
         ),
         if (review != null) ...[
           const SizedBox(height: 4),
@@ -33,8 +28,8 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
               review.application.jobCompany,
             ].where((value) => value.isNotEmpty).join(' · '),
             style: ScreeningStyle.text(
-              13,
-              weight: 500,
+              context,
+              AppType.h4,
               color: ScreeningStyle.muted,
             ),
           ),
@@ -57,8 +52,8 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
           error: ScreeningStyle.red,
         ),
         textTheme: textTheme.copyWith(
-          bodyMedium: ScreeningStyle.text(13),
-          bodyLarge: ScreeningStyle.text(13),
+          bodyMedium: ScreeningStyle.text(context, AppType.caption),
+          bodyLarge: ScreeningStyle.text(context, AppType.caption),
         ),
         dividerTheme: const DividerThemeData(
           color: ScreeningStyle.line,
@@ -72,8 +67,8 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
             horizontal: 10,
             vertical: 7,
           ),
-          border: ScreeningStyle.field().border,
-          enabledBorder: ScreeningStyle.field().enabledBorder,
+          border: ScreeningStyle.field(context).border,
+          enabledBorder: ScreeningStyle.field(context).enabledBorder,
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
@@ -85,13 +80,13 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
-            textStyle: ScreeningStyle.text(12.5, weight: 600),
+            textStyle: ScreeningStyle.text(context, AppType.button),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: ScreeningStyle.blue,
-            textStyle: ScreeningStyle.text(12.5, weight: 600),
+            textStyle: ScreeningStyle.text(context, AppType.button),
           ),
         ),
       ),
@@ -101,7 +96,7 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
           painter: const ScreeningBackground(),
           child: SafeArea(
             child: DefaultTextStyle(
-              style: ScreeningStyle.text(13),
+              style: ScreeningStyle.text(context, AppType.caption),
               child: Column(
                 children: [
                   ScreeningCommandBar(
@@ -127,7 +122,10 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
                               minimumSize: const Size(0, 28),
                               padding: EdgeInsets.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              textStyle: ScreeningStyle.text(12.5, weight: 600),
+                              textStyle: ScreeningStyle.text(
+                                context,
+                                AppType.button,
+                              ),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
@@ -256,7 +254,7 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  textStyle: ScreeningStyle.text(12, weight: 600),
+                  textStyle: ScreeningStyle.text(context, AppType.button),
                 ),
                 child: Text(label),
               ),
@@ -293,7 +291,7 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       if (leading != null) leading,
-                      Text(title, style: ScreeningStyle.title()),
+                      Text(title, style: ScreeningStyle.title(context)),
                     ],
                   ),
                   if (badge != null) badge,
@@ -370,15 +368,15 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: ScreeningStyle.text(12.5, weight: 700)),
+            Text(label, style: ScreeningStyle.text(context, AppType.caption)),
             const SizedBox(height: 6),
             TextField(
               controller: controller,
               maxLength: 2000,
               minLines: 3,
               maxLines: 3,
-              style: ScreeningStyle.text(12.5, weight: 500),
-              decoration: ScreeningStyle.field(),
+              style: ScreeningStyle.text(context, AppType.body),
+              decoration: ScreeningStyle.field(context),
             ),
           ],
         ),

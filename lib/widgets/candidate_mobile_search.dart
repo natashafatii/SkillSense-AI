@@ -1,9 +1,9 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../models/job.dart';
 import '../services/job_service.dart';
@@ -166,9 +166,9 @@ class _CandidateSearchState extends State<_CandidateSearch> {
               _debounce?.cancel();
               _load();
             },
-            style: GoogleFonts.inter(
-              color: context.themeForeground(const Color(0xFF0F172A)),
-              fontSize: 13,
+            style: AppType.body.style(
+              context,
+              color: context.themeForeground(TypographyColors.primary),
             ),
             decoration: InputDecoration(
               hintText: 'Type to filter...',
@@ -194,9 +194,9 @@ class _CandidateSearchState extends State<_CandidateSearch> {
                   dense: true,
                   title: Text(
                     job.title,
-                    style: GoogleFonts.inter(
-                      color: context.themeForeground(const Color(0xFF0F172A)),
-                      fontWeight: FontWeight.w600,
+                    style: AppType.h4.style(
+                      context,
+                      color: context.themeForeground(TypographyColors.primary),
                     ),
                   ),
                   subtitle: Text(
@@ -204,9 +204,11 @@ class _CandidateSearchState extends State<_CandidateSearch> {
                       job.recruiterCompany,
                       job.location,
                     ].where((text) => text.trim().isNotEmpty).join(' · '),
-                    style: GoogleFonts.jetBrainsMono(
-                      color: context.themeForeground(const Color(0xFF475569)),
-                      fontSize: 10,
+                    style: AppType.numeric.style(
+                      context,
+                      color: context.themeForeground(
+                        TypographyColors.secondary,
+                      ),
                     ),
                   ),
                   trailing: Icon(

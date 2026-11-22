@@ -75,29 +75,10 @@ extension _RankingsView on _RankingsScreenState {
 
   String _subtitle(RankingRow row) =>
       '${_stage(row)}, applied ${_date(_details[row.applicationId]?.createdAt)}';
-  TextStyle _text(
-    double size, {
-    Color? color,
-    FontWeight weight = FontWeight.w400,
-    double height = 1.45,
-  }) => TextStyle(
-    fontFamily: 'Geist',
-    letterSpacing: 0,
-    fontSize: size,
-    height: height,
-    fontWeight: weight,
-    color: color ?? _ink,
-    fontFeatures: const [FontFeature.tabularFigures()],
-  );
-  Widget _label(
-    String text, {
-    double size = 14,
-    Color? color,
-    FontWeight weight = FontWeight.w400,
-  }) => Text(
-    text,
-    style: _text(size, color: color, weight: weight),
-  );
+  TextStyle _text(AppType type, {Color? color}) =>
+      type.style(context, color: color ?? _ink);
+  Widget _label(String text, {AppType type = AppType.bodySm, Color? color}) =>
+      Text(text, style: _text(type, color: color));
   BoxDecoration _card({double radius = 12, Color? border, Color? color}) =>
       BoxDecoration(
         color: color ?? _paper,
@@ -114,7 +95,7 @@ extension _RankingsView on _RankingsScreenState {
 
   Widget _buildRanking(BuildContext context) => Theme(
     data: Theme.of(context).copyWith(
-      textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Geist'),
+      textTheme: Theme.of(context).textTheme,
       checkboxTheme: CheckboxThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
         side: const BorderSide(color: Color(0xFFC4CAD6), width: 1.5),
@@ -186,10 +167,7 @@ extension _RankingsView on _RankingsScreenState {
       mainAxisSize: MainAxisSize.min,
       children: [
         Flexible(
-          child: Text(
-            'Applicant Rankings',
-            style: pageHeadingStyle(context),
-          ),
+          child: Text('Applicant Rankings', style: context.text.headlineLarge),
         ),
         const SizedBox(width: 4),
         PopupMenuButton<String>(
@@ -290,14 +268,14 @@ extension _RankingsView on _RankingsScreenState {
                   children: [
                     _label(
                       'Job, ${_jobs.where((job) => job.status == JobStatus.active).length} open',
-                      size: 11,
                       color: _muted,
+                      type: AppType.caption,
                     ),
                     Text(
                       _job?.title ?? 'Choose a job',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _text(14, weight: FontWeight.w600),
+                      style: _text(AppType.h4),
                     ),
                   ],
                 ),
@@ -358,13 +336,13 @@ extension _RankingsView on _RankingsScreenState {
                           children: [
                             Text(
                               _loading ? '–' : values[index].$1,
-                              style: _text(
-                                24,
-                                weight: FontWeight.w600,
-                                height: 1.1,
-                              ).copyWith(letterSpacing: -.48),
+                              style: _text(AppType.h2),
                             ),
-                            _label(values[index].$2, size: 12, color: _muted),
+                            _label(
+                              values[index].$2,
+                              color: _muted,
+                              type: AppType.caption,
+                            ),
                           ],
                         ),
                       ),
@@ -406,12 +384,7 @@ extension _RankingsView on _RankingsScreenState {
     final cards = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _label(
-          'Top performers',
-          size: 12,
-          color: _muted,
-          weight: FontWeight.w600,
-        ),
+        _label('Top performers', color: _muted, type: AppType.caption),
         const SizedBox(height: 10),
         if (top.isEmpty)
           _message(
@@ -488,18 +461,12 @@ extension _RankingsView on _RankingsScreenState {
               children: [
                 Text(
                   '$rank',
-                  style: _text(30, weight: FontWeight.w700, height: 1).copyWith(
-                    color: rank == 1 ? _blue : const Color(0xFF98A2B3),
-                    letterSpacing: -.9,
+                  style: _text(
+                    AppType.metric,
+                    color: rank == 1 ? _blue : context.secondaryTextColor,
                   ),
                 ),
-                if (tie)
-                  _label(
-                    'tied',
-                    size: 10,
-                    color: _muted,
-                    weight: FontWeight.w500,
-                  ),
+                if (tie) _label('tied', color: _muted, type: AppType.caption),
               ],
             ),
           ),
@@ -513,7 +480,7 @@ extension _RankingsView on _RankingsScreenState {
                   _subtitle(row),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _text(12, color: _muted),
+                  style: _text(AppType.caption, color: _muted),
                 ),
                 const SizedBox(height: 7),
                 Wrap(
@@ -524,8 +491,8 @@ extension _RankingsView on _RankingsScreenState {
                     _decision(row),
                     _label(
                       '${_number(_screening(row)?.roundToDouble())}${_screening(row) == null ? '' : '%'} match',
-                      size: 12,
                       color: _muted,
+                      type: AppType.caption,
                     ),
                   ],
                 ),
@@ -557,13 +524,7 @@ extension _RankingsView on _RankingsScreenState {
                 backgroundColor: _line,
               ),
             ),
-            Text(
-              _number(score),
-              style: _text(
-                22,
-                weight: FontWeight.w700,
-              ).copyWith(letterSpacing: -.66),
-            ),
+            Text(_number(score), style: _text(AppType.h2)),
           ],
         ),
       ),
@@ -593,11 +554,7 @@ extension _RankingsView on _RankingsScreenState {
         const SizedBox(width: 6),
         Text(
           _decisionText(row),
-          style: _text(
-            12,
-            weight: FontWeight.w500,
-            color: context.themeForeground(color),
-          ),
+          style: _text(AppType.caption, color: context.themeForeground(color)),
         ),
       ],
     );
@@ -614,12 +571,7 @@ extension _RankingsView on _RankingsScreenState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _label(
-            'Score spread',
-            size: 12,
-            color: _muted,
-            weight: FontWeight.w600,
-          ),
+          _label('Score spread', color: _muted, type: AppType.caption),
           const SizedBox(height: 10),
           Expanded(
             child: Padding(
@@ -696,8 +648,8 @@ extension _RankingsView on _RankingsScreenState {
                           ),
                           child: _label(
                             'Average ${_number(_average!.roundToDouble())}',
-                            size: 11,
                             color: _muted,
+                            type: AppType.caption,
                           ),
                         ),
                       ...dots,
@@ -709,7 +661,7 @@ extension _RankingsView on _RankingsScreenState {
                           child: Text(
                             _number(minimum + (100 - minimum) * index / 5),
                             textAlign: TextAlign.center,
-                            style: _text(11, color: _muted),
+                            style: _text(AppType.caption, color: _muted),
                           ),
                         ),
                     ],
@@ -721,8 +673,8 @@ extension _RankingsView on _RankingsScreenState {
           const SizedBox(height: 8),
           _label(
             'Each dot is one scored applicant. The top three are filled.',
-            size: 11,
             color: _muted,
+            type: AppType.caption,
           ),
         ],
       ),
@@ -753,10 +705,14 @@ extension _RankingsView on _RankingsScreenState {
               children: [
                 _label(
                   'Showing ${rows.length} of ${_cohort.length} applicants',
-                  size: 12,
                   color: _muted,
+                  type: AppType.caption,
                 ),
-                _label('Equal scores share a rank.', size: 12, color: _muted),
+                _label(
+                  'Equal scores share a rank.',
+                  color: _muted,
+                  type: AppType.caption,
+                ),
               ],
             ),
           ),
@@ -781,7 +737,7 @@ extension _RankingsView on _RankingsScreenState {
             height: 38,
             child: TextField(
               controller: _search,
-              style: _text(14),
+              style: _text(AppType.body),
               onChanged: (value) =>
                   _update(() => _query = value.trim().toLowerCase()),
               decoration: InputDecoration(
@@ -793,7 +749,7 @@ extension _RankingsView on _RankingsScreenState {
                   ),
                 ),
                 hintText: 'Search applicants',
-                hintStyle: _text(14, color: _muted),
+                hintStyle: _text(AppType.caption, color: _muted),
                 prefixIcon: Icon(Icons.search, size: 16, color: _muted),
                 prefixIconConstraints: const BoxConstraints(minWidth: 35),
                 isDense: true,
@@ -841,9 +797,8 @@ extension _RankingsView on _RankingsScreenState {
                         ),
                         child: _label(
                           option.$2,
-                          size: 13,
-                          weight: FontWeight.w500,
                           color: _decisionFilter == option.$1 ? _blue : _muted,
+                          type: AppType.caption,
                         ),
                       ),
                     ),
@@ -872,7 +827,7 @@ extension _RankingsView on _RankingsScreenState {
                   CheckedPopupMenuItem(
                     value: option.$1,
                     checked: _evaluation == option.$1,
-                    child: Text(option.$2, style: _text(13)),
+                    child: Text(option.$2, style: _text(AppType.caption)),
                   ),
               ],
             ),
@@ -895,7 +850,7 @@ extension _RankingsView on _RankingsScreenState {
         value: _sort,
         isExpanded: true,
         iconSize: 16,
-        style: _text(13),
+        style: _text(AppType.caption),
         dropdownColor: _paper,
         borderRadius: BorderRadius.circular(9),
         items: [
@@ -947,9 +902,8 @@ extension _RankingsView on _RankingsScreenState {
               color: _soft,
               child: _label(
                 'Awaiting published score',
-                size: 12,
                 color: _muted,
-                weight: FontWeight.w500,
+                type: AppType.caption,
               ),
             ),
           _applicantRow(rows[index], mobile: mobile),
@@ -1005,25 +959,15 @@ extension _RankingsView on _RankingsScreenState {
       child: Row(
         children: _gridCells([
           const SizedBox(),
-          _label('#', size: 12, color: _muted),
-          _label('Applicant', size: 12, color: _muted, weight: FontWeight.w500),
-          _label(
-            'Combined score',
-            size: 12,
-            color: _muted,
-            weight: FontWeight.w500,
-          ),
+          _label('#', color: _muted, type: AppType.caption),
+          _label('Applicant', color: _muted, type: AppType.caption),
+          _label('Combined score', color: _muted, type: AppType.caption),
           Text(
             'Match',
             textAlign: TextAlign.right,
-            style: _text(12, color: _muted),
+            style: _text(AppType.caption, color: _muted),
           ),
-          _label(
-            'Recruiter decision',
-            size: 12,
-            color: _muted,
-            weight: FontWeight.w500,
-          ),
+          _label('Recruiter decision', color: _muted, type: AppType.caption),
           const SizedBox(),
         ], bounds.maxWidth),
       ),
@@ -1051,11 +995,7 @@ extension _RankingsView on _RankingsScreenState {
     final rank = Text(
       '${_rank(row) ?? '–'}',
       textAlign: TextAlign.center,
-      style: _text(
-        15,
-        color: _rank(row) == 1 ? _blue : _muted,
-        weight: FontWeight.w600,
-      ),
+      style: _text(AppType.h4, color: _rank(row) == 1 ? _blue : _muted),
     );
     final who = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1065,7 +1005,7 @@ extension _RankingsView on _RankingsScreenState {
           _subtitle(row),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: _text(12, color: _muted),
+          style: _text(AppType.caption, color: _muted),
         ),
       ],
     );
@@ -1109,7 +1049,7 @@ extension _RankingsView on _RankingsScreenState {
                           ? '–'
                           : '${_number(_screening(row)?.roundToDouble())}%',
                       textAlign: TextAlign.right,
-                      style: _text(14, weight: FontWeight.w500),
+                      style: _text(AppType.bodySm),
                     ),
                     _decision(row),
                     IconButton(
@@ -1144,14 +1084,18 @@ extension _RankingsView on _RankingsScreenState {
         _RankingsScreenState._name(row),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: _text(size, weight: FontWeight.w600, height: 1.3),
+        style: _text(AppType.body),
       ),
     ),
   );
   Widget _scoreBar(RankingRow row) {
     final score = _RankingsScreenState._score(row);
     if (score == null) {
-      return _label('Awaiting evaluation', size: 13, color: _muted);
+      return _label(
+        'Awaiting evaluation',
+        color: _muted,
+        type: AppType.caption,
+      );
     }
     return Row(
       children: [
@@ -1160,7 +1104,7 @@ extension _RankingsView on _RankingsScreenState {
           child: Text(
             _number(score),
             textAlign: TextAlign.right,
-            style: _text(18, weight: FontWeight.w600),
+            style: _text(AppType.h3),
           ),
         ),
         const SizedBox(width: 14),
@@ -1226,7 +1170,7 @@ extension _RankingsView on _RankingsScreenState {
           foregroundColor: _ink,
           minimumSize: const Size(0, 38),
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          textStyle: _text(13, weight: FontWeight.w500),
+          textStyle: _text(AppType.button),
           side: BorderSide(color: _line),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
         ),
@@ -1242,7 +1186,7 @@ extension _RankingsView on _RankingsScreenState {
       children: [
         Text(
           '${_selected.length} of 3 selected: ${_cohort.where((row) => _selected.contains(row.applicationId)).map(_RankingsScreenState._name).join(', ')}',
-          style: _text(13, color: Colors.white, weight: FontWeight.w500),
+          style: _text(AppType.badge, color: Colors.white),
         ),
         Wrap(
           spacing: 10,
@@ -1252,7 +1196,7 @@ extension _RankingsView on _RankingsScreenState {
               onPressed: () => _update(_selected.clear),
               child: Text(
                 'Clear selection',
-                style: _text(13, color: Colors.white),
+                style: _text(AppType.button, color: Colors.white),
               ),
             ),
             _button(
@@ -1270,16 +1214,12 @@ extension _RankingsView on _RankingsScreenState {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: _text(14, weight: FontWeight.w600),
-            ),
+            Text(title, textAlign: TextAlign.center, style: _text(AppType.h4)),
             const SizedBox(height: 4),
             Text(
               detail,
               textAlign: TextAlign.center,
-              style: _text(13, color: _muted),
+              style: _text(AppType.caption, color: _muted),
             ),
             if (retry)
               TextButton(

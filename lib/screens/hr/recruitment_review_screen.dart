@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -7,9 +8,11 @@ import '../../models/interview.dart';
 import '../../models/recruitment_evidence.dart';
 import '../../services/recruitment_review_controller.dart';
 import '../../services/recruitment_workflow_service.dart';
+import '../../widgets/recruiter_scaffold.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/interview_review_top_bar.dart';
 import '../../widgets/feedback_review_panel.dart';
+import '../../widgets/interview_replay_panel.dart';
 import '../../widgets/recruiter_interview_dashboard.dart';
 import '../../widgets/screening_visuals.dart';
 
@@ -216,6 +219,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                   if (input != null) ...[
                     const SizedBox(height: 12),
                     TextField(
+                      style: AppType.body.style(context),
                       controller: input,
                       maxLength: 2000,
                       minLines: 4,
@@ -229,6 +233,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                   ],
                   if (justification != null)
                     TextField(
+                      style: AppType.body.style(context),
                       controller: justification,
                       maxLength: 2000,
                       maxLines: 3,
@@ -487,9 +492,8 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         key: ValueKey('transcript-${r.interview!.id}-${selected?.id}'),
         initialValue: selected?.id,
         isExpanded: true,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 13,
+        style: AppType.caption.style(
+          context,
           color: context.themeForeground(const Color(0xFF16213A)),
         ),
         decoration: const InputDecoration(labelText: 'View version'),
@@ -515,9 +519,8 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         ),
         initialValue: comparison?.id ?? '',
         isExpanded: true,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 13,
+        style: AppType.caption.style(
+          context,
           color: context.themeForeground(const Color(0xFF16213A)),
         ),
         decoration: const InputDecoration(labelText: 'Compare with'),
@@ -544,10 +547,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       if (selected != null)
         _expansion(
           storageId: 'transcript-${selected.id}',
-          title: const Text(
-            'Read transcript',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
+          title: Text('Read transcript', style: AppType.caption.style(context)),
           children: [transcriptView(selected)],
         ),
       if (comparison != null)
@@ -837,10 +837,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (d == null)
-                const Text(
-                  'No decision yet',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                )
+                Text('No decision yet', style: AppType.h3.style(context))
               else
                 Row(
                   children: [
@@ -862,10 +859,8 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                     const SizedBox(width: 10),
                     Text(
                       d.outcome ?? 'Unrecorded',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -.4,
+                      style: AppType.h2.style(
+                        context,
                         color: context.themeForeground(
                           d.outcome == 'HIRE'
                               ? const Color(0xFF067A63)
@@ -1050,10 +1045,9 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
               Expanded(
                 child: Text(
                   'If this interview changes while you are reviewing, you will be asked to refresh before acting.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.5,
-                    color: context.themeForeground(const Color(0xFF5F6C85)),
+                  style: AppType.caption.style(
+                    context,
+                    color: context.themeForeground(TypographyColors.secondary),
                   ),
                 ),
               ),
@@ -1084,7 +1078,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         children: [
           Icon(icon, size: 16),
           const SizedBox(width: 6),
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
+          Expanded(child: Text(label, style: AppType.button.style(context))),
         ],
       ),
     ),
@@ -1161,11 +1155,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         isScrollable: true,
         tabAlignment: TabAlignment.start,
         onTap: (index) => setState(() => _tab = index),
-        labelStyle: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
+        labelStyle: AppType.bodySm.style(context, weight: FontWeight.w500),
         indicatorSize: TabBarIndicatorSize.label,
         indicatorColor: context.themeForeground(const Color(0xFF16213A)),
         labelColor: context.themeForeground(const Color(0xFF16213A)),
@@ -1193,99 +1183,87 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       ),
     );
     final summary = _reviewHeader(r);
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1560),
-        child: LayoutBuilder(
-          builder: (context, bounds) {
-            final wide =
-                bounds.maxWidth >= 1181 &&
-                bounds.maxHeight >= 440 &&
-                MediaQuery.textScalerOf(context).scale(14) <= 18;
-            if (!wide) {
-              return ListView(
-                padding: const EdgeInsets.all(14),
-                children: [
-                  summary,
-                  const SizedBox(height: 14),
-                  tabs,
-                  const SizedBox(height: 14),
-                  ...notices,
-                  decisions(r),
-                  ..._tabContent(r),
-                ],
-              );
-            }
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                (bounds.maxWidth * .02).clamp(14, 28),
-                14,
-                (bounds.maxWidth * .02).clamp(14, 28),
-                18,
+    return LayoutBuilder(
+      builder: (context, bounds) {
+        final wide =
+            bounds.maxWidth >= 1181 &&
+            bounds.maxHeight >= 440 &&
+            MediaQuery.textScalerOf(context).scale(14) <= 18;
+        if (!wide) {
+          return ListView(
+            padding: const EdgeInsets.all(14),
+            children: [
+              summary,
+              const SizedBox(height: 14),
+              tabs,
+              const SizedBox(height: 14),
+              ...notices,
+              decisions(r),
+              ..._tabContent(r),
+            ],
+          );
+        }
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            (bounds.maxWidth * .02).clamp(14, 28),
+            14,
+            (bounds.maxWidth * .02).clamp(14, 28),
+            18,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: bounds.maxHeight * .35),
+                child: SingleChildScrollView(primary: false, child: summary),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: bounds.maxHeight * .35,
-                    ),
-                    child: SingleChildScrollView(
-                      primary: false,
-                      child: summary,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  tabs,
-                  const SizedBox(height: 14),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, viewport) => ListView(
-                              key: PageStorageKey(
-                                'review-${r.interview?.id}-$_tab',
-                              ),
-                              primary: false,
-                              children: [
-                                ...notices,
-                                ..._tabContent(
-                                  r,
-                                  viewportHeight: viewport.maxHeight,
-                                ),
-                              ],
+              const SizedBox(height: 14),
+              tabs,
+              const SizedBox(height: 14),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, viewport) => ListView(
+                          key: PageStorageKey(
+                            'review-${r.interview?.id}-$_tab',
+                          ),
+                          primary: false,
+                          children: [
+                            ...notices,
+                            ..._tabContent(
+                              r,
+                              viewportHeight: viewport.maxHeight,
                             ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(width: 14),
-                        SizedBox(
-                          width: 340,
-                          child: LayoutBuilder(
-                            builder: (context, viewport) =>
-                                decisions(r, height: viewport.maxHeight + 14),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 14),
+                    SizedBox(
+                      width: 340,
+                      child: LayoutBuilder(
+                        builder: (context, viewport) =>
+                            decisions(r, height: viewport.maxHeight + 14),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            );
-          },
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _eyebrow(String text) => Text(
     text.toUpperCase(),
-    style: TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 1,
-      color: context.themeForeground(const Color(0xFF3D4A63)),
+    style: AppType.overline.style(
+      context,
+      color: context.themeForeground(TypographyColors.secondary),
     ),
   );
 
@@ -1298,10 +1276,9 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       child: Text(
         label,
-        style: TextStyle(
+        style: AppType.caption.style(
+          context,
           color: context.themeForeground(color),
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
         ),
       ),
     ),
@@ -1357,19 +1334,12 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                         const SizedBox(width: 10),
                       ],
                       Expanded(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            letterSpacing: -.2,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        child: Text(title, style: AppType.h4.style(context)),
                       ),
                     ],
                   );
                   if (badge != null &&
-                      (bounds.maxWidth < 230 ||
+                      (bounds.maxWidth < 360 ||
                           MediaQuery.textScalerOf(context).scale(13) > 16)) {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1383,7 +1353,15 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                   return Row(
                     children: [
                       Expanded(child: titleRow),
-                      if (badge != null) ...[const SizedBox(width: 10), badge],
+                      if (badge != null) ...[
+                        const SizedBox(width: 10),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: bounds.maxWidth * 0.55,
+                          ),
+                          child: badge,
+                        ),
+                      ],
                     ],
                   );
                 },
@@ -1462,10 +1440,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 7),
-          Text(
-            _displayStatus(value),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
+          Text(_displayStatus(value), style: AppType.body.style(context)),
         ],
       ),
     );
@@ -1484,8 +1459,8 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
             child: Text(
               initials,
               style: ScreeningStyle.text(
-                14,
-                weight: 700,
+                context,
+                AppType.bodySm,
                 color: ScreeningStyle.blue,
               ),
             ),
@@ -1496,10 +1471,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
             backgroundColor: const Color(0xFFE4F5F0),
             child: Text(
               initials,
-              style: const TextStyle(
-                color: Color(0xFF067A63),
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppType.body.style(context, color: Color(0xFF067A63)),
             ),
           ),
         const SizedBox(width: 12),
@@ -1510,16 +1482,12 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
               Text(
                 name.isEmpty ? 'Candidate unavailable' : name,
                 style: widget.compactScreening
-                    ? ScreeningStyle.title()
-                    : const TextStyle(
-                        fontSize: 17,
-                        letterSpacing: -.3,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    ? ScreeningStyle.title(context)
+                    : AppType.h3.style(context),
               ),
               Text(
                 '${app.jobTitle} · Application v${app.version}',
-                style: const TextStyle(fontSize: 13),
+                style: AppType.caption.style(context),
               ),
             ],
           ),
@@ -1574,11 +1542,8 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                         ? interview.id
                         : null,
                     isExpanded: true,
-                    style: TextStyle(
-                      fontFamily: widget.compactScreening
-                          ? 'Plus Jakarta Sans'
-                          : 'Inter',
-                      fontSize: 13,
+                    style: AppType.caption.style(
+                      context,
                       color: context.themeForeground(const Color(0xFF16213A)),
                     ),
                     decoration: InputDecoration(
@@ -1801,7 +1766,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                       onPressed: () => showTurn(transcript, turn.id),
                       child: Text(
                         turn.id,
-                        style: const TextStyle(fontSize: 12),
+                        style: AppType.button.style(context),
                       ),
                     ),
                   ),
@@ -1814,13 +1779,13 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           spacing: 16,
           runSpacing: 6,
           children: [
-            const Text(
+            Text(
               '▪ Linked to a question',
-              style: TextStyle(fontSize: 13),
+              style: AppType.caption.style(context),
             ),
             Text(
               '▪ Not linked (${transcript.turns.where((t) => !linked.contains(t.id) || unlinked.contains(t.id)).length})',
-              style: const TextStyle(fontSize: 13, color: Color(0xFF8A5A00)),
+              style: AppType.caption.style(context, color: Color(0xFF8A5A00)),
             ),
           ],
         ),
@@ -1874,9 +1839,8 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           children: [
             TextSpan(
               text: average?.toStringAsFixed(1) ?? '—',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
+              style: AppType.h2.style(
+                context,
                 color: context.themeForeground(color),
               ),
             ),
@@ -1917,11 +1881,12 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                 const SizedBox(width: 10),
                 Text(
                   scores[question.id]?.toStringAsFixed(1) ?? '—',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
+                  style: AppType.numeric.style(
+                    context,
                     color: context.themeForeground(
                       reviewAnswerScoreColor(scores[question.id]),
                     ),
+                    weight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -2015,19 +1980,13 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                       children: [
                         Text(
                           (index == 2 ? 'Combined' : metric.$1).toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: .8,
-                          ),
+                          style: AppType.overline.style(context),
                         ),
                         const SizedBox(height: 9),
                         Text(
                           percent(metric.$2),
-                          style: TextStyle(
-                            fontSize: 30,
-                            letterSpacing: -1,
-                            fontWeight: FontWeight.w600,
+                          style: AppType.h1.style(
+                            context,
                             color: index == 2
                                 ? Colors.white
                                 : context.themeForeground(
@@ -2039,7 +1998,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                         if (descriptions[index].isNotEmpty)
                           Text(
                             descriptions[index],
-                            style: const TextStyle(fontSize: 13),
+                            style: AppType.caption.style(context),
                           ),
                       ],
                     ),
@@ -2122,7 +2081,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                         ),
                       ],
                     ),
-                    style: const TextStyle(fontSize: 13),
+                    style: AppType.caption.style(context),
                   ),
             ],
           ),
@@ -2229,10 +2188,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                   Expanded(
                     child: Text(
                       entry.$1,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: AppType.caption.style(context),
                     ),
                   ),
                   const SizedBox(width: 5),
@@ -2240,9 +2196,11 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                     child: Text(
                       entry.$2,
                       textAlign: TextAlign.end,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: context.themeForeground(const Color(0xFF5F6C85)),
+                      style: AppType.caption.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                     ),
                   ),
@@ -2263,10 +2221,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         Row(
           children: [
             Expanded(child: Text(label)),
-            Text(
-              percent(value),
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
+            Text(percent(value), style: AppType.body.style(context)),
           ],
         ),
         if (value != null) ...[
@@ -2294,23 +2249,18 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       icon: const Icon(Icons.refresh),
     );
     final theme = Theme.of(context);
-    return Theme(
+    final content = Theme(
       data: theme.copyWith(
-        textTheme: theme.textTheme
-            .apply(fontFamily: 'Inter')
-            .copyWith(
-              bodyMedium: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 13,
-                height: 1.45,
-                color: context.themeForeground(const Color(0xFF16213A)),
-              ),
-              bodyLarge: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 13,
-                color: context.themeForeground(const Color(0xFF16213A)),
-              ),
-            ),
+        textTheme: theme.textTheme.copyWith(
+          bodyMedium: AppType.caption.style(
+            context,
+            color: context.themeForeground(const Color(0xFF16213A)),
+          ),
+          bodyLarge: AppType.caption.style(
+            context,
+            color: context.themeForeground(const Color(0xFF16213A)),
+          ),
+        ),
         dividerTheme: DividerThemeData(
           color: context.themeOutline(const Color(0xFFEDF1F7)),
           thickness: 1,
@@ -2321,7 +2271,10 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
             horizontal: 10,
             vertical: 10,
           ),
-          labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF5F6C85)),
+          labelStyle: AppType.bodySm.style(
+            context,
+            color: TypographyColors.secondary,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
@@ -2338,11 +2291,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: context.themeForeground(const Color(0xFF16213A)),
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+            textStyle: AppType.button.style(context),
             minimumSize: const Size(0, 36),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             side: BorderSide(
@@ -2356,22 +2305,14 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: context.themeForeground(const Color(0xFF2C52C4)),
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+            textStyle: AppType.button.style(context),
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             backgroundColor: const Color(0xFF16213A),
             foregroundColor: Colors.white,
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+            textStyle: AppType.button.style(context),
             minimumSize: const Size(0, 36),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -2384,20 +2325,16 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           ),
           backgroundColor: context.themeSurface(Colors.white),
           surfaceTintColor: Colors.transparent,
-          titleTextStyle: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 19,
-            fontWeight: FontWeight.w600,
+          titleTextStyle: AppType.h3.style(
+            context,
             color: context.themeForeground(const Color(0xFF16213A)),
           ),
-          contentTextStyle: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 13,
-            height: 1.6,
-            color: context.themeForeground(const Color(0xFF3D4A63)),
+          contentTextStyle: AppType.caption.style(
+            context,
+            color: context.themeForeground(TypographyColors.secondary),
           ),
         ),
-        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'Inter'),
+        primaryTextTheme: theme.primaryTextTheme,
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -2425,12 +2362,9 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
               const LinearProgressIndicator(minHeight: 2),
             Expanded(
               child: DefaultTextStyle(
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 13,
-                  height: 1.45,
+                style: AppType.numeric.style(
+                  context,
                   color: context.themeForeground(const Color(0xFF16213A)),
-                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
                 child: _workspace(r),
               ),
@@ -2439,5 +2373,12 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         ),
       ),
     );
+    return dashboard
+        ? RecruiterScaffold(
+            currentRoute: '/recruiter/interview-review/detail',
+            selectedRoute: '/recruiter/interview-review',
+            body: content,
+          )
+        : content;
   }
 }

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -13,7 +14,6 @@ class CandidateFeedbackDashboard extends StatelessWidget {
     this.practised = const {},
     this.onPractised,
     this.details,
-    this.searchQuery = '',
   });
 
   final FeedbackContent content;
@@ -21,7 +21,6 @@ class CandidateFeedbackDashboard extends StatelessWidget {
   final Set<String> practised;
   final void Function(String dimensionId, bool value)? onPractised;
   final Widget? details;
-  final String searchQuery;
 
   @override
   Widget build(BuildContext context) {
@@ -197,7 +196,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                   Text(
                     attemptLabel!,
                     textAlign: TextAlign.center,
-                    style: palette.text(size: 15, weight: FontWeight.w600),
+                    style: palette.text(type: AppType.h4),
                   ),
                 ],
                 const SizedBox(height: 10),
@@ -206,11 +205,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                 Text(
                   'Interview answer performance',
                   textAlign: TextAlign.center,
-                  style: palette.text(
-                    size: 18.5,
-                    weight: FontWeight.w700,
-                    height: 1.3,
-                  ),
+                  style: palette.text(type: AppType.h3),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -327,7 +322,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
           Text(title, style: palette.caption(uppercase: true)),
           Text(
             value,
-            style: palette.number(size: 22, color: color, bold: true),
+            style: palette.number(type: AppType.numeric, color: color),
           ),
         ],
       ),
@@ -373,8 +368,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                           ? 'Developing'
                           : 'Strong',
                       style: palette.text(
-                        size: 12.5,
-                        weight: FontWeight.w500,
+                        type: AppType.caption,
                         color: palette.score(value),
                       ),
                     ),
@@ -423,20 +417,11 @@ class CandidateFeedbackDashboard extends StatelessWidget {
       });
     final complete = ids.where(practised.contains).length;
     final scale = MediaQuery.textScalerOf(context).scale(1);
-    final query = searchQuery.trim().toLowerCase();
-    final visibleIds = ids
-        .where(
-          (id) =>
-              ('${dimensions[id]?.label} ${findings[id]?.join(' ')} ${actions[id]?.join(' ')}')
-                  .toLowerCase()
-                  .contains(query),
-        )
-        .toList();
     final tiles = [
-      for (final id in visibleIds)
+      for (final (index, id) in ids.indexed)
         _practiceStep(
           palette,
-          ids.indexOf(id),
+          index,
           id,
           dimensions[id],
           findings[id] ?? const [],
@@ -471,7 +456,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
               builder: (context, bounds) {
                 if (tiles.isEmpty) {
                   return Text(
-                    'No tips match “$searchQuery”.',
+                    'No practice tips available.',
                     style: palette.prose(),
                   );
                 }
@@ -545,18 +530,17 @@ class CandidateFeedbackDashboard extends StatelessWidget {
                 ),
                 child: Text(
                   '${index + 1}',
-                  style: palette.number(size: 14, color: palette.accent),
+                  style: palette.number(
+                    type: AppType.numeric,
+                    color: palette.accent,
+                  ),
                 ),
               ),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   dimension?.label ?? 'Practice suggestion',
-                  style: palette.text(
-                    size: 15,
-                    weight: FontWeight.w700,
-                    height: 1.3,
-                  ),
+                  style: palette.text(type: AppType.h4),
                 ),
               ),
               if (dimension != null) ...[
@@ -574,7 +558,7 @@ class CandidateFeedbackDashboard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               finding,
-              style: palette.prose().copyWith(fontSize: 14, height: 1.5),
+              style: AppType.bodySm.style(palette.context, color: palette.meta),
             ),
           ],
           for (final action in actions) ...[
@@ -594,9 +578,11 @@ class CandidateFeedbackDashboard extends StatelessWidget {
               child: Text(
                 action,
                 semanticsLabel: 'Practice: $action',
-                style: palette
-                    .prose(color: palette.ink, weight: FontWeight.w500)
-                    .copyWith(fontSize: 14, height: 1.5),
+                style: AppType.bodySm.style(
+                  palette.context,
+                  color: palette.ink,
+                  weight: FontWeight.w500,
+                ),
               ),
             ),
           ],
@@ -611,7 +597,10 @@ class CandidateFeedbackDashboard extends StatelessWidget {
               dense: true,
               visualDensity: VisualDensity.compact,
               checkboxScaleFactor: .8,
-              title: Text('Mark as practised', style: palette.text(size: 13.5)),
+              title: Text(
+                'Mark as practised',
+                style: palette.text(type: AppType.bodySm),
+              ),
             ),
         ],
       ),
@@ -683,7 +672,12 @@ class _SkillRadar extends StatelessWidget {
               painter: _RadarPainter(
                 dimensions: dimensions,
                 edge: palette.edge,
-                labelStyle: palette.caption().copyWith(fontSize: 17),
+                labelStyle: AppType.caption.style(context, color: palette.meta),
+                numberStyle: AppType.numeric.style(
+                  context,
+                  color: palette.meta,
+                  weight: FontWeight.w600,
+                ),
                 direction: Directionality.of(context),
               ),
             ),
@@ -699,12 +693,14 @@ class _RadarPainter extends CustomPainter {
     required this.dimensions,
     required this.edge,
     required this.labelStyle,
+    required this.numberStyle,
     required this.direction,
   });
 
   final List<FeedbackDimension> dimensions;
   final Color edge;
   final TextStyle labelStyle;
+  final TextStyle numberStyle;
   final TextDirection direction;
   static const _shortLabels = {
     'Reflection and collaboration': 'Reflection',
@@ -800,11 +796,7 @@ class _RadarPainter extends CustomPainter {
       text(
         '${(f * 100).round()}${f == 1 ? '%' : ''}',
         Offset(247, 205 - radius * f + 1),
-        labelStyle.copyWith(
-          fontSize: 13,
-          color: const Color(0xFF667380),
-          fontWeight: FontWeight.w600,
-        ),
+        numberStyle,
       );
     }
     final shape = polygon((i) => radius * dimensions[i].percentage / 100);
@@ -865,11 +857,7 @@ class _RadarPainter extends CustomPainter {
         text(
           label,
           Offset(position.dx, y + j * 19),
-          labelStyle.copyWith(
-            height: 1,
-            color: j == lines.length ? ink : const Color(0xFF14202E),
-            fontWeight: j == lines.length ? FontWeight.w800 : FontWeight.w600,
-          ),
+          j == lines.length ? numberStyle.copyWith(color: ink) : labelStyle,
           align: align,
         );
       }
@@ -882,5 +870,6 @@ class _RadarPainter extends CustomPainter {
       old.dimensions != dimensions ||
       old.edge != edge ||
       old.labelStyle != labelStyle ||
+      old.numberStyle != numberStyle ||
       old.direction != direction;
 }

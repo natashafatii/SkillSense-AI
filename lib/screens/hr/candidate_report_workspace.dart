@@ -8,7 +8,8 @@ typedef _InterviewEvidence = ({
 });
 
 class _ReportPalette {
-  const _ReportPalette(this.dark);
+  const _ReportPalette(this.dark, this.typeStep);
+  final TypeStep typeStep;
   final bool dark;
 
   Color get canvas => dark ? const Color(0xff070b14) : const Color(0xfff6f8fe);
@@ -34,13 +35,8 @@ class _ReportPalette {
   Color get track => dark ? const Color(0x2194aadc) : const Color(0xffe3e9f4);
 }
 
-TextStyle _reportDisplay(double size) => TextStyle(
-  fontFamily: 'Space Grotesk',
-  fontSize: size,
-  fontWeight: FontWeight.w700,
-  letterSpacing: -size * .025,
-  height: 1.15,
-);
+TextStyle _reportDisplay(BuildContext context, AppType type) =>
+    type.style(context);
 
 class _ReportWorkspace extends StatelessWidget {
   const _ReportWorkspace({
@@ -216,7 +212,7 @@ class _ReportWorkspace extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: _reportDisplay(23)),
+                    Text(name, style: _reportDisplay(context, AppType.h2)),
                     const SizedBox(height: 4),
                     Wrap(
                       spacing: 8,
@@ -225,12 +221,12 @@ class _ReportWorkspace extends StatelessWidget {
                           Text(
                             app.jobTitle,
                             style: _secondary(
-                              12,
+                              AppType.caption,
                             ).copyWith(fontWeight: FontWeight.w600),
                           ),
                         Text(
                           'Applied ${_date(context, app.createdAt)}',
-                          style: _secondary(12),
+                          style: _secondary(AppType.caption),
                         ),
                       ],
                     ),
@@ -247,14 +243,14 @@ class _ReportWorkspace extends StatelessWidget {
           Text(
             'Interview score',
             textAlign: TextAlign.center,
-            style: _reportDisplay(14),
+            style: _reportDisplay(context, AppType.bodySm),
           ),
           if (interview?.completedAt case final completed?) ...[
             const SizedBox(height: 3),
             Text(
               'Completed ${_date(context, completed)}',
               textAlign: TextAlign.center,
-              style: _secondary(11),
+              style: _secondary(AppType.caption),
             ),
           ],
           if (score == null)
@@ -263,7 +259,7 @@ class _ReportWorkspace extends StatelessWidget {
                   ? 'Loading interview evaluation…'
                   : 'Score unavailable',
               textAlign: TextAlign.center,
-              style: _secondary(11),
+              style: _secondary(AppType.caption),
             ),
           const SizedBox(height: 17),
           DecoratedBox(
@@ -276,6 +272,7 @@ class _ReportWorkspace extends StatelessWidget {
               children: [
                 Expanded(
                   child: _stat(
+                    context,
                     'Screening match',
                     screening == null
                         ? 'Unavailable'
@@ -290,6 +287,7 @@ class _ReportWorkspace extends StatelessWidget {
                       border: Border(left: BorderSide(color: palette.border)),
                     ),
                     child: _stat(
+                      context,
                       'Application stage',
                       _statusLabel(app.status),
                       detail: app.recruiterDecision?.outcome == null
@@ -306,7 +304,7 @@ class _ReportWorkspace extends StatelessWidget {
             Text(
               'Screening rank $rank of $candidateCount',
               textAlign: TextAlign.center,
-              style: _secondary(11),
+              style: _secondary(AppType.caption),
             ),
           ],
           const SizedBox(height: 14),
@@ -367,7 +365,7 @@ class _ReportWorkspace extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (resume.filename case final name? when name.isNotEmpty)
-              Text(name, style: _reportDisplay(16)),
+              Text(name, style: _reportDisplay(context, AppType.h4)),
             const SizedBox(height: 10),
             if (resume.isParsed) ...[
               if (resume.skills?.isNotEmpty == true)
@@ -405,6 +403,7 @@ class _ReportWorkspace extends StatelessWidget {
   }
 
   Widget _stat(
+    BuildContext context,
     String label,
     String value, {
     String? detail,
@@ -416,17 +415,23 @@ class _ReportWorkspace extends StatelessWidget {
         Text(
           label.toUpperCase(),
           textAlign: TextAlign.center,
-          style: _mono(10).copyWith(color: palette.muted, letterSpacing: .6),
+          style: _mono(context, AppType.numeric).copyWith(color: palette.muted),
         ),
         const SizedBox(height: 4),
         Text(
           value,
           textAlign: TextAlign.center,
-          style: numeric ? _mono(15) : _reportDisplay(15),
+          style: numeric
+              ? _mono(context, AppType.numeric)
+              : _reportDisplay(context, AppType.h4),
         ),
         if (detail != null) ...[
           const SizedBox(height: 4),
-          Text(detail, textAlign: TextAlign.center, style: _secondary(11)),
+          Text(
+            detail,
+            textAlign: TextAlign.center,
+            style: _secondary(AppType.caption),
+          ),
         ],
       ],
     ),
@@ -530,10 +535,7 @@ class _ReportWorkspace extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    label,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
+                  Text(label, style: AppType.body.style(context)),
                   const SizedBox(height: 3),
                   for (final item in preview ? items.take(1) : items)
                     Padding(
@@ -606,7 +608,7 @@ class _ReportWorkspace extends StatelessWidget {
               .indexed)
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: _rating(label, scores, switch (index) {
+          child: _rating(context, label, scores, switch (index) {
             0 => palette.mint,
             2 => palette.amber,
             _ => palette.blue,
@@ -687,7 +689,12 @@ class _ReportWorkspace extends StatelessWidget {
     );
   }
 
-  Widget _rating(String label, List<double?> scores, Color color) {
+  Widget _rating(
+    BuildContext context,
+    String label,
+    List<double?> scores,
+    Color color,
+  ) {
     final rated = scores.whereType<double>().toList();
     final score = rated.isEmpty
         ? null
@@ -709,7 +716,10 @@ class _ReportWorkspace extends StatelessWidget {
             Text(
               score == null ? 'Unrated' : '${_scoreNumber(score)} / 10',
               textAlign: TextAlign.end,
-              style: _mono(12).copyWith(color: palette.accent),
+              style: _mono(
+                context,
+                AppType.numeric,
+              ).copyWith(color: palette.accent),
             ),
           ],
         ),
@@ -718,7 +728,7 @@ class _ReportWorkspace extends StatelessWidget {
             rated.isEmpty
                 ? 'No rated answers'
                 : '${rated.length} of ${scores.length} rated',
-            style: _secondary(11),
+            style: _secondary(AppType.caption),
           ),
         if (score != null) ...[
           const SizedBox(height: 5),
@@ -753,7 +763,7 @@ class _ReportWorkspace extends StatelessWidget {
                       children: [
                         Text(
                           row.requirement,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          style: AppType.body.style(context),
                           maxLines: preview ? 2 : null,
                           overflow: preview ? TextOverflow.ellipsis : null,
                         ),
@@ -821,12 +831,7 @@ class _ReportWorkspace extends StatelessWidget {
           for (final label in ['Requirement', 'Result', 'Evidence'])
             _cell(
               label.toUpperCase(),
-              TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: palette.muted,
-                letterSpacing: .44,
-              ),
+              AppType.overline.at(palette.typeStep, color: palette.muted),
             ),
         ],
       ),
@@ -1011,7 +1016,8 @@ class _ReportWorkspace extends StatelessWidget {
                 child: Text(
                   '${index + 1}'.padLeft(2, '0'),
                   style: _mono(
-                    10,
+                    context,
+                    AppType.numeric,
                   ).copyWith(color: palette.accent, height: 1.85),
                 ),
               ),
@@ -1056,8 +1062,8 @@ class _ReportWorkspace extends StatelessWidget {
     );
   }
 
-  TextStyle _secondary([double size = 13]) =>
-      TextStyle(fontSize: size, color: palette.muted);
+  TextStyle _secondary([AppType type = AppType.caption]) =>
+      type.at(palette.typeStep, color: palette.muted);
 
   Widget _status(String text, Color color) => Row(
     mainAxisSize: MainAxisSize.min,
@@ -1071,7 +1077,9 @@ class _ReportWorkspace extends StatelessWidget {
       Flexible(
         child: Text(
           text,
-          style: _secondary(12).copyWith(fontWeight: FontWeight.w600),
+          style: _secondary(
+            AppType.caption,
+          ).copyWith(fontWeight: FontWeight.w600),
         ),
       ),
     ],
@@ -1087,7 +1095,7 @@ Future<void> _showReportDetails(
 ) => showDialog<void>(
   context: context,
   builder: (context) {
-    final palette = _ReportPalette(context.isDarkTheme);
+    final palette = _ReportPalette(context.isDarkTheme, context.typeStep);
     return Dialog(
       backgroundColor: palette.paper,
       surfaceTintColor: Colors.transparent,
@@ -1108,7 +1116,10 @@ Future<void> _showReportDetails(
                 Expanded(
                   child: Semantics(
                     header: true,
-                    child: Text(title, style: _reportDisplay(19)),
+                    child: Text(
+                      title,
+                      style: _reportDisplay(context, AppType.h3),
+                    ),
                   ),
                 ),
                 IconButton(
@@ -1133,11 +1144,7 @@ Future<void> _showReportDetails(
     );
   },
 );
-TextStyle _mono(double size) => TextStyle(
-  fontFamily: 'JetBrains Mono',
-  fontSize: size,
-  fontWeight: FontWeight.w600,
-);
+TextStyle _mono(BuildContext context, AppType type) => type.style(context);
 String _scoreNumber(double score) =>
     score.toStringAsFixed(score == score.roundToDouble() ? 0 : 1);
 
@@ -1222,17 +1229,15 @@ class _WorkspaceCard extends StatelessWidget {
                               header: true,
                               child: Text(
                                 heading,
-                                style: _reportDisplay(
-                                  16,
-                                ).copyWith(letterSpacing: -.24),
+                                style: _reportDisplay(context, AppType.h4),
                               ),
                             ),
                             if (subtitle case final detail?) ...[
                               const SizedBox(height: 3),
                               Text(
                                 detail,
-                                style: TextStyle(
-                                  fontSize: 11,
+                                style: AppType.caption.style(
+                                  context,
                                   color: palette.muted,
                                 ),
                               ),
@@ -1327,17 +1332,14 @@ class _InterviewScore extends StatelessWidget {
                 textScaler: MediaQuery.textScalerOf(
                   context,
                 ).clamp(maxScaleFactor: 1.2),
-                style: _mono(42).copyWith(
-                  height: 1.08,
-                  letterSpacing: -2.9,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppType.metric.style(context, weight: FontWeight.w700),
               ),
               Text(
                 'OUT OF 100',
                 style: _mono(
-                  10,
-                ).copyWith(color: palette.muted, letterSpacing: .6),
+                  context,
+                  AppType.overline,
+                ).copyWith(color: palette.muted),
               ),
             ],
           ),
@@ -1455,16 +1457,15 @@ class _ReportAnswerState extends State<_ReportAnswer> {
                     Expanded(
                       child: Text(
                         widget.question,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: AppType.body.style(context),
                       ),
                     ),
                     const SizedBox(width: 9),
                     Text(
                       widget.rating,
-                      style: TextStyle(
+                      style: AppType.caption.style(
+                        context,
                         color: palette.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],

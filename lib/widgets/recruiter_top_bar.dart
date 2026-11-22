@@ -1,10 +1,9 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
-import 'dart:ui';
 import 'notification_unread_scope.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../services/profile_service.dart';
 import '../services/auth_service.dart';
 import 'candidate_avatar_image.dart';
@@ -27,6 +26,7 @@ class RecruiterTopBar extends StatelessWidget {
     this.searchFocused = false,
     this.onSearchTap,
     this.onBellTap,
+    this.onMobileTitleTap,
     this.onTrailingTap,
     this.trailingTooltip = 'Workspace settings',
     this.hasUnread = false,
@@ -54,6 +54,7 @@ class RecruiterTopBar extends StatelessWidget {
   final bool searchFocused;
   final VoidCallback? onSearchTap;
   final VoidCallback? onBellTap;
+  final VoidCallback? onMobileTitleTap;
   final VoidCallback? onTrailingTap;
   final String trailingTooltip;
   final bool hasUnread;
@@ -100,7 +101,11 @@ class RecruiterTopBar extends StatelessWidget {
     final text3 = dark
         ? const Color(0xFF9FACC6)
         : context.themeForeground(const Color(0xFF64748B));
-    final accent = dark ? const Color(0xFF6C9BFF) : const Color(0xFF3E6FF0);
+    final accent = dark
+        ? const Color(0xFF6C9BFF)
+        : candidate
+        ? TypographyColors.candidateAccent
+        : TypographyColors.recruiterAccent;
     final showUnread = useExactUnread ? hasUnread : count > 0;
     void openNotifications() => Navigator.of(context).pushNamed(
       candidate ? '/candidate/notifications' : '/recruiter/notifications',
@@ -116,35 +121,22 @@ class RecruiterTopBar extends StatelessWidget {
             breadcrumbSegments ??
             (candidate ? [pageTitle] : [ancestor, pageTitle]);
         final title = Text(
-          compact ? (mobileTitle ?? pageTitle) : pageTitle.toUpperCase(),
+          mobileTitle ?? pageTitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: (compact ? GoogleFonts.inter : GoogleFonts.spaceGrotesk)(
-            color: text,
-            fontSize: compact ? 22 : 12,
-            fontWeight: compact ? FontWeight.w800 : FontWeight.w700,
-            letterSpacing: compact ? -0.5 : 1.2,
-          ),
+          style: AppType.h1.style(context, color: text),
         );
         Widget breadcrumbText(int index) => Text(
-          profileReference
-              ? breadcrumbs[index]
-              : breadcrumbs[index].toUpperCase(),
+          breadcrumbs[index],
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style:
-              (profileReference ? GoogleFonts.inter : GoogleFonts.spaceGrotesk)(
-                color: index == breadcrumbs.length - 1 ? text : text3,
-                fontSize: profileReference ? 13.5 : 12,
-                fontWeight: index == breadcrumbs.length - 1
-                    ? (profileReference ? FontWeight.w600 : FontWeight.w700)
-                    : FontWeight.w500,
-                letterSpacing: profileReference ? 0 : 1.2,
-              ),
+          style: AppType.caption.style(
+            context,
+            color: index == breadcrumbs.length - 1 ? text : text2,
+          ),
         );
-        return ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        return RepaintBoundary(
+          child: ClipRect(
             child: Container(
               height: 58,
               padding: EdgeInsets.symmetric(
@@ -181,9 +173,9 @@ class RecruiterTopBar extends StatelessWidget {
                               const SizedBox(width: 7),
                               Text(
                                 '/',
-                                style: GoogleFonts.spaceGrotesk(
-                                  color: text3,
-                                  fontSize: 12,
+                                style: AppType.caption.style(
+                                  context,
+                                  color: text2,
                                 ),
                               ),
                               const SizedBox(width: 7),
@@ -206,7 +198,20 @@ class RecruiterTopBar extends StatelessWidget {
                       ),
                     )
                   else
-                    Expanded(child: title),
+                    Expanded(
+                      child: onMobileTitleTap == null
+                          ? title
+                          : Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: Tooltip(
+                                message: 'Open candidate navigation',
+                                child: InkWell(
+                                  onTap: onMobileTitleTap,
+                                  child: title,
+                                ),
+                              ),
+                            ),
+                    ),
                   if (showSearch &&
                       compact &&
                       (candidate || onSearchTap != null))
@@ -227,7 +232,7 @@ class RecruiterTopBar extends StatelessWidget {
                   else if (showSearch && !compact)
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
-                      width: 300,
+                      width: (constraints.maxWidth * .36).clamp(160.0, 300.0),
                       height: profileReference ? 36 : 34,
                       decoration: BoxDecoration(
                         color: field,
@@ -248,15 +253,12 @@ class RecruiterTopBar extends StatelessWidget {
                           onTap: open,
                           onChanged: (_) => open(),
                           onSubmitted: (_) => open(),
-                          style: GoogleFonts.inter(
-                            color: text,
-                            fontSize: profileReference ? 13.5 : 12,
-                          ),
+                          style: AppType.body.style(context, color: text),
                           decoration: InputDecoration(
                             hintText: 'Search or jump to…',
-                            hintStyle: GoogleFonts.inter(
-                              color: text3,
-                              fontSize: profileReference ? 13.5 : 12,
+                            hintStyle: AppType.caption.style(
+                              context,
+                              color: text2,
                             ),
                             prefixIcon: Icon(
                               Icons.search_rounded,
@@ -281,10 +283,9 @@ class RecruiterTopBar extends StatelessWidget {
                               ),
                               child: Text(
                                 '⌘K',
-                                style: GoogleFonts.jetBrainsMono(
+                                style: AppType.numeric.style(
+                                  context,
                                   color: text3,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -344,12 +345,11 @@ class RecruiterTopBar extends StatelessWidget {
                                 builder: (context, profile, _) =>
                                     CandidateAvatarImage(
                                       profile: profile,
-                                      initialsStyle: GoogleFonts.spaceGrotesk(
+                                      initialsStyle: AppType.caption.style(
+                                        context,
                                         color: context.themeForeground(
                                           const Color(0xFF047857),
                                         ),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                               ),
@@ -421,11 +421,7 @@ class RecruiterTopBar extends StatelessWidget {
       Widget fallback() => Center(
         child: Text(
           initials,
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            color: const Color(0xFF2563EB),
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppType.caption.style(context, color: const Color(0xFF2563EB)),
         ),
       );
       return url == null

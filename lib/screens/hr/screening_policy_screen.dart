@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
@@ -100,92 +101,86 @@ class _ScreeningPolicyScreenState extends State<ScreeningPolicyScreen> {
       preferredSize: Size.fromHeight(58),
       child: RecruiterTopBar(pageTitle: 'Screening policy'),
     ),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 700),
-        child: MobileEdgeShadowWrapper(
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              Text(
-                widget.job.title,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const Text(
-                'Changes apply to new assessments. Existing applications keep their recorded policy; under-review applications can be rescreened explicitly.',
-              ),
-              if (_error != null)
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Enable automatic screening'),
-                value: _enabled,
-                onChanged: (v) => setState(() => _enabled = v),
-              ),
-              TextField(
-                controller: _threshold,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Minimum match score (inclusive, 0–100)',
-                ),
-              ),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                initialValue: _policy,
-                decoration: const InputDecoration(
-                  labelText: 'Confirmed failure policy',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'REVIEW',
-                    child: Text('Hold for review'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'REJECT',
-                    child: Text('Reject confirmed failures'),
-                  ),
-                ],
-                onChanged: (v) => setState(() => _policy = v ?? 'REVIEW'),
-              ),
-              const Text(
-                'Uncertain evidence always goes to review. Processing errors never reject applicants.',
-              ),
-              TextField(
-                controller: _years,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Minimum relevant years (optional)',
-                ),
-              ),
-              TextField(
-                controller: _education,
-                decoration: const InputDecoration(
-                  labelText: 'Accepted education levels, comma separated',
-                ),
-              ),
-              TextField(
-                controller: _certifications,
-                decoration: const InputDecoration(
-                  labelText: 'Required certifications, comma separated',
-                ),
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Other mandatory conditions need manual review',
-                ),
-                value: _manual,
-                onChanged: (v) => setState(() => _manual = v ?? false),
-              ),
-              Text('Mandatory skills: ${widget.job.skillsRequired.join(', ')}'),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: Text(_saving ? 'Saving…' : 'Save screening policy'),
+    body: MobileEdgeShadowWrapper(
+      child: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text(
+            widget.job.title,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const Text(
+            'Changes apply to new assessments. Existing applications keep their recorded policy; under-review applications can be rescreened explicitly.',
+          ),
+          if (_error != null)
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Enable automatic screening'),
+            value: _enabled,
+            onChanged: (v) => setState(() => _enabled = v),
+          ),
+          TextField(
+            style: AppType.body.style(context),
+            controller: _threshold,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Minimum match score (inclusive, 0–100)',
+            ),
+          ),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            initialValue: _policy,
+            decoration: const InputDecoration(
+              labelText: 'Confirmed failure policy',
+            ),
+            items: const [
+              DropdownMenuItem(value: 'REVIEW', child: Text('Hold for review')),
+              DropdownMenuItem(
+                value: 'REJECT',
+                child: Text('Reject confirmed failures'),
               ),
             ],
+            onChanged: (v) => setState(() => _policy = v ?? 'REVIEW'),
           ),
-        ),
+          const Text(
+            'Uncertain evidence always goes to review. Processing errors never reject applicants.',
+          ),
+          TextField(
+            style: AppType.body.style(context),
+            controller: _years,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Minimum relevant years (optional)',
+            ),
+          ),
+          TextField(
+            style: AppType.body.style(context),
+            controller: _education,
+            decoration: const InputDecoration(
+              labelText: 'Accepted education levels, comma separated',
+            ),
+          ),
+          TextField(
+            style: AppType.body.style(context),
+            controller: _certifications,
+            decoration: const InputDecoration(
+              labelText: 'Required certifications, comma separated',
+            ),
+          ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Other mandatory conditions need manual review'),
+            value: _manual,
+            onChanged: (v) => setState(() => _manual = v ?? false),
+          ),
+          Text('Mandatory skills: ${widget.job.skillsRequired.join(', ')}'),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: Text(_saving ? 'Saving…' : 'Save screening policy'),
+          ),
+        ],
       ),
     ),
   );

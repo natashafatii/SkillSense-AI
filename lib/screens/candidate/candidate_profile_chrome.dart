@@ -1,16 +1,7 @@
 part of 'candidate_profile_settings_screen.dart';
 
-TextStyle _profileType(
-  double size,
-  Color color, {
-  FontWeight weight = FontWeight.w600,
-}) => TextStyle(
-  fontFamily: 'Plus Jakarta Sans',
-  fontSize: size,
-  fontWeight: weight,
-  color: color,
-  height: 1.55,
-);
+TextStyle _profileType(BuildContext context, AppType type, Color color) =>
+    type.style(context, color: color);
 
 class _ProfileTopBar extends StatelessWidget {
   const _ProfileTopBar({required this.colors});
@@ -34,18 +25,14 @@ class _ProfileTopBar extends StatelessWidget {
                         TextSpan(
                           text: 'Account  /  ',
                           style: _profileType(
-                            13,
+                            context,
+                            AppType.caption,
                             c.text3,
-                            weight: FontWeight.w400,
                           ),
                         ),
                         TextSpan(
                           text: 'Profile & settings',
-                          style: _profileType(
-                            13,
-                            c.text,
-                            weight: FontWeight.w700,
-                          ),
+                          style: _profileType(context, AppType.caption, c.text),
                         ),
                       ],
                     ),

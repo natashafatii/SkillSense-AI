@@ -17,6 +17,7 @@ AuthServiceInterface createAuthService() => AuthServiceWeb();
 class AuthServiceWeb
     implements
         AuthServiceInterface,
+        SessionTokenRefreshService,
         GoogleOAuthService,
         GoogleSignInService,
         EmailVerificationService,
@@ -615,10 +616,17 @@ class AuthServiceWeb
   }
 
   @override
-  Future<String?> getSessionToken() async {
+  Future<String?> getSessionToken() => _sessionToken();
+
+  @override
+  Future<String?> refreshSessionToken() => _sessionToken(skipCache: true);
+
+  Future<String?> _sessionToken({bool skipCache = false}) async {
     final session = _clerk.session;
     if (session == null) return null;
-    final token = await session.getToken().toDart;
+    final token = await session
+        .getToken(ClerkTokenOptions(skipCache: skipCache))
+        .toDart;
     return token?.toDart;
   }
 

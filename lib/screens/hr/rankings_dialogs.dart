@@ -34,26 +34,14 @@ extension _RankingsDialogs on _RankingsScreenState {
                       color: _tint,
                       shape: BoxShape.circle,
                     ),
-                    child: _label(
-                      initials,
-                      size: 16,
-                      color: _blue,
-                      weight: FontWeight.w600,
-                    ),
+                    child: _label(initials, color: _blue, type: AppType.h4),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          name,
-                          style: _text(
-                            22,
-                            height: 1.2,
-                            weight: FontWeight.w700,
-                          ).copyWith(letterSpacing: -.44),
-                        ),
+                        Text(name, style: _text(AppType.h2)),
                         const SizedBox(height: 3),
                         _label(
                           '${_job?.title ?? 'Job unavailable'}, applied ${_date(_details[row.applicationId]?.createdAt)}',
@@ -75,8 +63,8 @@ extension _RankingsDialogs on _RankingsScreenState {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _label(
                     'Detailed evidence is unavailable. Ranking and screening values below retain their original sources.',
-                    size: 13,
                     color: _muted,
+                    type: AppType.caption,
                   ),
                 ),
               _reportGrid([
@@ -85,23 +73,23 @@ extension _RankingsDialogs on _RankingsScreenState {
                     _RankingsScreenState._score(row) == null
                         ? 'Awaiting a published score'
                         : 'Combined ${_number(_RankingsScreenState._score(row))}/100, rank ${_rank(row)}${review?.interview == null ? '' : ', attempt ${review!.attempts.length}'}',
-                    size: 13,
+                    type: AppType.caption,
                   ),
                   if (evaluation?.status == 'READY')
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: _label(
                         'Interview score ${_number(evaluation?.score)}/100',
-                        size: 13,
                         color: _muted,
+                        type: AppType.caption,
                       ),
                     ),
                   const SizedBox(height: 10),
                   if (competencies.isEmpty)
                     _label(
                       'Competency scores will appear after evaluation.',
-                      size: 13,
                       color: _muted,
+                      type: AppType.caption,
                     ),
                   for (final item in competencies)
                     _competencyBar(item.$1, item.$2),
@@ -117,38 +105,40 @@ extension _RankingsDialogs on _RankingsScreenState {
                             'REJECT' => 'Reject',
                             _ => 'Pending',
                           },
-                    size: 13,
+                    type: AppType.caption,
                   ),
                   const SizedBox(height: 4),
-                  _label(_stage(row), size: 13, color: _muted),
+                  _label(_stage(row), color: _muted, type: AppType.caption),
                   if (decision?.reason?.isNotEmpty == true)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: _label(decision!.reason!, size: 13),
+                      child: _label(decision!.reason!, type: AppType.caption),
                     ),
                 ]),
                 _reportSection('Evidence of strength', [
-                  _label(_findings(review, strengths: true), size: 13),
+                  _label(
+                    _findings(review, strengths: true),
+                    type: AppType.caption,
+                  ),
                 ]),
                 _reportSection('Area to verify', [
-                  _label(_findings(review, strengths: false), size: 13),
+                  _label(
+                    _findings(review, strengths: false),
+                    type: AppType.caption,
+                  ),
                 ]),
               ]),
               const SizedBox(height: 16),
               ExpansionTile(
                 tilePadding: EdgeInsets.zero,
-                title: _label(
-                  'Scoring details',
-                  size: 13,
-                  weight: FontWeight.w500,
-                ),
+                title: _label('Scoring details', type: AppType.caption),
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
                     child: SelectableText(
                       'Screening match: ${_screening(row) == null ? 'Unavailable' : '${_number(_screening(row))}%'}\nScore band: ${_RankingsScreenState._band(_RankingsScreenState._score(row))}\n'
                       'Top driver: ${row.topDriver ?? 'Unavailable'}\nRubric version: ${row.rubricVersion ?? 'Unavailable'}\nModel: ${row.modelVersion ?? 'Unavailable'}',
-                      style: _text(13),
+                      style: _text(AppType.caption),
                     ),
                   ),
                 ],
@@ -246,8 +236,8 @@ extension _RankingsDialogs on _RankingsScreenState {
       children: [
         Row(
           children: [
-            Expanded(child: _label(label, size: 13)),
-            _label('${_number(value)}/10', size: 13, weight: FontWeight.w600),
+            Expanded(child: _label(label, type: AppType.caption)),
+            _label('${_number(value)}/10', type: AppType.caption),
           ],
         ),
         const SizedBox(height: 2),
@@ -270,7 +260,7 @@ extension _RankingsDialogs on _RankingsScreenState {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _label(title, size: 13, weight: FontWeight.w600),
+        _label(title, type: AppType.caption),
         const SizedBox(height: 8),
         ...children,
       ],
@@ -319,7 +309,7 @@ extension _RankingsDialogs on _RankingsScreenState {
         builder: (context) => Theme(
           data: Theme.of(context).copyWith(
             dividerColor: _line,
-            textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Geist'),
+            textTheme: Theme.of(context).textTheme,
             expansionTileTheme: ExpansionTileThemeData(
               shape: const Border(),
               collapsedShape: const Border(),
@@ -356,13 +346,7 @@ extension _RankingsDialogs on _RankingsScreenState {
                       ),
                       child: Row(
                         children: [
-                          Expanded(
-                            child: _label(
-                              title,
-                              size: 17,
-                              weight: FontWeight.w600,
-                            ),
-                          ),
+                          Expanded(child: _label(title, type: AppType.h3)),
                           SizedBox.square(
                             dimension: 28,
                             child: IconButton(
@@ -480,8 +464,8 @@ extension _RankingsDialogs on _RankingsScreenState {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _label(
                     'Some detailed evidence could not be loaded. Available ranking values are retained.',
-                    size: 13,
                     color: _muted,
+                    type: AppType.caption,
                   ),
                 ),
               LayoutBuilder(
@@ -507,8 +491,7 @@ extension _RankingsDialogs on _RankingsScreenState {
                                 padding: const EdgeInsets.all(10),
                                 child: _label(
                                   _RankingsScreenState._name(item.row),
-                                  size: 15,
-                                  weight: FontWeight.w600,
+                                  type: AppType.h4,
                                 ),
                               ),
                           ],
@@ -520,15 +503,17 @@ extension _RankingsDialogs on _RankingsScreenState {
                                 padding: const EdgeInsets.all(10),
                                 child: _label(
                                   field.$1,
-                                  size: 13,
                                   color: _muted,
-                                  weight: FontWeight.w500,
+                                  type: AppType.caption,
                                 ),
                               ),
                               for (final item in items)
                                 Padding(
                                   padding: const EdgeInsets.all(10),
-                                  child: _label(field.$2(item), size: 13),
+                                  child: _label(
+                                    field.$2(item),
+                                    type: AppType.caption,
+                                  ),
                                 ),
                             ],
                           ),
@@ -540,11 +525,7 @@ extension _RankingsDialogs on _RankingsScreenState {
               const SizedBox(height: 12),
               ExpansionTile(
                 tilePadding: EdgeInsets.zero,
-                title: _label(
-                  'Scoring provenance',
-                  size: 13,
-                  weight: FontWeight.w500,
-                ),
+                title: _label('Scoring provenance', type: AppType.caption),
                 children: [
                   for (final item in items)
                     Padding(
@@ -556,7 +537,7 @@ extension _RankingsDialogs on _RankingsScreenState {
                           'Technical: ${_RankingsScreenState._metric(item.row.technical)} · Behavioral: ${_RankingsScreenState._metric(item.row.behavioral)} · Communication: ${_RankingsScreenState._metric(item.row.communication)}\n'
                           'Score band: ${_RankingsScreenState._band(_RankingsScreenState._score(item.row))} · Top driver: ${item.row.topDriver ?? 'Unavailable'}\n'
                           'Rubric: ${item.row.rubricVersion ?? 'Unavailable'} · Model: ${item.row.modelVersion ?? 'Unavailable'}',
-                          style: _text(13),
+                          style: _text(AppType.caption),
                         ),
                       ),
                     ),
@@ -661,15 +642,10 @@ class _RankingJobMenuState extends State<_RankingJobMenu> {
         )
         .toList();
     final line = context.themeOutline(const Color(0xFFE4E7EC));
-    TextStyle style(double size, {bool bold = false, Color? color}) =>
-        TextStyle(
-          fontFamily: 'Geist',
-          letterSpacing: 0,
-          fontSize: size,
-          fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
-          height: 1.45,
-          color: context.themeForeground(color ?? const Color(0xFF101828)),
-        );
+    TextStyle style(AppType type, {Color? color}) => type.style(
+      context,
+      color: context.themeForeground(color ?? TypographyColors.primary),
+    );
     return Material(
       elevation: 12,
       shadowColor: const Color(0x40101828),
@@ -690,7 +666,7 @@ class _RankingJobMenuState extends State<_RankingJobMenu> {
               child: TextField(
                 autofocus: true,
                 key: const ValueKey('job-search'),
-                style: style(14),
+                style: style(AppType.body),
                 onChanged: (value) =>
                     setState(() => query = value.trim().toLowerCase()),
                 onSubmitted: (_) {
@@ -709,7 +685,10 @@ class _RankingJobMenuState extends State<_RankingJobMenu> {
                     borderSide: BorderSide(color: line),
                   ),
                   hintText: 'Search jobs or departments',
-                  hintStyle: style(14, color: const Color(0xFF667085)),
+                  hintStyle: style(
+                    AppType.caption,
+                    color: const Color(0xFF667085),
+                  ),
                   prefixIcon: const Icon(Icons.search, size: 16),
                   prefixIconConstraints: const BoxConstraints(minWidth: 35),
                   isDense: true,
@@ -734,11 +713,14 @@ class _RankingJobMenuState extends State<_RankingJobMenu> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('No jobs match', style: style(14, bold: true)),
+                          Text('No jobs match', style: style(AppType.bodySm)),
                           const SizedBox(height: 4),
                           Text(
                             'Try another title or department.',
-                            style: style(13, color: const Color(0xFF667085)),
+                            style: style(
+                              AppType.caption,
+                              color: const Color(0xFF667085),
+                            ),
                           ),
                         ],
                       ),
@@ -775,12 +757,12 @@ class _RankingJobMenuState extends State<_RankingJobMenu> {
                                           children: [
                                             Text(
                                               job.title,
-                                              style: style(14, bold: true),
+                                              style: style(AppType.h4),
                                             ),
                                             Text(
                                               '${job.department.isEmpty ? 'Department unavailable' : job.department}, ${job.id == widget.selected ? widget.applicantCount : job.applicantCount} applicants',
                                               style: style(
-                                                12,
+                                                AppType.numeric,
                                                 color: const Color(0xFF667085),
                                               ),
                                             ),
@@ -793,8 +775,7 @@ class _RankingJobMenuState extends State<_RankingJobMenu> {
                                         Text(
                                           '${widget.awaiting} to review',
                                           style: style(
-                                            11,
-                                            bold: true,
+                                            AppType.caption,
                                             color: const Color(0xFFB54708),
                                           ),
                                         ),
@@ -816,7 +797,7 @@ class _RankingJobMenuState extends State<_RankingJobMenu> {
               ),
               child: Text(
                 'Choose a job to view its applicants.',
-                style: style(12, color: const Color(0xFF667085)),
+                style: style(AppType.caption, color: const Color(0xFF667085)),
               ),
             ),
           ],

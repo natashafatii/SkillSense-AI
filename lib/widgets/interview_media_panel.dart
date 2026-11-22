@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
@@ -98,11 +99,9 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
           seedColor: teal,
           brightness: brightness,
         ),
-        textTheme: Theme.of(context).textTheme.apply(
-          fontFamily: 'Inter',
-          bodyColor: ink,
-          displayColor: ink,
-        ),
+        textTheme: Theme.of(
+          context,
+        ).textTheme.apply(bodyColor: ink, displayColor: ink),
       );
       return Theme(
         data: theme,
@@ -140,20 +139,12 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
                         children: [
                           Text(
                             'Camera and microphone',
-                            style: TextStyle(
-                              color: ink,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: AppType.h4.style(context, color: ink),
                           ),
                           const SizedBox(height: 3),
                           Text(
                             'Get ready for your interview',
-                            style: TextStyle(
-                              color: muted,
-                              fontSize: 12,
-                              height: 1.4,
-                            ),
+                            style: AppType.caption.style(context, color: muted),
                           ),
                         ],
                       ),
@@ -209,20 +200,18 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
                                             ? 'Allow camera access in your browser'
                                             : 'Your camera preview',
                                         textAlign: TextAlign.center,
-                                        style: const TextStyle(
+                                        style: AppType.badge.style(
+                                          context,
                                           color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                       const SizedBox(height: 6),
-                                      const Text(
+                                      Text(
                                         'Keep your face in the frame.',
                                         textAlign: TextAlign.center,
-                                        style: TextStyle(
+                                        style: AppType.caption.style(
+                                          context,
                                           color: Color(0xFFABB9CC),
-                                          fontSize: 12,
-                                          height: 1.5,
                                         ),
                                       ),
                                     ],
@@ -271,7 +260,7 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
                   const SizedBox(height: 8),
                   Text(
                     'Mirrored preview',
-                    style: TextStyle(color: muted, fontSize: 11),
+                    style: AppType.caption.style(context, color: muted),
                   ),
                 ],
                 if (media.cameraError != null)
@@ -289,7 +278,7 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
                         : media.microphoneChecked
                         ? 'Microphone access checked. Interview audio connects separately.'
                         : 'Check microphone access before joining.',
-                    style: TextStyle(color: muted, fontSize: 12, height: 1.5),
+                    style: AppType.caption.style(context, color: muted),
                   ),
                 ),
                 if (media.microphoneError != null)
@@ -372,11 +361,7 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
                     Expanded(
                       child: Text(
                         'Device checks stay on this device. Joining an interview may send camera snapshots to the interview service.',
-                        style: TextStyle(
-                          color: muted,
-                          fontSize: 11,
-                          height: 1.5,
-                        ),
+                        style: AppType.caption.style(context, color: muted),
                       ),
                     ),
                   ],
@@ -389,7 +374,7 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
                   collapsedShape: const Border(),
                   title: Text(
                     'Camera troubleshooting',
-                    style: TextStyle(color: muted, fontSize: 12),
+                    style: AppType.caption.style(context, color: muted),
                   ),
                   children: [
                     Align(
@@ -407,7 +392,7 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
                         liveRegion: true,
                         child: Text(
                           media.sampleNotice!,
-                          style: TextStyle(color: muted, fontSize: 12),
+                          style: AppType.caption.style(context, color: muted),
                         ),
                       ),
                   ],
@@ -451,10 +436,9 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
         Flexible(
           child: Text(
             label,
-            style: TextStyle(
+            style: AppType.caption.style(
+              context,
               color: ready ? accent : muted,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -466,10 +450,7 @@ class _InterviewMediaPanelState extends State<InterviewMediaPanel>
     padding: const EdgeInsets.only(top: 10),
     child: Semantics(
       liveRegion: true,
-      child: Text(
-        message,
-        style: TextStyle(color: color, fontSize: 12, height: 1.5),
-      ),
+      child: Text(message, style: AppType.caption.style(context, color: color)),
     ),
   );
 }

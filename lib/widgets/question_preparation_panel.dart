@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -521,14 +522,13 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
     return Theme(
       data: ThemeData(
         useMaterial3: true,
-        fontFamily: 'Inter',
         colorScheme: ColorScheme.fromSeed(
           seedColor: teal,
           brightness: Theme.of(context).brightness,
         ),
       ),
       child: DefaultTextStyle.merge(
-        style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: ink),
+        style: AppType.bodySm.style(context, color: ink),
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
@@ -573,16 +573,15 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                           children: [
                             Text(
                               'Interview questions',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: ink,
-                              ),
+                              style: AppType.h3.style(context, color: ink),
                             ),
                             SizedBox(height: 4),
                             Text(
                               'Shape the conversation before sending an invitation.',
-                              style: TextStyle(fontSize: 13, color: muted),
+                              style: AppType.caption.style(
+                                context,
+                                color: muted,
+                              ),
                             ),
                           ],
                         ),
@@ -639,18 +638,18 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                   if (_data?['revision'] != null)
                     Text(
                       'Revision ${_data!['revision']}',
-                      style: TextStyle(fontSize: 12, color: muted),
+                      style: AppType.caption.style(context, color: muted),
                     ),
                 ],
               ),
               const SizedBox(height: 10),
-              Text(label, style: TextStyle(fontSize: 13, color: muted)),
+              Text(label, style: AppType.caption.style(context, color: muted)),
               if (approved)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(top: 6),
                   child: Text(
                     'Recruiter approved',
-                    style: TextStyle(color: teal, fontSize: 12),
+                    style: AppType.caption.style(context, color: teal),
                   ),
                 ),
               if (frozen)
@@ -658,7 +657,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                   padding: EdgeInsets.only(top: 6),
                   child: Text(
                     'Frozen for the scheduled interview',
-                    style: TextStyle(color: muted, fontSize: 12),
+                    style: AppType.caption.style(context, color: muted),
                   ),
                 ),
               ..._draftNotices(questions, canChange),
@@ -673,9 +672,9 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                   ),
                   child: Text(
                     _error!,
-                    style: TextStyle(
+                    style: AppType.caption.style(
+                      context,
                       color: context.themeForeground(const Color(0xFFB42338)),
-                      fontSize: 13,
                     ),
                   ),
                 ),
@@ -718,7 +717,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                     : approved
                     ? 'Adding or removing a question will require approval again.'
                     : 'Review every question, then approve this set to continue scheduling.',
-                style: TextStyle(color: muted, fontSize: 12, height: 1.5),
+                style: AppType.caption.style(context, color: muted),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -802,8 +801,8 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
         padding: const EdgeInsets.only(top: 6),
         child: Text(
           'Fallback reason: ${_data!['fallback_reason']}',
-          style: TextStyle(
-            fontSize: 12,
+          style: AppType.caption.style(
+            context,
             color: context.themeForeground(const Color(0xFF9A6700)),
           ),
         ),
@@ -879,10 +878,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
       color: color.withValues(alpha: .07),
       borderRadius: BorderRadius.circular(6),
     ),
-    child: Text(
-      text,
-      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
-    ),
+    child: Text(text, style: AppType.caption.style(context, color: color)),
   );
 
   Widget _questionCard(
@@ -920,11 +916,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
             ),
             child: Text(
               '$number',
-              style: TextStyle(
-                color: categoryColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppType.caption.style(context, color: categoryColor),
             ),
           ),
           const SizedBox(width: 12),
@@ -943,9 +935,11 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                     ),
                     Text(
                       'Source: ${question['source']}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: context.themeForeground(const Color(0xFF718096)),
+                      style: AppType.caption.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                     ),
                   ],
@@ -953,9 +947,8 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
                 const SizedBox(height: 10),
                 Text(
                   '${question['text']}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
+                  style: AppType.bodySm.style(
+                    context,
                     color: context.themeForeground(const Color(0xFF17233B)),
                   ),
                 ),
@@ -1065,10 +1058,10 @@ class _AddQuestionDialogState extends State<_AddQuestionDialog> {
                     children: [
                       Text(
                         'Ask about a skill or experience you want to explore.',
-                        style: TextStyle(
-                          fontSize: 13,
+                        style: AppType.caption.style(
+                          context,
                           color: context.themeForeground(
-                            const Color(0xFF64748B),
+                            TypographyColors.secondary,
                           ),
                         ),
                       ),
@@ -1099,6 +1092,7 @@ class _AddQuestionDialogState extends State<_AddQuestionDialog> {
                       ),
                       const SizedBox(height: 18),
                       TextFormField(
+                        style: AppType.body.style(context),
                         controller: _text,
                         minLines: 4,
                         maxLines: 8,

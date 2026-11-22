@@ -1,10 +1,10 @@
-import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import 'package:flutter/material.dart';
 import '../../models/interview_analysis_contract.dart';
 import '../../services/media/interview_media_route_observer.dart';
 import '../../services/recruiter_observation_controller.dart';
 import '../../widgets/recruiter_observation_panel.dart';
+import '../../widgets/live_monitor.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/role_guard.dart';
 
@@ -54,6 +54,16 @@ class _ObservationBody extends StatefulWidget {
 class _ObservationBodyState extends State<_ObservationBody>
     with WidgetsBindingObserver, RouteAware {
   late final RecruiterObservationController _controller;
+  bool _visible = true;
+  void _visibility(bool visible) {
+    if (mounted && _visible != visible) setState(() => _visible = visible);
+    if (visible) {
+      _controller.start();
+    } else {
+      _controller.pause();
+    }
+  }
+
   ModalRoute<dynamic>? _route;
   @override
   void initState() {
@@ -74,9 +84,9 @@ class _ObservationBodyState extends State<_ObservationBody>
   }
 
   @override
-  void didPushNext() => _controller.pause();
+  void didPushNext() => _visibility(false);
   @override
-  void didPopNext() => _controller.start();
+  void didPopNext() => _visibility(true);
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if ([
@@ -84,10 +94,10 @@ class _ObservationBodyState extends State<_ObservationBody>
       AppLifecycleState.paused,
       AppLifecycleState.detached,
     ].contains(state)) {
-      _controller.pause();
+      _visibility(false);
     } else if (state == AppLifecycleState.resumed &&
         _route?.isCurrent == true) {
-      _controller.start();
+      _visibility(true);
     }
   }
 
@@ -107,6 +117,8 @@ class _ObservationBodyState extends State<_ObservationBody>
         'Interview ${widget.target.identity.interviewId} · Session ${widget.target.identity.sessionId}',
       ),
       Text('Application ${widget.target.applicationId}'),
+      if (liveMonitorEnabled && _visible)
+        LiveMonitor(sessionId: widget.target.identity.sessionId),
       RecruiterObservationPanel(controller: _controller),
     ],
   );

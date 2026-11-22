@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -308,7 +309,7 @@ class _GlobalSearchDialogState extends State<GlobalSearchDialog> {
                       _choose(_jobRoute(_jobs.first));
                     }
                   },
-                  style: TextStyle(color: _ink, fontSize: 13),
+                  style: AppType.body.style(context, color: _ink),
                   decoration: InputDecoration(
                     hintText: 'Search pages and jobs…',
                     hintStyle: TextStyle(color: _muted),
@@ -408,14 +409,7 @@ class _GlobalSearchDialogState extends State<GlobalSearchDialog> {
 
   Widget _section(String label) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-    child: Text(
-      label,
-      style: TextStyle(
-        color: _muted,
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-      ),
-    ),
+    child: Text(label, style: AppType.caption.style(context, color: _muted)),
   );
 
   Widget _result(String title, String subtitle, IconData icon, String route) =>
@@ -424,13 +418,13 @@ class _GlobalSearchDialogState extends State<GlobalSearchDialog> {
         leading: Icon(icon, color: _accent, size: 20),
         title: Text(
           title,
-          style: TextStyle(color: _ink, fontSize: 13),
+          style: AppType.caption.style(context, color: _ink),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
           subtitle,
-          style: TextStyle(color: _muted, fontSize: 11),
+          style: AppType.caption.style(context, color: _muted),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),

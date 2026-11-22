@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 import '../services/media/interview_media_route_observer.dart';
 import '../services/publisher/candidate_publisher_controller.dart';
@@ -75,10 +76,7 @@ class _CandidatePublisherPanelState extends State<CandidatePublisherPanel>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Camera frame transport',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+              Text('Camera frame transport', style: AppType.h4.style(context)),
               const SizedBox(height: 8),
               Semantics(liveRegion: true, child: Text(publisher.notice)),
               const SizedBox(height: 8),

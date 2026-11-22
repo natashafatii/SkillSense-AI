@@ -1,5 +1,7 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -14,8 +16,6 @@ import '../../models/application.dart';
 import '../../models/interview.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/recruiter_button_style.dart';
-import '../../widgets/page_heading_style.dart';
-import '../../widgets/recruiter_side_nav.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import '../../widgets/applicant_avatar_image.dart';
 import '../application_screening_screen.dart';
@@ -35,17 +35,20 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
   List<Job> _jobs = const [];
   List<Application> _applications = const [];
   List<Interview> _interviews = const [];
-  bool _loadingDashboard = true;
+  bool _loadingJobs = true;
   bool _loadingApplications = true;
   bool _loadingInterviews = true;
   bool _refreshingDashboard = false;
-  String? _dashboardError;
+  String? _jobsError;
   String? _applicationsError;
   String? _interviewsError;
   Timer? _refreshTimer;
   bool _initialRefreshStarted = false;
+  bool _legacyApplications = false;
+  bool _legacyInterviews = false;
   bool _jobsNotFound = false;
   bool _interviewsNotFound = false;
+  Map<String, Application> _applicationsById = const {};
   ModalRoute<dynamic>? _route;
 
   bool get _hasData => _jobs.isNotEmpty || _applications.isNotEmpty;
@@ -62,11 +65,14 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     }).toList()..sort((a, b) => a.scheduledAt!.compareTo(b.scheduledAt!));
   }
 
-  int get _thisWeekApplications => _applications.where((application) {
-    final date = application.createdAt.toLocal();
-    return !date.isAfter(DateTime.now()) &&
-        !date.isBefore(DateTime.now().subtract(const Duration(days: 7)));
-  }).length;
+  int get _thisWeekApplications {
+    final now = DateTime.now();
+    final start = now.subtract(const Duration(days: 7));
+    return _applications
+        .takeWhile((application) => !application.createdAt.isBefore(start))
+        .where((application) => !application.createdAt.isAfter(now))
+        .length;
+  }
 
   String _pipelineStage(Application application) =>
       switch ((application.rawStatus ?? application.status.value)
@@ -80,20 +86,28 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
       };
 
   Future<({List<Application> applications, String? error})>
-  _loadAllApplications(List<Job> jobs) async {
+  _loadLegacyApplications(List<Job> jobs) async {
     final all = <Application>[];
     final failures = <String>[];
-    for (final job in jobs) {
-      if (!mounted || _route?.isCurrent != true) break;
-      try {
-        all.addAll(await ApplicationService.listAllForJob(job.id));
-      } catch (error) {
-        debugPrint(
-          'Command Deck applications for job ${job.id} failed: $error',
-        );
-        failures.add(job.title);
+    final remaining = jobs.iterator;
+
+    Future<void> loadJobs() async {
+      while (mounted && remaining.moveNext()) {
+        final job = remaining.current;
+        try {
+          all.addAll(
+            await ApplicationService.listAllForJob(job.id, pageSize: 100),
+          );
+        } catch (error) {
+          debugPrint(
+            'Command Deck applications for job ${job.id} failed: $error',
+          );
+          failures.add(job.title);
+        }
       }
     }
+
+    await Future.wait(List.generate(4, (_) => loadJobs()));
     return (
       applications: all,
       error: failures.isEmpty
@@ -102,91 +116,133 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     );
   }
 
-  Future<void> _refreshDashboard() async {
-    if (_refreshingDashboard ||
-        _jobsNotFound ||
-        !mounted ||
-        _route?.isCurrent != true) {
-      return;
-    }
-    _refreshingDashboard = true;
+  Future<List<Job>?> _refreshJobs() async {
+    if (_jobsNotFound) return _jobs.isEmpty ? null : _jobs;
     try {
-      final jobs = await JobService.listAllJobs();
-      if (!mounted || _route?.isCurrent != true) {
-        return;
+      final jobs = await JobService.listAllJobs(pageSize: 100);
+      if (mounted) {
+        setState(() {
+          _jobs = jobs;
+          _loadingJobs = false;
+          _jobsError = null;
+        });
       }
-      setState(() {
-        _jobs = jobs;
-        _loadingDashboard = false;
-        _dashboardError = null;
-      });
-      final loaded = await _loadAllApplications(jobs);
-      if (!mounted || _route?.isCurrent != true) {
-        return;
+      return jobs;
+    } catch (error) {
+      debugPrint('Command Deck jobs request failed: $error');
+      _jobsNotFound = error is ApiException && error.statusCode == 404;
+      if (mounted) {
+        setState(() {
+          _jobsError = error.toString();
+          _loadingJobs = false;
+        });
       }
+      return null;
+    }
+  }
+
+  Future<({List<Application> applications, String? error})> _loadApplications(
+    Future<List<Job>?> jobs,
+  ) async {
+    if (!_legacyApplications) {
+      try {
+        return (
+          applications: await ApplicationService.listCommandDeck(),
+          error: null,
+        );
+      } on DioException catch (error) {
+        if (error.response?.statusCode != 404) rethrow;
+        _legacyApplications = true;
+      }
+    }
+    final roles = await jobs;
+    if (roles == null) throw StateError('Roles could not be loaded.');
+    return _loadLegacyApplications(roles);
+  }
+
+  Future<void> _refreshApplications(Future<List<Job>?> jobs) async {
+    try {
+      final loaded = await _loadApplications(jobs);
+      if (!mounted) return;
+      final applications = loaded.applications
+        ..sort((a, b) {
+          final dateOrder = b.createdAt.compareTo(a.createdAt);
+          return dateOrder == 0 ? a.id.compareTo(b.id) : dateOrder;
+        });
+      final byId = {for (final app in applications) app.id: app};
       setState(() {
-        _applications = loaded.applications;
+        _applications = applications;
+        _applicationsById = byId;
         _applicationsError = loaded.error;
         _loadingApplications = false;
       });
-      if (jobs.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _interviews = const [];
-            _interviewsError = null;
-            _loadingInterviews = false;
-          });
-        }
-        return;
-      }
-      if (_interviewsNotFound) return;
-      try {
-        final interviews = await InterviewService.listAll();
-        if (mounted) {
-          setState(() {
-            _interviews = interviews;
-            _interviewsError = null;
-            _loadingInterviews = false;
-          });
-        }
-      } catch (error) {
-        if (error is ApiException && error.statusCode == 404) {
-          if (!_interviewsNotFound) {
-            debugPrint(
-              'Command Deck interviews endpoint returned 404; stopping refreshes.',
-            );
-          }
-          _interviewsNotFound = true;
-        } else {
-          debugPrint('Command Deck interviews request failed: $error');
-        }
-        if (mounted) {
-          setState(() {
-            _interviewsError = error.toString();
-            _loadingInterviews = false;
-          });
-        }
-      }
     } catch (error) {
-      if (error is ApiException && error.statusCode == 404) {
-        if (!_jobsNotFound) {
-          debugPrint(
-            'Command Deck jobs endpoint returned 404; stopping refreshes.',
-          );
-        }
-        _jobsNotFound = true;
-      } else {
-        debugPrint('Command Deck jobs request failed: $error');
-      }
+      debugPrint('Command Deck applications request failed: $error');
       if (mounted) {
         setState(() {
-          _dashboardError = error.toString();
-          _loadingDashboard = false;
+          _applicationsError = 'Could not load applicant data.';
+          _loadingApplications = false;
         });
       }
+    }
+  }
+
+  Future<List<Interview>> _loadInterviews(DateTime start) async {
+    if (!_legacyInterviews) {
+      try {
+        return await InterviewService.listCommandDeck(scheduledFrom: start);
+      } on DioException catch (error) {
+        if (error.response?.statusCode != 404) rethrow;
+        _legacyInterviews = true;
+      }
+    }
+    return InterviewService.listAll();
+  }
+
+  Future<void> _refreshInterviews() async {
+    if (_interviewsNotFound) return;
+    try {
+      final interviews = await _loadInterviews(
+        DateUtils.dateOnly(DateTime.now()),
+      );
+      if (mounted) {
+        setState(() {
+          _interviews = interviews;
+          _interviewsError = null;
+          _loadingInterviews = false;
+        });
+      }
+    } catch (error) {
+      debugPrint('Command Deck interviews request failed: $error');
+      _interviewsNotFound = error is ApiException && error.statusCode == 404;
+      if (mounted) {
+        setState(() {
+          _interviewsError = error.toString();
+          _loadingInterviews = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshDashboard() async {
+    if (_refreshingDashboard || !mounted || _route?.isCurrent != true) return;
+    _refreshingDashboard = true;
+    try {
+      final jobs = _refreshJobs();
+      await Future.wait<void>([
+        jobs.then<void>((_) {}),
+        _refreshApplications(jobs),
+        _refreshInterviews(),
+      ]);
     } finally {
       _refreshingDashboard = false;
     }
+  }
+
+  void _retryDashboard() {
+    _jobsNotFound = false;
+    _interviewsNotFound = false;
+    unawaited(_refreshDashboard());
   }
 
   @override
@@ -217,7 +273,8 @@ class _CommandDeckScreenState extends State<CommandDeckScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted && _route?.isCurrent == true) {
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle == null || lifecycle == AppLifecycleState.resumed) {
         _refreshDashboard();
       }
     });

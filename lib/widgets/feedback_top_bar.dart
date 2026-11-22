@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'candidate_feedback_visuals.dart';
@@ -88,9 +89,7 @@ class FeedbackTopBar extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'INTERVIEW FEEDBACK',
-                      style: p
-                          .text(size: 14, weight: FontWeight.w700)
-                          .copyWith(letterSpacing: 1.68),
+                      style: p.caption(uppercase: true),
                     ),
                   ),
                   if (MediaQuery.sizeOf(context).width > 900 &&
@@ -102,12 +101,12 @@ class FeedbackTopBar extends StatelessWidget {
                         controller: searchController,
                         focusNode: searchFocus,
                         onChanged: onSearchChanged,
-                        style: p.text(weight: FontWeight.w400),
+                        style: p.text(type: AppType.body),
                         decoration: InputDecoration(
                           hintText: 'Search or jump to…',
                           hintStyle: p.text(
+                            type: AppType.caption,
                             color: p.meta,
-                            weight: FontWeight.w400,
                           ),
                           prefixIcon: Icon(
                             Icons.search_rounded,

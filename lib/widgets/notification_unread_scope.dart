@@ -16,13 +16,16 @@ class NotificationUnreadScope extends StatefulWidget {
 class _NotificationUnreadScopeState extends State<NotificationUnreadScope>
     with WidgetsBindingObserver {
   Timer? _timer;
+  StreamSubscription<bool>? _authChanges;
   bool _busy = false, _active = true;
   @override
   void initState() {
     super.initState();
     NotificationService.observeSession();
     WidgetsBinding.instance.addObserver(this);
-    AuthService.currentUserNotifier.addListener(_refresh);
+    _authChanges = AuthService.authStateChanges.listen((authenticated) {
+      if (authenticated) _refresh();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
   }
@@ -60,7 +63,7 @@ class _NotificationUnreadScopeState extends State<NotificationUnreadScope>
   @override
   void dispose() {
     _timer?.cancel();
-    AuthService.currentUserNotifier.removeListener(_refresh);
+    _authChanges?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

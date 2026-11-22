@@ -53,14 +53,14 @@ Widget _person(
       title,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: c.text(size, weight: FontWeight.w600, height: 1.4),
+      style: c.text(AppType.h4),
     ),
     if (subtitle.isNotEmpty)
       Text(
         subtitle,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: c.text(12.5, color: c.muted, height: 1.4),
+        style: c.text(AppType.caption, color: c.muted),
       ),
   ],
 );
@@ -106,14 +106,7 @@ Widget _button(
         children: [
           if (glyph != null && !trailing) ...[glyph, const SizedBox(width: 8)],
           Flexible(
-            child: Text(
-              label,
-              style: c.text(
-                14,
-                color: ink,
-                weight: white ? FontWeight.w600 : FontWeight.w700,
-              ),
-            ),
+            child: Text(label, style: c.text(AppType.button, color: ink)),
           ),
           if (glyph != null && trailing) ...[const SizedBox(width: 8), glyph],
         ],
@@ -133,7 +126,7 @@ Widget _pill(_DeckColors c, String label, Color ink, Color fill) => Container(
     label,
     maxLines: 1,
     overflow: TextOverflow.ellipsis,
-    style: c.text(12.5, color: ink, weight: FontWeight.w600, height: 1.5),
+    style: c.text(AppType.caption, color: ink),
   ),
 );
 
@@ -145,9 +138,8 @@ Widget _avatar(
   String? image,
 }) {
   final style = c.text(
-    hero ? 11 : 12,
+    AppType.caption,
     color: hero ? const Color(0xFF2743A8) : c.blueInk,
-    weight: FontWeight.w600,
   );
   return Container(
     width: size,
@@ -182,7 +174,8 @@ Widget _iconTile(String icon, Color fill, Color ink, {double size = 38}) =>
     );
 
 class _DeckColors {
-  const _DeckColors(this.dark);
+  const _DeckColors(this.dark, this.typeStep);
+  final TypeStep typeStep;
   final bool dark;
 
   Color get canvas => dark ? const Color(0xFF070B14) : const Color(0xFFF6F8FE);
@@ -250,23 +243,8 @@ class _DeckColors {
           ),
         ];
 
-  TextStyle text(
-    double size, {
-    Color? color,
-    FontWeight? weight,
-    double? tracking,
-    double height = 1.55,
-  }) => TextStyle(
-    fontFamily: 'Inter',
-    fontSize: size,
-    color: color ?? ink,
-    fontWeight: weight ?? FontWeight.w400,
-    fontVariations: [
-      FontVariation.weight((weight ?? FontWeight.w400).value.toDouble()),
-    ],
-    letterSpacing: tracking,
-    height: height,
-  );
+  TextStyle text(AppType type, {Color? color}) =>
+      type.at(typeStep, color: color ?? ink);
 }
 
 class _DeckBackdrop extends CustomPainter {

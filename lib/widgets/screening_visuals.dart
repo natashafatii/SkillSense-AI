@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -29,38 +30,28 @@ abstract final class ScreeningStyle {
       MediaQuery.sizeOf(context).width <= 640 ? 14 : 20;
 
   static TextStyle text(
-    double size, {
-    int weight = 400,
+    BuildContext context,
+    AppType type, {
     Color color = ink,
-    double height = 1.5,
-    double spacing = 0,
-  }) => TextStyle(
-    fontFamily: 'Plus Jakarta Sans',
-    fontSize: size,
-    fontVariations: [FontVariation.weight(weight.toDouble())],
-    fontFeatures: const [FontFeature.tabularFigures()],
-    fontWeight: FontWeight.values[weight ~/ 100 - 1],
-    letterSpacing: spacing,
-    height: height,
-    color: color,
-  );
+  }) => type.style(context, color: color);
 
-  static TextStyle title([double size = 16]) =>
-      text(size, weight: 700, height: 1.25, spacing: -.02 * size);
+  static TextStyle title(BuildContext context, [AppType type = AppType.h3]) =>
+      text(context, type);
 
-  static InputDecoration field({String? hint}) => InputDecoration(
-    hintText: hint,
-    hintStyle: text(12.5, color: muted),
-    filled: true,
-    fillColor: Colors.white,
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: line),
-    ),
-  );
+  static InputDecoration field(BuildContext context, {String? hint}) =>
+      InputDecoration(
+        hintText: hint,
+        hintStyle: text(context, AppType.caption, color: muted),
+        filled: true,
+        fillColor: Colors.white,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: line),
+        ),
+      );
 }
 
 enum ScreeningGlyph {
@@ -197,12 +188,16 @@ class ScreeningHeading extends StatelessWidget {
           final heading = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: ScreeningStyle.title()),
+              Text(title, style: ScreeningStyle.title(context)),
               if (caption.isNotEmpty) ...[
                 const SizedBox(height: 3),
                 Text(
                   caption,
-                  style: ScreeningStyle.text(12, color: ScreeningStyle.muted),
+                  style: ScreeningStyle.text(
+                    context,
+                    AppType.caption,
+                    color: ScreeningStyle.muted,
+                  ),
                 ),
               ],
             ],
@@ -309,7 +304,11 @@ class ScreeningButton extends StatelessWidget {
                 vertical: 3,
               ),
               shape: RoundedRectangleBorder(borderRadius: radius),
-              textStyle: ScreeningStyle.text(12.5, weight: 600, color: color),
+              textStyle: ScreeningStyle.text(
+                context,
+                AppType.button,
+                color: color,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -372,8 +371,8 @@ class ScreeningDialog extends StatelessWidget {
       ),
       child: DefaultTextStyle(
         style: ScreeningStyle.text(
-          12.5,
-          height: 1.65,
+          context,
+          AppType.caption,
           color: ScreeningStyle.muted,
         ),
         child: Column(
@@ -384,7 +383,12 @@ class ScreeningDialog extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               child: Row(
                 children: [
-                  Expanded(child: Text(title, style: ScreeningStyle.title(15))),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: ScreeningStyle.title(context, AppType.h4),
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   ScreeningButton(
                     'Close',
@@ -449,27 +453,22 @@ class ScreeningCommandBar extends StatelessWidget {
                       Text(
                         'WORKSPACE',
                         style: ScreeningStyle.text(
-                          11,
-                          weight: 600,
+                          context,
+                          AppType.overline,
                           color: _muted,
-                          spacing: .88,
                         ),
                       ),
                       Text(
                         '/',
                         style: ScreeningStyle.text(
-                          11,
-                          weight: 600,
+                          context,
+                          AppType.caption,
                           color: _muted,
                         ),
                       ),
                       Text(
                         section.toUpperCase(),
-                        style: ScreeningStyle.text(
-                          11,
-                          weight: 700,
-                          spacing: .88,
-                        ),
+                        style: ScreeningStyle.text(context, AppType.overline),
                       ),
                     ],
                   ),
@@ -498,7 +497,11 @@ class ScreeningCommandBar extends StatelessWidget {
                           Expanded(
                             child: Text(
                               'Search or jump to...',
-                              style: ScreeningStyle.text(12.5, color: _muted),
+                              style: ScreeningStyle.text(
+                                context,
+                                AppType.caption,
+                                color: _muted,
+                              ),
                             ),
                           ),
                           Container(
@@ -514,9 +517,8 @@ class ScreeningCommandBar extends StatelessWidget {
                             child: Text(
                               '⌘K',
                               style: ScreeningStyle.text(
-                                12,
-                                weight: 600,
-                                height: 1.15,
+                                context,
+                                AppType.caption,
                                 color: _muted,
                               ),
                             ),
@@ -687,15 +689,21 @@ class _ScreeningSectionSearchState extends State<_ScreeningSectionSearch> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Find a section', style: ScreeningStyle.text(12.5, weight: 700)),
+        Text(
+          'Find a section',
+          style: ScreeningStyle.text(context, AppType.caption),
+        ),
         const SizedBox(height: 6),
         TextField(
           autofocus: true,
           onChanged: (value) =>
               setState(() => _query = value.trim().toLowerCase()),
           textInputAction: TextInputAction.search,
-          style: ScreeningStyle.text(12.5, weight: 500),
-          decoration: ScreeningStyle.field(hint: 'Search this application'),
+          style: ScreeningStyle.text(context, AppType.body),
+          decoration: ScreeningStyle.field(
+            context,
+            hint: 'Search this application',
+          ),
         ),
         if (matches.isEmpty) ...[
           const SizedBox(height: 8),

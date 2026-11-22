@@ -70,12 +70,17 @@ class _ReportAvatar extends StatelessWidget {
       borderRadius: BorderRadius.circular(size == 43 ? 12 : 9),
     ),
     child: label?.isNotEmpty == true
-        ? Text(
-            label!,
-            maxLines: 1,
-            style: _reportDisplay(
-              size == 43 ? 15 : 12,
-            ).copyWith(color: palette.accent),
+        ? Padding(
+            padding: const EdgeInsets.all(6),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label!,
+                maxLines: 1,
+                softWrap: false,
+                style: AppType.h3.style(context, color: palette.accent),
+              ),
+            ),
           )
         : _ReportGlyph(_ReportIcon.person, color: palette.accent),
   );
@@ -112,11 +117,7 @@ class _ReportCommandBar extends StatelessWidget {
     final theme = context
         .dependOnInheritedWidgetOfExactType<AppThemeScope>()
         ?.notifier;
-    final style = _reportDisplay(11).copyWith(
-      color: palette.muted,
-      fontWeight: FontWeight.w600,
-      letterSpacing: .825,
-    );
+    final style = AppType.overline.style(context, color: palette.muted);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: palette.rail,
@@ -247,7 +248,8 @@ class _ReportCommandBar extends StatelessWidget {
                                     ? palette.soft
                                     : null,
                                 textStyle: _reportDisplay(
-                                  11,
+                                  context,
+                                  AppType.button,
                                 ).copyWith(fontWeight: FontWeight.w600),
                                 padding: EdgeInsets.symmetric(
                                   horizontal: compact ? 5 : 8,

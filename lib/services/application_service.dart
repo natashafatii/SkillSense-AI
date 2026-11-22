@@ -12,6 +12,29 @@ import 'api_exception.dart';
 class ApplicationService {
   ApplicationService._();
 
+  /// The recruiter dashboard needs applicant names, stages and scores only.
+  static Future<List<Application>> listCommandDeck({Dio? client}) async {
+    final dio = client ?? await ApiClient.getInstance();
+    final applications = <Application>[];
+    try {
+      for (var page = 1; ; page++) {
+        final response = await dio.get<Map<String, dynamic>>(
+          '/applications/command-deck/',
+          queryParameters: {'page': page, 'page_size': 100},
+        );
+        final result = PaginatedResponse.fromJson(
+          response.data!,
+          Application.fromJson,
+        );
+        applications.addAll(result.results);
+        if (!result.hasNext) return applications;
+      }
+    } on DioException catch (error) {
+      if (applications.isEmpty && error.response?.statusCode == 404) rethrow;
+      throw ApiException.fromDioException(error);
+    }
+  }
+
   /// Uses the paginated total without downloading every applicant for a role.
   static Future<int> countForJob(String jobId, {Dio? client}) async {
     if (jobId.trim().isEmpty) throw ArgumentError('Job ID is required.');
@@ -66,6 +89,7 @@ class ApplicationService {
     String jobId, {
     String? status,
     bool? eligibleForInterview,
+    int? pageSize,
     Dio? client,
   }) async {
     if (jobId.isEmpty) throw ArgumentError('Job ID is required.');
@@ -76,6 +100,7 @@ class ApplicationService {
         status: status,
         eligibleForInterview: eligibleForInterview,
         page: page,
+        pageSize: pageSize,
         client: client,
       );
       applications.addAll(forJob(result.results, jobId));

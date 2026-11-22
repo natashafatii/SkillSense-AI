@@ -5,6 +5,7 @@ import 'package:skillsense_ai/constants/app_colors.dart';
 import 'package:skillsense_ai/constants/env_config.dart';
 
 import 'models/job.dart';
+import 'theme/app_typography.dart';
 import 'models/interview_analysis_contract.dart';
 import 'services/app_theme_controller.dart';
 import 'services/media/interview_media_route_observer.dart';
@@ -118,6 +119,7 @@ ThemeData _appTheme(Brightness brightness) {
     ),
     scaffoldBackgroundColor: dark ? tokens.bg : null,
     useMaterial3: true,
+    fontFamily: 'Inter',
     extensions: [tokens],
   );
 }
@@ -129,7 +131,9 @@ Widget _appBuilder(BuildContext context, Widget? child) {
       : SystemUiOverlayStyle.dark;
   return AnnotatedRegion<SystemUiOverlayStyle>(
     value: overlay.copyWith(statusBarColor: Colors.transparent),
-    child: mobileHomeIndicatorBuilder(context, child),
+    child: AppTypographyTheme(
+      child: mobileHomeIndicatorBuilder(context, child),
+    ),
   );
 }
 
@@ -174,29 +178,33 @@ class AuthInitializationFailure extends StatelessWidget {
                     Text(
                       'Unable to start authentication',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: context.themeForeground(const Color(0xFF0F172A)),
+                      style: AppType.h2.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.primary,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
                     Text(
                       message,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: context.themeForeground(const Color(0xFF475569)),
+                      style: AppType.bodySm.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
                     Text(
                       'Check the network connection, then reload this page.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: context.themeForeground(const Color(0xFF64748B)),
+                      style: AppType.caption.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                     ),
                   ],
@@ -210,7 +218,7 @@ class AuthInitializationFailure extends StatelessWidget {
   }
 }
 
-/// Global navigator key — used for programmatic navigation without BuildContext.
+/// Global navigator key â€” used for programmatic navigation without BuildContext.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class AppRouteObserver extends NavigatorObserver {
@@ -273,13 +281,10 @@ class SkillSenseApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Configure ApiClient token supplier dynamically from the auth service.
-    ApiClient.setTokenSupplier(() async {
-      try {
-        return await AuthService.getSessionToken();
-      } catch (_) {
-        return null;
-      }
-    });
+    ApiClient.setTokenSupplier(
+      AuthService.getSessionToken,
+      refresh: AuthService.refreshSessionToken,
+    );
 
     final adminLaunch =
         adminLocation(initialAdminRoute) ??

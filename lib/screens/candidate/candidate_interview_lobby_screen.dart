@@ -1,9 +1,11 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../../widgets/live_monitor.dart';
 
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -24,7 +26,6 @@ import '../../widgets/camera_device_selector.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/candidate_button_style.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/page_heading_style.dart';
 import 'candidate_interview_session_screen.dart';
 
 part 'candidate_interview_lobby_visuals.dart';
@@ -451,7 +452,7 @@ class _CandidateInterviewLobbyScreenState
             child: ColoredBox(
               color: Colors.transparent,
               child: DefaultTextStyle(
-                style: _lobbyText(14, color: colors.ink),
+                style: _lobbyText(context, AppType.bodySm, color: colors.ink),
                 child: _isLoading
                     ? Center(
                         child: CircularProgressIndicator(color: colors.accent),
@@ -502,7 +503,7 @@ class _CandidateInterviewLobbyScreenState
             Text(
               _loadError ?? 'No interview scheduled',
               textAlign: TextAlign.center,
-              style: _lobbyText(20, weight: FontWeight.w700),
+              style: _lobbyText(context, AppType.h3),
             ),
             if (_loadError == null) ...[
               const SizedBox(height: 8),
@@ -515,11 +516,13 @@ class _CandidateInterviewLobbyScreenState
             FilledButton(
               onPressed: () =>
                   Navigator.of(context).pushNamed('/candidate/applications'),
-              style: CandidateButtonStyle.primary(FilledButton.styleFrom(
-                backgroundColor: colors.accent,
-                foregroundColor: colors.onAccent,
-                shape: const StadiumBorder(),
-              )),
+              style: CandidateButtonStyle.primary(
+                FilledButton.styleFrom(
+                  backgroundColor: colors.accent,
+                  foregroundColor: colors.onAccent,
+                  shape: const StadiumBorder(),
+                ),
+              ),
               child: const Text('View applications'),
             ),
           ],
@@ -598,7 +601,7 @@ class _CandidateInterviewLobbyScreenState
           header: true,
           child: Text(
             'Ready for your interview?',
-            style: pageHeadingStyle(context),
+            style: context.text.headlineLarge,
           ),
         ),
         const SizedBox(height: 2),
@@ -659,25 +662,23 @@ class _CandidateInterviewLobbyScreenState
             Text(
               'YOUR INTERVIEW',
               style: _lobbyText(
-                12,
+                context,
+                AppType.overline,
                 color: colors.accent,
-                weight: FontWeight.w700,
-                spacing: .96,
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              role,
-              style: _lobbyText(
-                18,
-                weight: FontWeight.w800,
-                spacing: -.3,
-                height: 1.25,
-              ),
-            ),
+            Text(role, style: _lobbyText(context, AppType.h3)),
             if (detail.isNotEmpty) ...[
               const SizedBox(height: 1),
-              Text(detail, style: _lobbyText(13.5, color: colors.secondary)),
+              Text(
+                detail,
+                style: _lobbyText(
+                  context,
+                  AppType.bodySm,
+                  color: colors.secondary,
+                ),
+              ),
             ],
             const SizedBox(height: 12),
             CustomPaint(
@@ -697,7 +698,7 @@ class _CandidateInterviewLobbyScreenState
                         scheduledAt == null
                             ? 'Time to be confirmed'
                             : '${interview.isFlexible ? 'Start by ' : ''}${_formatDate(scheduledAt)}',
-                        style: _lobbyText(14.5, weight: FontWeight.w700),
+                        style: _lobbyText(context, AppType.numeric),
                       ),
                       if (scheduledAt != null)
                         Text(
@@ -705,9 +706,9 @@ class _CandidateInterviewLobbyScreenState
                               ? 'Pakistan Standard Time'
                               : 'Local time (${_utcOffset(scheduledAt)})',
                           style: _lobbyText(
-                            12.5,
+                            context,
+                            AppType.caption,
                             color: colors.muted,
-                            weight: FontWeight.w600,
                           ),
                         ),
                     ],
@@ -724,20 +725,15 @@ class _CandidateInterviewLobbyScreenState
                             TextSpan(
                               text: '  $period',
                               style: _lobbyText(
-                                14,
+                                context,
+                                AppType.bodySm,
                                 color: colors.secondary,
-                                weight: FontWeight.w700,
                               ),
                             ),
                         ],
                       ),
                       textAlign: TextAlign.end,
-                      style: _lobbyText(
-                        34,
-                        height: 1,
-                        weight: FontWeight.w800,
-                        spacing: -1.2,
-                      ),
+                      style: _lobbyText(context, AppType.h1),
                     ),
                   ),
                 ],
@@ -760,9 +756,9 @@ class _CandidateInterviewLobbyScreenState
                           ? (interview.isFlexible ? 'Deadline' : 'Starts in')
                           : 'Status',
                       style: _lobbyText(
-                        13,
+                        context,
+                        AppType.badge,
                         color: colors.secondary,
-                        weight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -784,9 +780,9 @@ class _CandidateInterviewLobbyScreenState
                             },
                       textAlign: TextAlign.end,
                       style: _lobbyText(
-                        13,
+                        context,
+                        AppType.numeric,
                         color: colors.accent,
-                        weight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -884,15 +880,19 @@ class _CandidateInterviewLobbyScreenState
                     '${(camera ? 1 : 0) + (mic ? 1 : 0)} of 2 ready',
                     textAlign: TextAlign.end,
                     style: _lobbyText(
-                      13,
+                      context,
+                      AppType.caption,
                       color: colors.muted,
-                      weight: FontWeight.w600,
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 4),
+            if (liveMonitorEnabled)
+              const Text(
+                'During the interview your assigned recruiter may watch your camera and listen to you and the AI interviewer.',
+              ),
             _checkRow(colors, 'Camera', 'Your face is clearly visible', camera),
             _checkRow(
               colors,
@@ -905,31 +905,29 @@ class _CandidateInterviewLobbyScreenState
               key: const ValueKey('start-interview-now'),
               onPressed: enabled ? _startFromLobby : null,
               style: CandidateButtonStyle.primary(
-                  FilledButton.styleFrom(
-                    backgroundColor: colors.accent,
-                    disabledBackgroundColor: colors.accent.withValues(
-                      alpha: .5,
-                    ),
-                    foregroundColor: colors.onAccent,
-                    disabledForegroundColor: colors.onAccent.withValues(
-                      alpha: .5,
-                    ),
-                    minimumSize: const Size(0, 50),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 8,
-                    ),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: const StadiumBorder(),
-                  ).copyWith(
-                    backgroundColor: WidgetStateProperty.resolveWith(
-                      (states) => !enabled
-                          ? colors.accent.withValues(alpha: .5)
-                          : states.contains(WidgetState.hovered)
-                          ? colors.accentHover
-                          : colors.accent,
-                    ),
+                FilledButton.styleFrom(
+                  backgroundColor: colors.accent,
+                  disabledBackgroundColor: colors.accent.withValues(alpha: .5),
+                  foregroundColor: colors.onAccent,
+                  disabledForegroundColor: colors.onAccent.withValues(
+                    alpha: .5,
                   ),
+                  minimumSize: const Size(0, 50),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: const StadiumBorder(),
+                ).copyWith(
+                  backgroundColor: WidgetStateProperty.resolveWith(
+                    (states) => !enabled
+                        ? colors.accent.withValues(alpha: .5)
+                        : states.contains(WidgetState.hovered)
+                        ? colors.accentHover
+                        : colors.accent,
+                  ),
+                ),
               ),
               child: Row(
                 children: [
@@ -940,7 +938,7 @@ class _CandidateInterviewLobbyScreenState
                           : _canResume
                           ? 'Resume interview'
                           : 'Join interview',
-                      style: _lobbyText(15.5, weight: FontWeight.w700),
+                      style: _lobbyText(context, AppType.button),
                     ),
                   ),
                   if (_starting)
@@ -955,7 +953,7 @@ class _CandidateInterviewLobbyScreenState
                     ExcludeSemantics(
                       child: Text(
                         '→',
-                        style: _lobbyText(15.5, weight: FontWeight.w700),
+                        style: _lobbyText(context, AppType.button),
                       ),
                     ),
                 ],
@@ -967,14 +965,25 @@ class _CandidateInterviewLobbyScreenState
               child: Text(
                 note,
                 textAlign: TextAlign.center,
-                style: _lobbyText(13, color: colors.secondary),
+                style: _lobbyText(
+                  context,
+                  AppType.caption,
+                  color: colors.secondary,
+                ),
               ),
             ),
             if (_startError case final error?) ...[
               const SizedBox(height: 8),
               Semantics(
                 liveRegion: true,
-                child: Text(error, style: _lobbyText(13, color: colors.error)),
+                child: Text(
+                  error,
+                  style: _lobbyText(
+                    context,
+                    AppType.caption,
+                    color: colors.error,
+                  ),
+                ),
               ),
             ],
             if (_allowImmediateTesting &&
@@ -1037,13 +1046,13 @@ class _CandidateInterviewLobbyScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: _lobbyText(15, weight: FontWeight.w700)),
+                Text(title, style: _lobbyText(context, AppType.h4)),
                 Text(
                   detail,
                   style: _lobbyText(
-                    13,
+                    context,
+                    AppType.caption,
                     color: colors.secondary,
-                    weight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -1056,9 +1065,9 @@ class _CandidateInterviewLobbyScreenState
               ready ? 'Ready' : 'Not checked',
               textAlign: TextAlign.end,
               style: _lobbyText(
-                12.5,
+                context,
+                AppType.caption,
                 color: ready ? colors.accent : colors.muted,
-                weight: FontWeight.w600,
               ),
             ),
           ),
@@ -1134,11 +1143,15 @@ class _CandidateInterviewLobbyScreenState
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: _lobbyText(14, weight: FontWeight.w700)),
+                Text(title, style: _lobbyText(context, AppType.h4)),
                 const SizedBox(height: 1),
                 Text(
                   detail,
-                  style: _lobbyText(13, color: colors.secondary, height: 1.4),
+                  style: _lobbyText(
+                    context,
+                    AppType.caption,
+                    color: colors.secondary,
+                  ),
                 ),
               ],
             ),
@@ -1168,6 +1181,6 @@ class _CandidateInterviewLobbyScreenState
 
   Widget _sectionTitle(String title) => Semantics(
     header: true,
-    child: Text(title, style: _lobbyText(14.5, weight: FontWeight.w700)),
+    child: Text(title, style: _lobbyText(context, AppType.h4)),
   );
 }

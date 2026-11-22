@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'recruiter_mobile_nav.dart';
@@ -22,6 +23,7 @@ class RecruiterScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.sizeOf(context).width < 900;
+    final isProfile = currentRoute == '/recruiter/profile';
     final themedBody = RecruiterButtonTheme(child: body);
     if (isMobile) {
       return Scaffold(
@@ -32,7 +34,7 @@ class RecruiterScaffold extends StatelessWidget {
             children: [const RecruiterGradientBackground(), themedBody],
           ),
         ),
-        bottomNavigationBar: currentRoute == '/recruiter/profile'
+        bottomNavigationBar: isProfile
             ? RecruiterMobileNav(currentRoute: currentRoute)
             : null,
       );
@@ -40,23 +42,15 @@ class RecruiterScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: SafeArea(
-        child: Row(
-          children: [
-            RecruiterSideNav(
-              currentRoute: currentRoute,
-              selectedRoute: selectedRoute,
-              glowSelected: glowSelected,
-              expandedWidth: currentRoute == '/recruiter/profile' ? 244 : 272,
-            ),
-            Expanded(
-              child: ClipRect(
-                key: const Key('recruiter-main-canvas'),
-                child: Stack(
-                  children: [const RecruiterGradientBackground(), themedBody],
-                ),
-              ),
-            ),
-          ],
+        child: RecruiterSideNav(
+          currentRoute: currentRoute,
+          selectedRoute: selectedRoute,
+          glowSelected: glowSelected,
+          expandedWidth: context.sidebarWidth,
+          workspace: Stack(
+            key: const Key('recruiter-main-canvas'),
+            children: [const RecruiterGradientBackground(), themedBody],
+          ),
         ),
       ),
     );

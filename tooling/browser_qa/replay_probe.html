@@ -1,0 +1,55 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Interview replay recording probe</title>
+<script src="/interview_replay.js"></script>
+<script>
+(async () => {
+  const check = (condition) => { if (!condition) throw new Error('assertion failed'); };
+  let timer, stream;
+  try {
+    check(skillSenseReplaySupported());
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 180;
+    const context = canvas.getContext('2d');
+    let frame = 0;
+    timer = setInterval(() => {
+      context.fillStyle = frame++ % 2 ? 'blue' : 'orange';
+      context.fillRect(0, 0, 320, 180);
+    }, 40);
+    stream = canvas.captureStream(24);
+    const [track] = stream.getVideoTracks();
+    async function segment(interrupted) {
+      let recorder;
+      const sealed = new Promise(resolve => {
+        recorder = skillSenseStartReplay(track, value => resolve(JSON.parse(value)),
+          async (sequence, elapsed, sha, bytes) => {
+            const response = await fetch('/chunk', {
+              method: 'PUT',
+              headers: {'X-Nonce': recorder.nonce, 'X-Sequence': sequence,
+                        'X-Elapsed': elapsed, 'X-Sha256': sha,
+                        'X-Interrupted': interrupted ? 'yes' : 'no'},
+              body: bytes
+            });
+            return response.ok;
+          });
+      });
+      await new Promise(resolve => setTimeout(resolve, 4700));
+      recorder.stop(true);
+      return {nonce: recorder.nonce, mime: recorder.mime, result: await sealed};
+    }
+    const first = await segment(false);
+    check(first.result.complete && first.result.count >= 2 && first.result.elapsed_ms >= 4500);
+    check(track.readyState === 'live');
+    const second = await segment(true);
+    check(first.nonce !== second.nonce && !second.result.complete && second.result.count === 1);
+    check(track.readyState === 'live');
+    await fetch('/result', {method: 'POST', body: 'passed ' + first.mime});
+  } catch (_) {
+    await fetch('/result', {method: 'POST', body: 'failed'});
+  } finally {
+    clearInterval(timer);
+    stream?.getTracks().forEach(track => track.stop());
+  }
+})();
+</script>

@@ -118,8 +118,8 @@ class _RequirementEvidenceState extends State<_RequirementEvidence> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   textStyle: ScreeningStyle.text(
-                                    12,
-                                    weight: 600,
+                                    context,
+                                    AppType.button,
                                   ),
                                 ),
                                 child: Text(label),
@@ -129,9 +129,9 @@ class _RequirementEvidenceState extends State<_RequirementEvidence> {
                       ),
                     );
                     final count = _copy(
+                      context,
                       '${criteria.length} requirements',
-                      size: 12,
-                      weight: 600,
+                      type: AppType.caption,
                     );
                     if (size.maxWidth < 390) {
                       return Wrap(
@@ -160,7 +160,7 @@ class _RequirementEvidenceState extends State<_RequirementEvidence> {
                           criteria.isEmpty
                               ? 'Evidence is not available yet'
                               : 'No requirements in this view',
-                          style: ScreeningStyle.title(15),
+                          style: ScreeningStyle.title(context, AppType.h4),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 3),
@@ -170,7 +170,11 @@ class _RequirementEvidenceState extends State<_RequirementEvidence> {
                               : widget.failed
                               ? 'Review the processing details for recovery guidance.'
                               : 'Refresh the application to check for completed screening.',
-                          style: ScreeningStyle.text(13.5, color: _muted),
+                          style: ScreeningStyle.text(
+                            context,
+                            AppType.bodySm,
+                            color: _muted,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -233,9 +237,9 @@ class _RequirementEvidenceState extends State<_RequirementEvidence> {
                         child: Semantics(
                           liveRegion: true,
                           child: _copy(
+                            context,
                             '${page * _pageSize + 1}–${page * _pageSize + visible.length} of ${matches.length}',
-                            size: 12,
-                            weight: 600,
+                            type: AppType.caption,
                           ),
                         ),
                       ),
@@ -295,23 +299,24 @@ class _RequirementCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _copy(
+                  context,
                   criterion.requirement,
-                  size: 13,
-                  weight: 700,
                   color: ScreeningStyle.ink,
+                  type: AppType.caption,
                 ),
                 _copy(
+                  context,
                   criterion.evidence.trim().isEmpty
                       ? 'No evidence found in the resume'
                       : 'Resume evidence: “${criterion.evidence}”',
-                  size: 11.5,
+                  type: AppType.caption,
                 ),
               ],
             ),
           ),
           const SizedBox(width: 10),
           if (ok)
-            _copy('Verified', size: 11.5, weight: 700, color: _green)
+            _copy(context, 'Verified', color: _green, type: AppType.caption)
           else
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -319,7 +324,7 @@ class _RequirementCard extends StatelessWidget {
                 color: ScreeningStyle.review,
                 borderRadius: BorderRadius.circular(99),
               ),
-              child: _copy('Needs review', size: 11.5, weight: 700),
+              child: _copy(context, 'Needs review', type: AppType.caption),
             ),
         ],
       ),
@@ -489,21 +494,21 @@ class _ScreeningHistory extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _copy(
+                              context,
                               title,
-                              size: 13,
-                              weight: 700,
                               color: ScreeningStyle.ink,
+                              type: AppType.caption,
                             ),
                             if (reason.isNotEmpty) ...[
                               const SizedBox(height: 2),
-                              _copy(reason, size: 12),
+                              _copy(context, reason, type: AppType.caption),
                             ],
                             const SizedBox(height: 6),
                             _copy(
+                              context,
                               metadata,
-                              size: 11.5,
-                              weight: 600,
                               color: const Color(0xff5b6a86),
+                              type: AppType.caption,
                             ),
                           ],
                         ),

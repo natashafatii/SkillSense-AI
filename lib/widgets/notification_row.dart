@@ -1,5 +1,5 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../constants/adaptive_colors.dart';
 import '../models/app_notification.dart';
@@ -99,14 +99,11 @@ class NotificationRow extends StatelessWidget {
                           children: [
                             Text(
                               item.displayType,
-                              style: GoogleFonts.inter(
+                              style: AppType.bodySm.style(
+                                context,
                                 color: context.themeForeground(
-                                  const Color(0xFF0F172A),
+                                  TypographyColors.primary,
                                 ),
-                                fontSize: 14,
-                                fontWeight: item.isRead
-                                    ? FontWeight.w600
-                                    : FontWeight.w700,
                               ),
                             ),
                             if (subject.isNotEmpty)
@@ -114,10 +111,9 @@ class NotificationRow extends StatelessWidget {
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
                                   subject,
-                                  style: GoogleFonts.inter(
+                                  style: AppType.caption.style(
+                                    context,
                                     color: secondary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -126,9 +122,9 @@ class NotificationRow extends StatelessWidget {
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
                                   description,
-                                  style: GoogleFonts.inter(
+                                  style: AppType.caption.style(
+                                    context,
                                     color: secondary,
-                                    fontSize: 13,
                                   ),
                                 ),
                               ),
@@ -140,18 +136,17 @@ class NotificationRow extends StatelessWidget {
                               children: [
                                 Text(
                                   item.relativeTime,
-                                  style: GoogleFonts.inter(
+                                  style: AppType.caption.style(
+                                    context,
                                     color: secondary,
-                                    fontSize: 12,
                                   ),
                                 ),
                                 if (actionLabel != null)
                                   Text(
                                     actionLabel,
-                                    style: GoogleFonts.inter(
+                                    style: AppType.caption.style(
+                                      context,
                                       color: accent,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                               ],

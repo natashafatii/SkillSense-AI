@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../models/interview.dart';
 import '../models/api_contract.dart';
+import '../models/paginated_response.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
 import 'application_service.dart';
@@ -10,6 +11,36 @@ import 'api_exception.dart';
 /// description; the backend repository was unavailable for response samples.
 class InterviewService {
   InterviewService._();
+
+  /// This calendar preview only needs interview identity, status and time.
+  static Future<List<Interview>> listCommandDeck({
+    required DateTime scheduledFrom,
+    Dio? client,
+  }) async {
+    final dio = client ?? await ApiClient.getInstance();
+    final interviews = <Interview>[];
+    try {
+      for (var page = 1; ; page++) {
+        final response = await dio.get<Map<String, dynamic>>(
+          '/interviews/command-deck/',
+          queryParameters: {
+            'scheduled_from': scheduledFrom.toUtc().toIso8601String(),
+            'page': page,
+            'page_size': 100,
+          },
+        );
+        final result = PaginatedResponse.fromJson(
+          response.data!,
+          Interview.fromJson,
+        );
+        interviews.addAll(result.results);
+        if (!result.hasNext) return interviews;
+      }
+    } on DioException catch (error) {
+      if (interviews.isEmpty && error.response?.statusCode == 404) rethrow;
+      throw ApiException.fromDioException(error);
+    }
+  }
 
   /// Lists interviews scoped by the API to the signed-in candidate or recruiter.
   static Future<List<Interview>> listAll({String? status, Dio? client}) async {

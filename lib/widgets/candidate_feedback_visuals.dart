@@ -1,5 +1,5 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -37,40 +37,23 @@ class FeedbackPalette {
     (false, _) => const Color(0xFF9A6212),
   };
 
-  TextStyle text({
-    double size = 14,
-    FontWeight weight = FontWeight.w600,
-    Color? color,
-    double height = 1.25,
-  }) => TextStyle(
-    fontFamily: 'Plus Jakarta Sans',
-    fontSize: size,
-    fontWeight: weight,
-    fontVariations: [ui.FontVariation('wght', weight.value.toDouble())],
-    color: color ?? ink,
-    height: height,
-  );
+  TextStyle text({AppType type = AppType.bodySm, Color? color}) =>
+      type.style(context, color: color ?? ink);
 
   TextStyle prose({Color? color, FontWeight weight = FontWeight.w400}) =>
-      text(size: 14, weight: weight, height: 1.55, color: color ?? meta);
+      AppType.body.style(context, color: color ?? meta, weight: weight);
 
-  TextStyle caption({bool uppercase = false}) => text(
-    size: uppercase ? 12 : 13,
-    weight: uppercase ? FontWeight.w600 : FontWeight.w500,
-    color: meta,
-    height: 1.4,
-  ).copyWith(letterSpacing: uppercase ? .6 : 0);
+  TextStyle caption({bool uppercase = false}) =>
+      (uppercase ? AppType.overline : AppType.caption).style(
+        context,
+        color: meta,
+      );
 
-  TextStyle number({double size = 14, Color? color, bool bold = false}) =>
-      TextStyle(
-        fontFamily: 'Plus Jakarta Sans',
-        fontSize: size,
-        fontWeight: bold ? FontWeight.w800 : FontWeight.w700,
-        fontVariations: [ui.FontVariation('wght', bold ? 800 : 700)],
+  TextStyle number({AppType type = AppType.numeric, Color? color}) =>
+      type.style(
+        context,
         color: color ?? ink,
-        height: 1.2,
-        letterSpacing: -size * .02,
-        fontFeatures: const [ui.FontFeature.tabularFigures()],
+        weight: type == AppType.numeric ? FontWeight.w600 : null,
       );
 }
 
@@ -184,10 +167,7 @@ class FeedbackPanelHeader extends StatelessWidget {
     final palette = FeedbackPalette(context);
     final heading = Semantics(
       header: true,
-      child: Text(
-        title,
-        style: palette.text(size: 16.5, weight: FontWeight.w700),
-      ),
+      child: Text(title, style: palette.text(type: AppType.h4)),
     );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -229,9 +209,7 @@ class FeedbackBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: palette
-            .caption(uppercase: true)
-            .copyWith(color: palette.accent, fontSize: 12, letterSpacing: .48),
+        style: AppType.caption.style(context, color: palette.accent),
       ),
     );
   }
@@ -336,10 +314,7 @@ class FeedbackBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.transparent,
-      child: child,
-    );
+    return ColoredBox(color: Colors.transparent, child: child);
   }
 }
 
@@ -373,15 +348,7 @@ class FeedbackGauge extends StatelessWidget {
                       value == null
                           ? 'Unavailable'
                           : feedbackPercentage(value!),
-                      style: p.number(
-                        size: value == null
-                            ? 15
-                            : (MediaQuery.sizeOf(context).height * .037).clamp(
-                                26.0,
-                                36.0,
-                              ),
-                        bold: true,
-                      ),
+                      style: p.number(type: AppType.metric),
                     ),
                     const SizedBox(height: 6),
                     Text('OVERALL', style: p.caption(uppercase: true)),
@@ -502,13 +469,7 @@ class FeedbackScoreGuide extends StatelessWidget {
                         Text(range, style: p.text()),
                         const SizedBox(width: 12),
                         Flexible(
-                          child: Text(
-                            label,
-                            style: p.text(
-                              weight: FontWeight.w400,
-                              color: p.meta,
-                            ),
-                          ),
+                          child: Text(label, style: p.text(color: p.meta)),
                         ),
                       ],
                     ),

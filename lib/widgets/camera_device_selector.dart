@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
@@ -87,7 +88,7 @@ class _CameraDeviceSelectorState extends State<CameraDeviceSelector> {
               child: Text(
                 label(i),
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: ink, fontSize: 13, fontFamily: 'Inter'),
+                style: AppType.caption.style(context, color: ink),
               ),
             ),
           if (devices.isEmpty)
@@ -126,11 +127,7 @@ class _CameraDeviceSelectorState extends State<CameraDeviceSelector> {
                           ? 'Camera'
                           : selected.label,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: ink,
-                        fontSize: 13,
-                        fontFamily: 'Inter',
-                      ),
+                      style: AppType.caption.style(context, color: ink),
                     ),
                   ),
                   Icon(

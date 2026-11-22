@@ -120,7 +120,7 @@ class _AdminPortalState extends State<AdminPortal> {
                             Text(
                               'SkillSense',
                               style: TextStyle(
-                                fontFamily: 'Space Grotesk',
+                                fontFamily: 'Inter',
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
                                 color: t.tx,
@@ -328,7 +328,7 @@ class _AdminPortalState extends State<AdminPortal> {
       child: Text(
         v,
         style: TextStyle(
-          fontFamily: 'Space Grotesk',
+          fontFamily: 'Inter',
           fontWeight: FontWeight.w700,
           color: t.gd,
           fontSize: 11,
@@ -358,7 +358,7 @@ class _AdminPortalState extends State<AdminPortal> {
               Text(
                 '✦  SkillSense ',
                 style: TextStyle(
-                  fontFamily: 'Space Grotesk',
+                  fontFamily: 'Inter',
                   fontWeight: FontWeight.w700,
                   color: t.tx,
                   fontSize: 13,
@@ -367,7 +367,7 @@ class _AdminPortalState extends State<AdminPortal> {
               Text(
                 'Admin',
                 style: TextStyle(
-                  fontFamily: 'Space Grotesk',
+                  fontFamily: 'Inter',
                   fontWeight: FontWeight.w700,
                   color: t.gd,
                   fontSize: 13,
@@ -427,7 +427,7 @@ class _AdminPortalState extends State<AdminPortal> {
                   Text(
                     labels[i],
                     style: TextStyle(
-                      fontFamily: 'Space Grotesk',
+                      fontFamily: 'Inter',
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: active ? t.gd : t.tx3,
@@ -468,7 +468,7 @@ class _AdminPortalState extends State<AdminPortal> {
                         Text(
                           'Aurora Console',
                           style: TextStyle(
-                            fontFamily: 'Space Grotesk',
+                            fontFamily: 'Inter',
                             color: t.tx,
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
@@ -678,7 +678,7 @@ class _AdminPortalState extends State<AdminPortal> {
         Text(
           title,
           style: TextStyle(
-            fontFamily: 'Space Grotesk',
+            fontFamily: 'Inter',
             fontWeight: FontWeight.w700,
             fontSize: mobile ? 24 : 33,
             color: context.aurora.tx,

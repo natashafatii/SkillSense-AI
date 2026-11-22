@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,6 @@ import '../../services/recruitment_workflow_service.dart';
 import '../../services/session_scope.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import '../../widgets/interview_review_top_bar.dart';
-import '../../widgets/page_heading_style.dart';
 import 'recruitment_review_screen.dart' show RecruitmentReviewScreen;
 
 class InterviewReviewScreen extends StatefulWidget {
@@ -223,19 +223,8 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
     if (mounted) await load();
   }
 
-  TextStyle _style(
-    double size, {
-    Color color = _ink,
-    FontWeight weight = FontWeight.w400,
-    double? spacing,
-  }) => TextStyle(
-    fontFamily: 'Inter',
-    fontSize: size,
-    color: context.themeForeground(color),
-    fontWeight: weight,
-    letterSpacing: spacing,
-    fontFeatures: const [FontFeature.tabularFigures()],
-  );
+  TextStyle _style(AppType type, {Color color = _ink}) =>
+      type.style(context, color: context.themeForeground(color));
 
   BoxDecoration _surface({double radius = 16}) => BoxDecoration(
     color: context.themeSurface(Colors.white),
@@ -252,14 +241,11 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: _style(13, color: _sub, weight: FontWeight.w700, spacing: 1.1),
-        ),
+        Text(label, style: _style(AppType.caption, color: _sub)),
         const SizedBox(height: 6),
-        Text(value, style: _style(28, weight: FontWeight.w600, spacing: -.8)),
+        Text(value, style: _style(AppType.h1)),
         const SizedBox(height: 6),
-        Text(description, style: _style(13, color: _sub)),
+        Text(description, style: _style(AppType.caption, color: _sub)),
       ],
     ),
   );
@@ -272,10 +258,10 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
       ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 260),
         child: TextField(
-          style: _style(13),
+          style: _style(AppType.body),
           decoration: InputDecoration(
             hintText: 'Search name or role',
-            hintStyle: _style(13, color: _muted),
+            hintStyle: _style(AppType.caption, color: _muted),
             filled: true,
             fillColor: context.themeSurface(Colors.white),
             isDense: true,
@@ -322,9 +308,8 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                         child: Text(
                           '${option.label} · ${loading && interviews.isEmpty ? '—' : count}',
                           style: _style(
-                            13,
+                            AppType.numeric,
                             color: filter == option ? _ink : _sub,
-                            weight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -352,15 +337,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-        child: Text(
-          label,
-          style: _style(
-            12,
-            color: foreground,
-            weight: FontWeight.w700,
-            spacing: .45,
-          ),
-        ),
+        child: Text(label, style: _style(AppType.caption, color: foreground)),
       ),
     ),
   );
@@ -431,10 +408,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
         CircleAvatar(
           radius: 19,
           backgroundColor: context.themeSurface(fill),
-          child: Text(
-            initials,
-            style: _style(13, color: ink, weight: FontWeight.w700),
-          ),
+          child: Text(initials, style: _style(AppType.caption, color: ink)),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -455,14 +429,14 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
         primary,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: _style(14, weight: FontWeight.w600),
+        style: _style(AppType.bodySm),
       ),
       if (secondary.isNotEmpty)
         Text(
           secondary,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: _style(13, color: _muted),
+          style: _style(AppType.caption, color: _muted),
         ),
     ],
   );
@@ -491,7 +465,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
         usable ? const Color(0xFFE4F5F0) : const Color(0xFFFFF3DC),
         usable ? const Color(0xFF067A63) : const Color(0xFF8A5A00),
       ),
-      Text(_percent(score), style: _style(14, weight: FontWeight.w700)),
+      Text(_percent(score), style: _style(AppType.bodySm)),
       _decisionBadge(interview),
       Align(
         alignment: Alignment.center,
@@ -554,15 +528,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                   'DECISION',
                   '',
                 ])
-                  Text(
-                    heading,
-                    style: _style(
-                      11.5,
-                      color: _sub,
-                      weight: FontWeight.w700,
-                      spacing: 1,
-                    ),
-                  ),
+                  Text(heading, style: _style(AppType.caption, color: _sub)),
               ], header: true),
               if (rows.isEmpty)
                 Padding(
@@ -575,7 +541,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                         : interviews.isEmpty
                         ? 'No interviews available.'
                         : 'No interviews match your search or filter.',
-                    style: _style(14, color: _sub),
+                    style: _style(AppType.bodySm, color: _sub),
                   ),
                 )
               else
@@ -636,7 +602,7 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, bounds) {
-                  final width = bounds.maxWidth.clamp(0.0, 1560.0).toDouble();
+                  final width = bounds.maxWidth;
                   final padding = (width * .02).clamp(14.0, 28.0).toDouble();
                   final perRow = width >= 900
                       ? 4
@@ -661,12 +627,12 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                             children: [
                               Text(
                                 'Interview evidence and decisions',
-                                style: pageHeadingStyle(context),
+                                style: context.text.headlineLarge,
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 'Open an interview to review evidence, scores and record a decision.',
-                                style: _style(14, color: _sub),
+                                style: _style(AppType.bodySm, color: _sub),
                               ),
                               const SizedBox(height: 18),
                               Wrap(
@@ -712,7 +678,10 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
                                     Expanded(
                                       child: Text(
                                         error!,
-                                        style: _style(13, color: _sub),
+                                        style: _style(
+                                          AppType.caption,
+                                          color: _sub,
+                                        ),
                                       ),
                                     ),
                                     TextButton(

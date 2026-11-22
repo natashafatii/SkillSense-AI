@@ -45,10 +45,19 @@ class JobService {
   }
 
   /// Loads all recruiter-owned jobs for selection controls.
-  static Future<List<Job>> listAllJobs({JobStatus? status, Dio? client}) async {
+  static Future<List<Job>> listAllJobs({
+    JobStatus? status,
+    int? pageSize,
+    Dio? client,
+  }) async {
     final jobs = <Job>[];
     for (var page = 1; page <= 100; page++) {
-      final result = await listJobs(page: page, status: status, client: client);
+      final result = await listJobs(
+        page: page,
+        pageSize: pageSize,
+        status: status,
+        client: client,
+      );
       jobs.addAll(result.results);
       if (!result.hasNext) return jobs;
     }

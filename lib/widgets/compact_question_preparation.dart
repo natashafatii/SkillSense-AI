@@ -7,14 +7,11 @@ const _questionCategories = [
 ];
 
 Text _questionText(
+  BuildContext context,
   String value, {
-  double size = 12,
-  int weight = 500,
+  AppType type = AppType.caption,
   Color color = ScreeningStyle.muted,
-}) => Text(
-  value,
-  style: ScreeningStyle.text(size, weight: weight, color: color),
-);
+}) => Text(value, style: ScreeningStyle.text(context, type, color: color));
 
 extension _CompactQuestions on _QuestionPreparationPanelState {
   Widget _compactQuestions(
@@ -44,7 +41,7 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
               children: [
                 Text(
                   'No questions in this draft',
-                  style: ScreeningStyle.title(15),
+                  style: ScreeningStyle.title(context, AppType.h4),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 3),
@@ -52,7 +49,11 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
                   canChange
                       ? 'Add a question to start preparing the interview.'
                       : statusMessage,
-                  style: ScreeningStyle.text(13.5, color: ScreeningStyle.muted),
+                  style: ScreeningStyle.text(
+                    context,
+                    AppType.bodySm,
+                    color: ScreeningStyle.muted,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -84,7 +85,7 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
         QuestionSet.fromJson(_data!).schedulable;
     return ScreeningPanel(
       child: DefaultTextStyle(
-        style: ScreeningStyle.text(13),
+        style: ScreeningStyle.text(context, AppType.caption),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -115,18 +116,19 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: _questionText(
+                      context,
                       frozen
                           ? 'Locked · interview scheduled'
                           : approved
                           ? 'Approved for scheduling'
                           : 'Draft for review',
-                      weight: 700,
                       color: ScreeningStyle.blue,
+                      type: AppType.bodySm,
                     ),
                   ),
-                  _questionText('${questions.length} questions'),
+                  _questionText(context, '${questions.length} questions'),
                   if (_data?['revision'] case final revision?)
-                    _questionText('Revision $revision'),
+                    _questionText(context, 'Revision $revision'),
                 ],
               ),
             ),
@@ -142,10 +144,10 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
                         color: ScreeningStyle.accent,
                       ),
                     if (!draftReady && questions.isNotEmpty)
-                      _questionText(statusMessage),
+                      _questionText(context, statusMessage),
                     ...notices,
                     if (_error case final error?)
-                      _questionText(error, color: ScreeningStyle.red),
+                      _questionText(context, error, color: ScreeningStyle.red),
                   ],
                 ),
               ),
@@ -230,7 +232,7 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
                         ),
                     ],
                   );
-                  final caption = _questionText(note);
+                  final caption = _questionText(context, note);
                   return size.maxWidth >= 660 &&
                           MediaQuery.textScalerOf(context).scale(12) <= 16
                       ? Row(
@@ -274,10 +276,10 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _questionText(
+            context,
             'Interview coverage',
-            size: 13,
-            weight: 700,
             color: ScreeningStyle.ink,
+            type: AppType.caption,
           ),
           const SizedBox(height: 8),
           const Divider(height: 1, color: ScreeningStyle.line),
@@ -316,16 +318,17 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _questionText(
+                    context,
                     label,
-                    size: 12.5,
                     color: ScreeningStyle.ink,
+                    type: AppType.caption,
                   ),
                 ),
                 _questionText(
+                  context,
                   '${counts[key] ?? 0}',
-                  size: 12.5,
-                  weight: 700,
                   color: ScreeningStyle.ink,
+                  type: AppType.caption,
                 ),
               ],
             ),
@@ -335,8 +338,8 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
           Text(
             'Use questions that reflect this role’s requirements. Review technical depth, clarity, and coverage before approval.',
             style: ScreeningStyle.text(
-              12,
-              height: 1.55,
+              context,
+              AppType.caption,
               color: ScreeningStyle.muted,
             ),
           ),
@@ -379,24 +382,25 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
                 _dot(type?.$3 ?? ScreeningStyle.muted),
                 const SizedBox(width: 7),
                 _questionText(
+                  context,
                   type?.$2 ?? category,
-                  size: 11.5,
-                  weight: 700,
                   color: ScreeningStyle.ink,
+                  type: AppType.caption,
                 ),
               ],
             ),
             if (source.isNotEmpty)
               _questionText(
+                context,
                 source[0].toUpperCase() + source.substring(1),
-                size: 11.5,
+                type: AppType.caption,
               ),
           ],
         ),
         const SizedBox(height: 3),
         Text(
           '${question['text']}',
-          style: ScreeningStyle.text(13, height: 1.55),
+          style: ScreeningStyle.text(context, AppType.caption),
         ),
       ],
     );
@@ -456,9 +460,10 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: _questionText(
+                      context,
                       number.toString().padLeft(2, '0'),
-                      weight: 700,
                       color: ScreeningStyle.blue,
+                      type: AppType.bodySm,
                     ),
                   ),
                 ),
@@ -518,17 +523,17 @@ extension _CompactQuestionEditor on _AddQuestionDialogState {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _questionText(
+              context,
               'Question type',
-              size: 12.5,
-              weight: 700,
               color: ScreeningStyle.ink,
+              type: AppType.caption,
             ),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
               initialValue: _category,
               isExpanded: true,
-              style: ScreeningStyle.text(12.5, weight: 500),
-              decoration: ScreeningStyle.field(),
+              style: ScreeningStyle.text(context, AppType.caption),
+              decoration: ScreeningStyle.field(context),
               items: [
                 for (final (key, label, _) in _questionCategories)
                   DropdownMenuItem(value: key, child: Text(label)),
@@ -539,10 +544,10 @@ extension _CompactQuestionEditor on _AddQuestionDialogState {
             ),
             const SizedBox(height: 10),
             _questionText(
+              context,
               'Question',
-              size: 12.5,
-              weight: 700,
               color: ScreeningStyle.ink,
+              type: AppType.caption,
             ),
             const SizedBox(height: 6),
             TextFormField(
@@ -550,8 +555,8 @@ extension _CompactQuestionEditor on _AddQuestionDialogState {
               minLines: 5,
               maxLines: 5,
               maxLength: 10000,
-              style: ScreeningStyle.text(12.5, weight: 500),
-              decoration: ScreeningStyle.field(),
+              style: ScreeningStyle.text(context, AppType.body),
+              decoration: ScreeningStyle.field(context),
               validator: (value) => value == null || value.trim().isEmpty
                   ? 'Enter a question.'
                   : null,

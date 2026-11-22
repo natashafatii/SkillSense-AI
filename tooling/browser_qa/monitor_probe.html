@@ -1,0 +1,114 @@
+<!doctype html>
+<title>SkillSense synthetic monitor test</title>
+<video muted playsinline></video>
+<script src="/live_monitor.js"></script>
+<script type="module">
+import {createRetellBridge} from '/bridge.js';
+const role = location.hash === '#viewer' ? 'viewer' : 'camera';
+const bus = new BroadcastChannel('monitor-test');
+const scenario = new URLSearchParams(location.search).get('scenario');
+const states = [];
+let paired = false, mediaVerified = false;
+let connection, cameraTrack, voice, timer, context, rounds = 0;
+const video = document.querySelector('video');
+function result(value) { fetch('/result', {method:'POST',body:value}); }
+window.onunhandledrejection = () => result('failed');
+class FixtureSocket {
+  static OPEN = 1;
+  readyState = 1;
+  constructor() {
+    bus.onmessage = ({data}) => {
+      if (data === 'join') {
+        rounds++;
+        paired = true;
+        this.deliver({type:'presence', generation:String(rounds)});
+        bus.postMessage({pair:String(rounds)});
+      } else if (data.pair) {
+        paired = true;
+        rounds = Number(data.pair);
+        this.deliver({type:'presence',generation:data.pair});
+      } else if (data === 'verified') mediaVerified = true;
+      else if (data === 'resume') location.reload();
+      else if (data === 'left') {
+        this.deliver({type:'presence',generation:null});
+        setTimeout(() => {
+          if (cameraTrack.readyState !== 'live' || !states.includes('live') || states.at(-1) !== 'waiting') {
+            result('failed'); return;
+          }
+          if (rounds === 1) bus.postMessage('resume');
+          else result('passed');
+        }, 150);
+      } else this.deliver(data);
+    };
+    setTimeout(() => {
+      this.deliver({type:'ready', config:{iceServers:[], iceTransportPolicy:scenario==='relay-failure'?'relay':'all'}});
+      this.deliver({type:'presence',generation:null});
+      if (role === 'viewer') bus.postMessage('join');
+    }, 10);
+    if (scenario === 'relay-failure') setInterval(() => {
+      if (paired && this.readyState === 1) this.deliver({type:'presence',generation:String(rounds)});
+    }, 1000);
+  }
+  deliver(data) { this.onmessage?.({data:JSON.stringify(data)}); }
+  send(raw) { const data = JSON.parse(raw); if (data.type !== 'metric') bus.postMessage(data); }
+  close() { this.readyState = 3; }
+}
+window.WebSocket = FixtureSocket;
+if (role === 'camera') {
+  context = new AudioContext();
+  await context.resume();
+  const tone = (hz, destination) => {
+    const oscillator = context.createOscillator();
+    oscillator.frequency.value = hz;
+    const gain = context.createGain();
+    gain.gain.value = 0.12;
+    oscillator.connect(gain).connect(destination);
+    oscillator.start();
+  };
+  const analyser = context.createAnalyser();
+  tone(620, analyser);
+  const microphone = context.createMediaStreamDestination();
+  tone(1130, microphone);
+  navigator.mediaDevices.getUserMedia = async () => microphone.stream.clone();
+  class SyntheticClient {
+    analyzerComponent = {analyser};
+    on() {}
+    startCall() {}
+    stopCall() { result('failed'); }
+  }
+  voice = createRetellBridge(SyntheticClient, () => {});
+  await voice.start({transport:'gateway',accessToken:'test',callId:'test',monitorAudio:true});
+  const canvas = document.createElement('canvas');
+  const paint = canvas.getContext('2d');
+  timer = setInterval(() => paint.fillRect(0,0,10,10), 60);
+  cameraTrack = canvas.captureStream(15).getVideoTracks()[0];
+}
+connection = openSkillSenseMonitor('fixture',role,()=>cameraTrack,voice,video,false,false,async state=>{
+  states.push(state);
+  if (role === 'camera' && state === 'reconnecting' && scenario !== 'rejoin') {
+    const expected = scenario === 'signal-loss' ? mediaVerified : !states.includes('live');
+    result(expected && cameraTrack.readyState === 'live' ? 'passed' : 'failed');
+  }
+  if (role !== 'viewer' || state !== 'live' || context) return;
+  context = new AudioContext();
+  await context.resume();
+  const analyser = context.createAnalyser();
+  context.createMediaStreamSource(video.srcObject).connect(analyser);
+  await connection.sound(true);
+  const bins = new Float32Array(analyser.frequencyBinCount);
+  for (let i=0;i<25;i++) {
+    await new Promise(resolve=>setTimeout(resolve,100));
+    analyser.getFloatFrequencyData(bins);
+    const level = hz => bins[Math.round(hz*analyser.fftSize/context.sampleRate)];
+    if (level(620)>-45 && level(1130)>-45 && video.videoWidth>0) {
+      if (scenario === 'signal-loss') { bus.postMessage('verified'); return; }
+      connection.dispose();
+      if (video.srcObject || !states.includes('connecting')) return result('failed');
+      bus.postMessage('left');
+      return;
+    }
+  }
+  result('failed');
+});
+if(role==='camera') setTimeout(()=>window.open(location.pathname + location.search + '#viewer'), 350);
+</script>

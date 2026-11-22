@@ -45,6 +45,11 @@ class SignInResult {
     : this._(SignInResultStatus.verificationRequired);
 }
 
+/// Optional support for bypassing the SDK's cached session token.
+abstract interface class SessionTokenRefreshService {
+  Future<String?> refreshSessionToken();
+}
+
 /// Abstract auth service interface.
 ///
 /// Platform implementations (native via clerk_flutter, web via clerk-js)

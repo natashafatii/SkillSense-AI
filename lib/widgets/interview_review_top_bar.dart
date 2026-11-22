@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 import '../constants/adaptive_colors.dart';
 import 'global_search.dart';
@@ -63,11 +64,8 @@ class InterviewReviewTopBar extends StatelessWidget {
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      letterSpacing: 1.2,
-                      fontWeight: FontWeight.w600,
+                    style: AppType.caption.style(
+                      context,
                       color: context.themeForeground(const Color(0xFF16213A)),
                     ),
                   ),
@@ -104,23 +102,21 @@ class InterviewReviewTopBar extends StatelessWidget {
                             ),
                             if (!compact) ...[
                               const SizedBox(width: 10),
-                              const Expanded(
+                              Expanded(
                                 child: Text(
                                   'Search or jump to…',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 13,
-                                    color: Color(0xFF5F6C85),
+                                  style: AppType.caption.style(
+                                    context,
+                                    color: TypographyColors.secondary,
                                   ),
                                 ),
                               ),
                               Text(
                                 '⌘K',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 12,
+                                style: AppType.caption.style(
+                                  context,
                                   color: context.themeForeground(
-                                    const Color(0xFF5F6C85),
+                                    TypographyColors.secondary,
                                   ),
                                 ),
                               ),

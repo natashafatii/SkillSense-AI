@@ -89,21 +89,19 @@ flutter:
     - assets/images/logo.svg
     - assets/icons/
   fonts:
-    - family: Geist
-      fonts:
-        - asset: assets/fonts/Geist.ttf
-    - family: Plus Jakarta Sans
-      fonts:
-        - asset: assets/fonts/PlusJakartaSans.ttf
-    - family: Inter
-      fonts:
-        - asset: assets/fonts/Inter.ttf
     - family: Space Grotesk
       fonts:
         - asset: assets/fonts/SpaceGrotesk.ttf
-    - family: JetBrains Mono
+    - family: Inter
       fonts:
-        - asset: assets/fonts/JetBrainsMono.ttf
+        - asset: assets/fonts/InterVariable.ttf
+          weight: 400
+        - asset: assets/fonts/InterVariable.ttf
+          weight: 500
+        - asset: assets/fonts/InterVariable.ttf
+          weight: 600
+        - asset: assets/fonts/InterVariable.ttf
+          weight: 700
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

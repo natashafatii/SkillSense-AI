@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 import '../services/media/interview_media_route_observer.dart';
 import '../services/voice/interview_lifecycle_controller.dart';
@@ -76,9 +77,9 @@ class _InterviewLifecyclePanelState extends State<InterviewLifecyclePanel>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'Interview voice and completion',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: AppType.h4.style(context),
               ),
               const SizedBox(height: 8),
               Semantics(liveRegion: true, child: Text(flow.notice)),

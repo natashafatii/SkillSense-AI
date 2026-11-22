@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +24,6 @@ import '../../services/session_scope.dart';
 import '../../widgets/notification_unread_scope.dart';
 import '../../widgets/question_preparation_panel.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
-import '../../widgets/page_heading_style.dart';
 import 'recruitment_review_screen.dart';
 import 'schedule_interview_screen.dart';
 
@@ -480,7 +480,10 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
           key: ValueKey((label, selection)),
           expandedInsets: EdgeInsets.zero,
           hintText: label == 'Job' ? 'Select a job' : 'Select an applicant',
-          textStyle: _reportDisplay(14).copyWith(color: palette.ink),
+          textStyle: _reportDisplay(
+            context,
+            AppType.bodySm,
+          ).copyWith(color: palette.ink),
           initialSelection: selection,
           enableFilter: true,
           requestFocusOnTap: true,
@@ -515,7 +518,10 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
             filled: true,
             isDense: true,
             fillColor: palette.field,
-            hintStyle: _reportDisplay(13).copyWith(color: palette.muted),
+            hintStyle: _reportDisplay(
+              context,
+              AppType.caption,
+            ).copyWith(color: palette.muted),
             prefixIconConstraints: const BoxConstraints(minWidth: 40),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
@@ -579,7 +585,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     final app = _data?.application;
     final viewport = MediaQuery.sizeOf(context).width;
     final mobile = viewport < 900;
-    final palette = _ReportPalette(context.isDarkTheme);
+    final palette = _ReportPalette(context.isDarkTheme, context.typeStep);
     final body = Column(
       children: [
         _ReportCommandBar(
@@ -601,11 +607,10 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
               final gutter = viewport <= 480
                   ? 12.0
                   : (viewport * .03).clamp(18.0, 42.0);
-              final width =
-                  (constraints.maxWidth.clamp(0.0, 1440.0) - gutter * 2).clamp(
-                    0.0,
-                    1440.0,
-                  );
+              final width = (constraints.maxWidth - gutter * 2).clamp(
+                0.0,
+                double.infinity,
+              );
               final data = _data;
               final selectorWidth = _candidates == null ? 300.0 : 480.0;
               final title = Semantics(
@@ -613,7 +618,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
                 header: true,
                 child: Text(
                   'Candidate report',
-                  style: pageHeadingStyle(context),
+                  style: context.text.headlineLarge,
                 ),
               );
               return RefreshIndicator(
@@ -684,7 +689,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
     );
     return Theme(
       data: Theme.of(context).copyWith(
-        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
+        textTheme: Theme.of(context).textTheme,
         colorScheme: Theme.of(context).colorScheme.copyWith(
           primary: palette.dark ? palette.accent : _accent,
           onPrimary: Colors.white,
@@ -698,11 +703,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
             side: BorderSide(color: palette.border),
             minimumSize: const Size(0, 36),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
+            textStyle: AppType.button.style(context),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -716,11 +717,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
             foregroundColor: Colors.white,
             minimumSize: const Size(0, 36),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
+            textStyle: AppType.button.style(context),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -730,12 +727,7 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: DefaultTextStyle.merge(
-          style: TextStyle(
-            fontFamily: 'Inter',
-            color: palette.ink,
-            fontSize: 13,
-            height: 1.45,
-          ),
+          style: AppType.caption.style(context, color: palette.ink),
           child: SafeArea(bottom: !mobile, child: body),
         ),
       ),

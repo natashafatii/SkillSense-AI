@@ -1,19 +1,7 @@
 part of 'candidate_interview_lobby_screen.dart';
 
-TextStyle _lobbyText(
-  double size, {
-  Color? color,
-  FontWeight weight = FontWeight.w400,
-  double height = 1.5,
-  double spacing = 0,
-}) => TextStyle(
-  fontFamily: 'Inter',
-  fontSize: size,
-  height: height,
-  fontWeight: weight,
-  letterSpacing: spacing,
-  color: color,
-);
+TextStyle _lobbyText(BuildContext context, AppType type, {Color? color}) =>
+    type.style(context, color: color);
 
 class _LobbyColors {
   const _LobbyColors(this.dark);
@@ -225,16 +213,16 @@ class _LobbyPreview extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _previewHeader(),
+                      _previewHeader(context),
                       if (constraints.hasBoundedHeight)
-                        Expanded(child: _previewCenter())
+                        Expanded(child: _previewCenter(context))
                       else
                         SizedBox(
                           height: math.max(
                             135.0,
                             stageHeight - (stacked ? 242 : 191),
                           ),
-                          child: _previewCenter(),
+                          child: _previewCenter(context),
                         ),
                       Align(
                         alignment: Alignment.bottomCenter,
@@ -242,7 +230,7 @@ class _LobbyPreview extends StatelessWidget {
                           padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 520),
-                            child: _deviceDock(stacked),
+                            child: _deviceDock(context, stacked),
                           ),
                         ),
                       ),
@@ -257,7 +245,7 @@ class _LobbyPreview extends StatelessWidget {
     );
   }
 
-  Widget _previewHeader() => Padding(
+  Widget _previewHeader(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(22, 8, 16, 0),
     child: Row(
       children: [
@@ -273,10 +261,9 @@ class _LobbyPreview extends StatelessWidget {
           child: Text(
             'YOUR PREVIEW',
             style: _lobbyText(
-              11.5,
+              context,
+              AppType.overline,
               color: const Color(0xffd7e7f0),
-              weight: FontWeight.w700,
-              spacing: 1.38,
             ),
           ),
         ),
@@ -290,7 +277,7 @@ class _LobbyPreview extends StatelessWidget {
     ),
   );
 
-  Widget _previewCenter() {
+  Widget _previewCenter(BuildContext context) {
     if (cameraReady) return const SizedBox.shrink();
     return Center(
       child: SingleChildScrollView(
@@ -309,16 +296,20 @@ class _LobbyPreview extends StatelessWidget {
                   : 'Camera preview is off',
               textAlign: TextAlign.center,
               style: _lobbyText(
-                17,
+                context,
+                AppType.h3,
                 color: const Color(0xffdce7f4),
-                weight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 10),
             Text(
               'Select “Check camera” to see yourself',
               textAlign: TextAlign.center,
-              style: _lobbyText(13.5, color: const Color(0xffa9b9cf)),
+              style: _lobbyText(
+                context,
+                AppType.bodySm,
+                color: const Color(0xffa9b9cf),
+              ),
             ),
           ],
         ),
@@ -326,14 +317,16 @@ class _LobbyPreview extends StatelessWidget {
     );
   }
 
-  Widget _deviceDock(bool stacked) {
+  Widget _deviceDock(BuildContext context, bool stacked) {
     final camera = _deviceButton(
+      context,
       _LobbyGlyph.camera,
       cameraReady ? 'Camera ready' : 'Check camera',
       cameraReady,
       onCamera,
     );
     final microphone = _deviceButton(
+      context,
       _LobbyGlyph.microphone,
       micReady ? 'Microphone ready' : 'Check microphone',
       micReady,
@@ -362,13 +355,13 @@ class _LobbyPreview extends StatelessWidget {
                     message,
                     textAlign: TextAlign.center,
                     style: _lobbyText(
-                      13,
+                      context,
+                      AppType.caption,
                       color: hasError
                           ? const Color(0xffffa3a8)
                           : cameraReady || micReady
                           ? const Color(0xff6ee7c8)
                           : const Color(0xffcfd9e8),
-                      weight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -400,6 +393,7 @@ class _LobbyPreview extends StatelessWidget {
   }
 
   Widget _deviceButton(
+    BuildContext context,
     _LobbyGlyph icon,
     String label,
     bool ready,
@@ -430,7 +424,7 @@ class _LobbyPreview extends StatelessWidget {
             child: Text(
               label,
               textAlign: TextAlign.center,
-              style: _lobbyText(14, weight: FontWeight.w700),
+              style: _lobbyText(context, AppType.button),
             ),
           ),
         ],

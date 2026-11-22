@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -6,7 +7,6 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/api_client.dart';
 import '../../services/auth_service.dart';
@@ -294,10 +294,8 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
           Text(
             mobile ? 'Nothing live' : 'No live interviews right now',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: mobile ? 15 : 18,
-              fontWeight: FontWeight.w700,
-              letterSpacing: mobile ? -.2 : -.45,
+            style: AppType.h3.style(
+              context,
               color: context.themeForeground(_text),
             ),
           ),
@@ -309,9 +307,8 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
                   ? 'Running interviews show up here.'
                   : 'Running interviews appear here. Authorized observations require an available session identity and analysis service.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: mobile ? 11 : 12.5,
-                height: 1.65,
+              style: AppType.caption.style(
+                context,
                 color: context.themeForeground(_text3),
               ),
             ),
@@ -344,11 +341,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
                 ),
                 child: Text(
                   'View schedule',
-                  style: GoogleFonts.inter(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
+                  style: AppType.button.style(context, color: Colors.white),
                 ),
               ),
             ),
@@ -358,8 +351,8 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
             Text(
               'Observations require authorized access',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 10.5,
+              style: AppType.caption.style(
+                context,
                 color: context.themeForeground(_text4),
               ),
             ),
@@ -375,7 +368,10 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
       children: [
         Text(
           _error!,
-          style: GoogleFonts.inter(color: context.themeForeground(_text2)),
+          style: AppType.body.style(
+            context,
+            color: context.themeForeground(_text2),
+          ),
         ),
         TextButton(onPressed: _load, child: const Text('Retry')),
       ],
@@ -397,69 +393,63 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
         mobile ? 16 : 28,
         mobile ? 110 : 40,
       ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                session.displayName,
-                style: GoogleFonts.inter(
-                  fontSize: mobile ? 20 : 26,
-                  fontWeight: FontWeight.w700,
-                  color: context.themeForeground(_text),
-                ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            session.displayName,
+            style: AppType.h1.style(
+              context,
+              color: context.themeForeground(_text),
+            ),
+          ),
+          if (_sessions.length > 1)
+            DropdownButtonFormField<String>(
+              key: ValueKey(_selectedId),
+              initialValue: _selectedId,
+              decoration: const InputDecoration(
+                labelText: 'Select interview to observe',
               ),
-              if (_sessions.length > 1)
-                DropdownButtonFormField<String>(
-                  key: ValueKey(_selectedId),
-                  initialValue: _selectedId,
-                  decoration: const InputDecoration(
-                    labelText: 'Select interview to observe',
-                  ),
-                  items: [
-                    for (final item in _sessions)
-                      DropdownMenuItem(
-                        value: item.id,
-                        child: Text(
-                          item.displayName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                  onChanged: (id) {
-                    setState(() => _selectedId = id);
-                    _load(silent: true);
-                  },
-                ),
-              Text('Interview ${session.id}'),
-              const SizedBox(height: 16),
-              if (session.target == null)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
+              items: [
+                for (final item in _sessions)
+                  DropdownMenuItem(
+                    value: item.id,
                     child: Text(
-                      'Observations unavailable: an authorized session and application identity could not be resolved. No session identifier is inferred from the interview ID.',
+                      item.displayName,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                )
-              else ...[
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).pushNamed(
-                    '/recruiter/candidate-report',
-                    arguments: session.target,
-                  ),
-                  child: const Text('Open behavioral report for this session'),
-                ),
-                RecruiterObservationView(
-                  key: ValueKey(session.target!.key),
-                  target: session.target!,
-                ),
               ],
-            ],
-          ),
-        ),
+              onChanged: (id) {
+                setState(() => _selectedId = id);
+                _load(silent: true);
+              },
+            ),
+          Text('Interview ${session.id}'),
+          const SizedBox(height: 16),
+          if (session.target == null)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Observations unavailable: an authorized session and application identity could not be resolved. No session identifier is inferred from the interview ID.',
+                ),
+              ),
+            )
+          else ...[
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).pushNamed(
+                '/recruiter/candidate-report',
+                arguments: session.target,
+              ),
+              child: const Text('Open behavioral report for this session'),
+            ),
+            RecruiterObservationView(
+              key: ValueKey(session.target!.key),
+              target: session.target!,
+            ),
+          ],
+        ],
       ),
     );
   }

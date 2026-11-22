@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../application_screening_screen.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
@@ -6,8 +7,6 @@ import '../../widgets/candidate_mobile_nav.dart';
 import '../../widgets/candidate_button_style.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/page_heading_style.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../models/application.dart';
 import '../../models/paginated_response.dart';
@@ -105,6 +104,45 @@ class _CandidateApplicationsScreenState
   Widget build(BuildContext context) {
     final wide = MediaQuery.of(context).size.width >= 900;
 
+    final workspace = Column(
+      children: [
+        RecruiterTopBar(pageTitle: 'Applications', candidate: true),
+        Expanded(
+          child: MobileEdgeShadowWrapper(
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.dashboardTeal,
+                    ),
+                  )
+                : _error != null
+                ? _buildErrorState()
+                : _applications.isEmpty
+                ? _buildEmptyState(!wide)
+                : SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      left: wide ? 40 : 16,
+                      right: wide ? 40 : 16,
+                      top: 32,
+                      bottom: wide ? 32 : 164,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(width: double.infinity, child: _buildHeader()),
+                        const SizedBox(height: 32),
+                        if (_visibleApplications.isEmpty)
+                          _buildNoFilteredApplications()
+                        else
+                          _buildGrid(wide),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+
     return Scaffold(
       backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
       body: Stack(
@@ -112,62 +150,12 @@ class _CandidateApplicationsScreenState
           const GreenGradientBackground(),
           SafeArea(
             bottom: false,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (wide)
-                  const CandidateSideNav(
+            child: !wide
+                ? workspace
+                : CandidateSideNav(
                     currentRoute: '/candidate/applications',
+                    workspace: workspace,
                   ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      RecruiterTopBar(
-                        pageTitle: 'Applications',
-                        candidate: true,
-                      ),
-                      Expanded(
-                        child: MobileEdgeShadowWrapper(
-                          child: _loading
-                              ? const Center(
-                                  child: CircularProgressIndicator(
-                                    color: AppColors.dashboardTeal,
-                                  ),
-                                )
-                              : _error != null
-                              ? _buildErrorState()
-                              : _applications.isEmpty
-                              ? _buildEmptyState(!wide)
-                              : SingleChildScrollView(
-                                  padding: EdgeInsets.only(
-                                    left: wide ? 40 : 16,
-                                    right: wide ? 40 : 16,
-                                    top: 32,
-                                    bottom: wide ? 32 : 164,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: _buildHeader(),
-                                      ),
-                                      const SizedBox(height: 32),
-                                      if (_visibleApplications.isEmpty)
-                                        _buildNoFilteredApplications()
-                                      else
-                                        _buildGrid(wide),
-                                    ],
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
           ),
           if (!wide)
             Positioned(
@@ -191,17 +179,13 @@ class _CandidateApplicationsScreenState
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Applications',
-              style: pageHeadingStyle(context),
-            ),
+            Text('Applications', style: context.text.headlineLarge),
             const SizedBox(height: 4),
             Text(
               '$_activeCount active · $_closedCount closed',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: context.themeForeground(const Color(0xFF64748B)),
-                fontWeight: FontWeight.w500,
+              style: AppType.bodySm.style(
+                context,
+                color: context.themeForeground(TypographyColors.secondary),
               ),
             ),
           ],
@@ -260,12 +244,11 @@ class _CandidateApplicationsScreenState
         ),
         child: Text(
           label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+          style: AppType.caption.style(
+            context,
             color: isSelected
                 ? context.themeForeground(const Color(0xFF10B981))
-                : context.themeForeground(const Color(0xFF64748B)),
+                : context.themeForeground(TypographyColors.secondary),
           ),
         ),
       ),
@@ -363,11 +346,9 @@ class _CandidateApplicationsScreenState
             const SizedBox(height: 16),
             Text(
               isMobile ? 'Nothing applied yet' : 'No applications yet',
-              style: GoogleFonts.inter(
-                color: context.themeForeground(const Color(0xFF0F172A)), // --tx
-                fontSize: isMobile ? 15 : 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: isMobile ? -0.03 : -0.025,
+              style: AppType.h3.style(
+                context,
+                color: context.themeForeground(TypographyColors.primary),
               ),
               textAlign: TextAlign.center,
             ),
@@ -378,12 +359,9 @@ class _CandidateApplicationsScreenState
                 isMobile
                     ? 'Track your applications here.'
                     : 'Apply to a role and track every stage here, from screening to offer.',
-                style: GoogleFonts.inter(
-                  color: context.themeForeground(
-                    const Color(0xFF64748B),
-                  ), // --tx3
-                  fontSize: isMobile ? 11 : 12.5,
-                  height: 1.65,
+                style: AppType.caption.style(
+                  context,
+                  color: context.themeForeground(TypographyColors.secondary),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -417,11 +395,7 @@ class _CandidateApplicationsScreenState
                 },
                 child: Text(
                   'Browse jobs',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppType.button.style(context, color: Colors.white),
                 ),
               ),
             ),
@@ -429,12 +403,9 @@ class _CandidateApplicationsScreenState
               const SizedBox(height: 4),
               Text(
                 'Applying takes about a minute',
-                style: GoogleFonts.inter(
-                  color: context.themeForeground(
-                    const Color(0xFF94A3B8),
-                  ), // --tx4
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w400,
+                style: AppType.caption.style(
+                  context,
+                  color: context.themeForeground(TypographyColors.secondary),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -451,9 +422,9 @@ class _CandidateApplicationsScreenState
       child: Center(
         child: Text(
           'No applications found for this filter.',
-          style: GoogleFonts.inter(
-            color: context.themeForeground(const Color(0xFF64748B)),
-            fontSize: 16,
+          style: AppType.bodyLg.style(
+            context,
+            color: context.themeForeground(TypographyColors.secondary),
           ),
         ),
       ),
@@ -505,7 +476,16 @@ class ApplicationCard extends StatelessWidget {
     final decision = _FinalDecision.from(application);
     final statusColor = _getStatusColor(application.status);
     final statusText = _getStatusBadgeText(application.status);
-    final statusBg = statusColor.withValues(alpha: 0.1);
+    final tone = switch (application.status) {
+      ApplicationStatus.screened ||
+      ApplicationStatus.interviewed => StatusTone.success,
+      ApplicationStatus.scheduled ||
+      ApplicationStatus.inProgress ||
+      ApplicationStatus.underReview ||
+      ApplicationStatus.interviewFailed => StatusTone.pending,
+      ApplicationStatus.rejected => StatusTone.error,
+      _ => StatusTone.neutral,
+    };
 
     String subtext = '';
     String companyName = 'Application';
@@ -584,7 +564,7 @@ class ApplicationCard extends StatelessWidget {
                       ),
                     ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                    padding: EdgeInsets.all(context.cardPadding),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -598,9 +578,8 @@ class ApplicationCard extends StatelessWidget {
                                 children: [
                                   Text(
                                     _title,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
+                                    style: AppType.h4.style(
+                                      context,
                                       color: context.themeForeground(
                                         const Color(0xFF1E293B),
                                       ),
@@ -611,13 +590,7 @@ class ApplicationCard extends StatelessWidget {
                                   const SizedBox(height: 4),
                                   Text(
                                     '$companyName · $subtext',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      color: context.themeForeground(
-                                        const Color(0xFF64748B),
-                                      ),
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                    style: context.secondaryBody,
                                   ),
                                 ],
                               ),
@@ -628,19 +601,17 @@ class ApplicationCard extends StatelessWidget {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: statusBg,
+                                color: tone.background,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: statusColor.withValues(alpha: 0.2),
+                                  color: tone.foreground.withValues(alpha: 0.2),
                                 ),
                               ),
                               child: Text(
                                 statusText,
-                                style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.0,
-                                  color: statusColor,
+                                style: AppType.badge.style(
+                                  context,
+                                  color: tone.foreground,
                                 ),
                               ),
                             ),
@@ -680,9 +651,8 @@ class ApplicationCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   _title,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                  style: AppType.h4.style(
+                    context,
                     color: context.themeForeground(const Color(0xFF17243A)),
                   ),
                 ),
@@ -700,12 +670,7 @@ class ApplicationCard extends StatelessWidget {
                 ),
                 child: Text(
                   hired ? 'HIRED' : 'NOT SELECTED',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: accent,
-                  ),
+                  style: AppType.caption.style(context, color: accent),
                 ),
               ),
             ],
@@ -713,17 +678,16 @@ class ApplicationCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text.rich(
             TextSpan(
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                height: 1.45,
-                color: context.themeForeground(const Color(0xFF64748B)),
+              style: AppType.bodySm.style(
+                context,
+                color: context.themeForeground(TypographyColors.secondary),
               ),
               children: [
                 TextSpan(
                   text: hired
                       ? "Congratulations, you're hired!"
                       : 'Not selected this time.',
-                  style: TextStyle(color: accent, fontWeight: FontWeight.w700),
+                  style: AppType.body.style(context, color: accent),
                 ),
                 TextSpan(
                   text: hired
@@ -931,12 +895,11 @@ class _ProgressBar extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           label,
-          style: GoogleFonts.inter(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
+          style: AppType.caption.style(
+            context,
             color:
-                finalAccent ?? context.themeForeground(const Color(0xFF94A3B8)),
+                finalAccent ??
+                context.themeForeground(TypographyColors.secondary),
           ),
         ),
       ],

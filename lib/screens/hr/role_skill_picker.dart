@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../../widgets/recruiter_button_style.dart';
 import 'package:flutter/material.dart';
@@ -156,11 +157,8 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
               ),
             ),
             const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Add Skills',
-                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
-              ),
+            Expanded(
+              child: Text('Add Skills', style: AppType.h2.style(context)),
             ),
             IconButton(
               tooltip: 'Close without saving',
@@ -172,9 +170,9 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
         const SizedBox(height: 7),
         Text(
           'Search, explore categories, and select up to $_maxSkills skills.',
-          style: TextStyle(
+          style: AppType.caption.style(
+            context,
             color: context.themeForeground(_muted),
-            fontSize: 13,
           ),
         ),
       ],
@@ -190,6 +188,7 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
       child: Column(
         children: [
           TextField(
+            style: AppType.body.style(context),
             key: const Key('role-skill-picker-search'),
             controller: _search,
             autofocus: wide,
@@ -322,14 +321,14 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
                 : _category == _all
                 ? 'Explore all skills'
                 : '$_category skills',
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: AppType.body.style(context),
           ),
         ),
         Text(
           '$count skills',
-          style: TextStyle(
+          style: AppType.numeric.style(
+            context,
             color: context.themeForeground(_muted),
-            fontSize: 12,
           ),
         ),
       ],
@@ -379,10 +378,9 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
       children: [
         Text(
           '${group.heading.toUpperCase()}  ${group.names.length}',
-          style: TextStyle(
+          style: AppType.overline.style(
+            context,
             color: context.themeForeground(_muted),
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 6),
@@ -425,11 +423,8 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
       children: [
         Row(
           children: [
-            const Expanded(
-              child: Text(
-                'Your selection',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
+            Expanded(
+              child: Text('Your selection', style: AppType.body.style(context)),
             ),
             const SizedBox(width: 8),
             Text(
@@ -441,9 +436,9 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
         const SizedBox(height: 5),
         Text(
           'Tap a skill to add or remove it.',
-          style: TextStyle(
+          style: AppType.caption.style(
+            context,
             color: context.themeForeground(_muted),
-            fontSize: 12,
           ),
         ),
         const SizedBox(height: 10),
@@ -476,15 +471,16 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
                 ),
         ),
         Divider(color: context.themeOutline(_line)),
-        const Text(
+        Text(
           'Can’t find a skill? Add your own',
-          style: TextStyle(fontSize: 12),
+          style: AppType.caption.style(context),
         ),
         const SizedBox(height: 7),
         Row(
           children: [
             Expanded(
               child: TextField(
+                style: AppType.body.style(context),
                 controller: _customInput,
                 maxLength: _maxCustomLength,
                 enabled: !_atLimit,
@@ -519,7 +515,7 @@ class _RoleSkillPickerState extends State<RoleSkillPicker> {
           children: [
             Text(
               '${_selected.length} selected',
-              style: const TextStyle(fontWeight: FontWeight.w700),
+              style: AppType.body.style(context),
             ),
             Text(
               '${(_maxSkills - _selected.length).clamp(0, _maxSkills)} more allowed',

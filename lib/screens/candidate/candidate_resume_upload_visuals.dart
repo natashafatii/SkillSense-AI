@@ -13,22 +13,11 @@ const _resumeGreenInk = Color(0xFF0B6B53);
 
 TextStyle _resumeText(
   BuildContext context,
-  double size, {
+  AppType type, {
   Color color = _resumeInk,
-  FontWeight weight = FontWeight.w400,
-  double height = 1.2,
-  double spacing = 0,
   bool onFill = false,
-}) => TextStyle(
-  fontFamily: 'Inter',
-  fontSize: size,
-  fontWeight: weight,
-  fontVariations: [FontVariation('wght', weight.value.toDouble())],
-  height: height,
-  letterSpacing: spacing,
-  color: onFill ? color : context.themeForeground(color),
-  leadingDistribution: TextLeadingDistribution.even,
-);
+}) =>
+    type.style(context, color: onFill ? color : context.themeForeground(color));
 
 BoxDecoration _resumeBox(
   BuildContext context, {
@@ -88,7 +77,7 @@ class _ResumeHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final resumesLabel = Text(
       'Resumes',
-      style: _resumeText(context, 13, color: _resumeMuted, spacing: .26),
+      style: _resumeText(context, AppType.caption, color: _resumeMuted),
     );
     return NotificationUnreadScope(
       builder: (context, unread) => Container(
@@ -128,20 +117,14 @@ class _ResumeHeader extends StatelessWidget {
                       '/',
                       style: _resumeText(
                         context,
-                        13,
+                        AppType.caption,
                         color: const Color(0xFF8A94A6),
-                        spacing: .26,
                       ),
                     ),
                   ),
                   Text(
                     'Add a resume',
-                    style: _resumeText(
-                      context,
-                      13,
-                      weight: FontWeight.w600,
-                      spacing: .26,
-                    ),
+                    style: _resumeText(context, AppType.caption),
                   ),
                 ],
               ),
@@ -264,10 +247,14 @@ class _ResumeSearchField extends StatelessWidget {
                 onTap: openSearch,
                 onChanged: (_) => openSearch(),
                 onSubmitted: (_) => openSearch(),
-                style: _resumeText(context, 14),
+                style: _resumeText(context, AppType.body),
                 decoration: InputDecoration(
                   hintText: 'Search or jump to…',
-                  hintStyle: _resumeText(context, 14, color: _resumeMuted),
+                  hintStyle: _resumeText(
+                    context,
+                    AppType.caption,
+                    color: _resumeMuted,
+                  ),
                   isCollapsed: true,
                   border: InputBorder.none,
                 ),
@@ -284,7 +271,11 @@ class _ResumeSearchField extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 child: Text(
                   '⌘K',
-                  style: _resumeText(context, 12, color: _resumeMuted),
+                  style: _resumeText(
+                    context,
+                    AppType.caption,
+                    color: _resumeMuted,
+                  ),
                 ),
               ),
             ),
@@ -359,16 +350,7 @@ class _ResumeChip extends StatelessWidget {
         label,
         style: _resumeText(
           context,
-          skill
-              ? 13
-              : compact
-              ? 11
-              : 12,
-          weight: skill
-              ? FontWeight.w500
-              : compact
-              ? FontWeight.w700
-              : FontWeight.w600,
+          AppType.caption,
           color: foreground,
           onFill: onFill,
         ),
@@ -465,12 +447,7 @@ class _ResumeDropAreaState extends State<_ResumeDropArea> {
                 Text(
                   'Drop your resume here',
                   textAlign: TextAlign.center,
-                  style: _resumeText(
-                    context,
-                    18,
-                    weight: FontWeight.w600,
-                    spacing: -.18,
-                  ),
+                  style: _resumeText(context, AppType.h3),
                 ),
                 const SizedBox(height: 12),
                 Text.rich(
@@ -481,14 +458,17 @@ class _ResumeDropAreaState extends State<_ResumeDropArea> {
                         text: 'browse your files',
                         style: _resumeText(
                           context,
-                          14,
+                          AppType.bodySm,
                           color: _resumeGreen,
-                          weight: FontWeight.w600,
                         ).copyWith(decoration: TextDecoration.underline),
                       ),
                     ],
                   ),
-                  style: _resumeText(context, 14, color: _resumeMuted),
+                  style: _resumeText(
+                    context,
+                    AppType.bodySm,
+                    color: _resumeMuted,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
@@ -568,10 +548,8 @@ class _ResumeFileBadge extends StatelessWidget {
       _resumeFileType(filename),
       style: _resumeText(
         context,
-        large ? 11 : 10,
+        AppType.caption,
         color: const Color(0xFF5B3FD0),
-        weight: FontWeight.w700,
-        spacing: large ? .44 : .4,
       ),
     ),
   );
@@ -594,7 +572,7 @@ class _ResumeOutlineButton extends StatelessWidget {
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       side: BorderSide(color: context.themeOutline(const Color(0xFFD5DBE3))),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-      textStyle: _resumeText(context, 13, weight: FontWeight.w600),
+      textStyle: _resumeText(context, AppType.button),
     ),
     child: Text(label),
   );
@@ -628,8 +606,7 @@ class _ResumePrimaryButton extends StatelessWidget {
           textAlign: TextAlign.center,
           style: _resumeText(
             context,
-            16,
-            weight: FontWeight.w700,
+            AppType.button,
             color: enabled ? Colors.white : _resumeMuted,
             onFill: enabled,
           ),
@@ -718,8 +695,7 @@ class _ResumeSteps extends StatelessWidget {
                         step.$1,
                         style: _resumeText(
                           context,
-                          14,
-                          weight: FontWeight.w600,
+                          AppType.bodySm,
                           color: index < completed || index == current
                               ? _resumeInk
                               : _resumeMuted,
@@ -727,7 +703,11 @@ class _ResumeSteps extends StatelessWidget {
                       ),
                       Text(
                         step.$2,
-                        style: _resumeText(context, 13, color: _resumeMuted),
+                        style: _resumeText(
+                          context,
+                          AppType.caption,
+                          color: _resumeMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -817,9 +797,13 @@ class _ResumeFindings extends StatelessWidget {
       children: [
         Text(
           name,
-          style: _resumeText(context, 12, color: const Color(0xFF4B5A6B)),
+          style: _resumeText(
+            context,
+            AppType.caption,
+            color: const Color(0xFF4B5A6B),
+          ),
         ),
-        Text(value, style: _resumeText(context, 15, weight: FontWeight.w600)),
+        Text(value, style: _resumeText(context, AppType.h4)),
       ],
     );
 
@@ -848,15 +832,17 @@ class _ResumeFindings extends StatelessWidget {
                     'WHAT WE FOUND',
                     style: _resumeText(
                       context,
-                      12,
+                      AppType.overline,
                       color: _resumeGreenInk,
-                      weight: FontWeight.w700,
-                      spacing: .96,
                     ),
                   ),
                   Text(
                     'Edit anytime in your profile',
-                    style: _resumeText(context, 13, color: _resumeGreenInk),
+                    style: _resumeText(
+                      context,
+                      AppType.caption,
+                      color: _resumeGreenInk,
+                    ),
                   ),
                 ],
               ),
@@ -874,7 +860,11 @@ class _ResumeFindings extends StatelessWidget {
             else
               Text(
                 'No structured sections were found.',
-                style: _resumeText(context, 13, color: _resumeMuted),
+                style: _resumeText(
+                  context,
+                  AppType.caption,
+                  color: _resumeMuted,
+                ),
               ),
             if (skills.isNotEmpty)
               Column(
@@ -885,7 +875,7 @@ class _ResumeFindings extends StatelessWidget {
                     'Top skills',
                     style: _resumeText(
                       context,
-                      12,
+                      AppType.caption,
                       color: const Color(0xFF4B5A6B),
                     ),
                   ),
@@ -944,7 +934,7 @@ class _ResumeStatusNotice extends StatelessWidget {
               label,
               style: _resumeText(
                 context,
-                13,
+                AppType.caption,
                 color: error ? const Color(0xFF991B1B) : _resumeMuted,
               ),
             ),
@@ -1022,11 +1012,7 @@ class _ResumeLibraryRow extends StatelessWidget {
                                 filename,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: _resumeText(
-                                  context,
-                                  14,
-                                  weight: FontWeight.w600,
-                                ),
+                                style: _resumeText(context, AppType.bodySm),
                               ),
                               Text(
                                 metadata,
@@ -1034,7 +1020,7 @@ class _ResumeLibraryRow extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: _resumeText(
                                   context,
-                                  12.5,
+                                  AppType.caption,
                                   color: _resumeMuted,
                                 ),
                               ),
@@ -1101,7 +1087,11 @@ class _ResumeLibraryRow extends StatelessWidget {
                 if (notice?.isNotEmpty == true)
                   Text(
                     notice!,
-                    style: _resumeText(context, 12, color: _resumeMuted),
+                    style: _resumeText(
+                      context,
+                      AppType.caption,
+                      color: _resumeMuted,
+                    ),
                   ),
                 if (canRetry)
                   _ResumeOutlineButton(
@@ -1133,12 +1123,12 @@ class _EmptyResumeLibrary extends StatelessWidget {
         Text(
           'No resumes uploaded yet',
           textAlign: TextAlign.center,
-          style: _resumeText(context, 14, weight: FontWeight.w600),
+          style: _resumeText(context, AppType.bodySm),
         ),
         Text(
           'Upload a resume to start your library.',
           textAlign: TextAlign.center,
-          style: _resumeText(context, 13, color: _resumeMuted),
+          style: _resumeText(context, AppType.caption, color: _resumeMuted),
         ),
       ],
     ),

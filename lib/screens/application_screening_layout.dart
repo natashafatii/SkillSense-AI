@@ -66,14 +66,11 @@ String _job(Application app) =>
     [app.jobTitle, app.jobCompany].where((part) => part.isNotEmpty).join(' · ');
 
 Widget _copy(
+  BuildContext context,
   String value, {
-  double size = 12.5,
-  int weight = 400,
+  AppType type = AppType.bodySm,
   Color color = _muted,
-}) => Text(
-  value,
-  style: ScreeningStyle.text(size, weight: weight, color: color),
-);
+}) => Text(value, style: ScreeningStyle.text(context, type, color: color));
 
 Widget _screeningStack(List<Widget> children) => Column(
   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -203,12 +200,15 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
             else ...[
               Text(
                 resume.filename ?? 'Submitted resume',
-                style: ScreeningStyle.title(13),
+                style: ScreeningStyle.title(context, AppType.caption),
               ),
               Text(_resumeMeta(resume)),
             ],
             const SizedBox(height: 16),
-            Text('Skills used in screening', style: ScreeningStyle.title(13)),
+            Text(
+              'Skills used in screening',
+              style: ScreeningStyle.title(context, AppType.caption),
+            ),
             const SizedBox(height: 6),
             Text(
               evidence?.matchedSkills.isNotEmpty == true
@@ -225,7 +225,11 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                   expandedAlignment: Alignment.centerLeft,
                   title: Text(
                     'All extracted skills (${skills.length})',
-                    style: ScreeningStyle.text(12.5, weight: 600, color: _blue),
+                    style: ScreeningStyle.text(
+                      context,
+                      AppType.caption,
+                      color: _blue,
+                    ),
                   ),
                   children: [Text(skills.join(' · '))],
                 ),
@@ -279,16 +283,16 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
             color: ScreeningStyle.tint,
             borderRadius: BorderRadius.circular(13),
           ),
-          child: _copy(initials, size: 14, weight: 700, color: _blue),
+          child: _copy(context, initials, color: _blue, type: AppType.bodySm),
         ),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_name(app), style: ScreeningStyle.title()),
+              Text(_name(app), style: ScreeningStyle.title(context)),
               const SizedBox(height: 2),
-              _copy(app.jobTitle, size: 12),
+              _copy(context, app.jobTitle, type: AppType.caption),
             ],
           ),
         ),
@@ -307,19 +311,25 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
       children: [
         _identity(app),
         const SizedBox(height: 16),
-        Text('Application', style: ScreeningStyle.title(13)),
+        Text(
+          'Application',
+          style: ScreeningStyle.title(context, AppType.caption),
+        ),
         const SizedBox(height: 6),
         Text(
           '${_job(app)}\nApplied ${_date(app.createdAt)} · ${_label(app.rawStatus ?? app.status.value)}',
         ),
         if (app.coverNote case final note? when note.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text('Cover note', style: ScreeningStyle.title(13)),
+          Text(
+            'Cover note',
+            style: ScreeningStyle.title(context, AppType.caption),
+          ),
           Text(note),
         ],
         if (app.resumeId != null) ...[
           const SizedBox(height: 16),
-          Text('Resume', style: ScreeningStyle.title(13)),
+          Text('Resume', style: ScreeningStyle.title(context, AppType.caption)),
           const SizedBox(height: 6),
           FutureBuilder<ResumeDetail>(
             future: _resume,
@@ -341,7 +351,10 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                   if (resume?.skills case final skills?
                       when skills.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    Text('Extracted skills', style: ScreeningStyle.title(13)),
+                    Text(
+                      'Extracted skills',
+                      style: ScreeningStyle.title(context, AppType.caption),
+                    ),
                     const SizedBox(height: 6),
                     Text(skills.take(10).join(' · ')),
                   ],
@@ -393,7 +406,7 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
             painter: const ScreeningBackground(),
             child: SafeArea(
               child: DefaultTextStyle(
-                style: ScreeningStyle.text(13),
+                style: ScreeningStyle.text(context, AppType.caption),
                 child: Column(
                   children: [
                     ScreeningCommandBar(
@@ -410,22 +423,23 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                         builder: (context, viewport) {
                           final width = viewport.maxWidth;
                           final gutter = ScreeningStyle.gutter(width);
-                          final titleSize = (width * .024).clamp(22.0, 26.0);
                           final heading = Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 'Screening evidence',
                                 style: ScreeningStyle.text(
-                                  titleSize,
-                                  weight: 800,
-                                  height: 1.15,
-                                  spacing: -titleSize * .03,
+                                  context,
+                                  AppType.body,
                                 ),
                               ),
                               if (app != null) ...[
                                 const SizedBox(height: 4),
-                                _copy(_job(app), size: 13, weight: 500),
+                                _copy(
+                                  context,
+                                  _job(app),
+                                  type: AppType.caption,
+                                ),
                               ],
                             ],
                           );
@@ -459,8 +473,8 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                                       tapTargetSize:
                                           MaterialTapTargetSize.shrinkWrap,
                                       textStyle: ScreeningStyle.text(
-                                        12.5,
-                                        weight: 600,
+                                        context,
+                                        AppType.button,
                                       ),
                                     ),
                                     child: const Row(
@@ -496,10 +510,10 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                                 const SizedBox(height: 14),
                                 if (widget.error case final error?) ...[
                                   _copy(
+                                    context,
                                     error,
-                                    size: 13,
-                                    weight: 600,
                                     color: ScreeningStyle.red,
+                                    type: AppType.caption,
                                   ),
                                   const SizedBox(height: 14),
                                 ],
@@ -641,16 +655,17 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _copy(
+                                  context,
                                   resume?.filename ??
                                       (app.resumeId == null
                                           ? 'No resume attached'
                                           : 'Submitted resume'),
-                                  weight: 700,
                                   color: ScreeningStyle.ink,
+                                  type: AppType.bodySm,
                                 ),
                                 if (_resumeMeta(resume) case final meta
                                     when meta.isNotEmpty)
-                                  _copy(meta, size: 11.5, weight: 500),
+                                  _copy(context, meta, type: AppType.caption),
                               ],
                             ),
                           ),
@@ -793,11 +808,15 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: ScreeningStyle.title(15)),
+            Text(title, style: ScreeningStyle.title(context, AppType.h4)),
             const SizedBox(height: 6),
             Text(
               message,
-              style: ScreeningStyle.text(12.5, color: _muted, height: 1.55),
+              style: ScreeningStyle.text(
+                context,
+                AppType.caption,
+                color: _muted,
+              ),
             ),
             const SizedBox(height: 12),
             ScreeningButton(
@@ -858,12 +877,12 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
               children: [
                 if (unverified.isNotEmpty) ...[
                   _copy(
+                    context,
                     missing.isEmpty
                         ? 'Requirements needing review'
                         : 'Skills not evidenced in the resume',
-                    size: 12,
-                    weight: 700,
                     color: ScreeningStyle.ink,
+                    type: AppType.caption,
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -879,10 +898,10 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                               vertical: 3,
                             ),
                             child: _copy(
+                              context,
                               item,
-                              size: 12,
-                              weight: 700,
                               color: const Color(0xff334a7a),
+                              type: AppType.caption,
                             ),
                           ),
                         ),
@@ -891,6 +910,7 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                   const SizedBox(height: 12),
                 ],
                 _copy(
+                  context,
                   below
                       ? 'Screening match ${_number(score)} / 100 is below the policy threshold of ${_number(threshold)}. You can record a manual screening decision with your rationale.'
                       : 'Review the unverified requirements before recording a screening decision.',
@@ -912,15 +932,15 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _copy(
+                          context,
                           recorded['to_status'] == 'REJECTED'
                               ? 'Manually rejected'
                               : 'Manually shortlisted',
-                          size: 13,
-                          weight: 700,
                           color: ScreeningStyle.ink,
+                          type: AppType.caption,
                         ),
                         const SizedBox(height: 4),
-                        _copy('${recorded['reason'] ?? ''}'),
+                        _copy(context, '${recorded['reason'] ?? ''}'),
                       ],
                     ),
                   ),
@@ -929,9 +949,10 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                 if (canDecide) ...[
                   const SizedBox(height: 10),
                   _copy(
+                    context,
                     'Reason for screening override or rejection',
-                    weight: 700,
                     color: ScreeningStyle.ink,
+                    type: AppType.bodySm,
                   ),
                   const SizedBox(height: 6),
                   TextField(
@@ -947,8 +968,9 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                           required isFocused,
                           maxLength,
                         }) => null,
-                    style: ScreeningStyle.text(12.5, weight: 500),
+                    style: ScreeningStyle.text(context, AppType.body),
                     decoration: ScreeningStyle.field(
+                      context,
                       hint:
                           'Explain the evidence or reasoning behind your decision.',
                     ),
@@ -958,19 +980,19 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                   ),
                   const SizedBox(height: 6),
                   _copy(
+                    context,
                     'This rationale will be recorded in screening history.',
-                    size: 11.5,
-                    weight: 500,
+                    type: AppType.caption,
                   ),
                   if (_reasonError) ...[
                     const SizedBox(height: 8),
                     Semantics(
                       liveRegion: true,
                       child: _copy(
+                        context,
                         'Enter a reason before shortlisting or rejecting.',
-                        size: 13,
-                        weight: 600,
                         color: ScreeningStyle.red,
+                        type: AppType.caption,
                       ),
                     ),
                   ],
@@ -1057,10 +1079,10 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                     children: [
                       Expanded(
                         child: _copy(
+                          context,
                           'Assessment & processing details',
-                          size: 13,
-                          weight: 700,
                           color: ScreeningStyle.ink,
+                          type: AppType.caption,
                         ),
                       ),
                       RotatedBox(
@@ -1090,12 +1112,13 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _copy(label, size: 11.5, weight: 600),
+                              _copy(context, label, type: AppType.caption),
                               const SizedBox(height: 2),
                               _copy(
+                                context,
                                 value,
-                                weight: 600,
                                 color: ScreeningStyle.ink,
+                                type: AppType.bodySm,
                               ),
                             ],
                           ),
@@ -1106,29 +1129,34 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
               ),
               const SizedBox(height: 14),
               _copy(
+                context,
                 'Recovery · ${_label(evidence?.recoveryAction, 'Wait')}',
-                size: 12,
+                type: AppType.caption,
               ),
               if (evidence?.reasons.isNotEmpty == true)
                 _copy(
+                  context,
                   'Assessment reasons · ${evidence!.reasons.map((reason) => _label(reason)).join(' · ')}',
-                  size: 12,
+                  type: AppType.caption,
                 ),
               if (evidence?.matchedSkills.isNotEmpty == true)
                 _copy(
+                  context,
                   'Matched skills · ${evidence!.matchedSkills.join(' · ')}',
-                  size: 12,
+                  type: AppType.caption,
                 ),
               if (evidence?.missingSkills.isNotEmpty == true)
                 _copy(
+                  context,
                   'Missing skills · ${evidence!.missingSkills.join(' · ')}',
-                  size: 12,
+                  type: AppType.caption,
                 ),
               if (evidence?.errorMessage.isNotEmpty == true)
                 _copy(
+                  context,
                   evidence!.errorMessage,
-                  size: 12,
                   color: ScreeningStyle.red,
+                  type: AppType.caption,
                 ),
               if (app.allowedActions.contains('rescreen'))
                 Align(
@@ -1153,14 +1181,14 @@ Widget _fact(String label, String value) => LayoutBuilder(
   builder: (context, bounds) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Expanded(child: _copy(label, weight: 500)),
+      Expanded(child: _copy(context, label, type: AppType.bodySm)),
       const SizedBox(width: 12),
       ConstrainedBox(
         constraints: BoxConstraints(maxWidth: bounds.maxWidth / 2),
         child: Text(
           value,
           textAlign: TextAlign.end,
-          style: ScreeningStyle.text(12.5, weight: 700),
+          style: ScreeningStyle.text(context, AppType.caption),
         ),
       ),
     ],

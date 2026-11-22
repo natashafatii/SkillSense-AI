@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -665,11 +666,9 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                       item.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: AppType.h4.style(
+                        context,
                         color: item.id == value ? activeInk : _ink,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        height: 1.35,
                       ),
                     ),
                     if (item.subtitle.trim().isNotEmpty)
@@ -677,12 +676,11 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                         item.subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: AppType.h4.style(
+                          context,
                           color: item.id == value && !_dark
-                              ? const Color(0xFF43536E)
+                              ? TypographyColors.secondary
                               : _muted,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
                         ),
                       ),
                   ],
@@ -740,7 +738,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                         selected?.title ?? hint,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _type(14, weight: FontWeight.w500),
+                        style: _type(AppType.button),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -919,11 +917,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         const SizedBox(height: 7),
         Text(
           'Interview ID: ${_interview!.id}',
-          style: TextStyle(
-            fontFamily: 'JetBrains Mono',
-            color: _muted,
-            fontSize: 10,
-          ),
+          style: AppType.numeric.style(context, color: _muted),
         ),
         if (_questionNotice != null) Text(_questionNotice!),
         if (_questionError != null)
@@ -937,6 +931,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         ),
         for (final question in _questions)
           TextField(
+            style: AppType.body.style(context),
             controller: _questionTexts[question.id],
             readOnly: true,
             maxLines: 2,

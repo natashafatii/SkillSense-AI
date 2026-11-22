@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -16,7 +17,6 @@ import '../../services/job_service.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../services/session_scope.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
-import '../../widgets/page_heading_style.dart';
 import '../../services/app_theme_controller.dart';
 
 import 'recruitment_review_screen.dart';

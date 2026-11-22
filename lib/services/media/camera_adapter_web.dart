@@ -41,6 +41,7 @@ class WebCameraAdapter extends CameraAdapter {
   late final JSFunction _visibility, _pageHide;
   web.MediaStream? _camera, _microphone;
   final web.HTMLVideoElement _video = web.HTMLVideoElement();
+  web.MediaStreamTrack? get monitorTrack => cameraReady ? _camera!.getVideoTracks().toDart.first : null;
   web.HTMLVideoElement? _preview;
   List<CameraDevice> _cameras = const [];
   String? _selected;

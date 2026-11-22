@@ -28,9 +28,14 @@ class ApiClient {
     ),
   );
   static TokenSupplier? _tokenSupplier;
+  static TokenSupplier? _refreshTokenSupplier;
 
-  static void setTokenSupplier(TokenSupplier supplier) {
+  static void setTokenSupplier(
+    TokenSupplier supplier, {
+    TokenSupplier? refresh,
+  }) {
     _tokenSupplier = supplier;
+    _refreshTokenSupplier = refresh;
   }
 
   static Future<Dio> getInstance() async {
@@ -52,6 +57,9 @@ class ApiClient {
     dio.interceptors.add(
       ClerkTokenInterceptor(
         tokenSupplier: () => _tokenSupplier?.call() ?? Future.value(null),
+        refreshTokenSupplier: () =>
+            (_refreshTokenSupplier ?? _tokenSupplier)?.call() ??
+            Future.value(null),
       ),
     );
 
@@ -94,18 +102,27 @@ class ApiClient {
 // Gets a current SDK token for each request and discards obsolete responses.
 class ClerkTokenInterceptor extends Interceptor {
   final TokenSupplier tokenSupplier;
+  final TokenSupplier? refreshTokenSupplier;
 
-  ClerkTokenInterceptor({required this.tokenSupplier});
+  ClerkTokenInterceptor({
+    required this.tokenSupplier,
+    this.refreshTokenSupplier,
+  });
 
   @override
   Future<void> onRequest(
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final epoch = SessionScope.generation;
-    options.extra['sessionGeneration'] = epoch;
+    final epoch = options.extra.putIfAbsent(
+      'sessionGeneration',
+      () => SessionScope.generation,
+    );
     try {
-      final token = await tokenSupplier();
+      final supplier = options.extra['refreshSessionToken'] == true
+          ? refreshTokenSupplier ?? tokenSupplier
+          : tokenSupplier;
+      final token = epoch == SessionScope.generation ? await supplier() : null;
       if (epoch != SessionScope.generation) {
         handler.reject(
           DioException(

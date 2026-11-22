@@ -11,7 +11,7 @@ class MonoText extends StatelessWidget {
     data,
     textAlign: textAlign,
     style: TextStyle(
-      fontFamily: 'JetBrains Mono',
+      fontFamily: 'Inter',
       fontFeatures: const [FontFeature.tabularFigures()],
       color: context.aurora.tx,
     ).merge(style),
@@ -26,7 +26,7 @@ class CapText extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     data,
     style: TextStyle(
-      fontFamily: 'Space Grotesk',
+      fontFamily: 'Inter',
       fontWeight: FontWeight.w700,
       letterSpacing: 1.1,
       color: context.aurora.tx3,
@@ -135,43 +135,48 @@ class AdminButton extends StatelessWidget {
         onPressed: onPressed,
         icon: icon == null ? const SizedBox.shrink() : Icon(icon, size: 15),
         label: Text(label),
-        style: TextButton.styleFrom(
-          foregroundColor: kind == AdminButtonKind.primary ? t.bg : color,
-          backgroundColor: fill,
-          disabledForegroundColor: t.tx4,
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-          textStyle: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(
-              color: kind == AdminButtonKind.text
-                  ? Colors.transparent
-                  : kind == AdminButtonKind.primary
-                  ? t.gd
-                  : kind == AdminButtonKind.destructive
-                  ? t.pr.withValues(alpha: .4)
-                  : t.edge,
+        style:
+            TextButton.styleFrom(
+              foregroundColor: kind == AdminButtonKind.primary ? t.bg : color,
+              backgroundColor: fill,
+              disabledForegroundColor: t.tx4,
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+              textStyle: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(
+                  color: kind == AdminButtonKind.text
+                      ? Colors.transparent
+                      : kind == AdminButtonKind.primary
+                      ? t.gd
+                      : kind == AdminButtonKind.destructive
+                      ? t.pr.withValues(alpha: .4)
+                      : t.edge,
+                ),
+              ),
+            ).copyWith(
+              backgroundBuilder: kind == AdminButtonKind.primary
+                  ? (context, states, child) =>
+                        states.contains(WidgetState.disabled)
+                        ? child ?? const SizedBox.shrink()
+                        : DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Color.lerp(t.gd, Colors.white, .12)!,
+                                  t.gd,
+                                ],
+                              ),
+                            ),
+                            child: child,
+                          )
+                  : null,
             ),
-          ),
-        ).copyWith(
-          backgroundBuilder: kind == AdminButtonKind.primary
-              ? (context, states, child) => states.contains(WidgetState.disabled)
-                    ? child ?? const SizedBox.shrink()
-                    : DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          gradient: LinearGradient(
-                            colors: [Color.lerp(t.gd, Colors.white, .12)!, t.gd],
-                          ),
-                        ),
-                        child: child,
-                      )
-              : null,
-        ),
       ),
     );
   }
@@ -233,7 +238,7 @@ class AdminPanel extends StatelessWidget {
                     child: Text(
                       title!,
                       style: TextStyle(
-                        fontFamily: 'Space Grotesk',
+                        fontFamily: 'Inter',
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
                         color: t.tx,
@@ -328,7 +333,7 @@ class AdminModal {
             ),
             title: Text(
               title,
-              style: TextStyle(fontFamily: 'Space Grotesk', color: t.tx),
+              style: TextStyle(fontFamily: 'Inter', color: t.tx),
             ),
             content: SizedBox(
               width: 390,
