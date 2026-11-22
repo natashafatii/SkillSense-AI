@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/page_heading_style.dart';
 import '../../widgets/notification_list_skeleton.dart';
+import '../../widgets/notification_row.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/job.dart';
@@ -1476,19 +1477,6 @@ class _RecruiterNotificationsScreenState
                   ),
                 ),
               ),
-              if (items.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 36),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.notifications_none_rounded),
-                        Text("You're all caught up."),
-                      ],
-                    ),
-                  ),
-                ),
               for (var index = 0; index < items.length; index++) ...[
                 if (index > 0)
                   Divider(
@@ -1505,77 +1493,11 @@ class _RecruiterNotificationsScreenState
           ),
         );
 
-  Widget _notificationRow(AppNotification item) => Opacity(
-    opacity: item.isRead ? .75 : 1,
-    child: Material(
-      color: item.isRead
-          ? context.themeSurface(Colors.white)
-          : context.themeSurface(const Color(0xFFFAFCFF)),
-      child: ListTile(
-        key: ValueKey(item.id),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: item.isRead
-            ? const SizedBox(width: 8)
-            : const Icon(Icons.circle, color: Color(0xFFE85D5B), size: 8),
-        title: Text(
-          item.displayType,
-          style: GoogleFonts.inter(
-            color: context.themeForeground(const Color(0xFF0F172A)),
-            fontSize: 13.5,
-            height: 1.4,
-            fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w700,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 6),
-            Text(item.message, style: const TextStyle(height: 1.5)),
-            const SizedBox(height: 8),
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: context.themeSurface(const Color(0xFFDBEAFE)),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Text(
-                    item.displayType,
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF1D4ED8),
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                Text(
-                  item.relativeTime,
-                  style: GoogleFonts.inter(
-                    color: context.themeForeground(const Color(0xFF64748B)),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        trailing: item.isRead
-            ? null
-            : IconButton(
-                tooltip: 'Mark as read',
-                onPressed: () => _markRead(item),
-                icon: const Icon(Icons.done_rounded),
-              ),
-        onTap: () => _openNotification(item),
-      ),
-    ),
+  Widget _notificationRow(AppNotification item) => NotificationRow(
+    key: ValueKey(item.id),
+    item: item,
+    role: 'RECRUITER',
+    onOpen: () => _openNotification(item),
+    onMarkRead: () => _markRead(item),
   );
 }

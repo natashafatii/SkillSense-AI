@@ -459,8 +459,8 @@ class _ApplicationProgress extends StatelessWidget {
     final rejected = status == ApplicationStatus.rejected;
     final interviewState = interview?.status;
     final interviewDate = interviewState == 'DONE'
-        ? interview?.completedAt ?? interview?.scheduledAt
-        : interview?.scheduledAt;
+        ? interview?.completedAt ?? interview?.timingAt
+        : interview?.timingAt;
     DateTime? transitionDate(ApplicationStatus target) {
       for (final event in application.history) {
         if (ApplicationStatus.fromString(

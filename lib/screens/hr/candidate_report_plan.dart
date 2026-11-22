@@ -99,7 +99,7 @@ class _ScheduledPlan extends StatelessWidget {
           source: question.source,
         ),
     ],
-    date: interview.scheduledAt,
+    date: interview.timingAt,
     focusAreas: focusAreas,
     note: interview.questions.isEmpty
         ? 'No questions were returned for this interview.'

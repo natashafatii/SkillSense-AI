@@ -1,22 +1,30 @@
-import 'package:skillsense_ai/constants/adaptive_colors.dart';
-import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
-import '../../widgets/mobile_edge_shadow_wrapper.dart';
-import '../../widgets/candidate_mobile_nav.dart';
-import '../../widgets/candidate_button_style.dart';
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
+
+import 'package:dio/dio.dart' show CancelToken;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import '../../widgets/recruiter_top_bar.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
+import '../../constants/adaptive_colors.dart';
+import '../../widgets/candidate_button_style.dart';
+import '../../widgets/candidate_mobile_search.dart';
+import '../../widgets/candidate_scaffold.dart';
+import '../../widgets/global_search.dart';
+import '../../widgets/notification_unread_scope.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
-import '../../constants/app_colors.dart';
 import '../../models/resume_detail.dart';
 import '../../services/resume_manager.dart';
 import '../../services/resume_service.dart';
 import '../../services/api_exception.dart';
 import '../../widgets/candidate_side_nav.dart';
-import '../../widgets/green_gradient_background.dart';
+
+import 'resume_file_drop_stub.dart'
+    if (dart.library.js_interop) 'resume_file_drop_web.dart';
+
+part 'candidate_resume_upload_visuals.dart';
 
 class CandidateResumeManagementScreen extends StatefulWidget {
   const CandidateResumeManagementScreen({super.key});
@@ -61,12 +69,16 @@ class _CandidateResumeManagementScreenState
       _statusCheckMessage == null;
 
   // Parsed Response Data (from API — no hardcoded values)
-  Map<String, dynamic>? _stagedExtracted;
+  ResumeDetail? _stagedExtracted;
 
   // Dynamic persistent resumes list loaded from ResumeManager
   List<Map<String, dynamic>> get _resumes => ResumeManager.getResumes();
 
-  Timer? _uploadTimer;
+  static const _maxFileSize = 5 * 1024 * 1024;
+  CancelToken? _uploadCancellation;
+  bool _isPicking = false;
+  bool _isSaving = false;
+  bool _savedAsDefault = false;
 
   @override
   void initState() {
@@ -91,7 +103,7 @@ class _CandidateResumeManagementScreenState
 
   @override
   void dispose() {
-    _uploadTimer?.cancel();
+    _uploadCancellation?.cancel();
     super.dispose();
   }
 
@@ -184,7 +196,11 @@ class _CandidateResumeManagementScreenState
     // 2. Eagerly remove from local UI
     try {
       ResumeManager.deleteResume(apiId);
-      setState(() {});
+      if (_stagedResumeId == apiId) {
+        _clearStagedFile();
+      } else {
+        setState(() {});
+      }
     } catch (e) {
       // ignore local cache errors
     }
@@ -223,52 +239,102 @@ class _CandidateResumeManagementScreenState
     );
   }
 
-  void _triggerBrowseFiles() async {
-    if (_isUploading || _isParsing) return;
+  Future<void> _triggerBrowseFiles() async {
+    if (!_canChooseFile) return;
+    _isPicking = true;
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'docx'],
-        withData: true,
+        withData: kIsWeb,
       );
-
-      if (mounted && result != null && result.files.isNotEmpty) {
-        final platformFile = result.files.single;
-        final sizeMb = (platformFile.size / (1024 * 1024)).toStringAsFixed(1);
-        final List<int> bytes = platformFile.bytes != null
-            ? List<int>.from(platformFile.bytes!)
-            : (platformFile.path != null
-                  ? File(platformFile.path!).readAsBytesSync()
-                  : <int>[]);
-        setState(() {
-          _stagedFilename = platformFile.name;
-          _stagedFilesize = '$sizeMb MB';
-          _stagedFileBytes = bytes;
-          _stagedResumeId = null;
-          _statusCheckMessage = null;
-          _hasStagedFile = true;
-          _isUploading = false;
-          _uploadProgress = 0.0;
-          _isParsing = false;
-          _parseCompleted = false;
-          _isFailed = false;
-          _failureErrorMessage = '';
-          _stagedExtracted = null;
-        });
-      }
+      if (!mounted || result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      if (!_validateFile(file.name, file.size)) return;
+      final bytes =
+          file.bytes ??
+          (file.path == null
+              ? Uint8List(0)
+              : await File(file.path!).readAsBytes());
+      if (mounted) _stageFile(file.name, bytes);
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to pick file: $e'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      if (mounted) _showFileError('Failed to pick file: $e');
+    } finally {
+      _isPicking = false;
     }
   }
 
+  bool get _canChooseFile =>
+      !_isPicking && !_isUploading && !_isParsing && !_isSaving;
+
+  Future<void> _stageDroppedFile(
+    String name,
+    int size,
+    Future<Uint8List> Function() read,
+  ) async {
+    if (!_canChooseFile || !_validateFile(name, size)) return;
+    _isPicking = true;
+    try {
+      final bytes = await read();
+      if (mounted) _stageFile(name, bytes);
+    } catch (e) {
+      if (mounted) _showFileError('Could not read the selected resume: $e');
+    } finally {
+      _isPicking = false;
+    }
+  }
+
+  bool _validateFile(String name, int size) {
+    final lower = name.toLowerCase();
+    final isSupported = lower.endsWith('.pdf') || lower.endsWith('.docx');
+    if (!isSupported || size > _maxFileSize) {
+      _showFileError('Choose a PDF or DOCX file up to 5 MB.');
+      return false;
+    }
+    if (size == 0) {
+      _showFileError(
+        'Could not read file content. Please select a valid file.',
+      );
+      return false;
+    }
+    return true;
+  }
+
+  void _showFileError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+    );
+  }
+
+  void _stageFile(String name, Uint8List bytes) {
+    if (!_validateFile(name, bytes.length)) return;
+    final size = bytes.length;
+    final filesize = size >= 1024 * 1024
+        ? '${(size / (1024 * 1024)).toStringAsFixed(1)} MB'
+        : '${(size / 1024).ceil()} KB';
+    setState(() {
+      _stagedFilename = name;
+      _stagedFilesize = filesize;
+      _stagedFileBytes = bytes;
+      _stagedResumeId = null;
+      _statusCheckMessage = null;
+      _hasStagedFile = true;
+      _uploadProgress = 0;
+      _parseCompleted = false;
+      _isFailed = false;
+      _failureErrorMessage = '';
+      _stagedExtracted = null;
+      _savedAsDefault = false;
+      _canRetryParsing = false;
+      _parseNeedsSupport = false;
+      _processingDelayed = false;
+      _parsingElapsedSeconds = 0;
+      _autoCommitOnParse = false;
+    });
+  }
+
   void _startUploadFlowFromButton() {
-    if (_stagedFileBytes != null) {
+    if (_canUpload && !_isPicking && _stagedFileBytes != null) {
       _autoCommitOnParse = true;
       _startRealUploadFlow(_stagedFilename, _stagedFilesize, _stagedFileBytes!);
     }
@@ -279,7 +345,8 @@ class _CandidateResumeManagementScreenState
     String filesize,
     List<int> fileBytes,
   ) async {
-    _uploadTimer?.cancel();
+    _uploadCancellation?.cancel();
+    final cancellation = _uploadCancellation = CancelToken();
 
     if (fileBytes.isEmpty) {
       setState(() {
@@ -310,8 +377,9 @@ class _CandidateResumeManagementScreenState
       final uploadResult = await ResumeService.uploadResume(
         fileBytes: fileBytes,
         fileName: filename,
+        cancelToken: cancellation,
         onSendProgress: (sent, total) {
-          if (total > 0 && mounted) {
+          if (total > 0 && mounted && !cancellation.isCancelled) {
             setState(() {
               _uploadProgress = (sent / total).clamp(0.0, 1.0);
             });
@@ -319,7 +387,7 @@ class _CandidateResumeManagementScreenState
         },
       );
 
-      if (!mounted) return;
+      if (!mounted || cancellation.isCancelled) return;
       final resumeId = uploadResult['id']?.toString();
       if (resumeId == null || resumeId.isEmpty) {
         throw const ApiException(message: 'The upload could not be confirmed.');
@@ -334,7 +402,7 @@ class _CandidateResumeManagementScreenState
       // Poll backend until parsing is completed or failed
       _pollParsingStatus(resumeId);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || cancellation.isCancelled) return;
       setState(() {
         _isUploading = false;
         _isParsing = false;
@@ -347,6 +415,8 @@ class _CandidateResumeManagementScreenState
   }
 
   void _pollParsingStatus(String resumeId) async {
+    _uploadCancellation?.cancel();
+    final cancellation = _uploadCancellation = CancelToken();
     setState(() {
       _isParsing = true;
       _isFailed = false;
@@ -359,6 +429,11 @@ class _CandidateResumeManagementScreenState
     try {
       final detail = await ResumeService.pollResumeUntilReady(
         resumeId,
+        fetchDetail: (id) => ResumeService.getResumeDetail(
+          id,
+          refresh: true,
+          cancelToken: cancellation,
+        ),
         onStatus: (detail) {
           final delayed = detail.processingCode == 'RETRY_PENDING';
           if (mounted &&
@@ -368,6 +443,9 @@ class _CandidateResumeManagementScreenState
           }
         },
         onTick: (elapsed) {
+          if (cancellation.isCancelled) {
+            throw StateError('Resume polling stopped.');
+          }
           if (mounted && _stagedResumeId == resumeId) {
             setState(() {
               _parsingElapsedSeconds = elapsed;
@@ -376,52 +454,23 @@ class _CandidateResumeManagementScreenState
         },
       );
 
-      if (!mounted || _stagedResumeId != resumeId) return;
+      if (!mounted || cancellation.isCancelled || _stagedResumeId != resumeId) {
+        return;
+      }
+      setState(() {
+        _isParsing = false;
+        _parseCompleted = true;
+        _stagedExtracted = detail;
+      });
 
-      if (detail.isFailed) {
-        setState(() {
-          _isParsing = false;
-          _isFailed = true;
-          _failureErrorMessage =
-              "Couldn't read this file — try a text-based PDF.";
-        });
-      } else {
-        // Derive all values from the real API response — no hardcoded numbers.
-        final skills = detail.skills ?? [];
-        final roles =
-            detail.experience
-                ?.map((e) => (e['title'] ?? 'Role').toString())
-                .toList() ??
-            [];
-        final expList = detail.experience ?? [];
-        // Estimate years_experience from experience entries if possible.
-        double yrs = 0;
-        for (final exp in expList) {
-          final start = exp['start_year'] as int?;
-          final end = exp['end_year'] as int?;
-          if (start != null) {
-            yrs += (end ?? DateTime.now().year) - start;
-          }
-        }
-        if (yrs == 0 && expList.isNotEmpty) yrs = expList.length.toDouble();
-
-        setState(() {
-          _isParsing = false;
-          _parseCompleted = true;
-          _stagedExtracted = {
-            'skills': skills,
-            'roles': roles,
-            'years_experience': yrs > 0 ? yrs : null,
-          };
-        });
-
-        if (_autoCommitOnParse) {
-          _autoCommitOnParse = false;
-          _commitStagedResume();
-        }
+      if (_autoCommitOnParse) {
+        _autoCommitOnParse = false;
+        await _commitStagedResume();
       }
     } catch (e) {
-      if (!mounted || _stagedResumeId != resumeId) return;
+      if (!mounted || cancellation.isCancelled || _stagedResumeId != resumeId) {
+        return;
+      }
       setState(() {
         _isParsing = false;
         if (e is ApiException && e.statusCode == 422) {
@@ -497,12 +546,14 @@ class _CandidateResumeManagementScreenState
   }
 
   Future<void> _commitStagedResume() async {
-    if (!_parseCompleted ||
+    if (_isSaving ||
+        !_parseCompleted ||
         _stagedResumeId == null ||
         _stagedResumeId!.isEmpty) {
       return;
     }
     final id = _stagedResumeId!;
+    setState(() => _isSaving = true);
     try {
       ResumeManager.addResume(
         _stagedFilename,
@@ -526,1193 +577,423 @@ class _CandidateResumeManagementScreenState
         );
       }
       return;
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
     if (!mounted) return;
-    setState(() {
-      _parseCompleted = false;
-      _hasStagedFile = false;
-      _stagedFileBytes = null;
-      _stagedResumeId = null;
-      _isParsing = false;
-      _isUploading = false;
-      _isFailed = false;
-      _uploadProgress = 0.0;
-    });
+    setState(() => _savedAsDefault = true);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Resume $_stagedFilename confirmed as default.')),
     );
   }
 
+  void _clearStagedFile() {
+    final wasBusy = _isUploading || _isParsing;
+    _uploadCancellation?.cancel();
+    _uploadCancellation = null;
+    setState(() {
+      _hasStagedFile = false;
+      _stagedFileBytes = null;
+      _stagedResumeId = null;
+      _statusCheckMessage = null;
+      _isFailed = false;
+      _isUploading = false;
+      _isParsing = false;
+      _parseCompleted = false;
+      _savedAsDefault = false;
+      _autoCommitOnParse = false;
+      _stagedExtracted = null;
+    });
+    if (wasBusy) unawaited(_loadResumeList());
+  }
+
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 900;
-
-    final bool hasResumes = _resumes.isNotEmpty;
-
-    return Scaffold(
-      backgroundColor: context.themeCanvas(const Color(0xFFF4F6FA)),
-      body: Stack(
-        children: [
-          const GreenGradientBackground(),
-          // Background subtle grid & aurora
-          Positioned.fill(
-            child: CustomPaint(
-              painter: GridPainter(
-                color: Colors.black.withValues(alpha: 0.015),
-              ),
-            ),
-          ),
-          Positioned(
-            top: isMobile ? -50 : -100,
-            left: isMobile ? 20 : 160,
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.dashboardTeal.withValues(alpha: 0.04),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-          ),
-
-          // Main Layout Wrapper
-          SafeArea(
-            bottom: false,
+    final mobile =
+        MediaQuery.sizeOf(context).width < CandidateScaffold.mobileBreakpoint;
+    const route = '/candidate/resumes';
+    return CandidateScaffold(
+      currentRoute: route,
+      mobileDrawer: Drawer(
+        child: CandidateSideNav(
+          currentRoute: route,
+          initialExpanded: true,
+          onNavigate: (destination) {
+            final navigator = Navigator.of(context);
+            navigator.pop();
+            if (destination != route) navigator.pushNamed(destination);
+          },
+        ),
+      ),
+      body: WebGlobalSearchLauncher(
+        candidate: true,
+        builder: (controller, focus, openSearch) => CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+                openSearch,
+            const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+                openSearch,
+          },
+          child: Focus(
+            autofocus: true,
             child: Column(
               children: [
+                _ResumeHeader(
+                  mobile: mobile,
+                  search: _ResumeSearchField(
+                    controller: controller,
+                    focus: focus,
+                    openSearch: openSearch,
+                  ),
+                ),
                 Expanded(
-                  child: Row(
-                    children: [
-                      // Left Rail Navigation (Desktop)
-                      if (!isMobile)
-                        const CandidateSideNav(
-                          currentRoute: '/candidate/resumes',
-                        ),
-
-                      // Main Canvas Area
-                      Expanded(
-                        child: Column(
-                          children: [
-                            // Top Bar Header with Breadcrumb & Controls
-                            RecruiterTopBar(
-                              pageTitle: 'Upload',
-                              breadcrumbSegments: const ['Resumes', 'Upload'],
-                              mobileTitle: 'Resumes',
-                              candidate: true,
-                            ),
-
-                            // Main Scrollable Canvas
-                            Expanded(
-                              child: MobileEdgeShadowWrapper(
-                                child: SingleChildScrollView(
-                                  physics: const BouncingScrollPhysics(),
-                                  padding: EdgeInsets.only(
-                                    left: isMobile ? 16 : 22,
-                                    right: isMobile ? 16 : 22,
-                                    top: 20,
-                                    bottom: isMobile ? 164 : 32,
-                                  ),
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) => isMobile
-                                        ? _buildMobileLayout(hasResumes)
-                                        : _buildWebLayout(hasResumes),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Mobile Navigation Dock
-          if (isMobile)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildMobileBottomDock(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ── TOP BAR HEADER ─────────────────────────────────────────────────────────
-  // ── WEB LAYOUT (Side-by-side columns matching Figma specifications) ────────
-  Widget _buildWebLayout(bool hasResumes) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Divide the available canvas rather than assuming its full width.
-        Expanded(flex: 678, child: _buildAddResumeCard()),
-        const SizedBox(width: 14),
-        Expanded(
-          flex: 484,
-          child: _buildYourResumesCard(hasResumes, isWeb: true),
-        ),
-      ],
-    );
-  }
-
-  // ── MOBILE LAYOUT (Stacked) ────────────────────────────────────────────────
-  Widget _buildMobileLayout(bool hasResumes) {
-    return Column(
-      children: [
-        _buildAddResumeCard(),
-        const SizedBox(height: 16),
-        _buildYourResumesCard(hasResumes, isWeb: false),
-      ],
-    );
-  }
-
-  // ── LEFT CARD: ADD A RESUME ────────────────────────────────────────────────
-  Widget _buildAddResumeCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color.fromRGBO(255, 255, 255, 0.72),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color.fromRGBO(255, 255, 255, 0.9),
-          width: 0.88,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(38, 51, 77, 0.04),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-          BoxShadow(
-            color: Color.fromRGBO(38, 51, 77, 0.3),
-            blurRadius: 38,
-            spreadRadius: -26,
-            offset: Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row: Add a resume
-          Container(
-            constraints: const BoxConstraints(minHeight: 42),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Color.fromRGBO(38, 51, 77, 0.08),
-                  width: 0.88,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Text(
-                  'Add a resume',
-                  style: GoogleFonts.inter(
-                    color: context.themeForeground(const Color(0xFF1B2740)),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.125,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Content Container
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Drag & drop dropzone box
-                PointerGestureDetector(
-                  onTap: _triggerBrowseFiles,
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(minHeight: 206.78),
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 38,
-                        horizontal: 20,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: const Color.fromRGBO(38, 51, 77, 0.14),
-                          width: 0.88,
-                          style: BorderStyle
-                              .solid, // Using sleek dashed visual style
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        color: context
-                            .themeSurface(Colors.white)
-                            .withValues(alpha: 0.4),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // ⇪ Upload Icon Container (44x44px white box)
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: context.themeSurface(Colors.white),
-                              borderRadius: BorderRadius.circular(14),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color.fromRGBO(38, 51, 77, 0.04),
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: Text(
-                                '⇪',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 18,
-                                  color: context.themeForeground(
-                                    const Color(0xFF4A5875),
-                                  ),
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          // Text: Drag & drop your resume here
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 280),
-                            child: Text(
-                              'Drag & drop your resume here',
-                              textAlign: TextAlign.center,
-                              softWrap: true,
-                              style: GoogleFonts.inter(
-                                color: context.themeForeground(
-                                  const Color(0xFF1B2740),
-                                ),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-
-                          // Text: PDF or DOCX, up to 5MB
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 280),
-                            child: Text(
-                              'PDF or DOCX, up to 5MB',
-                              textAlign: TextAlign.center,
-                              softWrap: true,
-                              style: GoogleFonts.spaceGrotesk(
-                                color: context.themeForeground(
-                                  const Color(0xFF7A88A3),
-                                ),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Button: Browse files
-                          Container(
-                            height: 32,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            decoration: BoxDecoration(
-                              gradient: CandidateButtonStyle.primaryGradient,
-                              borderRadius: BorderRadius.circular(999),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color.fromRGBO(20, 181, 132, 0.22),
-                                  blurRadius: 14,
-                                  offset: Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'Browse files',
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      mobile ? 16 : 32,
+                      28,
+                      mobile ? 16 : 32,
+                      mobile ? 112 + MediaQuery.paddingOf(context).bottom : 32,
                     ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                if (_hasStagedFile ||
-                    _isUploading ||
-                    _isParsing ||
-                    _isFailed ||
-                    _parseCompleted)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // UPLOADING section header
-                      Text(
-                        'UPLOADING',
-                        style: GoogleFonts.spaceGrotesk(
-                          color: context.themeForeground(
-                            const Color(0xFF7A88A3),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add your resume',
+                          style: _resumeText(
+                            context,
+                            30,
+                            weight: FontWeight.w700,
+                            height: 1.2,
+                            spacing: -.6,
                           ),
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.425,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Uploading File row
-                      Row(
-                        children: [
-                          // PDF Badge icon container (34x34px bg #E9E4FB radius 11px)
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: context.themeSurface(
-                                const Color(0xFFE9E4FB),
-                              ),
-                              borderRadius: BorderRadius.circular(11),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'PDF',
-                                style: GoogleFonts.inter(
-                                  color: context.themeForeground(
-                                    const Color(0xFF4B3AB8),
-                                  ),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
+                        const SizedBox(height: 6),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 620),
+                          child: Text(
+                            'Upload it once. We read it, pull out your skills, roles and experience, and use them to match you with the right jobs.',
+                            style: _resumeText(
+                              context,
+                              15,
+                              color: _resumeMuted,
+                              height: 1.5,
                             ),
                           ),
-                          const SizedBox(width: 12),
-
-                          // Filename & Filesize
-                          Expanded(
-                            child: Column(
+                        ),
+                        const SizedBox(height: 24),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final upload = _buildUploadCard();
+                            final library = _buildResumeLibrary();
+                            // The reference flex bases include padding and borders.
+                            const uploadBasis = 610.0;
+                            const libraryBasis = 422.0;
+                            final available = constraints.maxWidth - 24;
+                            if (available < uploadBasis + libraryBasis) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  upload,
+                                  const SizedBox(height: 24),
+                                  library,
+                                ],
+                              );
+                            }
+                            final extra =
+                                available - uploadBasis - libraryBasis;
+                            return Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  _stagedFilename,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    color: context.themeForeground(
-                                      const Color(0xFF1B2740),
-                                    ),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                SizedBox(
+                                  width: uploadBasis + extra * 1.45 / 2.45,
+                                  child: upload,
                                 ),
-                                Text(
-                                  _stagedFilesize,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.spaceGrotesk(
-                                    color: context.themeForeground(
-                                      const Color(0xFF7A88A3),
-                                    ),
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
+                                const SizedBox(width: 24),
+                                Expanded(child: library),
                               ],
-                            ),
-                          ),
-
-                          // Progress percentage text: 62%
-                          Text(
-                            _canUpload
-                                ? 'READY'
-                                : '${(_uploadProgress * 100).toInt()}%',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: context.themeForeground(
-                                const Color(0xFF4A5875),
-                              ),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-
-                      // Progress Track & Animated Progress Bar
-                      Container(
-                        width: double.infinity,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: const Color.fromRGBO(38, 51, 77, 0.09),
-                          borderRadius: BorderRadius.circular(3),
+                            );
+                          },
                         ),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: _uploadProgress,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3E6FF0),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // DistilBERT Parsing status / Failed row box
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 13,
-                          vertical: 11,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _isFailed
-                              ? context.themeSurface(const Color(0xFFFEF2F2))
-                              : context.themeSurface(Colors.white),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _isFailed
-                                ? const Color(0xFFFCA5A5)
-                                : const Color.fromRGBO(38, 51, 77, 0.08),
-                            width: 0.88,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            // Pulse Indicator Dot
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: _isFailed
-                                    ? const Color(0xFFEF4444)
-                                    : const Color(0xFF0FB89B),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _isFailed
-                                        ? const Color.fromRGBO(
-                                            239,
-                                            68,
-                                            68,
-                                            0.25,
-                                          )
-                                        : const Color.fromRGBO(
-                                            25,
-                                            200,
-                                            170,
-                                            0.25,
-                                          ),
-                                    blurRadius: 7,
-                                    spreadRadius: 3,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-
-                            // Text: Parsing with AI… / Failure message
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _isFailed
-                                        ? 'Resume processing failed'
-                                        : _processingDelayed
-                                        ? 'Processing delayed'
-                                        : _statusCheckMessage != null
-                                        ? 'Processing status'
-                                        : (_canUpload
-                                              ? 'Ready to upload and parse'
-                                              : (_isParsing
-                                                    ? (_parsingElapsedSeconds >
-                                                              10
-                                                          ? 'Still processing — this can take a moment.'
-                                                          : 'Parsing with AI…')
-                                                    : _parseCompleted
-                                                    ? 'AI Resume Parsing Complete'
-                                                    : 'Uploading resume…')),
-                                    style: GoogleFonts.inter(
-                                      color: _isFailed
-                                          ? context.themeForeground(
-                                              const Color(0xFF991B1B),
-                                            )
-                                          : context.themeForeground(
-                                              const Color(0xFF1B2740),
-                                            ),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  Text(
-                                    _isFailed
-                                        ? (_failureErrorMessage.isNotEmpty
-                                              ? _failureErrorMessage
-                                              : 'Text extraction or AI parsing failed')
-                                        : _processingDelayed
-                                        ? 'We’ll retry automatically.'
-                                        : _statusCheckMessage ??
-                                              (_canUpload
-                                                  ? 'Click "Use this resume" to begin extraction'
-                                                  : (_stagedExtracted != null &&
-                                                            _parseCompleted
-                                                        ? '${(_stagedExtracted!['skills'] as List?)?.length ?? 0} skills · ${(_stagedExtracted!['roles'] as List?)?.length ?? 0} roles · ${_stagedExtracted!['years_experience'] ?? 4} yrs experience'
-                                                        : 'Extracting skills, roles & experience')),
-                                    style: GoogleFonts.spaceGrotesk(
-                                      color: _isFailed
-                                          ? context.themeForeground(
-                                              const Color(0xFFB91C1C),
-                                            )
-                                          : context.themeForeground(
-                                              const Color(0xFF7A88A3),
-                                            ),
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // Badge: PARSING… / COMPLETED / FAILED
-                            if (_isFailed || _statusCheckMessage != null)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (!_parseNeedsSupport ||
-                                      _stagedResumeId == null)
-                                    InkWell(
-                                      onTap: _statusCheckMessage != null
-                                          ? () => _pollParsingStatus(
-                                              _stagedResumeId!,
-                                            )
-                                          : _canRetryParsing &&
-                                                _stagedResumeId != null
-                                          ? _retryingResumes.contains(
-                                                  _stagedResumeId,
-                                                )
-                                                ? null
-                                                : () => _retryParsing(
-                                                    _stagedResumeId!,
-                                                  )
-                                          : _triggerBrowseFiles,
-                                      borderRadius: BorderRadius.circular(6),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 7,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: context.themeSurface(
-                                            const Color(0xFFFEE2E2),
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
-                                          border: Border.all(
-                                            color: const Color(0xFFFCA5A5),
-                                            width: 0.88,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          _statusCheckMessage != null
-                                              ? 'Check status'
-                                              : _canRetryParsing
-                                              ? 'Retry parsing'
-                                              : 'Choose file',
-                                          style: GoogleFonts.jetBrainsMono(
-                                            color: context.themeForeground(
-                                              const Color(0xFF991B1B),
-                                            ),
-                                            fontSize: 8.5,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  const SizedBox(width: 4),
-                                  InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _hasStagedFile = false;
-                                        _stagedResumeId = null;
-                                        _statusCheckMessage = null;
-                                        _isFailed = false;
-                                        _isUploading = false;
-                                        _isParsing = false;
-                                      });
-                                    },
-                                    child: Icon(
-                                      Icons.close_rounded,
-                                      size: 14,
-                                      color: context.themeForeground(
-                                        const Color(0xFF991B1B),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            else
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _parseCompleted
-                                      ? context.themeSurface(
-                                          const Color(0xFFECFDF5),
-                                        )
-                                      : context.themeSurface(
-                                          const Color(0xFFEDF0F7),
-                                        ),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: const Color.fromRGBO(
-                                      38,
-                                      51,
-                                      77,
-                                      0.08,
-                                    ),
-                                    width: 0.88,
-                                  ),
-                                ),
-                                child: Text(
-                                  (_hasStagedFile &&
-                                          !_isUploading &&
-                                          !_isParsing &&
-                                          !_parseCompleted)
-                                      ? 'STAGED'
-                                      : (_parseCompleted
-                                            ? 'READY'
-                                            : 'PARSING…'),
-                                  style: GoogleFonts.jetBrainsMono(
-                                    color: _parseCompleted
-                                        ? context.themeForeground(
-                                            const Color(0xFF0B6B4A),
-                                          )
-                                        : context.themeForeground(
-                                            const Color(0xFF7A88A3),
-                                          ),
-                                    fontSize: 8.5,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.68,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Button: Use this resume
-                      InkWell(
-                        onTap: _canUpload
-                            ? _startUploadFlowFromButton
-                            : (_parseCompleted ? _commitStagedResume : null),
-                        borderRadius: BorderRadius.circular(999),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          height: 32,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            gradient: CandidateButtonStyle.primaryGradient,
-                            borderRadius: BorderRadius.circular(999),
-                            boxShadow: (_parseCompleted || _canUpload)
-                                ? const [
-                                    BoxShadow(
-                                      color: Color.fromRGBO(20, 181, 132, 0.22),
-                                      blurRadius: 14,
-                                      offset: Offset(0, 5),
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                          child: Opacity(
-                            opacity: (_parseCompleted || _canUpload)
-                                ? 1.0
-                                : 0.45,
-                            child: Center(
-                              child: Text(
-                                'Use this resume',
-                                style: GoogleFonts.inter(
-                                  color: Colors.white,
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Subtext
-                      Center(
-                        child: Text(
-                          _isFailed || _statusCheckMessage != null
-                              ? ''
-                              : (_canUpload
-                                    ? 'Click to upload and use this resume'
-                                    : (_parseCompleted
-                                          ? 'Parsing complete — resume ready for applications!'
-                                          : (_parsingElapsedSeconds > 10
-                                                ? 'Still processing — this can take a moment.'
-                                                : 'Unlocks once parsing finishes — usually 3–6 seconds'))),
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.spaceGrotesk(
-                            color: _isFailed
-                                ? const Color(0xFFDC2626)
-                                : context.themeForeground(
-                                    const Color(0xFF7A88A3),
-                                  ),
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // ── RIGHT CARD: YOUR RESUMES (DYNAMIC PREVIEW WHEN RESUMES EXIST vs EMPTY STATE) ─
-  Widget _buildYourResumesCard(bool hasResumes, {bool isWeb = false}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color.fromRGBO(255, 255, 255, 0.72),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color.fromRGBO(255, 255, 255, 0.9),
-          width: 0.88,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(38, 51, 77, 0.04),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-          BoxShadow(
-            color: Color.fromRGBO(38, 51, 77, 0.3),
-            blurRadius: 38,
-            spreadRadius: -26,
-            offset: Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row: Your resumes
-          Container(
-            constraints: const BoxConstraints(minHeight: 42),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Color.fromRGBO(38, 51, 77, 0.08),
-                  width: 0.88,
+  Widget _buildUploadCard() {
+    return _ResumeCard(
+      padding: const EdgeInsets.all(24),
+      child: _hasStagedFile
+          ? _buildStagedResume()
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ResumeDropArea(
+                  onBrowse: _triggerBrowseFiles,
+                  onDrop: _stageDroppedFile,
                 ),
-              ),
+                const SizedBox(height: 20),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ResumeIcon(_lockIcon, size: 15, color: _resumeMuted),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Private to you. Recruiters only see it when you apply.',
+                        style: _resumeText(context, 13, color: _resumeMuted),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
+    );
+  }
+
+  Widget _buildStagedResume() {
+    final busy = _isUploading || _isParsing;
+    final id = _stagedResumeId;
+    final statusMessage =
+        _statusCheckMessage ?? (_isFailed ? _failureErrorMessage : null);
+    final VoidCallback? action = _canUpload && !_isPicking
+        ? _startUploadFlowFromButton
+        : _parseCompleted && !_isSaving
+        ? (_savedAsDefault && ResumeManager.getActiveResume()['id'] == id
+              ? _clearStagedFile
+              : _commitStagedResume)
+        : null;
+    final detail = _stagedExtracted;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DecoratedBox(
+          decoration: _resumeBox(context, radius: 14, color: _resumeField),
+          child: Padding(
+            padding: const EdgeInsets.all(17),
             child: Row(
               children: [
+                _ResumeFileBadge(filename: _stagedFilename, large: true),
+                const SizedBox(width: 14),
                 Expanded(
-                  child: Text(
-                    'Your resumes',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: context.themeForeground(const Color(0xFF1B2740)),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.125,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (hasResumes && _listError == null)
-                  Text(
-                    '${_resumes.length} saved',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: context.themeForeground(const Color(0xFF7A88A3)),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Conditional Render: Resumes List, Loading Spinner, OR Empty State
-          if (_listError != null) ...[
-            Text('Could not load resumes: ${_listError!}'),
-            TextButton(
-              onPressed: _loadResumeList,
-              style: CandidateButtonStyle.secondary(
-                context,
-                TextButton.styleFrom(),
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
-          if (_isLoadingList)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFF17CBAC),
-                    ),
-                  ),
-                ),
-              ),
-            )
-          else if (_listError == null && hasResumes)
-            Column(
-              children: List.generate(_resumes.length, (index) {
-                final r = _resumes[index];
-                final bool isActive = r['active'] == true;
-                final bool isLast = index == _resumes.length - 1;
-                final Color badgeBg = (r['badgeColorBg'] is Color)
-                    ? r['badgeColorBg'] as Color
-                    : (isActive
-                          ? context.themeSurface(const Color(0xFFD9F4E7))
-                          : context.themeSurface(const Color(0xFFF1F5F9)));
-                final Color badgeFg = (r['badgeColorFg'] is Color)
-                    ? r['badgeColorFg'] as Color
-                    : (isActive
-                          ? const Color(0xFF0B6B4A)
-                          : const Color(0xFF64748B));
-                final String versionStr = (r['version'] ?? 'v${index + 1}')
-                    .toString();
-                final String filenameStr = (r['filename'] ?? 'resume.pdf')
-                    .toString();
-                final String dateStr = ResumeManager.getFormattedDateTag(r);
-                final resumeId = r['id'].toString();
-                final parsingNotice = switch (r['status']) {
-                  'pending' when r['processingCode'] == 'RETRY_PENDING' =>
-                    'Processing delayed. We’ll retry automatically.',
-                  'pending' => 'Processing resume…',
-                  'failed' => r['processingError']?.toString(),
-                  _ => null,
-                };
-
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    border: isLast
-                        ? null
-                        : const Border(
-                            bottom: BorderSide(
-                              color: Color.fromRGBO(38, 51, 77, 0.08),
-                              width: 0.88,
-                            ),
-                          ),
-                  ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Version Badge Container (e.g. v3, v2, v1)
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: badgeBg,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Center(
-                          child: Text(
-                            versionStr,
-                            style: GoogleFonts.inter(
-                              color: badgeFg,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                      Text(
+                        _stagedFilename,
+                        style: _resumeText(
+                          context,
+                          15,
+                          weight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 11),
-
-                      // Filename & Metadata
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              filenameStr,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(
-                                color: context.themeForeground(
-                                  const Color(0xFF1B2740),
-                                ),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              dateStr,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.spaceGrotesk(
-                                color: context.themeForeground(
-                                  const Color(0xFF7A88A3),
-                                ),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (parsingNotice != null &&
-                                parsingNotice.isNotEmpty)
-                              Text(
-                                parsingNotice,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            if (r['canRetryParsing'] == true &&
-                                resumeId != _stagedResumeId)
-                              TextButton(
-                                onPressed: _retryingResumes.contains(resumeId)
-                                    ? null
-                                    : () => _retryParsing(resumeId),
-                                child: const Text('Retry parsing'),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Active Badge
-                      if (isActive)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: context.themeSurface(
-                              const Color(0xFFD9F4E7),
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: const Color(0xFFA9E5CB),
-                              width: 0.88,
-                            ),
-                          ),
-                          child: Text(
-                            'ACTIVE',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: context.themeForeground(
-                                const Color(0xFF0B6B4A),
-                              ),
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.68,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 6),
-
-                      // Delete Icon Button
-                      InkWell(
-                        onTap: () => _removeResume(r),
-                        borderRadius: BorderRadius.circular(6),
-                        child: Padding(
-                          padding: EdgeInsets.all(4.0),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 14,
-                            color: context.themeForeground(
-                              const Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${_resumeFileType(_stagedFilename)} · $_stagedFilesize',
+                        style: _resumeText(context, 13, color: _resumeMuted),
                       ),
                     ],
                   ),
-                );
-              }),
-            )
-          else
-            // ── DYNAMIC PREVIEW: EMPTY STATE WHEN NO RESUMES ARE UPLOADED ────────
-            Builder(
-              builder: (context) {
-                final emptyState = Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 40,
+                ),
+                const SizedBox(width: 14),
+                _ResumeOutlineButton(
+                  label: busy ? 'Cancel' : 'Replace',
+                  onPressed: _isSaving
+                      ? null
+                      : busy
+                      ? _clearStagedFile
+                      : _triggerBrowseFiles,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_isUploading) ...[
+          const SizedBox(height: 20),
+          LinearProgressIndicator(
+            value: _uploadProgress,
+            minHeight: 6,
+            borderRadius: BorderRadius.circular(999),
+            color: _resumeGreen,
+            backgroundColor: context.themeChartTrack(_resumeBorder),
+            semanticsLabel: 'Upload progress',
+          ),
+        ],
+        const SizedBox(height: 20),
+        _ResumeSteps(
+          completed: _parseCompleted ? 3 : (_isParsing || id != null ? 1 : 0),
+          current: _isUploading
+              ? 0
+              : _isParsing
+              ? 1
+              : null,
+        ),
+        if (statusMessage != null) ...[
+          const SizedBox(height: 20),
+          _ResumeStatusNotice(
+            label: statusMessage,
+            error: _isFailed,
+            onDismiss: _clearStagedFile,
+            action: _statusCheckMessage != null && id != null
+                ? _ResumeOutlineButton(
+                    label: 'Check status',
+                    onPressed: () => _pollParsingStatus(id),
+                  )
+                : _canRetryParsing && id != null
+                ? _ResumeOutlineButton(
+                    label: 'Retry parsing',
+                    onPressed: _retryingResumes.contains(id)
+                        ? null
+                        : () => _retryParsing(id),
+                  )
+                : _parseNeedsSupport
+                ? null
+                : _ResumeOutlineButton(
+                    label: 'Choose file',
+                    onPressed: _triggerBrowseFiles,
                   ),
-                  child: Center(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // Empty state graphic container
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: context.themeSurface(
-                                const Color(0xFFF1F5F9),
-                              ),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: const Color.fromRGBO(38, 51, 77, 0.08),
-                                width: 0.88,
-                              ),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                Icons.note_add_outlined,
-                                color: context.themeForeground(
-                                  const Color(0xFF7A88A3),
-                                ),
-                                size: 26,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
+          ),
+        ],
+        if (_parseCompleted && detail != null) ...[
+          const SizedBox(height: 20),
+          _ResumeFindings(detail: detail),
+        ],
+        const SizedBox(height: 20),
+        _ResumePrimaryButton(
+          label: _canUpload || _parseCompleted
+              ? 'Use this resume'
+              : 'Preparing your resume…',
+          onPressed: action,
+        ),
+        if (statusMessage == null) ...[
+          const SizedBox(height: 10),
+          Text(
+            _savedAsDefault
+                ? 'Saved to your library. You can switch resumes anytime.'
+                : _canUpload
+                ? 'Click to upload and use this resume'
+                : _processingDelayed
+                ? 'Processing delayed. We’ll retry automatically.'
+                : _parsingElapsedSeconds > 10
+                ? 'Still processing — this can take a moment.'
+                : 'Usually takes 3 to 6 seconds',
+            textAlign: TextAlign.center,
+            style: _resumeText(context, 13, color: _resumeMuted),
+          ),
+        ],
+      ],
+    );
+  }
 
-                          Text(
-                            'No resumes uploaded yet',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
-                              color: context.themeForeground(
-                                const Color(0xFF1B2740),
-                              ),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 280),
-                            child: Text(
-                              'Upload your first resume using the form on the left to extract skills, experience, and unlock automated AI match scoring.',
-                              textAlign: TextAlign.center,
-                              softWrap: true,
-                              style: GoogleFonts.spaceGrotesk(
-                                color: context.themeForeground(
-                                  const Color(0xFF7A88A3),
-                                ),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w500,
-                                height: 1.45,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Helper chip
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.themeSurface(
-                                const Color(0xFFE6F7F5),
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              'Supports PDF & DOCX up to 5MB',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.spaceGrotesk(
-                                color: AppColors.dashboardTeal,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+  Widget _buildResumeLibrary() {
+    final resumes = _resumes;
+    final activeId = resumes.isEmpty
+        ? null
+        : ResumeManager.getActiveResume()['id'];
+    return _ResumeCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: context.themeOutline(_resumeBorder)),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 19),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Your resumes',
+                      style: _resumeText(context, 16, weight: FontWeight.w600),
                     ),
                   ),
-                );
-                return emptyState;
-              },
+                  if (!_isLoadingList && _listError == null)
+                    _ResumeChip('${resumes.length} saved'),
+                ],
+              ),
+            ),
+          ),
+          if (_isLoadingList)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: Center(
+                child: CircularProgressIndicator(color: _resumeGreen),
+              ),
+            )
+          else if (_listError case final error?)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: _ResumeStatusNotice(
+                label: 'Could not load resumes: $error',
+                error: true,
+                action: _ResumeOutlineButton(
+                  label: 'Retry',
+                  onPressed: _loadResumeList,
+                ),
+              ),
+            )
+          else if (resumes.isEmpty)
+            const _EmptyResumeLibrary()
+          else
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                spacing: 2,
+                children: [
+                  for (final resume in resumes)
+                    _buildResumeRow(resume, activeId),
+                ],
+              ),
             ),
         ],
       ),
     );
   }
 
-  // ── LEFT RAIL NAVIGATION (Web Navigation Sidebar) ─────────────────────────
-  // ── MOBILE BOTTOM NAVIGATION DOCK ──────────────────────────────────────────
-  Widget _buildMobileBottomDock() =>
-      const CandidateMobileNav(currentRoute: '/candidate/resumes');
-}
-
-class GridPainter extends CustomPainter {
-  final Color color;
-  GridPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.0;
-
-    const double step = 30.0;
-    for (double i = 0; i < size.width; i += step) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-    for (double i = 0; i < size.height; i += step) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
+  Widget _buildResumeRow(Map<String, dynamic> resume, Object? activeId) {
+    final id = resume['id'].toString();
+    final parsed = resume['status'] == 'parsed';
+    final active = parsed && activeId == id;
+    final filename = (resume['filename'] ?? 'resume.pdf').toString();
+    final uploadedAt = DateTime.tryParse(
+      resume['uploadedAt']?.toString() ?? '',
+    )?.toLocal();
+    final date = uploadedAt == null
+        ? ResumeManager.getFormattedDateTag(resume).split(' · ').first
+        : DateUtils.isSameDay(uploadedAt, DateTime.now())
+        ? 'Today'
+        : MaterialLocalizations.of(context).formatShortMonthDay(uploadedAt);
+    final role = ResumeManager.deriveRoleTag(filename);
+    final notice = switch (resume['status']) {
+      'pending' when resume['processingCode'] == 'RETRY_PENDING' =>
+        'Processing delayed. We’ll retry automatically.',
+      'pending' => 'Processing resume…',
+      'failed' => resume['processingError']?.toString(),
+      _ => null,
+    };
+    return _ResumeLibraryRow(
+      filename: filename,
+      metadata: '$role · $date',
+      active: active,
+      isNew: _parseCompleted && id == _stagedResumeId,
+      notice: notice,
+      onSelect: parsed && !active && !_isSaving
+          ? () => setState(() => ResumeManager.setActive(id))
+          : null,
+      onDelete: _isSaving || (id == _stagedResumeId && _isParsing)
+          ? null
+          : () => _removeResume(resume),
+      canRetry: resume['canRetryParsing'] == true && id != _stagedResumeId,
+      onRetry: _retryingResumes.contains(id) ? null : () => _retryParsing(id),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant GridPainter oldDelegate) =>
-      oldDelegate.color != color;
 }

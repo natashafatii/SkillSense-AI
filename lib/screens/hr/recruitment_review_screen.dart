@@ -11,8 +11,10 @@ import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/interview_review_top_bar.dart';
 import '../../widgets/feedback_review_panel.dart';
 import '../../widgets/recruiter_interview_dashboard.dart';
+import '../../widgets/screening_visuals.dart';
 
 part 'interview_review_pages.dart';
+part 'compact_interview_review.dart';
 
 const _reviewBlue = Color(0xFF3E6FF0);
 const _reviewTeal = Color(0xFF0E8F76);
@@ -33,11 +35,13 @@ class RecruitmentReviewScreen extends StatefulWidget {
     this.interviewId,
     this.service,
     this.showInterviewDashboard = false,
+    this.compactScreening = false,
   });
   final String applicationId;
   final String? interviewId;
   final RecruitmentWorkflowService? service;
   final bool showInterviewDashboard;
+  final bool compactScreening;
   @override
   State<RecruitmentReviewScreen> createState() =>
       _RecruitmentReviewScreenState();
@@ -49,7 +53,6 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       decisionReason = TextEditingController(),
       overrideReason = TextEditingController();
   String? transcriptId, compareTranscriptId, evaluationId, compareEvaluationId;
-  DateTime? scheduledAt;
   int _dashboardRefresh = 0;
   int _tab = 0;
   String _historyFilter = 'all';
@@ -195,64 +198,69 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
     String detail, {
     TextEditingController? input,
     TextEditingController? justification,
-  }) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          constraints: const BoxConstraints(maxWidth: 520),
-          title: Text(title),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(detail),
-                if (input != null) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: input,
-                    maxLength: 2000,
-                    minLines: 4,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      filled: true,
-                      fillColor: Color(0xFFFBFCFE),
-                      labelText: 'Reason (required)',
+  }) async {
+    if (widget.compactScreening) {
+      return _confirmScreeningReview(title, detail, input, justification);
+    }
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            constraints: const BoxConstraints(maxWidth: 520),
+            title: Text(title),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(detail),
+                  if (input != null) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: input,
+                      maxLength: 2000,
+                      minLines: 4,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        filled: true,
+                        fillColor: Color(0xFFFBFCFE),
+                        labelText: 'Reason (required)',
+                      ),
                     ),
-                  ),
+                  ],
+                  if (justification != null)
+                    TextField(
+                      controller: justification,
+                      maxLength: 2000,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Override justification (required)',
+                      ),
+                    ),
                 ],
-                if (justification != null)
-                  TextField(
-                    controller: justification,
-                    maxLength: 2000,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Override justification (required)',
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ListenableBuilder(
-              listenable: Listenable.merge([input, justification]),
-              builder: (_, _) => FilledButton(
-                onPressed:
-                    (input?.text.trim().isEmpty ?? false) ||
-                        (justification?.text.trim().isEmpty ?? false)
-                    ? null
-                    : () => Navigator.pop(context, true),
-                child: const Text('Confirm'),
               ),
             ),
-          ],
-        ),
-      ) ??
-      false;
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ListenableBuilder(
+                listenable: Listenable.merge([input, justification]),
+                builder: (_, _) => FilledButton(
+                  onPressed:
+                      (input?.text.trim().isEmpty ?? false) ||
+                          (justification?.text.trim().isEmpty ?? false)
+                      ? null
+                      : () => Navigator.pop(context, true),
+                  child: const Text('Confirm'),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<void> decision(
     String outcome, {
     bool override = false,
@@ -280,40 +288,59 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
     }, reviewed: r);
   }
 
-  Future<void> chooseTime() async {
-    final now = DateTime.now();
+  Future<DateTime?> _chooseRecoveryTime({
+    required bool flexible,
+    required DateTime after,
+  }) async {
+    final initial = after.add(const Duration(minutes: 1));
     final date = await showDatePicker(
       context: context,
-      initialDate: scheduledAt ?? now.add(const Duration(days: 1)),
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: now.add(const Duration(days: 730)),
+      initialDate: initial,
+      firstDate: DateUtils.dateOnly(initial),
+      lastDate: DateTime(9999, 12, 31),
+      helpText: flexible ? 'New deadline date' : 'New interview date',
     );
-    if (date == null || !mounted) return;
+    if (date == null || !mounted) return null;
     final time = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(scheduledAt ?? now),
+      initialTime: TimeOfDay.fromDateTime(initial),
+      helpText: flexible ? 'New deadline time' : 'New interview time',
     );
-    if (time == null || !mounted) return;
-    setState(() {
-      scheduledAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+    if (time == null || !mounted) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
   }
 
   Future<void> recover(bool reopen) async {
     final reviewed = controller.review!;
-    scheduledAt = null;
-    await chooseTime();
-    final time = scheduledAt;
+    final flexible = reviewed.interview?.isFlexible == true;
+    final now = DateTime.now();
+    final currentDeadline = reopen
+        ? null
+        : reviewed.interview?.deadlineAt?.toLocal();
+    final after = currentDeadline != null && currentDeadline.isAfter(now)
+        ? currentDeadline
+        : now;
+    final time = await _chooseRecoveryTime(flexible: flexible, after: after);
     if (!mounted || time == null) return;
+    if (!time.isAfter(after) || !time.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            flexible && !reopen
+                ? 'Choose a future deadline later than the current deadline.'
+                : 'Choose a date and time in the future.',
+          ),
+        ),
+      );
+      return;
+    }
     if (!await confirm(
-      reopen ? 'Schedule another attempt' : 'Reschedule this interview',
-      'Time: ${localTime(scheduledAt)}\nReason: ${reason.text}\n'
+      reopen
+          ? 'Schedule another attempt'
+          : flexible
+          ? 'Extend interview deadline'
+          : 'Reschedule this interview',
+      '${flexible ? 'Deadline' : 'Time'}: ${localTime(time)}\n'
       '${reopen ? 'A new interview identity and frozen question copies will be created. Historical evidence is retained.' : 'This interview keeps its current identity.'}',
       input: reason,
     )) {
@@ -863,41 +890,59 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         ),
         if (d == null) ...[
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _reviewTeal,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(0, 40),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
+          if (widget.compactScreening)
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                ScreeningButton(
+                  'Hire',
+                  kind: ScreeningButtonKind.primary,
                   onPressed: enabled ? () => decision('HIRE') : null,
-                  icon: const Icon(Icons.check, size: 16),
-                  label: const Text('Hire'),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _reviewRed,
-                    side: const BorderSide(color: Color(0xFFF1CCD2)),
-                    minimumSize: const Size(0, 40),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
+                ScreeningButton(
+                  'Reject',
+                  kind: ScreeningButtonKind.danger,
                   onPressed: enabled ? () => decision('REJECT') : null,
-                  icon: const Icon(Icons.close, size: 16),
-                  label: const Text('Reject'),
                 ),
-              ),
-            ],
-          ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _reviewTeal,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: enabled ? () => decision('HIRE') : null,
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Hire'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _reviewRed,
+                      side: const BorderSide(color: Color(0xFFF1CCD2)),
+                      minimumSize: const Size(0, 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: enabled ? () => decision('REJECT') : null,
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('Reject'),
+                  ),
+                ),
+              ],
+            ),
         ],
         ...[
           if (currentAttemptReviewed &&
@@ -955,7 +1000,9 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                 children: [
                   _decisionAction(
                     width,
-                    'Reschedule',
+                    r.interview?.isFlexible == true
+                        ? 'Extend deadline'
+                        : 'Reschedule',
                     Icons.calendar_today_outlined,
                     r.latestAttempt &&
                         r.interview?.status == 'SCHEDULED' &&
@@ -1076,31 +1123,33 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
     }, reviewed: review);
   }
 
+  List<Widget> _reviewNotices() => <Widget>[
+    if (controller.error != null)
+      section('Review required', [line(controller.error!)]),
+    if (controller.requiresReview)
+      section('Unsaved input retained', [
+        const Text(
+          'Refresh, compare the current versions with your intended command, then explicitly accept the reviewed state. No command has been automatically retried.',
+        ),
+        TextButton(
+          onPressed: controller.loading || controller.busy
+              ? null
+              : () => controller.refresh(poll: false),
+          child: const Text('Refresh current state'),
+        ),
+        TextButton(
+          onPressed: controller.error == null && !controller.loading
+              ? controller.confirmRefreshedReview
+              : null,
+          child: const Text('I reviewed the current versions'),
+        ),
+      ]),
+    if (controller.retryAt != null)
+      line('Retry permitted after ${localTime(controller.retryAt)}'),
+  ];
+
   Widget _workspace(RecruitmentReview? r) {
-    final notices = <Widget>[
-      if (controller.error != null)
-        section('Review required', [line(controller.error!)]),
-      if (controller.requiresReview)
-        section('Unsaved input retained', [
-          const Text(
-            'Refresh, compare the current versions with your intended command, then explicitly accept the reviewed state. No command has been automatically retried.',
-          ),
-          TextButton(
-            onPressed: controller.loading || controller.busy
-                ? null
-                : () => controller.refresh(poll: false),
-            child: const Text('Refresh current state'),
-          ),
-          TextButton(
-            onPressed: controller.error == null && !controller.loading
-                ? controller.confirmRefreshedReview
-                : null,
-            child: const Text('I reviewed the current versions'),
-          ),
-        ]),
-      if (controller.retryAt != null)
-        line('Retry permitted after ${localTime(controller.retryAt)}'),
-    ];
+    final notices = _reviewNotices();
     if (r == null) {
       return ListView(padding: const EdgeInsets.all(20), children: notices);
     }
@@ -1265,6 +1314,14 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
     double? height,
     required List<Widget> children,
   }) {
+    if (widget.compactScreening) {
+      return _screeningReviewCard(
+        title,
+        children,
+        badge: badge,
+        leading: leading,
+      );
+    }
     final body = Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
       child: Column(
@@ -1415,17 +1472,36 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
     final identity = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        CircleAvatar(
-          radius: 20,
-          backgroundColor: const Color(0xFFE4F5F0),
-          child: Text(
-            initials,
-            style: const TextStyle(
-              color: Color(0xFF067A63),
-              fontWeight: FontWeight.w700,
+        if (widget.compactScreening)
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: ScreeningStyle.tint,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Text(
+              initials,
+              style: ScreeningStyle.text(
+                14,
+                weight: 700,
+                color: ScreeningStyle.blue,
+              ),
+            ),
+          )
+        else
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: const Color(0xFFE4F5F0),
+            child: Text(
+              initials,
+              style: const TextStyle(
+                color: Color(0xFF067A63),
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-        ),
         const SizedBox(width: 12),
         Flexible(
           child: Column(
@@ -1433,11 +1509,13 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
             children: [
               Text(
                 name.isEmpty ? 'Candidate unavailable' : name,
-                style: const TextStyle(
-                  fontSize: 17,
-                  letterSpacing: -.3,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: widget.compactScreening
+                    ? ScreeningStyle.title()
+                    : const TextStyle(
+                        fontSize: 17,
+                        letterSpacing: -.3,
+                        fontWeight: FontWeight.w600,
+                      ),
               ),
               Text(
                 '${app.jobTitle} · Application v${app.version}',
@@ -1448,14 +1526,10 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         ),
       ],
     );
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        color: context.themeSurface(Colors.white),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: context.themeOutline(const Color(0xFFE2E8F2)),
-        ),
+    final contents = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: widget.compactScreening ? 16 : 18,
+        vertical: widget.compactScreening ? 16 : 10,
       ),
       child: LayoutBuilder(
         builder: (context, bounds) {
@@ -1483,7 +1557,9 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Scheduled ${_scheduleTime(interview.scheduledAt)}'),
+                    Text(
+                      '${interview.isFlexible ? 'Start by' : 'Scheduled'} ${_scheduleTime(interview.timingAt)}',
+                    ),
                     Text('Completed ${_scheduleTime(interview.completedAt)}'),
                   ],
                 ),
@@ -1499,7 +1575,9 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
                         : null,
                     isExpanded: true,
                     style: TextStyle(
-                      fontFamily: 'Inter',
+                      fontFamily: widget.compactScreening
+                          ? 'Plus Jakarta Sans'
+                          : 'Inter',
                       fontSize: 13,
                       color: context.themeForeground(const Color(0xFF16213A)),
                     ),
@@ -1565,6 +1643,17 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         },
       ),
     );
+    if (widget.compactScreening) return ScreeningPanel(child: contents);
+    return Container(
+      decoration: BoxDecoration(
+        color: context.themeSurface(Colors.white),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.themeOutline(const Color(0xFFE2E8F2)),
+        ),
+      ),
+      child: contents,
+    );
   }
 
   List<Widget> _tabContent(RecruitmentReview r, {double? viewportHeight}) {
@@ -1578,6 +1667,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
               service: controller.service,
               refreshVersion: _dashboardRefresh,
               viewportHeight: viewportHeight,
+              compactScreening: widget.compactScreening,
             )
           else
             section('Evidence', [
@@ -2196,6 +2286,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
   @override
   Widget build(BuildContext context) {
     final r = controller.review;
+    if (widget.compactScreening) return _compactReview(r);
     final dashboard = widget.showInterviewDashboard;
     final refreshAction = IconButton(
       tooltip: 'Refresh review',

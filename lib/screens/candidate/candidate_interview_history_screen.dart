@@ -66,8 +66,8 @@ class _HistoryEntry {
   final CandidateFeedbackReport? report;
 
   DateTime? get date =>
-      (interview.scheduledAt ?? interview.completedAt)?.toLocal();
-  DateTime? get sortDate => interview.completedAt ?? interview.scheduledAt;
+      (interview.timingAt ?? interview.completedAt)?.toLocal();
+  DateTime? get sortDate => interview.completedAt ?? interview.timingAt;
   double? get score => report?.performance;
   bool? get videoRequired => switch (interview) {
     CandidateInterview(:final videoRequired) => videoRequired,

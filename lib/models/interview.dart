@@ -22,19 +22,25 @@ class QuestionReadiness {
 /// Shared public interview identity and lifecycle. It never retains questions.
 class Interview {
   final String id, applicationId, status, workflowState;
-  final DateTime? scheduledAt, completedAt;
+  final DateTime? scheduledAt, deadlineAt, completedAt;
   final QuestionReadiness questionReadiness;
   final bool joinWindowRequired;
   const Interview({
     required this.id,
     required this.applicationId,
     this.scheduledAt,
+    this.deadlineAt,
     this.status = 'SCHEDULED',
     this.workflowState = 'UNKNOWN',
     this.completedAt,
     this.questionReadiness = const QuestionReadiness(),
     this.joinWindowRequired = true,
   });
+  bool get isFlexible => deadlineAt != null;
+  DateTime? get timingAt => deadlineAt ?? scheduledAt;
+  bool deadlinePassedAt(DateTime now) =>
+      status == 'SCHEDULED' && deadlineAt != null && !now.isBefore(deadlineAt!);
+
   String get questionPreparationMode => '';
   String get questionFallbackReason => '';
   bool canJoinAt(DateTime now) =>
@@ -44,7 +50,9 @@ class Interview {
       const {'SCHEDULED', 'IN_PROGRESS'}.contains(workflowState) &&
       (status == 'LIVE' ||
           (status == 'SCHEDULED' &&
-              (!joinWindowRequired ||
+              !deadlinePassedAt(now) &&
+              (isFlexible ||
+                  !joinWindowRequired ||
                   (scheduledAt != null &&
                       !now.isBefore(
                         scheduledAt!.subtract(const Duration(minutes: 15)),
@@ -63,6 +71,7 @@ class Interview {
       scheduledAt: ApiValue.instant(
         json['scheduled_at'] ?? json['scheduled_time'],
       ),
+      deadlineAt: ApiValue.instant(json['deadline_at']),
       completedAt: ApiValue.instant(json['completed_at']),
       joinWindowRequired: json['join_window_required'] != false,
       questionReadiness: json['question_readiness'] is Map
@@ -82,6 +91,7 @@ class Interview {
       status = value.status,
       workflowState = value.workflowState,
       scheduledAt = value.scheduledAt,
+      deadlineAt = value.deadlineAt,
       completedAt = value.completedAt,
       joinWindowRequired = value.joinWindowRequired,
       questionReadiness = value.questionReadiness;

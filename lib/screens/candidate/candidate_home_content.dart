@@ -335,7 +335,7 @@ class _HomeDashboard extends StatelessWidget {
     required bool compact,
   }) {
     final live = next.status.toUpperCase() == 'LIVE';
-    final local = next.scheduledAt?.toLocal();
+    final local = next.timingAt?.toLocal();
     final app = interviewApplication;
     final title = app?.jobTitle.trim();
     final company = app?.jobCompany.trim();
@@ -401,7 +401,7 @@ class _HomeDashboard extends StatelessWidget {
             child: Column(
               children: [
                 Text(
-                  'Starts in',
+                  next.isFlexible ? 'Start by · Time remaining' : 'Starts in',
                   style: _homeText(
                     12,
                     color: const Color(0xddffffff),
@@ -1142,13 +1142,9 @@ class _HomeDashboard extends StatelessWidget {
       backgroundColor: white
           ? Colors.white
           : candidateAccent
-          ? colors.teal
+          ? CandidateButtonStyle.deepTeal
           : colors.blueFill,
-      foregroundColor: white
-          ? const Color(0xff0a6b57)
-          : candidateAccent
-          ? colors.ink
-          : Colors.white,
+      foregroundColor: white ? const Color(0xff0a6b57) : Colors.white,
       minimumSize: const Size(0, 44),
       visualDensity: VisualDensity.standard,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

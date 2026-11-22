@@ -128,6 +128,20 @@ class ResumeManager {
         };
       }).toList();
 
+      // Responses without a default flag still retain the candidate's
+      // selection when the selected resume remains available and parsed.
+      if (_cachedUserId == AuthService.currentUserId &&
+          !normalised.any((resume) => resume['active'] == true)) {
+        final selectedId = _cachedResumes
+            ?.where((resume) => resume['active'] == true)
+            .firstOrNull?['id'];
+        if (selectedId != null) {
+          for (final resume in normalised) {
+            resume['active'] =
+                resume['id'] == selectedId && resume['status'] == 'parsed';
+          }
+        }
+      }
       _cachedResumes = normalised;
       _cachedUserId = AuthService.currentUserId;
       resumesNotifier.value = List.from(normalised);

@@ -18,6 +18,15 @@ class NotificationTarget {
   final String path;
   final NotificationLinks links;
   const NotificationTarget(this.destination, this.path, this.links);
+
+  String get actionLabel => switch (destination) {
+    NotificationDestination.application => 'View application',
+    NotificationDestination.questions => 'Review questions',
+    NotificationDestination.review => 'Open interview review',
+    NotificationDestination.lobby => 'View interview',
+    NotificationDestination.feedback => 'View feedback',
+  };
+
   static NotificationTarget? resolve(AppNotification n, String role) {
     final l = n.links;
     if (role == 'CANDIDATE') {

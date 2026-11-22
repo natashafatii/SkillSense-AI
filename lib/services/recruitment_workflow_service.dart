@@ -375,7 +375,8 @@ class RecruitmentWorkflowService {
       '/interviews/${r.interview!.id}/${reopen ? 'reopen' : 'reschedule'}/',
       data: {
         'expected_version': r.application.version,
-        'scheduled_at': ApiValue.timestamp(scheduledAt),
+        (r.interview!.isFlexible ? 'deadline_at' : 'scheduled_at'):
+            ApiValue.timestamp(scheduledAt),
         'reason': reason(explanation),
       },
     );

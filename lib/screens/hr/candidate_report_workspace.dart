@@ -650,7 +650,7 @@ class _ReportWorkspace extends StatelessWidget {
                 ),
             ],
           );
-    final scheduledAt = attempt?.scheduledAt;
+    final scheduledAt = attempt?.timingAt;
     final completedAt = attempt?.completedAt;
     return _panel(
       'Interview performance',

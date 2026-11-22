@@ -5,8 +5,11 @@ import 'candidate_side_nav.dart';
 import 'green_gradient_background.dart';
 
 class CandidateScaffold extends StatelessWidget {
+  static const mobileBreakpoint = 900.0;
+
   final String currentRoute;
   final Widget body;
+  final Widget? mobileDrawer;
   final bool hideSideNav;
   final Function(String route)? onNavigate;
 
@@ -14,6 +17,7 @@ class CandidateScaffold extends StatelessWidget {
     super.key,
     required this.currentRoute,
     required this.body,
+    this.mobileDrawer,
     this.hideSideNav = false,
     this.onNavigate,
   });
@@ -21,7 +25,7 @@ class CandidateScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isMobile = screenWidth < 900;
+    final bool isMobile = screenWidth < mobileBreakpoint;
 
     if (hideSideNav) {
       return Scaffold(
@@ -32,6 +36,7 @@ class CandidateScaffold extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: context.themeCanvas(const Color(0xFFF8FAFC)),
+      drawer: isMobile ? mobileDrawer : null,
       body: Stack(
         children: [
           const GreenGradientBackground(),

@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/notification_list_skeleton.dart';
+import '../../widgets/notification_row.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/candidate_side_nav.dart';
@@ -325,6 +326,15 @@ class _CandidateNotificationsScreenState
   ) {
     final unread = _unreadCount;
 
+    final now = DateTime.now();
+    final today = <AppNotification>[];
+    final earlier = <AppNotification>[];
+    for (final item in _items) {
+      final group = DateUtils.isSameDay(item.createdAt.toLocal(), now)
+          ? today
+          : earlier;
+      group.add(item);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -402,44 +412,23 @@ class _CandidateNotificationsScreenState
               ],
             ),
           ),
-        if (_items.any(
-          (n) => DateTime.now().difference(n.createdAt.toLocal()).inDays == 0,
-        ))
+        if (today.isNotEmpty)
           _buildGroupCard(
             label: 'TODAY',
-            notifs: _items
-                .where(
-                  (n) =>
-                      DateTime.now().difference(n.createdAt.toLocal()).inDays ==
-                      0,
-                )
-                .toList(),
+            notifs: today,
             isMobile: isMobile,
-            textPrimary: textPrimary,
-            textSecondary: textSecondary,
             cardBg: cardBg,
             cardBorder: cardBorder,
           ),
-        if (_items.any(
-          (n) => DateTime.now().difference(n.createdAt.toLocal()).inDays > 0,
-        )) ...[
-          const SizedBox(height: 16),
+        if (today.isNotEmpty && earlier.isNotEmpty) const SizedBox(height: 16),
+        if (earlier.isNotEmpty)
           _buildGroupCard(
             label: 'EARLIER',
-            notifs: _items
-                .where(
-                  (n) =>
-                      DateTime.now().difference(n.createdAt.toLocal()).inDays >
-                      0,
-                )
-                .toList(),
+            notifs: earlier,
             isMobile: isMobile,
-            textPrimary: textPrimary,
-            textSecondary: textSecondary,
             cardBg: cardBg,
             cardBorder: cardBorder,
           ),
-        ],
         if (_hasNext)
           Center(
             child: TextButton(
@@ -456,8 +445,6 @@ class _CandidateNotificationsScreenState
     required String label,
     required List<AppNotification> notifs,
     required bool isMobile,
-    required Color textPrimary,
-    required Color textSecondary,
     required Color cardBg,
     required Color cardBorder,
   }) {
@@ -503,11 +490,12 @@ class _CandidateNotificationsScreenState
             final isLast = idx == notifs.length - 1;
             return Column(
               children: [
-                _buildNotifRow(
-                  notif: notif,
-                  isMobile: isMobile,
-                  textPrimary: textPrimary,
-                  textSecondary: textSecondary,
+                NotificationRow(
+                  key: ValueKey(notif.id),
+                  item: notif,
+                  role: 'CANDIDATE',
+                  onOpen: () => _openNotification(notif),
+                  onMarkRead: () => _markRead(notif.id),
                 ),
                 if (!isLast)
                   Divider(
@@ -522,186 +510,6 @@ class _CandidateNotificationsScreenState
           }),
 
           const SizedBox(height: 4),
-        ],
-      ),
-    );
-  }
-
-  // ── SINGLE NOTIFICATION ROW ─────────────────────────────────────────────────
-  Widget _buildNotifRow({
-    required AppNotification notif,
-    required bool isMobile,
-    required Color textPrimary,
-    required Color textSecondary,
-  }) {
-    return PointerGestureDetector(
-      onTap: () => _openNotification(notif),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        color: notif.isRead ? Colors.transparent : const Color(0xFFFAFCFF),
-        padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 16 : 20,
-          vertical: isMobile ? 12 : 14,
-        ),
-        child: isMobile
-            ? _buildMobileNotifContent(notif, textPrimary, textSecondary)
-            : _buildWebNotifContent(notif, textPrimary, textSecondary),
-      ),
-    );
-  }
-
-  Widget _buildWebNotifContent(
-    AppNotification notif,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return Opacity(
-      opacity: notif.isRead ? 0.75 : 1.0,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Unread dot
-          Container(
-            width: 8,
-            height: 8,
-            margin: const EdgeInsets.only(right: 12),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: notif.isRead
-                  ? Colors.transparent
-                  : const Color(0xFFEF4444),
-            ),
-          ),
-
-          // Tag badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-              color: context.themeSurface(const Color(0xFFDBEAFE)),
-              borderRadius: BorderRadius.circular(5),
-            ),
-            child: Text(
-              notif.displayType,
-              style: GoogleFonts.inter(
-                color: const Color(0xFF1D4ED8),
-                fontSize: 9.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.3,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-
-          // Title + Subtitle
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  notif.message,
-                  style: GoogleFonts.inter(
-                    color: textPrimary,
-                    fontSize: 13.5,
-                    fontWeight: notif.isRead
-                        ? FontWeight.w500
-                        : FontWeight.w700,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  notif.relativeTime,
-                  style: GoogleFonts.inter(
-                    color: context.themeForeground(const Color(0xFF64748B)),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileNotifContent(
-    AppNotification notif,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return Opacity(
-      opacity: notif.isRead ? 0.75 : 1.0,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Unread dot
-          Padding(
-            padding: const EdgeInsets.only(top: 6, right: 10),
-            child: Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: notif.isRead
-                    ? Colors.transparent
-                    : const Color(0xFFEF4444),
-              ),
-            ),
-          ),
-
-          // Content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Tag + chip row
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.themeSurface(const Color(0xFFDBEAFE)),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        notif.displayType,
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF1D4ED8),
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  notif.message,
-                  style: GoogleFonts.inter(
-                    color: textPrimary,
-                    fontSize: 13,
-                    fontWeight: notif.isRead
-                        ? FontWeight.w500
-                        : FontWeight.w700,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  notif.relativeTime,
-                  style: GoogleFonts.inter(
-                    color: context.themeForeground(const Color(0xFF64748B)),
-                    fontSize: 11.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

@@ -1,4 +1,8 @@
-import '../widgets/mobile_edge_shadow_wrapper.dart';
+import 'package:flutter/services.dart';
+import '../models/resume_detail.dart';
+import '../models/screening_assessment.dart';
+import '../services/resume_download.dart';
+import '../widgets/screening_visuals.dart';
 import 'package:dio/dio.dart';
 import '../models/api_contract.dart';
 import '../services/api_exception.dart';
@@ -16,6 +20,10 @@ import '../widgets/question_preparation_panel.dart';
 import 'hr/schedule_interview_screen.dart';
 import '../widgets/candidate_scaffold.dart';
 import 'candidate/widgets/candidate_application_summary.dart';
+
+part 'application_screening_layout.dart';
+part 'application_screening_outcome.dart';
+part 'application_screening_evidence.dart';
 
 /// Application-owned progress and screening actions, shared by both roles.
 class ApplicationScreeningScreen extends StatefulWidget {
@@ -254,241 +262,67 @@ class _ApplicationScreeningScreenState
     }
   }
 
+  bool _canRecruiterAct(String action) =>
+      !_busy &&
+      !_reviewRequired &&
+      _fresh &&
+      _app?.status != ApplicationStatus.unknown &&
+      (action != 'retry-screening' ||
+          !{
+            'WAIT',
+            'REPLACE_RESUME',
+          }.contains(_app?.assessment?['recovery_action']));
+
+  Future<void> _openRecruiterRoute(Widget screen) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    if (mounted) _load();
+  }
+
+  Future<void> _openScreeningSchedule(Application app) async {
+    await showDialog<void>(
+      context: context,
+      barrierColor: const Color(0x800b1730),
+      barrierDismissible: false,
+      builder: (_) => ScheduleInterviewScreen(
+        jobId: app.job,
+        applicationId: app.id,
+        compactScreening: true,
+      ),
+    );
+    if (mounted) _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = _app;
     if (!_recruiter) return _buildCandidateView(app);
-    final assessment = app?.assessment;
-    final evidence = app?.screening;
-    final criteria = assessment?['criteria_results'] as List? ?? const [];
-    final reasons = (assessment?['reasons'] as List? ?? const [])
-        .join(', ')
-        .replaceAll('_', ' ');
-    const labels = {
-      'shortlist': 'Shortlist',
-      'reject': 'Reject',
-      'retry-screening': 'Retry screening',
-      'rescreen': 'Rescreen with current policy',
-    };
-    return Scaffold(
-      appBar: _recruiter
-          ? const PreferredSize(
-              preferredSize: Size.fromHeight(58),
-              child: RecruiterTopBar(pageTitle: 'Application screening'),
-            )
-          : AppBar(title: const Text('Application screening')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: MobileEdgeShadowWrapper(
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
-                TextButton(
-                  onPressed: _busy ? null : _load,
-                  child: const Text('Refresh application'),
-                ),
-                if (_reviewRequired)
-                  TextButton(
-                    onPressed: _busy || !_fresh
-                        ? null
-                        : () => setState(() => _reviewRequired = false),
-                    child: const Text('I reviewed the refreshed application'),
-                  ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ),
-                if (app == null && _error == null)
-                  const Center(child: CircularProgressIndicator()),
-                if (app != null) ...[
-                  Text(
-                    app.jobTitle,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  Text(app.candidateName ?? app.candidateEmail),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Application: ${(app.rawStatus ?? app.status.value).replaceAll('_', ' ')}',
-                  ),
-                  Text(
-                    'Processing: ${assessment?['status'] ?? 'Awaiting assessment'}',
-                  ),
-                  if (assessment != null)
-                    Text(
-                      'Assessment ${assessment['revision']} · policy ${assessment['policy_version']}',
-                    ),
-                  Text(switch (evidence?.eligibility) {
-                    'PASS' =>
-                      'Requirements check: All required criteria verified',
-                    'FAIL' =>
-                      'Requirements check: Some requirements are not met',
-                    'UNKNOWN' =>
-                      'Requirements check: Needs recruiter review — some requirements could not be verified',
-                    _ => 'Requirements check: Awaiting screening',
-                  }),
-                  Text(
-                    'Policy recommendation: ${evidence?.outcome ?? 'Unavailable'}',
-                  ),
-                  Text(
-                    'Interview eligibility: ${app.eligibleForInterview ? 'Eligible stage, no existing interview' : 'Not currently eligible'}',
-                  ),
-                  Text('Recovery: ${evidence?.recoveryAction ?? 'WAIT'}'),
-                  Text('Threshold: ${evidence?.threshold ?? 'Unavailable'}'),
-                  if (app.resumeScore == null)
-                    const Text('Screening match: Unavailable'),
-                  if (_replacementResumeId != null)
-                    Text('Selected replacement resume: $_replacementResumeId'),
-                  if (app.resumeScore != null)
-                    Text(
-                      'Screening match: ${app.resumeScore!.toStringAsFixed(2)} / 100 · threshold ${evidence?.threshold ?? 'Unavailable'}',
-                    ),
-                  Text(
-                    'Matched skills: ${evidence?.matchedSkills.join(', ') ?? 'Unavailable'}',
-                  ),
-                  Text(
-                    'Missing skills: ${evidence?.missingSkills.join(', ') ?? 'Unavailable'}',
-                  ),
-                  if (reasons.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text(reasons),
-                    ),
-                  for (final row in criteria.whereType<Map>())
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        '${row['requirement']} — ${switch ((row['kind'], row['status'])) {
-                          ('skill', 'UNKNOWN') => 'Missing',
-                          (_, 'UNKNOWN') => 'Needs verification',
-                          _ => row['status'],
-                        }}',
-                      ),
-                      subtitle: Text('${row['evidence']}'),
-                    ),
-                  if ((assessment?['error_message'] ?? '')
-                      .toString()
-                      .isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text('${assessment!['error_message']}'),
-                    ),
-                  if (_recruiter &&
-                      (app.allowedActions.contains('shortlist') ||
-                          app.allowedActions.contains('reject')))
-                    TextField(
-                      controller: _reason,
-                      maxLines: 3,
-                      maxLength: 2000,
-                      decoration: const InputDecoration(
-                        labelText: 'Reason for rejection or screening override',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final action in app.allowedActions.where(
-                        (action) =>
-                            labels.containsKey(action) &&
-                            (_recruiter || action == 'retry-screening'),
-                      ))
-                        FilledButton(
-                          onPressed:
-                              _busy ||
-                                  _reviewRequired ||
-                                  !_fresh ||
-                                  app.status == ApplicationStatus.unknown ||
-                                  (action == 'retry-screening' &&
-                                      ((evidence?.recoveryAction == 'WAIT' ||
-                                              (!_recruiter &&
-                                                  evidence?.recoveryAction ==
-                                                      'CONTACT_SUPPORT')) ||
-                                          (_recruiter &&
-                                              evidence?.recoveryAction ==
-                                                  'REPLACE_RESUME')))
-                              ? null
-                              : () => _act(action),
-                          child: Text(labels[action] ?? action),
-                        ),
-                    ],
-                  ),
-                  if (_busy)
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: LinearProgressIndicator(),
-                    ),
-                  if (_recruiter && app.history.isNotEmpty) ...[
-                    const Text('Screening history'),
-                    for (final event in app.history)
-                      ListTile(
-                        title: Text(
-                          '${event['source'] ?? 'Unknown source'} · ${event['from_status']} → ${event['to_status']}',
-                        ),
-                        subtitle: Text('${event['reason'] ?? ''}'),
-                      ),
-                  ],
-                  if (_recruiter)
-                    OutlinedButton(
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              await Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => RecruitmentReviewScreen(
-                                    applicationId: app.id,
-                                  ),
-                                ),
-                              );
-                              if (mounted) _load();
-                            },
-                      child: const Text(
-                        'Review interview evidence, scores and decisions',
-                      ),
-                    ),
-                  if (_recruiter && app.status == ApplicationStatus.screened)
-                    QuestionPreparationPanel(
-                      key: ValueKey('preparation-${app.id}'),
-                      applicationId: app.id,
-                      application: app,
-                      onApprovalChanged: (_, _) {},
-                    ),
-                  if (_recruiter && app.eligibleForInterview)
-                    FilledButton(
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              await Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => ScheduleInterviewScreen(
-                                    jobId: app.job,
-                                    applicationId: app.id,
-                                  ),
-                                ),
-                              );
-                              if (mounted) _load();
-                            },
-                      child: const Text('Review questions and schedule'),
-                    ),
-                  if (app.eligibleForInterview)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 20),
-                      child: Text(
-                        'Shortlisted and available for interview scheduling.',
-                      ),
-                    ),
-                ],
-              ],
+    return _ScreeningWorkspace(
+      app: app,
+      error: _error,
+      busy: _busy,
+      needsReview: _reviewRequired,
+      acknowledge: _busy || !_fresh
+          ? null
+          : () => setState(() => _reviewRequired = false),
+      refresh: _busy ? null : _load,
+      reason: _reason,
+      action: _act,
+      canAct: _canRecruiterAct,
+      interview: () {
+        if (app != null) {
+          _openRecruiterRoute(
+            RecruitmentReviewScreen(
+              applicationId: app.id,
+              compactScreening: true,
             ),
-          ),
-        ),
-      ),
+          );
+        }
+      },
+      schedule: () {
+        if (app != null && app.eligibleForInterview && !_busy) {
+          _openScreeningSchedule(app);
+        }
+      },
     );
   }
 
