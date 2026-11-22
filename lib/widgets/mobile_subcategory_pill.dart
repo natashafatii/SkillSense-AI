@@ -40,7 +40,7 @@ class MobileSubcategoryPill extends StatelessWidget {
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         ),
       ),
-      child: Text(label, maxLines: 1),
+      child: Text(label, maxLines: 1, softWrap: false),
     ),
   );
 }

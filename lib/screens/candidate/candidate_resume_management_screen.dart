@@ -13,6 +13,7 @@ import '../../widgets/candidate_mobile_search.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/global_search.dart';
 import '../../widgets/notification_unread_scope.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../models/resume_detail.dart';
@@ -638,14 +639,17 @@ class _CandidateResumeManagementScreenState
             autofocus: true,
             child: Column(
               children: [
-                _ResumeHeader(
-                  mobile: mobile,
-                  search: _ResumeSearchField(
-                    controller: controller,
-                    focus: focus,
-                    openSearch: openSearch,
+                if (mobile)
+                  const RecruiterTopBar(pageTitle: 'Resumes', candidate: true)
+                else
+                  _ResumeHeader(
+                    mobile: false,
+                    search: _ResumeSearchField(
+                      controller: controller,
+                      focus: focus,
+                      openSearch: openSearch,
+                    ),
                   ),
-                ),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(

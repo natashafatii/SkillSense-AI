@@ -131,40 +131,65 @@ class _CandidateMobileNavState extends State<CandidateMobileNav> {
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: SizedBox(
-                        height: 52,
+                        height: 60,
                         child: Row(
                           children: [
                             Expanded(
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                child: Row(
-                                  children: [
-                                    for (final item
-                                        in _categories[_expanded!].$3)
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 4,
+                              child: ShaderMask(
+                                blendMode: BlendMode.dstIn,
+                                shaderCallback: (bounds) =>
+                                    const LinearGradient(
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black,
+                                        Colors.black,
+                                        Colors.transparent,
+                                      ],
+                                      stops: [0, .045, .955, 1],
+                                    ).createShader(bounds),
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  physics: const BouncingScrollPhysics(),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      for (final item
+                                          in _categories[_expanded!].$3)
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                          ),
+                                          child: MobileSubcategoryPill(
+                                            label: item.$1,
+                                            selected:
+                                                widget.currentRoute == item.$2,
+                                            accent: const Color(0xFF00AD87),
+                                            onPressed: () =>
+                                                _navigate(item.$2),
+                                          ),
                                         ),
-                                        child: MobileSubcategoryPill(
-                                          label: item.$1,
-                                          selected:
-                                              widget.currentRoute == item.$2,
-                                          accent: const Color(0xFF00AD87),
-                                          onPressed: () => _navigate(item.$2),
-                                        ),
-                                      ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                            IconButton(
-                              tooltip: 'Close subcategories',
-                              onPressed: () => setState(() => _expanded = null),
-                              color: const Color(0xFF475569),
-                              icon: const Icon(Icons.close_rounded, size: 18),
+                            SizedBox(
+                              width: 48,
+                              height: 48,
+                              child: IconButton(
+                                tooltip: 'Close subcategories',
+                                onPressed: () =>
+                                    setState(() => _expanded = null),
+                                color: const Color(0xFF475569),
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  size: 18,
+                                ),
+                              ),
                             ),
                           ],
                         ),

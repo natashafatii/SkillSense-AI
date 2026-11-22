@@ -739,11 +739,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
     final bool isParentActive = childRoutes.contains(widget.currentRoute);
 
-    // Badges
-    int badgeCount = 0;
-    if (index == 1) badgeCount = jobsBadgeCount;
-    if (index == 3) badgeCount = interviewBadgeCount;
-
     if (!_isExpanded) {
       // ── COLLAPSED STATE (60px wide rail) ──
       return Padding(
@@ -871,19 +866,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                                   const Color(0xFF64748B),
                                 ),
                         ),
-                        if (badgeCount > 0)
-                          Positioned(
-                            top: -2,
-                            right: -2,
-                            child: Container(
-                              width: 7,
-                              height: 7,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFEF4444),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                     const SizedBox(width: 10),
