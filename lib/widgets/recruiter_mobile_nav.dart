@@ -40,15 +40,23 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
   final _link = LayerLink();
   int? _expanded;
   static const _tabLabels = ['Overview', 'Pipeline', 'Interviews', 'Workspace'];
+  static const _profile = RecruiterDestination(
+    'Profile & settings',
+    '/recruiter/profile',
+  );
+
+  List<RecruiterDestination> _destinations(int index) => [
+    if (index == recruiterSections.length - 1) _profile,
+    ...recruiterSections[index].items,
+  ];
 
   int? get _active {
     final route = switch (widget.currentRoute) {
       '/recruiter/job-detail' => '/recruiter/job-listings',
-      '/recruiter/profile' => '/recruiter/analytics',
       final route => route,
     };
     for (var index = 0; index < recruiterSections.length; index++) {
-      if (recruiterSections[index].items.any((item) => item.route == route)) {
+      if (_destinations(index).any((item) => item.route == route)) {
         return index;
       }
     }
@@ -116,49 +124,67 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
               clipBehavior: Clip.antiAlias,
               child: SizedBox(
                 width: width,
-                height: 52,
+                height: 60,
                 child: Row(
                   children: [
                     Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Row(
-                          children: [
-                            for (final item
-                                in recruiterSections[_expanded!].items)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: MobileSubcategoryPill(
-                                  label: item.label,
-                                  selected:
-                                      widget.currentRoute == item.route ||
-                                      (widget.currentRoute ==
-                                              '/recruiter/job-detail' &&
-                                          item.route ==
-                                              '/recruiter/job-listings'),
-                                  accent: widget.accentColor,
-                                  onPressed: () {
-                                    _close();
-                                    if (widget.currentRoute != item.route) {
-                                      Navigator.of(
-                                        context,
-                                      ).pushNamed(item.route);
-                                    }
-                                  },
-                                ),
-                              ),
+                      child: ShaderMask(
+                        blendMode: BlendMode.dstIn,
+                        shaderCallback: (bounds) => const LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black,
+                            Colors.black,
+                            Colors.transparent,
                           ],
+                          stops: [0, .045, .955, 1],
+                        ).createShader(bounds),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Row(
+                            children: [
+                              for (final item in _destinations(_expanded!))
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: MobileSubcategoryPill(
+                                    label: item.label,
+                                    selected:
+                                        widget.currentRoute == item.route ||
+                                        (widget.currentRoute ==
+                                                '/recruiter/job-detail' &&
+                                            item.route ==
+                                                '/recruiter/job-listings'),
+                                    accent: widget.accentColor,
+                                    onPressed: () {
+                                      _close();
+                                      if (widget.currentRoute != item.route) {
+                                        Navigator.of(
+                                          context,
+                                        ).pushNamed(item.route);
+                                      }
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Close subcategories',
-                      onPressed: _close,
-                      color: context.themeForeground(const Color(0xFF475569)),
-                      icon: const Icon(Icons.close_rounded, size: 18),
+                    SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: IconButton(
+                        tooltip: 'Close subcategories',
+                        onPressed: _close,
+                        color: context.themeForeground(const Color(0xFF475569)),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                      ),
                     ),
                   ],
                 ),
@@ -219,7 +245,6 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
                                 label: _tabLabels[index],
                                 selected: selected == index,
                                 accent: widget.accentColor,
-                                menuActiveColor: widget.accentColor,
                                 menuOpen: _expanded != null,
                               ),
                             ),

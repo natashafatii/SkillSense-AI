@@ -26,6 +26,7 @@ class RecruiterTopBar extends StatelessWidget {
     this.searchFocused = false,
     this.onSearchTap,
     this.onBellTap,
+    this.onMobileTitleTap,
     this.onTrailingTap,
     this.trailingTooltip = 'Workspace settings',
     this.hasUnread = false,
@@ -53,6 +54,7 @@ class RecruiterTopBar extends StatelessWidget {
   final bool searchFocused;
   final VoidCallback? onSearchTap;
   final VoidCallback? onBellTap;
+  final VoidCallback? onMobileTitleTap;
   final VoidCallback? onTrailingTap;
   final String trailingTooltip;
   final bool hasUnread;
@@ -196,7 +198,20 @@ class RecruiterTopBar extends StatelessWidget {
                       ),
                     )
                   else
-                    Expanded(child: title),
+                    Expanded(
+                      child: onMobileTitleTap == null
+                          ? title
+                          : Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: Tooltip(
+                                message: 'Open candidate navigation',
+                                child: InkWell(
+                                  onTap: onMobileTitleTap,
+                                  child: title,
+                                ),
+                              ),
+                            ),
+                    ),
                   if (showSearch &&
                       compact &&
                       (candidate || onSearchTap != null))

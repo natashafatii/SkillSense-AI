@@ -52,10 +52,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
   Timer? _hoverIntentTimer;
   int? _hoveredIndex;
 
-  // Badge counts (clears on action)
-  static int jobsBadgeCount = 3;
-  static int interviewBadgeCount = 1;
-
   // Expanded accordion section toggles (default: all collapsed)
   final Map<int, bool> _accordionExpanded = {
     0: false,
@@ -219,14 +215,8 @@ class _CandidateSideNavState extends State<CandidateSideNav>
     }
   }
 
-  void _handleNavigation(String targetRoute, int parentIndex) {
+  void _handleNavigation(String targetRoute) {
     FocusManager.instance.primaryFocus?.unfocus();
-    // Clear badge when actioned
-    if (parentIndex == 1) {
-      jobsBadgeCount = 0;
-    } else if (parentIndex == 3) {
-      interviewBadgeCount = 0;
-    }
 
     if (widget.onNavigate != null) {
       widget.onNavigate!(targetRoute);
@@ -531,7 +521,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                     child: PointerGestureDetector(
                       key: const Key('candidate-collapsed-profile'),
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => _handleNavigation('/candidate/profile', -1),
+                      onTap: () => _handleNavigation('/candidate/profile'),
                       child: SizedBox(
                         width: 40,
                         height: 40,
@@ -639,7 +629,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
             child: PointerGestureDetector(
               key: const Key('candidate-expanded-profile'),
               behavior: HitTestBehavior.opaque,
-              onTap: () => _handleNavigation('/candidate/profile', -1),
+              onTap: () => _handleNavigation('/candidate/profile'),
               child: ValueListenableBuilder<CandidateProfile?>(
                 valueListenable: ProfileService.currentProfileNotifier,
                 builder: (context, profile, child) {
@@ -751,11 +741,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
     final bool isParentActive = childRoutes.contains(widget.currentRoute);
 
-    // Badges
-    int badgeCount = 0;
-    if (index == 1) badgeCount = jobsBadgeCount;
-    if (index == 3) badgeCount = interviewBadgeCount;
-
     if (!_isExpanded) {
       // ── COLLAPSED STATE (60px wide rail) ──
       return Padding(
@@ -771,7 +756,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
             child: PointerGestureDetector(
               onTap: () {
                 _expandDestination(index);
-                _handleNavigation(primaryRoute, index);
+                _handleNavigation(primaryRoute);
               },
               child: Stack(
                 clipBehavior: Clip.none,
@@ -858,7 +843,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                 });
                 _rememberPreferences();
                 if (dest['id'] != 'explore_jobs') {
-                  _handleNavigation(primaryRoute, index);
+                  _handleNavigation(primaryRoute);
                 }
               },
               child: Container(
@@ -883,19 +868,6 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                                   const Color(0xFF64748B),
                                 ),
                         ),
-                        if (badgeCount > 0)
-                          Positioned(
-                            top: -2,
-                            right: -2,
-                            child: Container(
-                              width: 7,
-                              height: 7,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFEF4444),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                     const SizedBox(width: 10),
@@ -934,7 +906,7 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                   return MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: PointerGestureDetector(
-                      onTap: () => _handleNavigation(subRoute, index),
+                      onTap: () => _handleNavigation(subRoute),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 2),
                         constraints: BoxConstraints(

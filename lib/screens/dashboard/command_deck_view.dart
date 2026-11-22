@@ -61,7 +61,7 @@ extension _DeckView on _CommandDeckScreenState {
               ],
             ),
           ),
-          bottomNavigationBar: mobile ? _dock(c) : null,
+          bottomNavigationBar: mobile ? _dock() : null,
         ),
       ),
     );
@@ -140,99 +140,8 @@ extension _DeckView on _CommandDeckScreenState {
     if (mounted && route != null) _go(route);
   }
 
-  List<RecruiterDestination> get _jobsMenu => [
-    ...recruiterSections[0].items.skip(1),
-    ...recruiterSections[1].items,
-  ];
-
-  Widget _dockTab(
-    _DeckColors c,
-    String label,
-    String icon, {
-    List<RecruiterDestination> menu = const [],
-  }) {
-    final selected = menu.isEmpty;
-    final ink = selected ? c.blue : c.muted;
-    final tab = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 48),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Align(
-          heightFactor: 1,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _DeckIcon(icon, color: ink),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: c.text(AppType.caption, color: ink),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (selected) return Semantics(selected: true, child: tab);
-    return PopupMenuButton<String>(
-      tooltip: label,
-      color: c.card,
-      padding: EdgeInsets.zero,
-      onSelected: _go,
-      itemBuilder: (_) => [
-        for (final destination in menu)
-          PopupMenuItem(
-            value: destination.route,
-            child: Text(destination.label, style: c.text(AppType.caption)),
-          ),
-      ],
-      child: tab,
-    );
-  }
-
-  Widget _dock(_DeckColors c) => Material(
-    key: const Key('recruiter-mobile-main-nav'),
-    color: c.card,
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: c.line)),
-      ),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        child: Row(
-          children: [
-            Expanded(child: _dockTab(c, 'Deck', 'grid')),
-            Expanded(child: _dockTab(c, 'Jobs', 'brief', menu: _jobsMenu)),
-            Expanded(
-              child: _dockTab(
-                c,
-                'Interviews',
-                'cal',
-                menu: recruiterSections[2].items,
-              ),
-            ),
-            Expanded(
-              child: _dockTab(
-                c,
-                'Profile',
-                'user',
-                menu: [
-                  const RecruiterDestination(
-                    'Profile & settings',
-                    '/recruiter/profile',
-                  ),
-                  ...recruiterSections[3].items,
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+  Widget _dock() =>
+      const RecruiterMobileNav(currentRoute: '/recruiter/command-deck');
 
   List<Interview> get _upcomingInterviews {
     final now = DateTime.now();

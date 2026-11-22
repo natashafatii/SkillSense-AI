@@ -11,7 +11,6 @@ class MobileNavTab extends StatelessWidget {
     required this.selected,
     required this.accent,
     this.menuOpen = false,
-    this.menuActiveColor = const Color(0xFF27DEB0),
   });
 
   final IconData icon;
@@ -19,7 +18,6 @@ class MobileNavTab extends StatelessWidget {
   final bool selected;
   final Color accent;
   final bool menuOpen;
-  final Color menuActiveColor;
 
   @override
   Widget build(BuildContext context) {
@@ -31,13 +29,13 @@ class MobileNavTab extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: selected ? menuActiveColor : Colors.transparent,
+              color: Colors.transparent,
             ),
             child: Icon(
               icon,
-              size: 20,
+              size: selected ? 21 : 20,
               color: selected
-                  ? context.themeForeground(const Color(0xFF0F172A))
+                  ? accent
                   : context.themeForeground(const Color(0xFF71829C)),
             ),
           ),
@@ -54,7 +52,7 @@ class MobileNavTab extends StatelessWidget {
           : const Duration(milliseconds: 180),
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
-        color: selected ? accent.withValues(alpha: 0.11) : Colors.transparent,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Stack(
@@ -83,13 +81,19 @@ class MobileNavTab extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 16, color: color),
+                Icon(icon, size: selected ? 17 : 16, color: color),
                 const SizedBox(height: 2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppType.nav.style(context, color: color),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: AppType.nav.style(
+                      context,
+                      color: color,
+                      weight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
                 ),
               ],
             ),

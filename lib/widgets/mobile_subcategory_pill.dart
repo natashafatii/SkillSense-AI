@@ -38,7 +38,7 @@ class MobileSubcategoryPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         textStyle: AppType.button.style(context),
       ),
-      child: Text(label, maxLines: 1),
+      child: Text(label, maxLines: 1, softWrap: false),
     ),
   );
 }

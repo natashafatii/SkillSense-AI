@@ -88,8 +88,12 @@ void main() {
       );
 
       await tester.pumpWidget(
-        const MaterialApp(
-          home: RecruiterScaffold(
+        MaterialApp(
+          routes: {
+            '/recruiter/profile': (_) =>
+                const Scaffold(body: Text('Recruiter profile destination')),
+          },
+          home: const RecruiterScaffold(
             currentRoute: '/recruiter/command-deck',
             body: CommandDeckScreen(),
           ),
@@ -136,6 +140,12 @@ void main() {
         find.byKey(const Key('recruiter-mobile-main-nav')),
         findsOneWidget,
       );
+      await tester.tap(find.byKey(const Key('recruiter-mobile-category-3')));
+      await tester.pumpAndSettle();
+      expect(find.text('Analytics'), findsOneWidget);
+      await tester.tap(find.text('Profile & settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Recruiter profile destination'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
 
