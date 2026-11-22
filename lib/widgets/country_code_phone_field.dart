@@ -1,8 +1,8 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class CountryData {
   final String code;
@@ -195,25 +195,23 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
-          Text(country.flag, style: const TextStyle(fontSize: 20)),
+          Text(country.flag, style: AppType.bodyLg.style(context)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               country.name,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                color: context.themeForeground(const Color(0xFF0F172A)),
+              style: AppType.caption.style(
+                context,
+                color: context.themeForeground(TypographyColors.primary),
               ),
             ),
           ),
           Text(
             country.dialCode,
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: context.themeForeground(const Color(0xFF64748B)),
+            style: AppType.numeric.style(
+              context,
+              color: context.themeForeground(TypographyColors.secondary),
             ),
           ),
         ],
@@ -226,6 +224,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
       Padding(
         padding: const EdgeInsets.all(10),
         child: TextField(
+          style: AppType.body.style(context),
           key: const Key('country-search'),
           controller: _countrySearchController,
           focusNode: _countrySearchFocus,
@@ -256,9 +255,9 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
               return Center(
                 child: Text(
                   'No countries found',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: context.themeForeground(const Color(0xFF64748B)),
+                  style: AppType.caption.style(
+                    context,
+                    color: context.themeForeground(TypographyColors.secondary),
                   ),
                 ),
               );
@@ -435,8 +434,9 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                 padding: const EdgeInsets.only(left: 4, bottom: 5),
                 child: Text(
                   widget.label!,
-                  style: widget.labelStyle ??
-                      GoogleFonts.inter(fontSize: 12, color: hintColor),
+                  style:
+                      widget.labelStyle ??
+                      AppType.caption.style(context, color: hintColor),
                 ),
               ),
             ],
@@ -498,15 +498,14 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                               children: [
                                 Text(
                                   _selectedCountry.flag,
-                                  style: const TextStyle(fontSize: 16),
+                                  style: AppType.bodyLg.style(context),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   _selectedCountry.dialCode,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
+                                  style: AppType.caption.style(
+                                    context,
                                     color: textColor,
-                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
@@ -554,16 +553,15 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                                 _selectedCountry.maxLength,
                               ),
                             ],
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
+                            style: AppType.body.style(
+                              context,
                               color: textColor,
                             ),
                             decoration: InputDecoration(
                               hintText: widget.hintText,
-                              hintStyle: GoogleFonts.inter(
+                              hintStyle: AppType.caption.style(
+                                context,
                                 color: hintColor,
-                                fontSize: 13,
                               ),
                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
@@ -587,7 +585,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                 padding: const EdgeInsets.only(top: 6, left: 4),
                 child: Text(
                   '${widget.controller.text.length} / ${_selectedCountry.maxLength} digits',
-                  style: GoogleFonts.inter(fontSize: 12, color: hintColor),
+                  style: AppType.caption.style(context, color: hintColor),
                 ),
               )
             else if (field.hasError)
@@ -595,7 +593,7 @@ class _CountryCodePhoneFieldState extends State<CountryCodePhoneField> {
                 padding: const EdgeInsets.only(top: 6, left: 4),
                 child: Text(
                   field.errorText ?? '',
-                  style: GoogleFonts.inter(fontSize: 12, color: errorColor),
+                  style: AppType.caption.style(context, color: errorColor),
                 ),
               ),
           ],

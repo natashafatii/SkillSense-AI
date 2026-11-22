@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -50,10 +53,9 @@ class ReviewQuestionBadge extends StatelessWidget {
         ),
         child: Text(
           type.isEmpty ? '—' : type.characters.first,
-          style: TextStyle(
+          style: AppType.caption.style(
+            context,
             color: context.themeForeground(ink),
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -126,7 +128,10 @@ class _RecruiterInterviewDashboardState
 
   @override
   void didPushNext() {
-    if (_player?.value.isPlaying == true) _player!.pause();
+    final player = _player;
+    if (player?.value.isPlaying == true) {
+      unawaited(_controlRecording(player!, player.pause));
+    }
   }
 
   @override
@@ -153,8 +158,10 @@ class _RecruiterInterviewDashboardState
     _clear();
     final token = _request = CancelToken();
     final id = widget.review.interview!.id;
-    _recordingLoading = _behaviorLoading = true;
-    _recordingFailed = _behaviorFailed = false;
+    setState(() {
+      _recordingLoading = _behaviorLoading = true;
+      _recordingFailed = _behaviorFailed = false;
+    });
 
     final InterviewRecording recording;
     try {
@@ -177,21 +184,56 @@ class _RecruiterInterviewDashboardState
       _recordingLoading = false;
       _behaviorLoading = recording.sessionId != null;
     });
-    await Future.wait([
-      if (recording.uri case final uri?) _openRecording(uri, token),
-      if (recording.sessionId case final sessionId?)
-        _loadBehavior(id, sessionId, token),
-    ]);
+    if (recording.sessionId case final sessionId?) {
+      await _loadBehavior(id, sessionId, token);
+    }
   }
 
-  Future<void> _openRecording(Uri uri, CancelToken token) async {
+  Future<void> _openRecording({Duration? position}) async {
+    final uri = _recording?.uri;
+    final token = _request;
+    if (uri == null || token == null || !_current(token)) return;
+
     final player = VideoPlayerController.networkUrl(uri);
-    setState(() => _player = player);
+    final previousPlayer = _player;
+    setState(() {
+      _recordingFailed = false;
+      _showRecording = false;
+      _player = player;
+    });
+    unawaited(previousPlayer?.dispose());
     try {
-      await player.initialize();
-      if (_current(token)) setState(() {});
+      await player.initialize().timeout(const Duration(seconds: 15));
     } catch (_) {
-      if (_current(token)) setState(() => _recordingFailed = true);
+      _failPlayback(player);
+      return;
+    }
+    if (!_current(token) || _player != player) return;
+    final seek = position != null && position <= player.value.duration;
+    setState(() => _showRecording = seek);
+    if (seek) {
+      await _controlRecording(player, () => player.seekTo(position));
+    }
+  }
+
+  void _failPlayback(VideoPlayerController player) {
+    if (!mounted || _player != player) return;
+    setState(() {
+      _player = null;
+      _recordingFailed = true;
+      _showRecording = false;
+    });
+    unawaited(player.dispose());
+  }
+
+  Future<void> _controlRecording(
+    VideoPlayerController player,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (_) {
+      _failPlayback(player);
     }
   }
 
@@ -224,13 +266,8 @@ class _RecruiterInterviewDashboardState
   @override
   Widget build(BuildContext context) => DefaultTextStyle.merge(
     style: widget.compactScreening
-        ? ScreeningStyle.text(13)
-        : TextStyle(
-            color: context.themeForeground(_ink),
-            fontSize: 13,
-            height: 1.45,
-            fontFamily: 'Inter',
-          ),
+        ? ScreeningStyle.text(context, AppType.caption)
+        : AppType.caption.style(context, color: context.themeForeground(_ink)),
     child: LayoutBuilder(
       builder: (context, size) {
         final answers = _evidenceAnswers();
@@ -299,6 +336,13 @@ class _RecruiterInterviewDashboardState
         time <= value!.duration;
   }
 
+  bool _canOpenAt(_EvidenceAnswer answer) =>
+      _player == null &&
+      _recording?.uri != null &&
+      answer.timestamp != null &&
+      answer.callId?.isNotEmpty == true &&
+      answer.callId == _recording?.callId;
+
   Widget _recordingPanel(
     BuildContext context,
     List<_EvidenceAnswer> answers, {
@@ -317,10 +361,9 @@ class _RecruiterInterviewDashboardState
     final player = _player;
 
     Widget contents(VideoPlayerValue? value) {
-      final ready =
-          value?.isInitialized == true &&
-          value?.hasError == false &&
-          !_recordingFailed;
+      final failed = _recordingFailed || value?.hasError == true;
+      final canLoad = _recording?.uri != null && player == null && !failed;
+      final ready = value?.isInitialized == true && !failed;
       final duration = ready && value!.duration > Duration.zero
           ? value.duration
           : _recording?.duration;
@@ -335,20 +378,26 @@ class _RecruiterInterviewDashboardState
       final progress = milliseconds == 0
           ? 0.0
           : ((position?.inMilliseconds ?? 0) / milliseconds).clamp(0.0, 1.0);
-      final message = _recordingFailed || value?.hasError == true
-          ? 'Recording unavailable'
+      final message = failed
+          ? 'Could not load the recording.'
           : _recordingLoading || (player != null && !ready)
           ? 'Loading recording…'
           : ready
           ? 'Recorded session. Press play or pick an answer.'
+          : canLoad
+          ? 'Recorded session. Load the recording or pick an answer.'
           : 'No recording available';
 
       void togglePlayback() {
+        if (player == null) {
+          unawaited(_openRecording());
+          return;
+        }
         if (playing) {
-          player!.pause();
+          unawaited(_controlRecording(player, player.pause));
         } else {
           setState(() => _showRecording = true);
-          player!.play();
+          unawaited(_controlRecording(player, player.play));
         }
       }
 
@@ -372,26 +421,40 @@ class _RecruiterInterviewDashboardState
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (ready)
+                    if (ready || canLoad)
                       IconButton.filledTonal(
-                        tooltip: 'Play recording',
+                        tooltip: canLoad ? 'Load recording' : 'Play recording',
                         style: IconButton.styleFrom(
                           backgroundColor: const Color(0xFF293143),
                           foregroundColor: Colors.white,
                           minimumSize: const Size.square(46),
                         ),
                         onPressed: togglePlayback,
-                        icon: const Icon(Icons.play_arrow_rounded),
+                        icon: Icon(
+                          canLoad
+                              ? Icons.download_rounded
+                              : Icons.play_arrow_rounded,
+                        ),
                       ),
-                    if (ready) const SizedBox(height: 10),
+                    if (ready || canLoad) const SizedBox(height: 10),
                     Text(
                       message,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Color(0xFF9CADCA),
-                        fontSize: 14,
+                      style: AppType.bodySm.style(
+                        context,
+                        color: const Color(0xFFA7B7CF),
                       ),
                     ),
+                    if (failed)
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFFCBDAF4),
+                        ),
+                        onPressed: _recording?.uri == null
+                            ? _load
+                            : _openRecording,
+                        child: const Text('Retry recording'),
+                      ),
                   ],
                 ),
               ),
@@ -411,13 +474,13 @@ class _RecruiterInterviewDashboardState
                         header,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _eyebrow(const Color(0xFF9FACC6)),
+                        style: _eyebrow(context, const Color(0xFF9FACC6)),
                       ),
                     ),
                     if (duration != null)
                       Text(
                         _clock(duration),
-                        style: _eyebrow(const Color(0xFF9FACC6)),
+                        style: _eyebrow(context, const Color(0xFF9FACC6)),
                       ),
                   ],
                 ),
@@ -438,21 +501,27 @@ class _RecruiterInterviewDashboardState
                 child: Row(
                   children: [
                     IconButton(
-                      tooltip: playing ? 'Pause recording' : 'Play recording',
+                      tooltip: canLoad
+                          ? 'Load recording'
+                          : playing
+                          ? 'Pause recording'
+                          : 'Play recording',
                       color: Colors.white,
                       disabledColor: const Color(0xFF62718A),
-                      onPressed: ready ? togglePlayback : null,
+                      onPressed: ready || canLoad ? togglePlayback : null,
                       icon: Icon(
-                        playing
+                        canLoad
+                            ? Icons.download_rounded
+                            : playing
                             ? Icons.pause_rounded
                             : Icons.play_arrow_rounded,
                       ),
                     ),
                     Text(
                       '${position == null ? '—' : _clock(position)} / ${duration == null ? '—' : _clock(duration)}',
-                      style: const TextStyle(
+                      style: AppType.caption.style(
+                        context,
                         color: Color(0xFFA7B7CF),
-                        fontSize: 11,
                       ),
                     ),
                     Expanded(
@@ -478,11 +547,14 @@ class _RecruiterInterviewDashboardState
                                 child: Slider(
                                   value: progress,
                                   onChanged: ready && milliseconds > 0
-                                      ? (fraction) => player!.seekTo(
-                                          Duration(
-                                            milliseconds:
-                                                (milliseconds * fraction)
-                                                    .round(),
+                                      ? (fraction) => _controlRecording(
+                                          player!,
+                                          () => player.seekTo(
+                                            Duration(
+                                              milliseconds:
+                                                  (milliseconds * fraction)
+                                                      .round(),
+                                            ),
                                           ),
                                         )
                                       : null,
@@ -522,7 +594,10 @@ class _RecruiterInterviewDashboardState
                       tooltip: 'Playback speed',
                       enabled: ready,
                       initialValue: value?.playbackSpeed,
-                      onSelected: (speed) => player!.setPlaybackSpeed(speed),
+                      onSelected: (speed) => _controlRecording(
+                        player!,
+                        () => player.setPlaybackSpeed(speed),
+                      ),
                       itemBuilder: (_) => [
                         for (final speed in [1.0, 1.25, 1.5, 2.0])
                           PopupMenuItem(
@@ -532,7 +607,7 @@ class _RecruiterInterviewDashboardState
                       ],
                       child: Text(
                         ready ? _speedLabel(value!.playbackSpeed) : '—',
-                        style: _eyebrow(const Color(0xFFA7B7CF)),
+                        style: _eyebrow(context, const Color(0xFFA7B7CF)),
                       ),
                     ),
                   ],
@@ -634,9 +709,10 @@ class _RecruiterInterviewDashboardState
                           const SizedBox(width: 4),
                           Text(
                             '${entry.key} ${entry.value.toStringAsFixed(0)}%',
-                            style: TextStyle(
+                            style: AppType.numeric.style(
+                              context,
                               color: context.themeForeground(_muted),
-                              fontSize: 11,
+                              weight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -738,7 +814,11 @@ class _RecruiterInterviewDashboardState
         average == null
             ? 'Scores unavailable'
             : '${scores.length} scored · average ${average.toStringAsFixed(1)} / 10',
-        style: TextStyle(fontSize: 12, color: context.themeForeground(_muted)),
+        style: AppType.numeric.style(
+          context,
+          color: context.themeForeground(_muted),
+          weight: FontWeight.w600,
+        ),
       ),
       children: [
         Divider(height: 1, color: context.themeOutline(_line)),
@@ -762,13 +842,22 @@ class _RecruiterInterviewDashboardState
   }
 
   Widget _answerRow(_EvidenceAnswer answer) {
-    final canSeek = _canSeek(answer);
+    final canSeek = _canSeek(answer) || _canOpenAt(answer);
     return InkWell(
       onTap: canSeek
           ? () {
-              if (!_canSeek(answer)) return;
-              setState(() => _showRecording = true);
-              _player!.seekTo(answer.timestamp!);
+              if (_canOpenAt(answer)) {
+                unawaited(_openRecording(position: answer.timestamp));
+              } else if (_canSeek(answer)) {
+                final player = _player!;
+                setState(() => _showRecording = true);
+                unawaited(
+                  _controlRecording(
+                    player,
+                    () => player.seekTo(answer.timestamp!),
+                  ),
+                );
+              }
             }
           : null,
       child: Padding(
@@ -790,19 +879,19 @@ class _RecruiterInterviewDashboardState
               children: [
                 Text(
                   answer.score?.toStringAsFixed(1) ?? '—',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
+                  style: AppType.numeric.style(
+                    context,
                     color: context.themeForeground(
                       reviewAnswerScoreColor(answer.score),
                     ),
+                    weight: FontWeight.w600,
                   ),
                 ),
                 if (answer.timestamp != null)
                   Text(
                     _clock(answer.timestamp!),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    style: AppType.caption.style(
+                      context,
                       color: context.themeForeground(canSeek ? _blue : _muted),
                     ),
                   ),
@@ -843,7 +932,7 @@ class _RecruiterInterviewDashboardState
               children: [
                 Text(
                   _eventTime(context, event.startedAt),
-                  style: _eyebrow(_muted),
+                  style: _eyebrow(context, _muted),
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Text(_eventDescription(event))),
@@ -883,11 +972,7 @@ class _RecruiterInterviewDashboardState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (title != null)
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
+              if (title != null) Text(title, style: AppType.h4.style(context)),
               Text(
                 detail,
                 style: TextStyle(color: context.themeForeground(_muted)),
@@ -945,13 +1030,8 @@ class _RecruiterInterviewDashboardState
   static String _speedLabel(double speed) =>
       '${speed.toString().replaceFirst(RegExp(r'\.0$'), '')}×';
 
-  static TextStyle _eyebrow(Color color) => TextStyle(
-    color: color,
-    fontFamily: 'Inter',
-    fontWeight: FontWeight.w700,
-    fontSize: 10,
-    letterSpacing: .8,
-  );
+  static TextStyle _eyebrow(BuildContext context, Color color) =>
+      AppType.overline.style(context, color: color);
 
   Widget _badge(
     String text, {
@@ -972,7 +1052,7 @@ class _RecruiterInterviewDashboardState
         color: context.themeSurface(fill),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(text, style: _eyebrow(context.themeForeground(ink))),
+      child: Text(text, style: _eyebrow(context, context.themeForeground(ink))),
     );
   }
 
@@ -1009,11 +1089,8 @@ class _RecruiterInterviewDashboardState
               Text(
                 title,
                 style: widget.compactScreening
-                    ? ScreeningStyle.title()
-                    : const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    ? ScreeningStyle.title(context)
+                    : AppType.h4.style(context),
               ),
               if (badge != null) badge,
               if (trailing != null) trailing,

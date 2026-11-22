@@ -1,9 +1,9 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,6 +12,7 @@ import '../services/profile_service.dart';
 import '../models/candidate_profile.dart';
 import 'app_tooltip.dart';
 import 'candidate_avatar_image.dart';
+import 'workspace_rail_layout.dart';
 
 class CandidateSideNav extends StatefulWidget {
   @visibleForTesting
@@ -25,12 +26,14 @@ class CandidateSideNav extends StatefulWidget {
   final String currentRoute;
   final Function(String route)? onNavigate;
   final bool initialExpanded;
+  final Widget? workspace;
 
   const CandidateSideNav({
     super.key,
     required this.currentRoute,
     this.onNavigate,
     this.initialExpanded = false,
+    this.workspace,
   });
 
   @override
@@ -311,10 +314,45 @@ class _CandidateSideNavState extends State<CandidateSideNav>
 
   @override
   Widget build(BuildContext context) {
-    final double targetWidth = _isExpanded ? 272.0 : 60.0;
+    final double targetWidth = _isExpanded ? context.sidebarWidth : 60.0;
     const Color tealAccent = Color(0xFF2EE6C8);
 
-    return KeyboardListener(
+    final content = Column(
+      children: [
+        const SizedBox(height: 14),
+
+        // ── HEADER ──────────────────────────────────────────────────────
+        _buildHeader(tealAccent),
+
+        const SizedBox(height: 16),
+
+        const SizedBox(height: 8),
+
+        // ── DESTINATIONS LIST ──────────────────────────────────────────
+        Expanded(
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(
+              context,
+            ).copyWith(scrollbars: false),
+            child: ListView(
+              padding: EdgeInsets.symmetric(horizontal: _isExpanded ? 10 : 10),
+              physics: const BouncingScrollPhysics(),
+              children: [
+                // Work Destinations (Index 0 to 3)
+                for (int i = 0; i < 5; i++)
+                  _buildDestinationTile(i, tealAccent),
+              ],
+            ),
+          ),
+        ),
+
+        // ── FOOTER (Collapsed & Expanded States) ─────────────────────
+        _buildFooter(),
+
+        const SizedBox(height: 12),
+      ],
+    );
+    final rail = KeyboardListener(
       focusNode: _keyboardFocusNode,
       autofocus: true,
       onKeyEvent: (KeyEvent event) {
@@ -331,73 +369,55 @@ class _CandidateSideNavState extends State<CandidateSideNav>
       child: MouseRegion(
         onEnter: (_) => _onRailMouseEnter(),
         onExit: (_) => _onRailMouseExit(),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: const Cubic(0.2, 0.8, 0.2, 1.0),
-          width: targetWidth,
-          height: double.infinity,
-          decoration: BoxDecoration(
-            color: context.themeSurface(Colors.white),
-            border: Border(
-              right: BorderSide(
-                color: context.themeOutline(const Color(0xFFE2E8F0)),
-                width: 1.0,
-              ),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 10,
-                offset: const Offset(2, 0),
-              ),
-            ],
+        child: widget.workspace == null
+            ? _standaloneRail(context, targetWidth, content)
+            : content,
+      ),
+    );
+    final workspace = widget.workspace;
+    if (workspace == null) return rail;
+    return WorkspaceRailLayout(
+      expanded: _isExpanded,
+      expandedWidth: context.sidebarWidth,
+      railColor: context.themeSurface(Colors.white),
+      railBorderColor: context.themeOutline(const Color(0xFFE2E8F0)),
+      rail: rail,
+      body: workspace,
+    );
+  }
+
+  Widget _standaloneRail(
+    BuildContext context,
+    double targetWidth,
+    Widget content,
+  ) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: const Cubic(0.2, 0.8, 0.2, 1.0),
+      width: targetWidth,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: context.themeSurface(Colors.white),
+        border: Border(
+          right: BorderSide(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+            width: 1.0,
           ),
-          // Lay out each state at its final width while the rail animates.
-          // Otherwise expanded rows briefly receive the collapsed constraints.
-          child: ClipRect(
-            child: OverflowBox(
-              alignment: Alignment.topLeft,
-              minWidth: targetWidth - 1, // Account for the right border.
-              maxWidth: targetWidth - 1,
-              child: Column(
-                children: [
-                  const SizedBox(height: 14),
-
-                  // ── HEADER ──────────────────────────────────────────────────────
-                  _buildHeader(tealAccent),
-
-                  const SizedBox(height: 16),
-
-                  const SizedBox(height: 8),
-
-                  // ── DESTINATIONS LIST ──────────────────────────────────────────
-                  Expanded(
-                    child: ScrollConfiguration(
-                      behavior: ScrollConfiguration.of(
-                        context,
-                      ).copyWith(scrollbars: false),
-                      child: ListView(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: _isExpanded ? 10 : 10,
-                        ),
-                        physics: const BouncingScrollPhysics(),
-                        children: [
-                          // Work Destinations (Index 0 to 3)
-                          for (int i = 0; i < 5; i++)
-                            _buildDestinationTile(i, tealAccent),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // ── FOOTER (Collapsed & Expanded States) ─────────────────────
-                  _buildFooter(),
-
-                  const SizedBox(height: 12),
-                ],
-              ),
-            ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(2, 0),
           ),
+        ],
+      ),
+      child: ClipRect(
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          minWidth: targetWidth - 1,
+          maxWidth: targetWidth - 1,
+          child: content,
         ),
       ),
     );
@@ -461,22 +481,18 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                 'SkillSense',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.spaceGrotesk(
-                  color: context.themeForeground(const Color(0xFF0F172A)),
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  height: 1.1,
+                style: AppType.h4.style(
+                  context,
+                  color: context.themeForeground(TypographyColors.primary),
                 ),
               ),
               Text(
                 'CANDIDATE WORKSPACE',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.spaceGrotesk(
-                  color: context.themeForeground(const Color(0xFF66748F)),
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
+                style: AppType.overline.style(
+                  context,
+                  color: context.themeForeground(TypographyColors.secondary),
                 ),
               ),
             ],
@@ -558,12 +574,11 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                               ),
                               child: CandidateAvatarImage(
                                 profile: profile,
-                                initialsStyle: GoogleFonts.spaceGrotesk(
+                                initialsStyle: AppType.caption.style(
+                                  context,
                                   color: context.themeForeground(
                                     const Color(0xFF047857),
                                   ),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
@@ -675,12 +690,11 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                           ),
                           child: CandidateAvatarImage(
                             profile: profile,
-                            initialsStyle: GoogleFonts.spaceGrotesk(
+                            initialsStyle: AppType.caption.style(
+                              context,
                               color: context.themeForeground(
                                 const Color(0xFF047857),
                               ),
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
@@ -691,13 +705,11 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                             children: [
                               Text(
                                 displayName,
-                                style: GoogleFonts.spaceGrotesk(
+                                style: AppType.caption.style(
+                                  context,
                                   color: context.themeForeground(
-                                    const Color(0xFF0F172A),
+                                    TypographyColors.primary,
                                   ),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.1,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -705,11 +717,11 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                               if (email.isNotEmpty)
                                 Text(
                                   email,
-                                  style: GoogleFonts.inter(
+                                  style: AppType.caption.style(
+                                    context,
                                     color: context.themeForeground(
-                                      const Color(0xFF64748B),
+                                      TypographyColors.secondary,
                                     ),
-                                    fontSize: 10.5,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -890,13 +902,9 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                     Expanded(
                       child: Text(
                         dest['label'],
-                        style: GoogleFonts.spaceGrotesk(
-                          color: context.themeForeground(
-                            const Color(0xFF0F172A),
-                          ),
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.46,
+                        style: AppType.nav.style(
+                          context,
+                          color: context.primaryTextColor,
                         ),
                       ),
                     ),
@@ -929,6 +937,10 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                       onTap: () => _handleNavigation(subRoute, index),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 2),
+                        constraints: BoxConstraints(
+                          minHeight: context.controlHeight,
+                        ),
+                        alignment: Alignment.centerLeft,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 6,
@@ -970,18 +982,13 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                                 subLabel,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.inter(
+                                style: AppType.nav.style(
+                                  context,
                                   color: isSubActive
                                       ? context.themeForeground(
-                                          const Color(0xFF0F172A),
+                                          TypographyColors.candidateAccent,
                                         )
-                                      : context.themeForeground(
-                                          const Color(0xFF64748B),
-                                        ),
-                                  fontSize: 12.5,
-                                  fontWeight: isSubActive
-                                      ? FontWeight.bold
-                                      : FontWeight.w500,
+                                      : context.secondaryTextColor,
                                 ),
                               ),
                             ),

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -7,8 +8,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/candidate_button_style.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/page_heading_style.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../models/job.dart';
 import '../../models/paginated_response.dart';
@@ -182,6 +181,56 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
 
     final processedJobs = _getProcessedJobs();
 
+    final workspace = Column(
+      children: [
+        RecruiterTopBar(pageTitle: 'Job feed', candidate: true),
+        Expanded(
+          child: MobileEdgeShadowWrapper(
+            child: _loading && _jobs.isEmpty
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.dashboardTeal,
+                    ),
+                  )
+                : _error != null && _jobs.isEmpty
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Could not load jobs: ${_error!}'),
+                      TextButton(
+                        onPressed: () => _loadJobs(),
+                        style: CandidateButtonStyle.secondary(
+                          context,
+                          TextButton.styleFrom(),
+                        ),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  )
+                : !_hasAnyJobs
+                ? _buildEmptyState(isMobile)
+                : SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.only(
+                      left: 22,
+                      right: 22,
+                      top: 16,
+                      bottom: isMobile ? 164 : 32,
+                    ),
+                    child: _buildContentCanvas(
+                      isMobile,
+                      processedJobs,
+                      textPrimary,
+                      textSecondary,
+                      cardBg,
+                      cardBorder,
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+
     return Scaffold(
       backgroundColor: bgBase,
       body: Stack(
@@ -222,73 +271,12 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
             child: Column(
               children: [
                 Expanded(
-                  child: Row(
-                    children: [
-                      // Left Rail (Web Only)
-                      if (!isMobile)
-                        const CandidateSideNav(currentRoute: '/candidate/jobs'),
-
-                      // Main Canvas
-                      Expanded(
-                        child: Column(
-                          children: [
-                            RecruiterTopBar(
-                              pageTitle: 'Job feed',
-                              candidate: true,
-                            ),
-                            Expanded(
-                              child: MobileEdgeShadowWrapper(
-                                child: _loading && _jobs.isEmpty
-                                    ? const Center(
-                                        child: CircularProgressIndicator(
-                                          color: AppColors.dashboardTeal,
-                                        ),
-                                      )
-                                    : _error != null && _jobs.isEmpty
-                                    ? Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            'Could not load jobs: ${_error!}',
-                                          ),
-                                          TextButton(
-                                            onPressed: () => _loadJobs(),
-                                            style:
-                                                CandidateButtonStyle.secondary(
-                                                  context,
-                                                  TextButton.styleFrom(),
-                                                ),
-                                            child: const Text('Retry'),
-                                          ),
-                                        ],
-                                      )
-                                    : !_hasAnyJobs
-                                    ? _buildEmptyState(isMobile)
-                                    : SingleChildScrollView(
-                                        physics: const BouncingScrollPhysics(),
-                                        padding: EdgeInsets.only(
-                                          left: 22,
-                                          right: 22,
-                                          top: 16,
-                                          bottom: isMobile ? 164 : 32,
-                                        ),
-                                        child: _buildContentCanvas(
-                                          isMobile,
-                                          processedJobs,
-                                          textPrimary,
-                                          textSecondary,
-                                          cardBg,
-                                          cardBorder,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ],
+                  child: isMobile
+                      ? workspace
+                      : CandidateSideNav(
+                          currentRoute: '/candidate/jobs',
+                          workspace: workspace,
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -328,10 +316,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        'Job feed',
-                        style: pageHeadingStyle(context),
-                      ),
+                      Text('Job feed', style: context.text.headlineLarge),
                     ],
                   ),
                   Text(
@@ -340,10 +325,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                         : 'Browse active jobs · match scores appear after application screening.',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: textSecondary,
-                      fontSize: 10.5,
-                    ),
+                    style: AppType.caption.style(context, color: textSecondary),
                   ),
                 ],
               ),
@@ -382,47 +364,48 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
         if (!_loading && _error == null && processedJobs.isEmpty)
           const Text('No active jobs found.'),
         if (!_loading && _error == null)
-          if (isMobile)
-            ListView.separated(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: processedJobs.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 14),
-              itemBuilder: (context, idx) {
-                final job = processedJobs[idx];
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = !isMobile && constraints.maxWidth >= 650 ? 2 : 1;
+
+              Widget card(int index) {
+                final job = processedJobs[index];
                 return CandidateJobCard(
+                  key: ValueKey(job.id),
                   job: job,
                   isMobile: isMobile,
-                  isHot: idx == 0,
+                  isHot: index == 0,
                   hasUploadedResume: _hasUploadedResume ?? false,
                   onApply: () => _openJobDetail(job.title, job.id),
                 );
-              },
-            )
-          else
-            GridView.builder(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 14,
-                mainAxisExtent: 62 + MediaQuery.textScalerOf(context).scale(42),
-              ),
-              itemCount: processedJobs.length,
-              itemBuilder: (context, idx) {
-                final job = processedJobs[idx];
-                return CandidateJobCard(
-                  job: job,
-                  isMobile: isMobile,
-                  isHot: idx == 0,
-                  hasUploadedResume: _hasUploadedResume ?? false,
-                  onApply: () => _openJobDetail(job.title, job.id),
-                );
-              },
-            ),
+              }
+
+              return ListView.separated(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: (processedJobs.length + columns - 1) ~/ columns,
+                separatorBuilder: (_, _) => const SizedBox(height: 14),
+                itemBuilder: (context, row) {
+                  final index = row * columns;
+                  if (columns == 1) return card(index);
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: 14,
+                    children: [
+                      Expanded(child: card(index)),
+                      Expanded(
+                        child: index + 1 < processedJobs.length
+                            ? card(index + 1)
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
       ],
     );
   }
@@ -459,11 +442,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
             const SizedBox(height: 16),
             Text(
               isMobile ? 'No jobs yet' : 'No jobs to show right now',
-              style: GoogleFonts.inter(
-                color: context.themeForeground(const Color(0xFF0F172A)), // --tx
-                fontSize: isMobile ? 15 : 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: isMobile ? -0.03 : -0.025,
+              style: AppType.h3.style(
+                context,
+                color: context.themeForeground(TypographyColors.primary),
               ),
               textAlign: TextAlign.center,
             ),
@@ -474,12 +455,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                 isMobile
                     ? 'New roles will appear here.'
                     : 'New roles appear here as recruiters post them. Complete your profile so the best matches rank first.',
-                style: GoogleFonts.inter(
-                  color: context.themeForeground(
-                    const Color(0xFF64748B),
-                  ), // --tx3
-                  fontSize: isMobile ? 11 : 12.5,
-                  height: 1.65,
+                style: AppType.caption.style(
+                  context,
+                  color: context.themeForeground(TypographyColors.secondary),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -513,11 +491,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                 },
                 child: Text(
                   'Complete my profile',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppType.button.style(context, color: Colors.white),
                 ),
               ),
             ),
@@ -525,12 +499,9 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
               const SizedBox(height: 4),
               Text(
                 'We\'ll notify you when roles match',
-                style: GoogleFonts.inter(
-                  color: context.themeForeground(
-                    const Color(0xFF94A3B8),
-                  ), // --tx4
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w400,
+                style: AppType.caption.style(
+                  context,
+                  color: context.themeForeground(TypographyColors.secondary),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -711,10 +682,9 @@ class _HoverableFilterChipState extends State<_HoverableFilterChip> {
           ),
           child: Text(
             widget.chip,
-            style: GoogleFonts.inter(
+            style: AppType.caption.style(
+              context,
               color: isSelected ? Colors.white : inactiveText,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.bold,
-              fontSize: 12.5,
             ),
           ),
         ),

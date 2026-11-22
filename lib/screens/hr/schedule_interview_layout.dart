@@ -23,32 +23,17 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
       _dark ? _colors.primaryContainer : const Color(0xFFEDF2FC);
   Color get _purple => _dark ? _colors.tertiary : const Color(0xFF51468A);
 
-  TextStyle _type(
-    double size, {
-    Color? color,
-    FontWeight weight = FontWeight.w400,
-    double height = 1.5,
-    double? tracking,
-  }) => TextStyle(
-    fontFamily: 'Plus Jakarta Sans',
-    fontWeight: weight,
-    fontSize: size,
-    color: color,
-    height: height,
-    leadingDistribution: TextLeadingDistribution.even,
-    letterSpacing: tracking,
-  );
+  TextStyle _type(AppType type, {Color? color}) =>
+      type.style(context, color: color);
 
-  Widget _heading(String text) => Text(
-    text,
-    style: _type(17, color: _ink, weight: FontWeight.w700, tracking: -.34),
-  );
+  Widget _heading(String text) =>
+      Text(text, style: _type(AppType.h3, color: _ink));
   Widget _label(String text) => Text(
     text,
-    style: _type(14, color: _ink, weight: FontWeight.w600),
+    style: AppType.bodySm.style(context, color: _ink, weight: FontWeight.w500),
   );
-  Widget _body(String text, {double size = 13}) =>
-      Text(text, style: _type(size, color: _muted));
+  Widget _body(String text, {AppType type = AppType.bodySm}) =>
+      Text(text, style: _type(type, color: _muted));
 
   String _dateLabel(DateTime date) {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -95,7 +80,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
         body: SafeArea(
           bottom: false,
           child: DefaultTextStyle(
-            style: _type(16, color: _ink),
+            style: _type(AppType.bodyLg, color: _ink),
             child: Column(
               children: [
                 if (compact)
@@ -130,7 +115,10 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
                                   Expanded(
                                     child: Text(
                                       message,
-                                      style: _type(14, color: _colors.error),
+                                      style: _type(
+                                        AppType.bodySm,
+                                        color: _colors.error,
+                                      ),
                                     ),
                                   ),
                                   TextButton(
@@ -209,29 +197,26 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
       TextSpan(
         children: [
           TextSpan(
-            text: 'RECRUITMENT',
+            text: 'Recruitment',
             style: TextStyle(color: _dark ? _muted : const Color(0xFF546589)),
           ),
           TextSpan(
             text: '  /  ',
-            style: TextStyle(color: _dark ? _muted : const Color(0xFF818AA2)),
+            style: TextStyle(color: context.secondaryTextColor),
           ),
-          const TextSpan(text: 'INTERVIEWS'),
+          const TextSpan(text: 'Interviews'),
         ],
       ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: _type(
-        11,
+        AppType.caption,
         color: _dark ? _ink : const Color(0xFF26253A),
-        weight: FontWeight.w700,
-        tracking: 1.76,
       ),
     ),
   );
 
   Widget _pageHeading(double width, bool split) {
-    final size = (width * .035).clamp(29.6, 38.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -239,25 +224,13 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
           header: true,
           child: Text(
             'Schedule interview',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w700,
-              fontVariations: [
-                const FontVariation('wght', 720),
-                FontVariation('opsz', (size * .75).clamp(14.0, 32.0)),
-              ],
-              fontSize: size,
-              height: 1.15,
-              leadingDistribution: TextLeadingDistribution.even,
-              letterSpacing: -size * .05,
-              color: _ink,
-            ),
+            style: AppType.h1.style(context, color: _ink),
           ),
         ),
         const SizedBox(height: 8),
         _body(
           'Invite a shortlisted candidate to an AI-guided voice interview.',
-          size: 16,
+          type: AppType.bodySm,
         ),
         SizedBox(height: split ? 25 : 19),
         Divider(height: 1, thickness: 1, color: _edge),
@@ -475,7 +448,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
             child: Text(
               error,
               style: _type(
-                14,
+                AppType.bodySm,
                 color: _dark ? _colors.error : const Color(0xFFA22A46),
               ),
             ),
@@ -574,9 +547,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
                     Text(
                       title,
                       style: _type(
-                        14,
-                        weight: FontWeight.w700,
-                        height: 1.35,
+                        AppType.h4,
                         color: selected
                             ? (_dark ? _colors.onPrimaryContainer : _blue)
                             : _muted,
@@ -605,7 +576,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
     onPressed: _busyApplicationId == null ? onPressed : null,
     style: OutlinedButton.styleFrom(
       foregroundColor: _ink,
-      minimumSize: const Size(0, 42),
+      minimumSize: Size(0, context.controlHeight),
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       side: BorderSide(color: _fieldEdge),
@@ -615,9 +586,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
       label: title,
       child: Row(
         children: [
-          Expanded(
-            child: Text(value, style: _type(14, weight: FontWeight.w500)),
-          ),
+          Expanded(child: Text(value, style: _type(AppType.button))),
           const SizedBox(width: 6),
           _icon(icon, color: _ink, size: 15),
         ],
@@ -702,15 +671,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
             spacing: 10,
             runSpacing: 2,
             children: [
-              Text(
-                'Booked times',
-                style: _type(
-                  14,
-                  color: _ink,
-                  weight: FontWeight.w700,
-                  tracking: -.21,
-                ),
-              ),
+              Text('Booked times', style: _type(AppType.bodySm, color: _ink)),
               if (day != null) _body(_dateLabel(day)),
             ],
           ),
@@ -755,9 +716,8 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
                             child: Text(
                               time,
                               style: _type(
-                                13,
+                                AppType.caption,
                                 color: _dark ? _ink : const Color(0xFF404663),
-                                weight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -825,8 +785,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
                           child: Text(
                             initials,
                             style: _type(
-                              13,
-                              weight: FontWeight.w800,
+                              AppType.caption,
                               color: _dark
                                   ? _colors.onTertiaryContainer
                                   : const Color(0xFF504485),
@@ -839,14 +798,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              name,
-                              style: _type(
-                                15,
-                                color: _ink,
-                                weight: FontWeight.w700,
-                              ),
-                            ),
+                            Text(name, style: _type(AppType.h4, color: _ink)),
                             _body(role ?? 'Select a job opening'),
                           ],
                         ),
@@ -882,7 +834,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
                       liveRegion: true,
                       child: Text(
                         rowError,
-                        style: _type(14, color: _colors.error),
+                        style: _type(AppType.bodySm, color: _colors.error),
                       ),
                     ),
                   ],
@@ -913,7 +865,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
               Text(
                 _flexible ? 'Start by' : 'Scheduled for',
                 style: _type(
-                  13,
+                  AppType.caption,
                   color: _dark
                       ? _colors.onTertiaryContainer
                       : const Color(0xFF544779),
@@ -924,16 +876,15 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
                     ? 'Choose a date and time'
                     : '${_dateLabel(slot)}, ${_timeLabel(slot)}',
                 style: _type(
-                  15,
+                  AppType.h4,
                   color: _dark ? _colors.onTertiaryContainer : _ink,
-                  weight: FontWeight.w700,
                 ),
               ),
               if (slot != null)
                 Text(
                   _ScheduleInterviewScreenState._zone,
                   style: _type(
-                    13,
+                    AppType.caption,
                     color: _dark ? _colors.onTertiaryContainer : _muted,
                   ),
                 ),
@@ -950,13 +901,13 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        Expanded(child: _body(label, size: 14)),
+        Expanded(child: _body(label)),
         const SizedBox(width: 14),
         Expanded(
           child: Text(
             value,
             textAlign: TextAlign.right,
-            style: _type(14, color: _ink, weight: FontWeight.w600),
+            style: _type(AppType.bodySm, color: _ink),
           ),
         ),
       ],
@@ -987,7 +938,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
           liveRegion: true,
           child: Text(
             'Choose at least one delivery channel.',
-            style: _type(13, color: _colors.error),
+            style: _type(AppType.caption, color: _colors.error),
           ),
         ),
     ],
@@ -1024,7 +975,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
                 ),
                 const SizedBox(width: 7),
                 Flexible(
-                  child: Text(label, style: _type(14, color: _ink)),
+                  child: Text(label, style: _type(AppType.bodySm, color: _ink)),
                 ),
               ],
             ),
@@ -1053,7 +1004,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
               ? _colors.surfaceContainerHighest
               : const Color(0xFFECEFF5),
           disabledForegroundColor: _dark ? _muted : const Color(0xFF5B6171),
-          minimumSize: const Size(0, 42),
+          minimumSize: Size(0, context.controlHeight),
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
@@ -1084,10 +1035,7 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
             dimension: 16,
             child: CircularProgressIndicator(strokeWidth: 2),
           )
-        : Text(
-            'Send invitation',
-            style: _type(14, weight: FontWeight.w700, height: 1.3),
-          ),
+        : Text('Send invitation', style: _type(AppType.button)),
   );
 
   Widget _questionReview() {
@@ -1195,16 +1143,20 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (busy) const LinearProgressIndicator(),
-        if (error != null) Text(error, style: _type(14, color: _colors.error)),
+        if (error != null)
+          Text(error, style: _type(AppType.bodySm, color: _colors.error)),
         if (questions.isEmpty && !busy && error == null)
-          _body('No interview questions are ready yet.', size: 14),
+          _body('No interview questions are ready yet.'),
         for (final (index, question) in questions.indexed) ...[
           if (index != 0) const SizedBox(height: 7),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${index + 1}. ', style: _type(14, color: _muted)),
-              Expanded(child: _body(question.text, size: 14)),
+              Text(
+                '${index + 1}. ',
+                style: _type(AppType.bodySm, color: _muted),
+              ),
+              Expanded(child: _body(question.text)),
             ],
           ),
         ],

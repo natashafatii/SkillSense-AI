@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import '../../widgets/theme_switcher.dart';
 import '../../widgets/country_code_phone_field.dart';
 import '../../widgets/candidate_button_style.dart';
@@ -450,7 +451,7 @@ class _CandidateProfileSettingsScreenState
             backgroundColor: c.surface,
             title: Text(
               'Use this photo?',
-              style: _profileHeadingText(18, c.text),
+              style: _profileHeadingText(AppType.h3, c.text),
             ),
             content: SizedBox(
               width: 220,
@@ -530,7 +531,7 @@ class _CandidateProfileSettingsScreenState
             backgroundColor: c.surface,
             content: Text(
               'Remove your profile photo? Your initials will be shown instead.',
-              style: _profileText(15, c.text),
+              style: _profileText(AppType.body, c.text),
             ),
             actions: [
               TextButton(
@@ -565,12 +566,14 @@ class _CandidateProfileSettingsScreenState
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextFormField(
+                  style: AppType.body.style(context),
                   initialValue: first,
                   onChanged: (value) => first = value,
                   enabled: !saving,
                   decoration: const InputDecoration(labelText: 'First name'),
                 ),
                 TextFormField(
+                  style: AppType.body.style(context),
                   initialValue: last,
                   onChanged: (value) => last = value,
                   enabled: !saving,
@@ -748,7 +751,7 @@ class _CandidateProfileSettingsScreenState
           Expanded(
             child: Text(
               'Sign out',
-              style: _profileText(13.5, c.text2, weight: FontWeight.w600),
+              style: _profileText(AppType.button, c.text2),
             ),
           ),
           Icon(Icons.logout, size: 18, color: c.text2),
@@ -760,28 +763,10 @@ class _CandidateProfileSettingsScreenState
   bool _isDark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
 
-  TextStyle _profileText(
-    double size,
-    Color color, {
-    FontWeight weight = FontWeight.w400,
-    double? height,
-  }) => TextStyle(
-    fontFamily: 'Plus Jakarta Sans',
-    fontSize: size,
-    color: color,
-    fontWeight: weight,
-    height: height ?? 1.55,
-  );
-  TextStyle _profileHeadingText(
-    double size,
-    Color color, {
-    FontWeight weight = FontWeight.w700,
-  }) => TextStyle(
-    fontFamily: 'Plus Jakarta Sans',
-    fontSize: size,
-    color: color,
-    fontWeight: weight,
-  );
+  TextStyle _profileText(AppType type, Color color) =>
+      type.style(context, color: color);
+  TextStyle _profileHeadingText(AppType type, Color color) =>
+      type.style(context, color: color);
 
   bool get _current => mounted && _session == SessionScope.generation;
 
@@ -980,7 +965,7 @@ class _CandidateProfileSettingsScreenState
   Widget build(BuildContext context) {
     final c = _Colors(_isDark(context));
     final mobile = MediaQuery.sizeOf(context).width < 780;
-    final base = _profileText(14, c.text, height: 1.55);
+    final base = _profileText(AppType.bodySm, c.text);
     final profile = _profile;
     final steps = <(String, bool, String, VoidCallback)>[
       (
@@ -1057,79 +1042,71 @@ class _CandidateProfileSettingsScreenState
                     final panel = _panelForTab(c);
                     return Stack(
                       children: [
-                        Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1280),
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(inset, 4, inset, 0),
-                              child: sticky
-                                  ? Column(
+                        SizedBox.expand(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(inset, 4, inset, 0),
+                            child: sticky
+                                ? Column(
+                                    children: [
+                                      header,
+                                      Expanded(
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: SingleChildScrollView(
+                                                controller: _mobileScroll,
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 64,
+                                                ),
+                                                child: panel,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 22),
+                                            SizedBox(
+                                              width: 330,
+                                              child: SingleChildScrollView(
+                                                primary: false,
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 64,
+                                                ),
+                                                child: rail,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : SingleChildScrollView(
+                                    controller: _mobileScroll,
+                                    padding: EdgeInsets.only(
+                                      bottom: mobile ? 132 : 64,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
                                       children: [
                                         header,
-                                        Expanded(
-                                          child: Row(
+                                        if (wide)
+                                          Row(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Expanded(
-                                                child: SingleChildScrollView(
-                                                  controller: _mobileScroll,
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                        bottom: 64,
-                                                      ),
-                                                  child: panel,
-                                                ),
-                                              ),
+                                              Expanded(child: panel),
                                               const SizedBox(width: 22),
-                                              SizedBox(
-                                                width: 330,
-                                                child: SingleChildScrollView(
-                                                  primary: false,
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                        bottom: 64,
-                                                      ),
-                                                  child: rail,
-                                                ),
-                                              ),
+                                              SizedBox(width: 330, child: rail),
                                             ],
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  : SingleChildScrollView(
-                                      controller: _mobileScroll,
-                                      padding: EdgeInsets.only(
-                                        bottom: mobile ? 132 : 64,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          header,
-                                          if (wide)
-                                            Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Expanded(child: panel),
-                                                const SizedBox(width: 22),
-                                                SizedBox(
-                                                  width: 330,
-                                                  child: rail,
-                                                ),
-                                              ],
-                                            )
-                                          else ...[
-                                            panel,
-                                            const SizedBox(height: 22),
-                                            rail,
-                                          ],
+                                          )
+                                        else ...[
+                                          panel,
+                                          const SizedBox(height: 22),
+                                          rail,
                                         ],
-                                      ),
+                                      ],
                                     ),
-                            ),
+                                  ),
                           ),
                         ),
                         if (_toast case final message?)
@@ -1222,11 +1199,7 @@ class _CandidateProfileSettingsScreenState
                       children: [
                         CandidateAvatarImage(
                           profile: _profile,
-                          initialsStyle: _profileText(
-                            28,
-                            Colors.white,
-                            weight: FontWeight.w700,
-                          ),
+                          initialsStyle: _profileText(AppType.h1, Colors.white),
                         ),
                         if (_avatarHovered)
                           const ColoredBox(
@@ -1254,7 +1227,7 @@ class _CandidateProfileSettingsScreenState
               ),
               child: Text(
                 '${(progress * 100).round()}%',
-                style: _profileText(11.5, c.accent, weight: FontWeight.w700),
+                style: _profileText(AppType.caption, c.accent),
               ),
             ),
           ),
@@ -1271,15 +1244,11 @@ class _CandidateProfileSettingsScreenState
             children: [
               Text(
                 name.isEmpty ? 'Candidate profile' : name,
-                style: _profileHeadingText(
-                  MediaQuery.sizeOf(context).width < 780 ? 22 : 26,
-                  c.text,
-                  weight: FontWeight.w800,
-                ).copyWith(height: 1.2, letterSpacing: -.7),
+                style: _profileHeadingText(AppType.display, c.text),
               ),
               if (subtitle.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text(subtitle, style: _profileText(14, c.text2)),
+                Text(subtitle, style: _profileText(AppType.bodySm, c.text2)),
               ],
               const SizedBox(height: 12),
               Wrap(
@@ -1369,9 +1338,8 @@ class _CandidateProfileSettingsScreenState
                   child: Text(
                     label,
                     style: _profileText(
-                      14,
+                      AppType.bodySm,
                       _mobileTab == index ? c.text : c.text3,
-                      weight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1411,7 +1379,11 @@ class _CandidateProfileSettingsScreenState
             ),
             _contactRow(c, const _Detail('email', 'Email', '')),
             for (final key in [
-              'phone', 'location', 'linkedin_url', 'github_url', 'portfolio_url',
+              'phone',
+              'location',
+              'linkedin_url',
+              'github_url',
+              'portfolio_url',
             ])
               _contactRow(c, _details.firstWhere((field) => field.key == key)),
           ],
@@ -1427,27 +1399,62 @@ class _CandidateProfileSettingsScreenState
     final value = isEmail ? (_profile?.user.email ?? '') : _values[field.key]!;
     Widget editor = const SizedBox.shrink();
     if (draft == null) {
-      editor = Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(value.isEmpty ? 'Not added' : value, textAlign: TextAlign.end, style: _profileText(13.5, value.isEmpty ? c.text3 : c.text, weight: FontWeight.w700)),
-          if (isEmail && _googleVerified)
-            Text('✓ Verified through Google', textAlign: TextAlign.end, style: _profileText(11.5, c.accent, weight: FontWeight.w600)),
-        ])),
-        if (!isEmail) ...[
-          const SizedBox(width: 6),
-          IconButton(tooltip: 'Edit ${field.label}', onPressed: _savingContacts ? null : () => _editContacts(field.key), visualDensity: VisualDensity.compact, constraints: const BoxConstraints(), padding: const EdgeInsets.all(4), icon: Icon(Icons.edit_outlined, size: 16, color: c.accent)),
+      editor = Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  value.isEmpty ? 'Not added' : value,
+                  textAlign: TextAlign.end,
+                  style: _profileText(
+                    AppType.bodySm,
+                    value.isEmpty ? c.text3 : c.text,
+                  ),
+                ),
+                if (isEmail && _googleVerified)
+                  Text(
+                    '✓ Verified through Google',
+                    textAlign: TextAlign.end,
+                    style: _profileText(AppType.caption, c.accent),
+                  ),
+              ],
+            ),
+          ),
+          if (!isEmail) ...[
+            const SizedBox(width: 6),
+            IconButton(
+              tooltip: 'Edit ${field.label}',
+              onPressed: _savingContacts
+                  ? null
+                  : () => _editContacts(field.key),
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(),
+              padding: const EdgeInsets.all(4),
+              icon: Icon(Icons.edit_outlined, size: 16, color: c.accent),
+            ),
+          ],
         ],
-      ]);
+      );
     } else {
       final radius = BorderRadius.circular(10);
-      final focus = isPhone && _phoneCountry != null ? _phoneFocus : _contactFocus;
+      final focus = isPhone && _phoneCountry != null
+          ? _phoneFocus
+          : _contactFocus;
       final input = ListenableBuilder(
         listenable: focus,
         builder: (context, _) => DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: radius,
             boxShadow: focus.hasFocus && !(isPhone && _phoneCountry != null)
-                ? [BoxShadow(color: c.accent.withValues(alpha: .16), spreadRadius: 3)]
+                ? [
+                    BoxShadow(
+                      color: c.accent.withValues(alpha: .16),
+                      spreadRadius: 3,
+                    ),
+                  ]
                 : null,
           ),
           child: isPhone && _phoneCountry != null
@@ -1461,7 +1468,7 @@ class _CandidateProfileSettingsScreenState
                   focusGlowSpread: 1,
                   focusGlowOpacity: .07,
                   label: field.label,
-                  labelStyle: _profileText(12, c.text3, weight: FontWeight.w500),
+                  labelStyle: _profileText(AppType.bodySm, c.text3),
                   onPhoneChanged: (value) => _phoneDraft = value,
                 )
               : TextField(
@@ -1475,63 +1482,97 @@ class _CandidateProfileSettingsScreenState
                       ? TextInputType.url
                       : TextInputType.text,
                   onSubmitted: (_) => _saveContacts(),
-                  style: _profileText(14, c.text, weight: FontWeight.w600),
+                  style: _profileText(AppType.body, c.text),
                   decoration: InputDecoration(
                     labelText: field.label,
                     isDense: true,
                     filled: true,
                     fillColor: c.surface2,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
                     border: OutlineInputBorder(borderRadius: radius),
-                    enabledBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: c.border)),
-                    focusedBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: c.accent.withValues(alpha: .72))),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: radius,
+                      borderSide: BorderSide(color: c.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: radius,
+                      borderSide: BorderSide(
+                        color: c.accent.withValues(alpha: .72),
+                      ),
+                    ),
                   ),
                 ),
         ),
       );
-      editor = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(child: input),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: _savingContacts ? null : _saveContacts,
-            style: CandidateButtonStyle.primary(FilledButton.styleFrom(
-              backgroundColor: c.accent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              minimumSize: const Size(0, 40),
-              shape: const StadiumBorder(),
-            )),
-            child: Text(_savingContacts ? 'Saving…' : 'Save'),
+      editor = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: input),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _savingContacts ? null : _saveContacts,
+                style: CandidateButtonStyle.primary(
+                  FilledButton.styleFrom(
+                    backgroundColor: c.accent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    minimumSize: const Size(0, 40),
+                    shape: const StadiumBorder(),
+                  ),
+                ),
+                child: Text(_savingContacts ? 'Saving…' : 'Save'),
+              ),
+              const SizedBox(width: 6),
+              OutlinedButton(
+                onPressed: _savingContacts
+                    ? null
+                    : () {
+                        FocusScope.of(context).unfocus();
+                        setState(_clearDraft);
+                      },
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: c.surface,
+                  foregroundColor: c.text,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  minimumSize: const Size(0, 40),
+                  side: BorderSide(color: c.border),
+                  shape: RoundedRectangleBorder(borderRadius: radius),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          OutlinedButton(
-            onPressed: _savingContacts ? null : () {
-              FocusScope.of(context).unfocus();
-              setState(_clearDraft);
-            },
-            style: OutlinedButton.styleFrom(
-              backgroundColor: c.surface,
-              foregroundColor: c.text,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              minimumSize: const Size(0, 40),
-              side: BorderSide(color: c.border),
-              shape: RoundedRectangleBorder(borderRadius: radius),
-            ),
-            child: const Text('Cancel'),
-          ),
-        ]),
-      ]);
+        ],
+      );
     }
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 15),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.border))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: c.border)),
+      ),
       child: draft == null
-          ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(flex: 2, child: Text(field.label, style: _profileText(13, c.text3))),
-              const SizedBox(width: 12),
-              Expanded(flex: 3, child: Align(alignment: Alignment.centerRight, child: editor)),
-            ])
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    field.label,
+                    style: _profileText(AppType.caption, c.text3),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: Align(alignment: Alignment.centerRight, child: editor),
+                ),
+              ],
+            )
           : editor,
     );
   }
@@ -1553,7 +1594,7 @@ class _CandidateProfileSettingsScreenState
                     const SizedBox(height: 3),
                     Text(
                       'Choose how SkillSense looks.',
-                      style: _profileText(13, c.text3),
+                      style: _profileText(AppType.caption, c.text3),
                     ),
                   ],
                 );
@@ -1564,11 +1605,7 @@ class _CandidateProfileSettingsScreenState
                   selectedBorder: c.border,
                   foreground: c.text,
                   inactiveForeground: c.text2,
-                  labelStyle: _profileText(
-                    12.5,
-                    c.text,
-                    weight: FontWeight.w600,
-                  ),
+                  labelStyle: _profileText(AppType.bodySm, c.text),
                 );
                 if (bounds.maxWidth < 500 ||
                     MediaQuery.textScalerOf(context).scale(14) > 21) {
@@ -1660,12 +1697,9 @@ class _CandidateProfileSettingsScreenState
         final description = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: _profileText(14, c.text, weight: FontWeight.w700),
-            ),
+            Text(title, style: _profileText(AppType.h4, c.text)),
             if (subtitle.isNotEmpty)
-              Text(subtitle, style: _profileText(13, c.text3)),
+              Text(subtitle, style: _profileText(AppType.caption, c.text3)),
           ],
         );
         return bounds.maxWidth < 380
@@ -1728,7 +1762,7 @@ class _CandidateProfileSettingsScreenState
             const SizedBox(height: 4),
             Text(
               'Add a few details so recruiters can reach you.',
-              style: _profileText(13, c.text3, height: 1.55),
+              style: _profileText(AppType.caption, c.text3),
             ),
             const SizedBox(height: 18),
             if (_profileLoading)
@@ -1744,12 +1778,12 @@ class _CandidateProfileSettingsScreenState
                   Expanded(
                     child: Text(
                       '$completed of ${steps.length} complete',
-                      style: _profileText(13, c.text, weight: FontWeight.w700),
+                      style: _profileText(AppType.caption, c.text),
                     ),
                   ),
                   Text(
                     '${(completed * 100 / steps.length).round()}%',
-                    style: _profileText(13, c.accent, weight: FontWeight.w700),
+                    style: _profileText(AppType.caption, c.accent),
                   ),
                 ],
               ),
@@ -1789,9 +1823,8 @@ class _CandidateProfileSettingsScreenState
                         child: Text(
                           step.$1,
                           style: _profileText(
-                            14,
+                            AppType.bodySm,
                             step.$2 ? c.text2 : c.text,
-                            weight: step.$2 ? FontWeight.w600 : FontWeight.w700,
                           ),
                         ),
                       ),
@@ -1818,25 +1851,21 @@ class _CandidateProfileSettingsScreenState
 
   Color _blue(_Colors c) =>
       c.dark ? const Color(0xFF4F74F0) : const Color(0xFF2456DB);
-  Widget _heading(_Colors c, String label) => Text(
-    label,
-    style: _profileText(
-      16.5,
-      c.text,
-      weight: FontWeight.w700,
-    ).copyWith(letterSpacing: -.2),
-  );
+  Widget _heading(_Colors c, String label) =>
+      Text(label, style: _profileText(AppType.h4, c.text));
   Widget _primary(_Colors c, String label, VoidCallback? onPressed) =>
       FilledButton(
         onPressed: onPressed,
-        style: CandidateButtonStyle.primary(FilledButton.styleFrom(
-          backgroundColor: c.accent,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(0, 40),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          textStyle: _profileText(13.5, Colors.white, weight: FontWeight.w700),
-          shape: const StadiumBorder(),
-        )),
+        style: CandidateButtonStyle.primary(
+          FilledButton.styleFrom(
+            backgroundColor: c.accent,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            textStyle: _profileText(AppType.button, Colors.white),
+            shape: const StadiumBorder(),
+          ),
+        ),
         child: Text(label),
       );
 
@@ -1863,7 +1892,7 @@ class _CandidateProfileSettingsScreenState
           TextSpan(text: icon == null ? text : ' $text'),
         ],
       ),
-      style: _profileText(12.5, tint ?? c.text2, weight: FontWeight.w600),
+      style: _profileText(AppType.caption, tint ?? c.text2),
     ),
   );
 
@@ -1872,7 +1901,7 @@ class _CandidateProfileSettingsScreenState
     backgroundColor: c.surface,
     minimumSize: const Size(0, 34),
     padding: const EdgeInsets.symmetric(horizontal: 14),
-    textStyle: _profileText(13, c.text, weight: FontWeight.w600),
+    textStyle: _profileText(AppType.button, c.text),
     side: BorderSide(color: c.border),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
   );

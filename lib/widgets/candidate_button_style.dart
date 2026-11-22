@@ -14,7 +14,7 @@ class CandidateButtonStyle {
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
-    colors: [teal, deepTeal],
+    colors: [Color(0xFF0F766E), Color(0xFF115E59)],
   );
 
   /// Apply the shared green gradient to candidate primary actions.
@@ -44,13 +44,6 @@ class CandidateButtonStyle {
           ? base.foregroundColor?.resolve(states)
           : Colors.white,
     ),
-    textStyle: WidgetStateProperty.resolveWith(
-      (states) =>
-          base.textStyle?.resolve(states)?.copyWith(
-            fontWeight: FontWeight.w700,
-          ) ??
-          const TextStyle(fontWeight: FontWeight.w700),
-    ),
   );
 
   static BoxDecoration primaryDecoration() => BoxDecoration(
@@ -65,50 +58,42 @@ class CandidateButtonStyle {
     ],
   );
 
-  static ButtonStyle primary(ButtonStyle base) =>
-      base.merge(
-        ButtonStyle(
-          backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
-          foregroundColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.disabled)
-                ? secondaryText
-                : Colors.white,
-          ),
-          textStyle: WidgetStateProperty.resolveWith(
-            (states) =>
-                base.textStyle?.resolve(states)?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ) ??
-                const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          shadowColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.disabled)
-                ? Colors.transparent
-                : teal.withValues(
-                    alpha: states.contains(WidgetState.hovered) ? .4 : .22,
-                  ),
-          ),
-          elevation: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.disabled)
-                ? 0
-                : (states.contains(WidgetState.hovered) ? 5 : 3),
-          ),
-          overlayColor: WidgetStatePropertyAll(Colors.white.withValues(alpha: .08)),
-          shape: const WidgetStatePropertyAll(StadiumBorder()),
-          backgroundBuilder: (context, states, child) => DecoratedBox(
-            decoration: BoxDecoration(
-              color: states.contains(WidgetState.disabled)
-                  ? context.themeSurface(edge)
-                  : null,
-              gradient: states.contains(WidgetState.disabled)
-                  ? null
-                  : primaryGradient,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: child,
-          ),
+  static ButtonStyle primary(ButtonStyle base) => base.merge(
+    ButtonStyle(
+      backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
+      foregroundColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.disabled)
+            ? secondaryText
+            : Colors.white,
+      ),
+      shadowColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.disabled)
+            ? Colors.transparent
+            : teal.withValues(
+                alpha: states.contains(WidgetState.hovered) ? .4 : .22,
+              ),
+      ),
+      elevation: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.disabled)
+            ? 0
+            : (states.contains(WidgetState.hovered) ? 5 : 3),
+      ),
+      overlayColor: WidgetStatePropertyAll(Colors.white.withValues(alpha: .08)),
+      shape: const WidgetStatePropertyAll(StadiumBorder()),
+      backgroundBuilder: (context, states, child) => DecoratedBox(
+        decoration: BoxDecoration(
+          color: states.contains(WidgetState.disabled)
+              ? context.themeSurface(edge)
+              : null,
+          gradient: states.contains(WidgetState.disabled)
+              ? null
+              : primaryGradient,
+          borderRadius: BorderRadius.circular(999),
         ),
-      );
+        child: child,
+      ),
+    ),
+  );
 
   static ButtonStyle secondary(
     BuildContext context,

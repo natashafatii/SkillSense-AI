@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -8,7 +9,6 @@ import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/notification_list_skeleton.dart';
 import '../../widgets/notification_row.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/candidate_side_nav.dart';
 import '../../widgets/green_gradient_background.dart';
@@ -209,6 +209,40 @@ class _CandidateNotificationsScreenState
     final Color cardBg = context.themeSurface(Colors.white);
     final Color cardBorder = context.themeOutline(const Color(0xFFE2E8F0));
 
+    final workspace = Column(
+      children: [
+        // Top Bar
+        RecruiterTopBar(
+          pageTitle: 'Notifications',
+          candidate: true,
+          hasUnread: _unreadCount > 0,
+          useExactUnread: true,
+        ),
+
+        // Scrollable Content
+        Expanded(
+          child: MobileEdgeShadowWrapper(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.only(
+                left: isMobile ? 16 : 28,
+                right: isMobile ? 16 : 28,
+                top: 24,
+                bottom: isMobile ? 164 : 40,
+              ),
+              child: _buildBody(
+                isMobile,
+                textPrimary,
+                textSecondary,
+                cardBg,
+                cardBorder,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
     return Scaffold(
       backgroundColor: bgBase,
       body: Stack(
@@ -251,52 +285,12 @@ class _CandidateNotificationsScreenState
             child: Column(
               children: [
                 Expanded(
-                  child: Row(
-                    children: [
-                      // Left Rail (Web Only)
-                      if (!isMobile)
-                        const CandidateSideNav(
+                  child: isMobile
+                      ? workspace
+                      : CandidateSideNav(
                           currentRoute: '/candidate/notifications',
+                          workspace: workspace,
                         ),
-
-                      // Main Canvas
-                      Expanded(
-                        child: Column(
-                          children: [
-                            // Top Bar
-                            RecruiterTopBar(
-                              pageTitle: 'Notifications',
-                              candidate: true,
-                              hasUnread: _unreadCount > 0,
-                              useExactUnread: true,
-                            ),
-
-                            // Scrollable Content
-                            Expanded(
-                              child: MobileEdgeShadowWrapper(
-                                child: SingleChildScrollView(
-                                  physics: const BouncingScrollPhysics(),
-                                  padding: EdgeInsets.only(
-                                    left: isMobile ? 16 : 28,
-                                    right: isMobile ? 16 : 28,
-                                    top: 24,
-                                    bottom: isMobile ? 164 : 40,
-                                  ),
-                                  child: _buildBody(
-                                    isMobile,
-                                    textPrimary,
-                                    textSecondary,
-                                    cardBg,
-                                    cardBorder,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -348,22 +342,16 @@ class _CandidateNotificationsScreenState
               children: [
                 Text(
                   'Notifications',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: isMobile ? 22 : 26,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.3,
-                  ),
+                  style: AppType.h1.style(context, color: textPrimary),
                 ),
                 if (unread > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
                       '$unread unread',
-                      style: GoogleFonts.inter(
+                      style: AppType.caption.style(
+                        context,
                         color: textSecondary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -374,10 +362,9 @@ class _CandidateNotificationsScreenState
                 onTap: _markAllRead,
                 child: Text(
                   'Mark all read',
-                  style: GoogleFonts.inter(
+                  style: AppType.caption.style(
+                    context,
                     color: context.themeForeground(const Color(0xFF0A8A76)),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -392,7 +379,10 @@ class _CandidateNotificationsScreenState
               Expanded(
                 child: Text(
                   _error!,
-                  style: GoogleFonts.inter(color: const Color(0xFFEF4444)),
+                  style: AppType.body.style(
+                    context,
+                    color: const Color(0xFFEF4444),
+                  ),
                 ),
               ),
               if (_error != "You're not authorized to view notifications.")
@@ -474,11 +464,9 @@ class _CandidateNotificationsScreenState
             ),
             child: Text(
               label,
-              style: GoogleFonts.inter(
-                color: context.themeForeground(const Color(0xFF94A3B8)),
-                fontSize: 10.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.0,
+              style: AppType.caption.style(
+                context,
+                color: context.themeForeground(TypographyColors.secondary),
               ),
             ),
           ),

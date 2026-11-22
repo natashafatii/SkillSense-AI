@@ -1,15 +1,16 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import 'app_tooltip.dart';
+import 'workspace_rail_layout.dart';
 
 /// The destinations are shared by the desktop rail, mobile drawer and search.
 class RecruiterDestination {
@@ -52,6 +53,7 @@ class RecruiterSideNav extends StatefulWidget {
   final bool glowSelected;
   final bool inDrawer;
   final double expandedWidth;
+  final Widget? workspace;
   const RecruiterSideNav({
     super.key,
     required this.currentRoute,
@@ -59,6 +61,7 @@ class RecruiterSideNav extends StatefulWidget {
     this.glowSelected = false,
     this.inDrawer = false,
     this.expandedWidth = 272,
+    this.workspace,
   });
 
   @override
@@ -81,18 +84,16 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
 
   static final Map<String, bool> _expandedByUser = {};
   static final Set<int> _persistedSections = <int>{0};
-  static const _accent = Color(0xFF2563EB);
+  static const _accent = TypographyColors.recruiterAccent;
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
   static const _textSecondary = Color(0xFF475569);
-  static const _textTertiary = Color(0xFF94A3B8);
+
   static const _border = Color(0xFFE2E8F0);
   String get _selectedRoute => widget.selectedRoute ?? widget.currentRoute;
 
   late bool _expanded;
-  late bool _contentExpanded;
   String? _preferenceKey;
-  bool _focusSearchOnExpand = false;
   late Set<int> _openSections;
   final _searchController = TextEditingController();
   final _searchFocus = FocusNode();
@@ -102,7 +103,6 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
     super.initState();
     _preferenceKey = _keyForCurrentUser();
     _expanded = widget.inDrawer || (_expandedByUser[_preferenceKey] ?? false);
-    _contentExpanded = _expanded;
     _openSections = {..._persistedSections};
     _openActiveSection();
     HardwareKeyboard.instance.addHandler(_handleKeyboardShortcut);
@@ -129,7 +129,6 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
       final expanded = _expandedByUser[key] ?? false;
       setState(() {
         _expanded = expanded;
-        _contentExpanded = expanded && _contentExpanded;
       });
       _restorePreference(key);
     }
@@ -149,7 +148,6 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
       _expandedByUser[key] = stored;
       setState(() {
         _expanded = stored;
-        _contentExpanded = stored && _contentExpanded;
       });
     } catch (_) {
       // With no readable preference, the rail stays collapsed.
@@ -186,7 +184,9 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
         _expanded = true;
       });
       _rememberExpanded(true);
-      _focusSearchOnExpand = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _expanded) _searchFocus.requestFocus();
+      });
     } else {
       _searchFocus.requestFocus();
     }
@@ -234,7 +234,6 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
     setState(() {
       if (!_expanded) {
         _expanded = true;
-        _contentExpanded = false;
         _openSections.add(index);
         _rememberExpanded(true);
       } else if (!_openSections.add(index)) {
@@ -252,7 +251,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
   Widget _section(int index) {
     final section = recruiterSections[index];
     final active = section.items.any((item) => item.route == _selectedRoute);
-    if (!_contentExpanded) {
+    if (!_expanded) {
       return _tooltip(
         section.label,
         InkWell(
@@ -317,13 +316,10 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                   Expanded(
                     child: Text(
                       section.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.46,
-                        color: context.themeForeground(_ink),
+                      style: AppType.overline.style(
+                        context,
+                        color: context.secondaryTextColor,
+                        weight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -367,7 +363,8 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
         hoverColor: const Color(0xFFF1F5F9),
         child: Container(
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
+          constraints: BoxConstraints(minHeight: context.controlHeight),
+          padding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
           decoration: BoxDecoration(
             color: active ? _accent.withValues(alpha: .09) : null,
             border: active
@@ -390,12 +387,11 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                   item.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  style: AppType.nav.style(
+                    context,
                     color: active
-                        ? context.themeForeground(_ink)
-                        : context.themeForeground(_textSecondary),
+                        ? context.themeForeground(_accent)
+                        : context.secondaryTextColor,
                   ),
                 ),
               ),
@@ -422,11 +418,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
         );
         Widget accountInitials(String initials) => Text(
           initials,
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            color: _accent,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppType.caption.style(context, color: _accent),
         );
         return AppTooltip(
           message: name.isNotEmpty ? name : 'Account',
@@ -438,7 +430,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
               margin: const EdgeInsets.fromLTRB(12, 8, 12, 10),
               padding: const EdgeInsets.only(top: 9),
               child: Row(
-                mainAxisAlignment: _contentExpanded
+                mainAxisAlignment: _expanded
                     ? MainAxisAlignment.start
                     : MainAxisAlignment.center,
                 children: [
@@ -502,7 +494,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                               ),
                         ),
                   ),
-                  if (_contentExpanded) ...[
+                  if (_expanded) ...[
                     const SizedBox(width: 9),
                     Expanded(
                       child: Column(
@@ -512,20 +504,17 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                             name.isEmpty ? 'Recruiter' : name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: context.themeForeground(_ink),
+                            style: AppType.bodySm.style(
+                              context,
+                              weight: FontWeight.w600,
+                              color: context.primaryTextColor,
                             ),
                           ),
                           Text(
                             email,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              color: context.themeForeground(_textTertiary),
-                            ),
+                            style: context.secondaryCaption,
                           ),
                         ],
                       ),
@@ -542,7 +531,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
 
   @override
   Widget build(BuildContext context) {
-    return Shortcuts(
+    final rail = Shortcuts(
       shortcuts: {
         const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
             const ActivateIntent(),
@@ -558,146 +547,137 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
             },
           ),
         },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOut,
-          onEnd: () {
-            if (_expanded && !_contentExpanded) {
-              setState(() => _contentExpanded = true);
-              if (_focusSearchOnExpand) {
-                _focusSearchOnExpand = false;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _searchFocus.requestFocus();
-                });
-              }
-            }
-          },
-          width: widget.inDrawer
-              ? widget.expandedWidth
-              : (_expanded ? widget.expandedWidth : 60),
-          height: double.infinity,
-          decoration: BoxDecoration(
-            color: context.themeSurface(Colors.white),
-            border: Border(
-              right: BorderSide(color: context.themeOutline(_border)),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                _expanded ? 15 : 10,
+                _expanded ? 12 : 14,
+                _expanded ? 12 : 10,
+                _expanded ? 10 : 0,
+              ),
+              child: Row(
+                mainAxisAlignment: _expanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
+                children: [
+                  if (widget.inDrawer)
+                    SvgPicture.asset(
+                      'assets/images/logo.svg',
+                      width: _expanded ? 28 : 24,
+                      height: _expanded ? 28 : 24,
+                    )
+                  else
+                    AppTooltip(
+                      message: _expanded
+                          ? 'Collapse sidebar'
+                          : 'Expand navigation',
+                      position: TooltipPosition.bottom,
+                      child: InkWell(
+                        key: _expanded ? null : const Key('recruiter-collapse'),
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => setState(() {
+                          _expanded = !_expanded;
+                          _rememberExpanded(_expanded);
+                        }),
+                        child: SvgPicture.asset(
+                          'assets/images/logo.svg',
+                          width: _expanded ? 28 : 32,
+                          height: _expanded ? 28 : 32,
+                        ),
+                      ),
+                    ),
+                  if (_expanded) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'SkillSense',
+                            style: AppType.bodySm.style(
+                              context,
+                              color: context.themeForeground(_ink),
+                              weight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            'Recruiter workspace',
+                            style: context.secondaryCaption,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_expanded && !widget.inDrawer)
+                    AppTooltip(
+                      message: 'Collapse sidebar',
+                      position: TooltipPosition.bottom,
+                      child: InkWell(
+                        key: const Key('recruiter-collapse'),
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => setState(() {
+                          _expanded = false;
+                          _rememberExpanded(false);
+                        }),
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: Icon(
+                            Icons.chevron_left,
+                            size: 17,
+                            color: context.themeForeground(_muted),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  _contentExpanded ? 15 : 10,
-                  _contentExpanded ? 12 : 14,
-                  _contentExpanded ? 12 : 10,
-                  _contentExpanded ? 10 : 0,
-                ),
-                child: Row(
-                  mainAxisAlignment: _contentExpanded
-                      ? MainAxisAlignment.start
-                      : MainAxisAlignment.center,
+
+            if (!_expanded) const SizedBox(height: 24),
+            Expanded(
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
+                child: ListView(
                   children: [
-                    if (widget.inDrawer)
-                      SvgPicture.asset(
-                        'assets/images/logo.svg',
-                        width: _contentExpanded ? 28 : 24,
-                        height: _contentExpanded ? 28 : 24,
-                      )
-                    else
-                      AppTooltip(
-                        message: _expanded
-                            ? 'Collapse sidebar'
-                            : 'Expand navigation',
-                        position: TooltipPosition.bottom,
-                        child: InkWell(
-                          key: _contentExpanded
-                              ? null
-                              : const Key('recruiter-collapse'),
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () => setState(() {
-                            _expanded = !_expanded;
-                            if (!_expanded) _contentExpanded = false;
-                            _rememberExpanded(_expanded);
-                          }),
-                          child: SvgPicture.asset(
-                            'assets/images/logo.svg',
-                            width: _contentExpanded ? 28 : 32,
-                            height: _contentExpanded ? 28 : 32,
-                          ),
-                        ),
-                      ),
-                    if (_contentExpanded) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'SkillSense',
-                              style: GoogleFonts.inter(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.135,
-                                color: context.themeForeground(_ink),
-                              ),
-                            ),
-                            Text(
-                              'Recruiter workspace',
-                              style: GoogleFonts.spaceGrotesk(
-                                fontSize: 10,
-                                color: context.themeForeground(_textTertiary),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (_contentExpanded && !widget.inDrawer)
-                      AppTooltip(
-                        message: 'Collapse sidebar',
-                        position: TooltipPosition.bottom,
-                        child: InkWell(
-                          key: const Key('recruiter-collapse'),
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () => setState(() {
-                            _expanded = false;
-                            _contentExpanded = false;
-                            _rememberExpanded(false);
-                          }),
-                          child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: Icon(
-                              Icons.chevron_left,
-                              size: 17,
-                              color: context.themeForeground(_muted),
-                            ),
-                          ),
-                        ),
-                      ),
+                    for (var i = 0; i < recruiterSections.length; i++)
+                      _section(i),
                   ],
                 ),
               ),
-
-              if (!_contentExpanded) const SizedBox(height: 24),
-              Expanded(
-                child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(
-                    context,
-                  ).copyWith(scrollbars: false),
-                  child: ListView(
-                    children: [
-                      for (var i = 0; i < recruiterSections.length; i++)
-                        _section(i),
-                    ],
-                  ),
-                ),
-              ),
-              Divider(height: 1, color: context.themeOutline(_border)),
-              _account(),
-            ],
-          ),
+            ),
+            Divider(height: 1, color: context.themeOutline(_border)),
+            _account(),
+          ],
         ),
       ),
+    );
+    final color = context.themeSurface(Colors.white);
+    final border = context.themeOutline(_border);
+    final workspace = widget.workspace;
+    if (workspace != null) {
+      return WorkspaceRailLayout(
+        expanded: _expanded,
+        expandedWidth: widget.expandedWidth,
+        railColor: color,
+        railBorderColor: border,
+        rail: rail,
+        body: workspace,
+      );
+    }
+    return Container(
+      width: _expanded
+          ? widget.expandedWidth
+          : WorkspaceRailLayout.collapsedWidth,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: color,
+        border: Border(right: BorderSide(color: border)),
+      ),
+      child: rail,
     );
   }
 }

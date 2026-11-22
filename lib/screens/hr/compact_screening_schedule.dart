@@ -15,7 +15,7 @@ extension _CompactScreeningSchedule on _ScheduleInterviewScreenState {
             Text(
               _jobs.where((job) => job.id == _jobId).firstOrNull?.title ??
                   'Interview',
-              style: ScreeningStyle.title(13),
+              style: ScreeningStyle.title(context, AppType.h4),
             ),
             const SizedBox(height: 6),
             if (slot != null)
@@ -58,7 +58,11 @@ extension _CompactScreeningSchedule on _ScheduleInterviewScreenState {
             if (_error case final error?) ...[
               Text(
                 error,
-                style: ScreeningStyle.text(12.5, color: ScreeningStyle.red),
+                style: ScreeningStyle.text(
+                  context,
+                  AppType.caption,
+                  color: ScreeningStyle.red,
+                ),
               ),
               Align(
                 alignment: Alignment.centerLeft,
@@ -110,8 +114,8 @@ extension _CompactScreeningSchedule on _ScheduleInterviewScreenState {
                                 ? 'Checking the approved question revision…'
                                 : 'Review and approve the current question revision before scheduling.',
                             style: ScreeningStyle.text(
-                              12.5,
-                              weight: 500,
+                              context,
+                              AppType.caption,
                               color: ScreeningStyle.blue,
                             ),
                           ),
@@ -120,7 +124,8 @@ extension _CompactScreeningSchedule on _ScheduleInterviewScreenState {
                           Text(
                             error,
                             style: ScreeningStyle.text(
-                              12.5,
+                              context,
+                              AppType.caption,
                               color: ScreeningStyle.red,
                             ),
                           ),
@@ -146,7 +151,7 @@ extension _CompactScreeningSchedule on _ScheduleInterviewScreenState {
               const SizedBox(height: 10),
               Text(
                 '$_timeField · Asia/Karachi',
-                style: ScreeningStyle.text(12.5, weight: 700),
+                style: ScreeningStyle.text(context, AppType.caption),
               ),
               const SizedBox(height: 6),
               _pair(
@@ -198,7 +203,11 @@ extension _CompactScreeningSchedule on _ScheduleInterviewScreenState {
                   liveRegion: true,
                   child: Text(
                     problem,
-                    style: ScreeningStyle.text(12.5, color: ScreeningStyle.red),
+                    style: ScreeningStyle.text(
+                      context,
+                      AppType.caption,
+                      color: ScreeningStyle.red,
+                    ),
                   ),
                 ),
               ],

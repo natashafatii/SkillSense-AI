@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
@@ -18,7 +19,7 @@ class RecruiterMobileNav extends StatefulWidget {
     this.backgroundColor = Colors.white,
     this.borderColor = const Color(0xFFE2E8F0),
     this.foregroundColor = const Color(0xFF64748B),
-    this.accentColor = const Color(0xFF4D7BFA),
+    this.accentColor = TypographyColors.recruiterAccent,
   });
 
   final String currentRoute;

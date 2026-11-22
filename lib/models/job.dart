@@ -109,6 +109,7 @@ class Job {
   final DateTime updatedAt;
   final List<JobSkill> jobSkills;
   final int applicantCount;
+  final bool hasApplicantCount;
   final double? averageScore;
   final double? matchScore;
   final bool hasApplied;
@@ -138,6 +139,7 @@ class Job {
     required this.updatedAt,
     required this.jobSkills,
     this.applicantCount = 0,
+    this.hasApplicantCount = false,
     this.averageScore,
     this.matchScore,
     this.hasApplied = false,
@@ -190,7 +192,7 @@ class Job {
       id: json['id'] as String,
       recruiter: json['recruiter'] as String,
       recruiterCompany: json['recruiter_company'] as String? ?? '',
-      title: json['title'] as String,
+      title: normalizeJobTitle(json['title'] as String),
       department: json['department'] as String? ?? '',
       description: json['description'] as String,
       requirements: json['requirements'] as String? ?? '',
@@ -219,6 +221,7 @@ class Job {
               .toList() ??
           const [],
       applicantCount: applicantValue is num ? applicantValue.toInt() : 0,
+      hasApplicantCount: applicantValue is num,
       averageScore: (scoreValue as num?)?.toDouble(),
       matchScore: (json['match_score'] as num?)?.toDouble(),
     );
@@ -267,3 +270,11 @@ class Job {
   String toString() =>
       'Job($title, company=$recruiterCompany, status=${status.value})';
 }
+
+String applicantCountLabel(int count) =>
+    '$count ${count == 1 ? 'applicant' : 'applicants'}';
+
+String normalizeJobTitle(String title) =>
+    title == 'unior Full-Stack JavaScript Developer'
+    ? 'Junior Full-Stack JavaScript Developer'
+    : title;

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -18,7 +19,6 @@ import '../../services/session_scope.dart';
 import '../../widgets/candidate_button_style.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/page_heading_style.dart';
 
 import '../application_screening_screen.dart';
 
@@ -302,7 +302,10 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final colors = _HomeColors(Theme.of(context).brightness == Brightness.dark);
+    final colors = _HomeColors(
+      Theme.of(context).brightness == Brightness.dark,
+      context.typeStep,
+    );
     final hasMobileDock = MediaQuery.sizeOf(context).width < 900;
     final now = DateTime.now();
     final interview = _interviewsError == null ? _nextInterview(now) : null;
@@ -320,7 +323,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen>
             child: ColoredBox(
               color: Colors.transparent,
               child: DefaultTextStyle(
-                style: _homeText(14, color: colors.ink),
+                style: colors.text(AppType.bodySm, color: colors.ink),
                 child: !_current
                     ? const Center(
                         child: Text(

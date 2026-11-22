@@ -40,22 +40,15 @@ class CandidateScaffold extends StatelessWidget {
       body: Stack(
         children: [
           const GreenGradientBackground(),
-          // Background layout
           SafeArea(
             bottom: false,
-            child: Row(
-              children: [
-                // Desktop Web Rail
-                if (!isMobile)
-                  CandidateSideNav(
+            child: isMobile
+                ? body
+                : CandidateSideNav(
                     currentRoute: currentRoute,
                     onNavigate: onNavigate,
+                    workspace: body,
                   ),
-
-                // Main Canvas (Reflows automatically when sidebar width animates)
-                Expanded(child: body),
-              ],
-            ),
           ),
 
           // Mobile Bottom Dock (Mobile Viewport < 900px)

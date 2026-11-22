@@ -219,10 +219,7 @@ class _QuestionTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                question.text,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
+              Text(question.text, style: AppType.body.style(context)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,

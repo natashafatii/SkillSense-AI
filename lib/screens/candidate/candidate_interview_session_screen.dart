@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../utils/interview_testing.dart';
 import '../../models/interview_analysis_contract.dart';
 import '../../services/interview_session_controller.dart';
+import '../../services/replay/replay_capture.dart';
 import '../../services/media/interview_media_controller.dart';
 import '../../services/publisher/candidate_publisher_controller.dart';
 import '../../services/voice/interview_lifecycle_controller.dart';
@@ -38,6 +39,8 @@ class _CandidateInterviewSessionScreenState
   late InterviewMediaController _media;
   late CandidatePublisherController _publisher;
   late InterviewLifecycleController _lifecycle;
+  late ReplayCapture _replay;
+  bool _preparingReplay = false;
   ModalRoute<dynamic>? _route;
 
   @override
@@ -92,7 +95,68 @@ class _CandidateInterviewSessionScreenState
       return;
     }
     if (lifecycle.videoRequired && !media.cameraReady) return;
-    await lifecycle.joinVoice();
+    await _joinWithReplay(lifecycle);
+  }
+
+  Future<void> _joinWithReplay(InterviewLifecycleController lifecycle) async {
+    if (_preparingReplay) return;
+    _preparingReplay = true;
+    try {
+      final notice = lifecycle.videoRequired && await _replay.prepare();
+      if (!mounted ||
+          !identical(lifecycle, _lifecycle) ||
+          !lifecycle.isCurrent) {
+        return;
+      }
+      if (notice) {
+        final accepted = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Interview recording'),
+            content: const Text(
+              'If you agree, SkillSense records your camera and both speakers during the interview. '
+              'Your assigned recruiter can play the recording from interview feedback. '
+              'You can continue the interview without a SkillSense replay.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Continue without replay'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Acknowledge and record'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted ||
+            !identical(lifecycle, _lifecycle) ||
+            !lifecycle.isCurrent ||
+            accepted == null) {
+          return;
+        }
+        if (accepted) _replay.acknowledge();
+      }
+      await lifecycle.joinVoice();
+    } finally {
+      _preparingReplay = false;
+    }
+  }
+
+  void _updateReplay() {
+    if (_lifecycle.isCurrent &&
+        _lifecycle.state == InterviewLifecycleState.live &&
+        !_lifecycle.finishRequested) {
+      _replay.update(_media.adapter, _lifecycle.snapshot?.callId);
+    }
+  }
+
+  void _disposeReplay() {
+    _lifecycle.removeListener(_updateReplay);
+    _media.removeListener(_updateReplay);
+    _lifecycle.beforeLocalMediaStop = null;
+    _replay.dispose();
   }
 
   void _initializeControllers() {
@@ -121,6 +185,12 @@ class _CandidateInterviewSessionScreenState
           : null,
       analysis: analysis,
     );
+    _replay = ReplayCapture(widget.identity.sessionId);
+    _lifecycle.beforeLocalMediaStop = (completing) {
+      _replay.stop(complete: completing);
+    };
+    _lifecycle.addListener(_updateReplay);
+    _media.addListener(_updateReplay);
     if (immediate) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _startImmediately());
     } else {
@@ -137,7 +207,7 @@ class _CandidateInterviewSessionScreenState
     if (!current() || !lifecycle.canUseMedia) return;
     if (lifecycle.videoRequired) await media.requestCamera();
     if (!current() || (lifecycle.videoRequired && !media.cameraReady)) return;
-    await lifecycle.joinVoice();
+    await _joinWithReplay(lifecycle);
   }
 
   @override
@@ -145,6 +215,7 @@ class _CandidateInterviewSessionScreenState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.identity.interviewId != widget.identity.interviewId ||
         oldWidget.identity.sessionId != widget.identity.sessionId) {
+      _disposeReplay();
       _lifecycle.dispose();
       _publisher.dispose();
       _controller.dispose();
@@ -157,6 +228,7 @@ class _CandidateInterviewSessionScreenState
   void dispose() {
     interviewMediaRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
+    _disposeReplay();
     _lifecycle.dispose();
     _publisher.dispose();
     _media.dispose();

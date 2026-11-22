@@ -91,6 +91,16 @@ extension on _CandidateInterviewWorkspaceState {
             height: 64,
             child: _roomHeader(context, mobile, focused, edge, size.width),
           ),
+          if (liveMonitorEnabled && _live && media.cameraReady)
+            Positioned(
+              top: 64,
+              left: 12,
+              child: LiveMonitor(
+                key: ValueKey(lifecycle.identity.sessionId),
+                sessionId: lifecycle.identity.sessionId,
+                lifecycle: lifecycle,
+              ),
+            ),
           Positioned(
             bottom: focused ? 20 : 22,
             left: 16,
@@ -144,14 +154,9 @@ extension on _CandidateInterviewWorkspaceState {
                     height: 28,
                   ),
                   const SizedBox(width: 9),
-                  const Text(
+                  Text(
                     'SkillSense',
-                    style: TextStyle(
-                      color: _roomInk,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -.5,
-                    ),
+                    style: AppType.h3.style(context, color: _roomInk),
                   ),
                 ],
               ),
@@ -210,11 +215,11 @@ extension on _CandidateInterviewWorkspaceState {
                     ),
                   ),
                   child: startedAt == null
-                      ? _roomPill('00:00')
+                      ? _roomPill(context, '00:00')
                       : _RoomClock(
                           startedAt: startedAt,
                           stoppedAt: snapshot?.audioEndedAt,
-                          builder: _roomPill,
+                          builder: (value) => _roomPill(context, value),
                         ),
                 ),
               ),
@@ -249,7 +254,7 @@ extension on _CandidateInterviewWorkspaceState {
         ),
       );
 
-  Widget _roomPill(String text) => Container(
+  Widget _roomPill(BuildContext context, String text) => Container(
     height: 36,
     padding: const EdgeInsets.symmetric(horizontal: 15),
     decoration: BoxDecoration(
@@ -263,13 +268,7 @@ extension on _CandidateInterviewWorkspaceState {
         const SizedBox(width: 7),
         Text(
           text,
-          style: const TextStyle(
-            color: Color(0xFF38476A),
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            fontFeatures: [FontFeature.tabularFigures()],
-            letterSpacing: 0,
-          ),
+          style: AppType.numeric.style(context, color: const Color(0xFF38476A)),
         ),
       ],
     ),
@@ -286,7 +285,6 @@ extension on _CandidateInterviewWorkspaceState {
         ? cameraWidth * 9 / 16 + 20
         : 0.0;
     final top = mobile ? math.min(size.height * .14, 110.0) : 0.0;
-    final questionSize = (size.width * .03).clamp(22.0, 36.0);
     return LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(20, top, 20, bottom),
@@ -302,13 +300,13 @@ extension on _CandidateInterviewWorkspaceState {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_questionBadge() case final badge?) ...[
+                  if (_questionBadge(context) case final badge?) ...[
                     badge,
                     const SizedBox(height: 12),
                   ],
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 720),
-                    child: _questionText(questionSize),
+                    child: _questionText(),
                   ),
                   Padding(
                     padding: EdgeInsets.only(
@@ -341,9 +339,13 @@ extension on _CandidateInterviewWorkspaceState {
                     ),
                     child: SizedBox(
                       width: double.infinity,
-                      child: _answer(context, size.width),
+                      child: _answer(context),
                     ),
                   ),
+                  if (!_live && liveMonitorEnabled && lifecycle.videoRequired)
+                    const Text(
+                      'Your assigned recruiter may watch your camera and listen to both speakers during this interview.',
+                    ),
                   if (!_live) _audioAction(),
                   if (media.cameraError case final failure?)
                     Text(
@@ -364,7 +366,7 @@ extension on _CandidateInterviewWorkspaceState {
     );
   }
 
-  Widget? _questionBadge({bool focused = false}) {
+  Widget? _questionBadge(BuildContext context, {bool focused = false}) {
     final count = lifecycle.snapshot?.questionCount;
     final number = lifecycle.exchange.number;
     if (count == null || number == null) return null;
@@ -380,19 +382,12 @@ extension on _CandidateInterviewWorkspaceState {
       ),
       child: Text(
         'QUESTION $number OF $count',
-        style: TextStyle(
-          color: const Color(0xFF0A6353),
-          fontSize: focused ? 12 : 13,
-          fontWeight: FontWeight.w700,
-          letterSpacing: focused ? 1.08 : 1.17,
-          height: 1.2,
-        ),
+        style: AppType.overline.style(context, color: const Color(0xFF0A6353)),
       ),
     );
   }
 
-  Widget _questionText(
-    double fontSize, {
+  Widget _questionText({
     bool focused = false,
     TextAlign textAlign = TextAlign.center,
   }) => Semantics(
@@ -402,18 +397,16 @@ extension on _CandidateInterviewWorkspaceState {
       builder: (context, constraints) {
         final text =
             lifecycle.exchange.question ??
-            (_live && lifecycle.snapshot?.questionNumber == null &&
+            (_live &&
+                    lifecycle.snapshot?.questionNumber == null &&
                     (lifecycle.snapshot?.questionCount ?? 0) > 0
                 ? 'All questions answered. Confirm when you have finished.'
                 : _live
                 ? 'Waiting for the interviewer…'
                 : 'Let’s get you connected.');
-        final style = TextStyle(
+        final style = (focused ? AppType.h2 : AppType.h1).style(
+          context,
           color: _roomInk,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w600,
-          letterSpacing: focused ? -.3 : -.8,
-          height: 1.3,
         );
         final painter = TextPainter(
           text: TextSpan(
@@ -455,38 +448,35 @@ extension on _CandidateInterviewWorkspaceState {
         : 'Listening. Answer whenever you are ready.';
   }
 
-  Widget _answer(BuildContext context, double width, {bool focused = false}) {
+  Widget _answer(BuildContext context, {bool focused = false}) {
     final answer = lifecycle.exchange.answer;
-    final textSize = answer.isEmpty
-        ? (width * .015).clamp(16.0, 18.0)
-        : (width * .02).clamp(17.0, 22.0);
+    final answerStyle = AppType.bodyLg.style(
+      context,
+      color: answer.isEmpty ? TypographyColors.secondary : _roomInk,
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: focused
           ? CrossAxisAlignment.start
           : CrossAxisAlignment.center,
       children: [
-        const Row(
+        Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             _RoomDot(size: 8, color: _roomTeal),
             SizedBox(width: 9),
             Text(
               'YOUR ANSWER',
-              style: TextStyle(
-                color: Color(0xFF38476A),
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.17,
-                height: 1.2,
-              ),
+              style: AppType.overline.style(context, color: Color(0xFF38476A)),
             ),
           ],
         ),
         SizedBox(height: focused ? 8 : 12),
         ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: textSize * (focused ? 6.4 : 7.5),
+            maxHeight:
+                MediaQuery.textScalerOf(context).scale(answerStyle.fontSize!) *
+                (focused ? 6.4 : 7.5),
           ),
           child: Semantics(
             liveRegion: true,
@@ -495,15 +485,7 @@ extension on _CandidateInterviewWorkspaceState {
               child: Text(
                 answer.isEmpty ? _answerPlaceholder : answer,
                 textAlign: focused ? TextAlign.start : TextAlign.center,
-                style: TextStyle(
-                  color: answer.isEmpty ? const Color(0xFF44537A) : _roomInk,
-                  fontSize: textSize,
-                  letterSpacing: 0,
-                  height: 1.6,
-                  fontWeight: answer.isEmpty
-                      ? FontWeight.w500
-                      : FontWeight.w400,
-                ),
+                style: answerStyle,
               ),
             ),
           ),
@@ -560,14 +542,7 @@ extension on _CandidateInterviewWorkspaceState {
               children: [
                 _RoomDot(size: 6, color: thinking ? _roomBlue : _roomTeal),
                 const SizedBox(width: 6),
-                Text(
-                  state,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                Text(state, style: AppType.badge.style(context, color: color)),
               ],
             ),
           ),
@@ -587,7 +562,7 @@ extension on _CandidateInterviewWorkspaceState {
     final questionHeight = showAnswer && short
         ? size.height - answerBottom - answerHeight - 30 - questionTop - 8
         : (size.height - questionTop - 60) * .4;
-    final badge = _questionBadge(focused: true);
+    final badge = _questionBadge(context, focused: true);
     return [
       Positioned(
         top: questionTop,
@@ -615,7 +590,6 @@ extension on _CandidateInterviewWorkspaceState {
                 children: [
                   if (badge != null) ...[badge, const SizedBox(height: 12)],
                   _questionText(
-                    narrow ? 18 : (size.width * .017).clamp(20, 24),
                     focused: true,
                     textAlign: narrow ? TextAlign.center : TextAlign.left,
                   ),
@@ -658,9 +632,9 @@ extension on _CandidateInterviewWorkspaceState {
                   child: short
                       ? SingleChildScrollView(
                           reverse: true,
-                          child: _answer(context, size.width, focused: true),
+                          child: _answer(context, focused: true),
                         )
-                      : _answer(context, size.width, focused: true),
+                      : _answer(context, focused: true),
                 ),
               ),
             ),
@@ -757,11 +731,7 @@ extension on _CandidateInterviewWorkspaceState {
                           backgroundColor: Colors.white,
                           child: Text(
                             'You',
-                            style: TextStyle(
-                              color: _roomSub,
-                              fontSize: expanded ? 30 : 17,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: AppType.h1.style(context, color: _roomSub),
                           ),
                         ),
                         if (expanded) ...[
@@ -770,10 +740,9 @@ extension on _CandidateInterviewWorkspaceState {
                             _hideSelfView
                                 ? 'Your self-view is hidden'
                                 : 'Your camera is off',
-                            style: const TextStyle(
+                            style: AppType.h3.style(
+                              context,
                               color: Color(0xFF38476A),
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -819,10 +788,9 @@ extension on _CandidateInterviewWorkspaceState {
                       ),
                       child: Text(
                         'You',
-                        style: TextStyle(
+                        style: AppType.bodySm.style(
+                          context,
                           color: Colors.white,
-                          fontSize: focused ? 14 : 12,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -839,12 +807,7 @@ extension on _CandidateInterviewWorkspaceState {
                   style: TextButton.styleFrom(
                     minimumSize: Size(compactExit ? 44 : 0, 42),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                    ),
+                    textStyle: AppType.button.style(context),
                     padding: EdgeInsets.symmetric(
                       horizontal: compactExit ? 0 : 16,
                     ),

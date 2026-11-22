@@ -16,7 +16,10 @@ extension _DeckView on _CommandDeckScreenState {
   }
 
   Widget _buildDeck(BuildContext context) {
-    final c = _DeckColors(Theme.of(context).brightness == Brightness.dark);
+    final c = _DeckColors(
+      Theme.of(context).brightness == Brightness.dark,
+      context.typeStep,
+    );
     final width = MediaQuery.sizeOf(context).width;
     final mobile = width < 900;
     final gutter = mobile ? 16.0 : 32.0;
@@ -49,11 +52,10 @@ extension _DeckView on _CommandDeckScreenState {
                       gutter,
                       16,
                     ),
-                    child: _loadingDashboard
-                        ? _loading()
-                        : _dashboardError != null && !_hasData
-                        ? _error(c, 'Could not load Command Deck.')
-                        : _dashboard(c, mobile, width),
+                    child: LayoutBuilder(
+                      builder: (context, bounds) =>
+                          _dashboard(c, mobile, bounds.maxWidth),
+                    ),
                   ),
                 ),
               ],
@@ -80,6 +82,7 @@ extension _DeckView on _CommandDeckScreenState {
             child: Column(
               children: [
                 TextField(
+                  style: AppType.body.style(context),
                   autofocus: true,
                   controller: _searchController,
                   decoration: const InputDecoration(
@@ -104,7 +107,7 @@ extension _DeckView on _CommandDeckScreenState {
                         return Center(
                           child: Text(
                             'No matching applicants or jobs',
-                            style: c.text(13),
+                            style: c.text(AppType.caption),
                           ),
                         );
                       }
@@ -113,10 +116,13 @@ extension _DeckView on _CommandDeckScreenState {
                         itemBuilder: (context, index) {
                           final item = results[index];
                           return ListTile(
-                            title: Text(item['title']!, style: c.text(14)),
+                            title: Text(
+                              item['title']!,
+                              style: c.text(AppType.bodySm),
+                            ),
                             subtitle: Text(
                               item['type']!,
-                              style: c.text(12, color: c.muted),
+                              style: c.text(AppType.caption, color: c.muted),
                             ),
                             onTap: () => Navigator.pop(context, item['route']),
                           );
@@ -162,11 +168,7 @@ extension _DeckView on _CommandDeckScreenState {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: c.text(
-                  11.5,
-                  color: ink,
-                  weight: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
+                style: c.text(AppType.caption, color: ink),
               ),
             ],
           ),
@@ -183,7 +185,7 @@ extension _DeckView on _CommandDeckScreenState {
         for (final destination in menu)
           PopupMenuItem(
             value: destination.route,
-            child: Text(destination.label, style: c.text(13)),
+            child: Text(destination.label, style: c.text(AppType.caption)),
           ),
       ],
       child: tab,
@@ -261,12 +263,8 @@ extension _DeckView on _CommandDeckScreenState {
       .map((word) => word.characters.first.toUpperCase())
       .join();
 
-  Application? _personFor(Interview interview) {
-    for (final app in _applications) {
-      if (app.id == interview.applicationId) return app;
-    }
-    return null;
-  }
+  Application? _personFor(Interview interview) =>
+      _applicationsById[interview.applicationId];
 
   Widget _dashboard(_DeckColors c, bool mobile, double width) {
     final first = AuthService.firstName.trim();
@@ -295,14 +293,18 @@ extension _DeckView on _CommandDeckScreenState {
           (app) =>
               (app.status == ApplicationStatus.applied ||
                   app.status == ApplicationStatus.underReview) &&
-              app.screening?.status == 'SUCCEEDED',
+              app.assessment?['status'] == 'SUCCEEDED',
         )
         .length;
     final roles = _activeJobs.length;
     final screeningSummary = screened == 0
         ? ''
         : ' $screened ${screened == 1 ? 'application is' : 'applications are'} ready to review.';
-    final summary = !_hasData
+    final summary = _loadingJobs
+        ? 'Loading open roles…'
+        : _jobsError != null
+        ? 'Open role totals are unavailable.'
+        : !_hasData
         ? 'Post your first role and candidates can start applying.'
         : '$roles open ${roles == 1 ? 'role' : 'roles'} accepting applications.'
               '${ready.isEmpty ? '' : ' ${ready.length} ${ready.length == 1 ? 'interview needs' : 'interviews need'} your decision.'}'
@@ -312,14 +314,14 @@ extension _DeckView on _CommandDeckScreenState {
       children: [
         Text(
           _hasData ? '$greeting, $name' : 'Welcome to SkillSense, $name',
-          style: pageHeadingStyle(context),
+          style: context.text.headlineLarge,
         ),
         const SizedBox(height: 4),
-        Text(summary, style: c.text(14, color: c.body)),
+        Text(summary, style: c.text(AppType.bodySm, color: c.body)),
       ],
     );
     final post = _button(c, 'Post a role', () => _go(_post), icon: 'plus');
-    final wide = width > 1180;
+    final wide = width >= 860;
     final media = MediaQuery.of(context);
     // Reserve the header, greeting and outer padding above and below the grid.
     final gridHeight = wide
@@ -369,17 +371,39 @@ extension _DeckView on _CommandDeckScreenState {
   }
 
   Widget _hero(_DeckColors c, List<Application> ready, List<Interview> week) {
-    final fresh = !_hasData;
     final count = ready.length;
+    final waiting =
+        count == 0 &&
+        week.isEmpty &&
+        (_loadingApplications || _loadingInterviews);
+    final unavailable =
+        count == 0 &&
+        week.isEmpty &&
+        (_applicationsError != null || _interviewsError != null);
+    final fresh =
+        !_hasData &&
+        !_loadingJobs &&
+        _jobsError == null &&
+        !waiting &&
+        !unavailable &&
+        week.isEmpty;
     final active = fresh || count > 0 || week.isNotEmpty;
-    final title = fresh
+    final title = waiting
+        ? 'Checking for updates'
+        : unavailable
+        ? 'Some updates are unavailable'
+        : fresh
         ? 'Post your first role'
         : count > 0
         ? '$count ${count == 1 ? 'interview is' : 'interviews are'} ready to review'
         : active
         ? '${week.length} ${week.length == 1 ? 'interview' : 'interviews'} scheduled'
         : 'You’re up to date';
-    final detail = fresh
+    final detail = waiting
+        ? 'Loading interviews and applications.'
+        : unavailable
+        ? 'You can still open the interview calendar.'
+        : fresh
         ? 'Candidates apply and interview with our AI. You review the results.'
         : count > 0
         ? 'Review the evidence and record a hire or reject decision.'
@@ -435,10 +459,8 @@ extension _DeckView on _CommandDeckScreenState {
                         ? 'NEEDS YOUR DECISION'
                         : 'UPCOMING INTERVIEWS',
                     style: c.text(
-                      12,
+                      AppType.numeric,
                       color: active ? const Color(0xD9FFFFFF) : c.muted,
-                      weight: FontWeight.w600,
-                      tracking: .96,
                     ),
                   ),
                 ),
@@ -447,19 +469,13 @@ extension _DeckView on _CommandDeckScreenState {
             const SizedBox(height: 12),
             Text(
               title,
-              style: c.text(
-                mobile ? 21 : 24,
-                color: active ? Colors.white : c.ink,
-                weight: FontWeight.w700,
-                tracking: -.5,
-                height: 1.2,
-              ),
+              style: c.text(AppType.h2, color: active ? Colors.white : c.ink),
             ),
             const SizedBox(height: 2),
             Text(
               detail,
               style: c.text(
-                14,
+                AppType.bodySm,
                 color: active ? const Color(0xE0FFFFFF) : c.body,
               ),
             ),
@@ -490,9 +506,8 @@ extension _DeckView on _CommandDeckScreenState {
                             child: Text(
                               label,
                               style: c.text(
-                                12.5,
+                                AppType.caption,
                                 color: Colors.white,
-                                weight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -532,9 +547,8 @@ extension _DeckView on _CommandDeckScreenState {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: c.text(
-                        13.5,
+                        AppType.bodySm,
                         color: const Color(0xE6FFFFFF),
-                        weight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -609,33 +623,57 @@ extension _DeckView on _CommandDeckScreenState {
     final jobs = _activeJobs.length;
     final metrics = [
       (
-        jobs,
+        _loadingJobs || _jobsError != null ? null : jobs,
         'Open roles',
-        jobs == 0 ? 'Post a role' : 'Accepting',
+        _loadingJobs
+            ? 'Loading…'
+            : _jobsError != null
+            ? 'Unavailable'
+            : jobs == 0
+            ? 'Post a role'
+            : 'Accepting',
         'brief',
         c.blueSoft,
         c.blueInk,
       ),
       (
-        _applications.length,
+        _loadingApplications || _applicationsError != null
+            ? null
+            : _applications.length,
         'Applicants',
-        _applications.isEmpty ? 'None yet' : '$_thisWeekApplications new',
+        _loadingApplications
+            ? 'Loading…'
+            : _applicationsError != null
+            ? 'Unavailable'
+            : _applications.isEmpty
+            ? 'None yet'
+            : '$_thisWeekApplications new',
         'users',
         c.tealSoft,
         c.tealInk,
       ),
       (
-        today.length,
+        _loadingInterviews || _interviewsError != null ? null : today.length,
         'Today',
-        today.isEmpty ? 'No interviews' : 'See calendar',
+        _loadingInterviews
+            ? 'Loading…'
+            : _interviewsError != null
+            ? 'Unavailable'
+            : today.isEmpty
+            ? 'No interviews'
+            : 'See calendar',
         'cal',
         c.amberSoft,
         c.amber,
       ),
       (
-        week.length,
+        _loadingInterviews || _interviewsError != null ? null : week.length,
         'This week',
-        week.isEmpty
+        _loadingInterviews
+            ? 'Loading…'
+            : _interviewsError != null
+            ? 'Unavailable'
+            : week.isEmpty
             ? 'Nothing yet'
             : 'Next: ${MaterialLocalizations.of(context).formatShortMonthDay(week.first.scheduledAt!.toLocal())}',
         'clock',
@@ -676,29 +714,20 @@ extension _DeckView on _CommandDeckScreenState {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '$value',
-                                style: c.text(
-                                  26,
-                                  weight: FontWeight.w700,
-                                  tracking: -.6,
-                                  height: 1.1,
-                                ),
+                                value?.toString() ?? '—',
+                                style: c.text(AppType.h1),
                               ),
                               Text(
                                 label,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: c.text(
-                                  13,
-                                  color: c.body,
-                                  weight: FontWeight.w500,
-                                ),
+                                style: c.text(AppType.caption, color: c.body),
                               ),
                               Text(
                                 detail,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: c.text(12, color: c.muted),
+                                style: c.text(AppType.caption, color: c.muted),
                               ),
                             ],
                           ),
@@ -715,9 +744,7 @@ extension _DeckView on _CommandDeckScreenState {
   }
 
   Widget _applicants(_DeckColors c, {required double gridHeight}) {
-    final recent = [..._applications]
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final rows = recent.take(5).toList();
+    final rows = _applications.take(5).toList();
     // Reserve space for the hero, KPIs, card spacing and table heading.
     const applicantTableChromeHeight = 398.0;
     final rowHeight = gridHeight > 0 && rows.isNotEmpty
@@ -729,7 +756,7 @@ extension _DeckView on _CommandDeckScreenState {
     return _column([
       if (_applicationsError != null)
         _error(c, 'Applications unavailable', detail: _applicationsError),
-      if (_applicationsError == null || recent.isNotEmpty)
+      if (_applicationsError == null || rows.isNotEmpty)
         _card(
           c,
           Column(
@@ -742,7 +769,7 @@ extension _DeckView on _CommandDeckScreenState {
               ),
               if (_loadingApplications)
                 _loading()
-              else if (recent.isEmpty)
+              else if (rows.isEmpty)
                 _empty(
                   c,
                   'users',
@@ -773,9 +800,8 @@ extension _DeckView on _CommandDeckScreenState {
                                   Text(
                                     label,
                                     style: c.text(
-                                      12,
+                                      AppType.caption,
                                       color: c.muted,
-                                      weight: FontWeight.w600,
                                     ),
                                   ),
                                 const SizedBox.shrink(),
@@ -850,10 +876,7 @@ extension _DeckView on _CommandDeckScreenState {
                 padding: EdgeInsets.zero,
               ),
             ),
-          Text(
-            score?.toString() ?? '—',
-            style: c.text(13, weight: FontWeight.w600),
-          ),
+          Text(score?.toString() ?? '—', style: c.text(AppType.caption)),
         ],
       ),
     );
@@ -987,7 +1010,10 @@ extension _DeckView on _CommandDeckScreenState {
                                 Expanded(
                                   child: Text(
                                     'Nothing scheduled today',
-                                    style: c.text(14, color: c.body),
+                                    style: c.text(
+                                      AppType.bodySm,
+                                      color: c.body,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -996,12 +1022,7 @@ extension _DeckView on _CommandDeckScreenState {
                               const SizedBox(height: 14),
                               Text(
                                 'COMING UP',
-                                style: c.text(
-                                  12,
-                                  color: c.muted,
-                                  weight: FontWeight.w600,
-                                  tracking: .48,
-                                ),
+                                style: c.text(AppType.overline, color: c.muted),
                               ),
                               const SizedBox(height: 11),
                               _nextInterview(c, later.first, now),
@@ -1039,10 +1060,7 @@ extension _DeckView on _CommandDeckScreenState {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _time(date),
-                    style: c.text(13, weight: FontWeight.w600, height: 1.25),
-                  ),
+                  Text(_time(date), style: c.text(AppType.caption)),
                   Text(
                     today
                         ? 'Today'
@@ -1050,10 +1068,8 @@ extension _DeckView on _CommandDeckScreenState {
                             context,
                           ).formatShortMonthDay(date),
                     style: c.text(
-                      11.5,
+                      AppType.caption,
                       color: today ? c.blueInk : c.muted,
-                      weight: FontWeight.w600,
-                      height: 1.25,
                     ),
                   ),
                 ],
@@ -1118,21 +1134,9 @@ extension _DeckView on _CommandDeckScreenState {
                       children: [
                         Text(
                           month.characters.take(3).toString(),
-                          style: c.text(
-                            11,
-                            color: c.blueInk,
-                            weight: FontWeight.w600,
-                            height: 1.2,
-                          ),
+                          style: c.text(AppType.caption, color: c.blueInk),
                         ),
-                        Text(
-                          '${date.day}',
-                          style: c.text(
-                            18,
-                            weight: FontWeight.w700,
-                            height: 1.2,
-                          ),
-                        ),
+                        Text('${date.day}', style: c.text(AppType.h3)),
                       ],
                     ),
                   ),
@@ -1144,7 +1148,7 @@ extension _DeckView on _CommandDeckScreenState {
                         _person(c, _candidateName(app), app?.jobTitle ?? ''),
                         Text(
                           _time(date),
-                          style: c.text(13, color: c.muted, height: 1.4),
+                          style: c.text(AppType.caption, color: c.muted),
                         ),
                         if (!inline) ...[const SizedBox(height: 4), badge],
                       ],
@@ -1209,11 +1213,7 @@ extension _DeckView on _CommandDeckScreenState {
                             width: 96,
                             child: Text(
                               label,
-                              style: c.text(
-                                13,
-                                color: c.body,
-                                weight: FontWeight.w500,
-                              ),
+                              style: c.text(AppType.caption, color: c.body),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -1234,7 +1234,7 @@ extension _DeckView on _CommandDeckScreenState {
                             child: Text(
                               '$count',
                               textAlign: TextAlign.end,
-                              style: c.text(13, weight: FontWeight.w600),
+                              style: c.text(AppType.numeric),
                             ),
                           ),
                         ],
@@ -1250,6 +1250,9 @@ extension _DeckView on _CommandDeckScreenState {
   }
 
   Widget _roles(_DeckColors c, {required double gridHeight}) {
+    if (_jobsError != null && _jobs.isEmpty) {
+      return _error(c, 'Open roles unavailable');
+    }
     final counts = <String, int>{};
     final shortlisted = <String, int>{};
     for (final app in _applications) {
@@ -1269,7 +1272,18 @@ extension _DeckView on _CommandDeckScreenState {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _section(c, 'Open roles'),
-          if (jobs.isEmpty)
+          if (_jobsError != null)
+            _section(
+              c,
+              'Could not refresh roles',
+              action: TextButton(
+                onPressed: _retryDashboard,
+                child: const Text('Retry'),
+              ),
+            ),
+          if (_loadingJobs)
+            _loading()
+          else if (jobs.isEmpty)
             _empty(
               c,
               'brief',
@@ -1303,11 +1317,7 @@ extension _DeckView on _CommandDeckScreenState {
                                       job.title,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: c.text(
-                                        14,
-                                        weight: FontWeight.w700,
-                                        height: 1.4,
-                                      ),
+                                      style: c.text(AppType.h4),
                                     ),
                                     Text(
                                       available
@@ -1318,9 +1328,8 @@ extension _DeckView on _CommandDeckScreenState {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: c.text(
-                                        12.5,
+                                        AppType.caption,
                                         color: c.muted,
-                                        height: 1.4,
                                       ),
                                     ),
                                   ],
@@ -1330,7 +1339,7 @@ extension _DeckView on _CommandDeckScreenState {
                               _pill(
                                 c,
                                 available
-                                    ? '${counts[job.id] ?? 0} applicants'
+                                    ? applicantCountLabel(counts[job.id] ?? 0)
                                     : '—',
                                 c.ink,
                                 c.blueSoft,
@@ -1357,7 +1366,7 @@ extension _DeckView on _CommandDeckScreenState {
                       Expanded(
                         child: Text(
                           '+$hiddenJobs more roles',
-                          style: c.text(12.5, color: c.muted),
+                          style: c.text(AppType.caption, color: c.muted),
                         ),
                       )
                     else
@@ -1375,11 +1384,7 @@ extension _DeckView on _CommandDeckScreenState {
                         children: [
                           Text(
                             'View all roles',
-                            style: c.text(
-                              13,
-                              color: c.blue,
-                              weight: FontWeight.w600,
-                            ),
+                            style: c.text(AppType.button, color: c.blue),
                           ),
                           const SizedBox(width: 4),
                           const Icon(Icons.arrow_forward_rounded, size: 16),
@@ -1404,7 +1409,7 @@ extension _DeckView on _CommandDeckScreenState {
       spacing: 10,
       runSpacing: 4,
       children: [
-        Text(title, style: c.text(16, weight: FontWeight.w600, tracking: -.2)),
+        Text(title, style: c.text(AppType.h4)),
         if (action != null) action,
       ],
     ),
@@ -1422,10 +1427,7 @@ extension _DeckView on _CommandDeckScreenState {
       mainAxisSize: MainAxisSize.min,
       children: [
         Flexible(
-          child: Text(
-            label,
-            style: c.text(13.5, color: c.blue, weight: FontWeight.w600),
-          ),
+          child: Text(label, style: c.text(AppType.button, color: c.blue)),
         ),
         const SizedBox(width: 4),
         _DeckIcon('chev', size: 14, color: c.blue),
@@ -1440,9 +1442,10 @@ extension _DeckView on _CommandDeckScreenState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: c.text(16, weight: FontWeight.w600)),
-          if (detail != null) Text(detail, style: c.text(13, color: c.muted)),
-          TextButton(onPressed: _refreshDashboard, child: const Text('Retry')),
+          Text(title, style: c.text(AppType.h4)),
+          if (detail != null)
+            Text(detail, style: c.text(AppType.caption, color: c.muted)),
+          TextButton(onPressed: _retryDashboard, child: const Text('Retry')),
         ],
       ),
     ),
@@ -1464,18 +1467,14 @@ extension _DeckView on _CommandDeckScreenState {
         children: [
           _iconTile(icon, c.blueSoft, c.blue, size: 52),
           const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: c.text(15.5, weight: FontWeight.w600),
-          ),
+          Text(title, textAlign: TextAlign.center, style: c.text(AppType.h4)),
           const SizedBox(height: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 320),
             child: Text(
               detail,
               textAlign: TextAlign.center,
-              style: c.text(14, color: c.body),
+              style: c.text(AppType.bodySm, color: c.body),
             ),
           ),
           if (action != null) ...[const SizedBox(height: 10), action],

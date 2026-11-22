@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
@@ -44,14 +45,14 @@ class MobileNavTab extends StatelessWidget {
       );
     }
     final color = selected
-        ? accent
-        : context.themeForeground(const Color(0xFF7E8DAA));
+        ? context.themeForeground(accent)
+        : context.secondaryTextColor;
     final tab = AnimatedContainer(
       height: double.infinity,
       duration: MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
           : const Duration(milliseconds: 180),
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
         color: selected ? accent.withValues(alpha: 0.11) : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
@@ -82,21 +83,13 @@ class MobileNavTab extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 20, color: color),
-                const SizedBox(height: 3),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 9,
-                      height: 1.2,
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                    ),
-                  ),
+                Icon(icon, size: 16, color: color),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppType.nav.style(context, color: color),
                 ),
               ],
             ),

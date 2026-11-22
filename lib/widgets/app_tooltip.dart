@@ -1,7 +1,7 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 enum TooltipPosition { bottom, right, top }
 
@@ -120,12 +120,7 @@ class _AppTooltipState extends State<AppTooltip> {
                 ),
                 child: Text(
                   widget.message.toUpperCase(),
-                  style: GoogleFonts.spaceGrotesk(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.06 * 11,
-                  ),
+                  style: AppType.overline.style(context, color: Colors.white),
                 ),
               ),
             ),

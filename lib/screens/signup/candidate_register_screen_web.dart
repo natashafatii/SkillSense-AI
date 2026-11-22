@@ -381,13 +381,13 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                             // ── RIGHT PANEL ───────────────────────────────
                             Expanded(
                               flex: 1,
-                              child: SingleChildScrollView(
-                                physics: const ClampingScrollPhysics(),
-                                child: Align(
-                                  alignment: Alignment.topCenter,
+                              child: Align(
+                                alignment: Alignment.center,
+                                child: SingleChildScrollView(
+                                  physics: const ClampingScrollPhysics(),
                                   child: Padding(
                                     padding: EdgeInsets.symmetric(
-                                      vertical: verticalPadding,
+                                      vertical: 12,
                                       horizontal: horizontalPadding,
                                     ),
                                     child: ConstrainedBox(
@@ -401,7 +401,6 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          const SizedBox(height: 80),
                                           // Title
                                           Text(
                                             AppConstants
@@ -415,7 +414,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               letterSpacing: -0.01,
                                             ),
                                           ),
-                                          const SizedBox(height: 8),
+                                          const SizedBox(height: 6),
 
                                           // Subtitle
                                           Text(
@@ -430,12 +429,12 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               height: 1.5,
                                             ),
                                           ),
-                                          const SizedBox(height: 16),
+                                          const SizedBox(height: 10),
                                           AuthRoleSwitcher(
                                             selectedRole: 'candidate',
                                             onSelected: onRoleChanged,
                                           ),
-                                          const SizedBox(height: 16),
+                                          const SizedBox(height: 10),
 
                                           // Google Button
                                           _GoogleSignInButton(
@@ -443,11 +442,11 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                 ? null
                                                 : onGoogleSignIn,
                                           ),
-                                          const SizedBox(height: 16),
+                                          const SizedBox(height: 10),
 
                                           // Divider
                                           const _WorkEmailDivider(),
-                                          const SizedBox(height: 16),
+                                          const SizedBox(height: 10),
 
                                           // Form Fields
                                           Row(
@@ -460,7 +459,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                     const _FormFieldLabel(
                                                       label: 'First name',
                                                     ),
-                                                    const SizedBox(height: 8),
+                                                    const SizedBox(height: 6),
                                                     _CustomTextField(
                                                       controller:
                                                           firstNameController,
@@ -480,7 +479,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                     const _FormFieldLabel(
                                                       label: 'Last name',
                                                     ),
-                                                    const SizedBox(height: 8),
+                                                    const SizedBox(height: 6),
                                                     _CustomTextField(
                                                       controller:
                                                           lastNameController,
@@ -493,12 +492,12 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               ),
                                             ],
                                           ),
-                                          const SizedBox(height: 14),
+                                          const SizedBox(height: 8),
 
                                           const _FormFieldLabel(
                                             label: 'Email Address',
                                           ),
-                                          const SizedBox(height: 8),
+                                          const SizedBox(height: 6),
                                           _CustomTextField(
                                             controller: emailController,
                                             focusNode: emailFocus,
@@ -507,12 +506,12 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                           ),
-                                          const SizedBox(height: 14),
+                                          const SizedBox(height: 8),
 
                                           const _FormFieldLabel(
                                             label: 'Phone Number',
                                           ),
-                                          const SizedBox(height: 8),
+                                          const SizedBox(height: 6),
                                           CountryCodePhoneField(
                                             controller: phoneController,
                                             focusNode: phoneFocus,
@@ -523,12 +522,12 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                             focusColor:
                                                 AppColors.candidatePrimary,
                                           ),
-                                          const SizedBox(height: 14),
+                                          const SizedBox(height: 8),
 
                                           const _FormFieldLabel(
                                             label: 'Password',
                                           ),
-                                          const SizedBox(height: 8),
+                                          const SizedBox(height: 6),
                                           _CustomTextField(
                                             controller: passwordController,
                                             focusNode: passwordFocus,
@@ -575,12 +574,12 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               );
                                             },
                                           ),
-                                          const SizedBox(height: 14),
+                                          const SizedBox(height: 8),
 
                                           const _FormFieldLabel(
                                             label: 'Confirm Password',
                                           ),
-                                          const SizedBox(height: 8),
+                                          const SizedBox(height: 6),
                                           _CustomTextField(
                                             controller: confirmController,
                                             focusNode: confirmFocus,
@@ -600,7 +599,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(height: 20),
+                                          const SizedBox(height: 14),
 
                                           // Submit Button
                                           SizedBox(
@@ -650,7 +649,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                                     ),
                                             ),
                                           ),
-                                          const SizedBox(height: 16),
+                                          const SizedBox(height: 10),
 
                                           // Bottom Agreement Text
                                           Center(
@@ -699,7 +698,7 @@ class CandidateRegisterScreenWeb extends StatelessWidget {
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(height: 16),
+                                          const SizedBox(height: 10),
 
                                           // Already have an account? Sign in
                                           Center(

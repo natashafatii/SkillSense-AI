@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -12,7 +13,6 @@ import '../../services/session_scope.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/candidate_button_style.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/page_heading_style.dart';
 import '../application_screening_screen.dart';
 
 class CandidateInterviewHistoryScreen extends StatefulWidget {
@@ -208,19 +208,11 @@ class _CandidateInterviewHistoryScreenState
           child: ColoredBox(
             color: Colors.transparent,
             child: Theme(
-              data: Theme.of(context).copyWith(
-                textTheme: Theme.of(
-                  context,
-                ).textTheme.apply(fontFamily: 'Inter'),
-              ),
+              data: Theme.of(
+                context,
+              ).copyWith(textTheme: Theme.of(context).textTheme),
               child: DefaultTextStyle(
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 14,
-                  height: 1.45,
-                  fontWeight: FontWeight.w400,
-                  color: _ink,
-                ),
+                style: AppType.bodySm.style(context, color: _ink),
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
                     : ListView(
@@ -258,15 +250,12 @@ class _CandidateInterviewHistoryScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Interview history',
-                style: pageHeadingStyle(context),
-              ),
+              Text('Interview history', style: context.text.headlineLarge),
               if (_error == null) ...[
                 const SizedBox(height: 4),
                 Text(
                   '${_items.length} ${_items.length == 1 ? 'interview' : 'interviews'} · $released with feedback${interrupted > 0 ? ' · $interrupted interrupted' : ''}',
-                  style: TextStyle(color: _mute, fontSize: 15),
+                  style: AppType.body.style(context, color: _mute),
                 ),
               ],
             ],
@@ -338,10 +327,7 @@ class _CandidateInterviewHistoryScreenState
               const SizedBox(height: 3),
               Text(
                 entry?.title ?? 'No report available',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppType.h4.style(context),
               ),
               if (entry != null)
                 Text(
@@ -350,7 +336,7 @@ class _CandidateInterviewHistoryScreenState
                       MaterialLocalizations.of(context).formatShortDate(date),
                     if (entry.company.isNotEmpty) entry.company,
                   ].join(' · '),
-                  style: TextStyle(fontSize: 13, color: _mute),
+                  style: AppType.caption.style(context, color: _mute),
                 ),
             ],
           ),
@@ -373,9 +359,10 @@ class _CandidateInterviewHistoryScreenState
             delta == null
                 ? 'Available after two scored reports'
                 : '${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(1).replaceFirst(RegExp(r'\.0$'), '')} pts since first report',
-            style: TextStyle(
+            style: AppType.numeric.style(
+              context,
               color: delta != null && delta >= 0 ? _green : _mute,
-              fontWeight: FontWeight.w600,
+              weight: FontWeight.w600,
             ),
           ),
           if (delta != null)
@@ -411,11 +398,10 @@ class _CandidateInterviewHistoryScreenState
               color: _filter == filter ? _green.withValues(alpha: .35) : _edge,
             ),
             shape: const StadiumBorder(),
-            labelStyle: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+            labelStyle: AppType.bodySm.style(
+              context,
               color: _filter == filter ? _green : _mute,
+              weight: FontWeight.w500,
             ),
             onSelected: (_) => setState(() => _filter = filter),
           ),
@@ -447,7 +433,7 @@ class _CandidateInterviewHistoryScreenState
                 ),
                 foregroundColor: option == _sort ? Colors.white : _ink,
                 backgroundColor: option == _sort ? selectionBlue : _surface,
-                textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 14),
+                textStyle: AppType.button.style(context),
                 shape: const RoundedRectangleBorder(),
               ),
               onPressed: () => setState(() => _sort = option),
@@ -469,11 +455,7 @@ class _CandidateInterviewHistoryScreenState
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-                textStyle: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+                textStyle: AppType.button.style(context),
               ).copyWith(
                 side: WidgetStateProperty.resolveWith(
                   (states) =>
@@ -592,18 +574,14 @@ class _CandidateInterviewHistoryScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                title,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.3,
-                                ),
-                              ),
+                              Text(title, style: AppType.h4.style(context)),
                               if (entry.format case final format?)
                                 Text(
                                   '$format · with SkillSense Interview Agent',
-                                  style: TextStyle(color: _mute, fontSize: 13),
+                                  style: AppType.caption.style(
+                                    context,
+                                    color: _mute,
+                                  ),
                                 ),
                               if (!wide) ...[const SizedBox(height: 6), badges],
                             ],
@@ -701,7 +679,11 @@ class _CandidateInterviewHistoryScreenState
                         : entry.interrupted
                         ? 'The call was interrupted and no feedback has been released. An unavailable score does not count as zero.'
                         : 'Your recruiter hasn’t released feedback for this interview yet.',
-                    style: TextStyle(color: _ink, fontSize: 14, height: 1.65),
+                    style: AppType.numeric.style(
+                      context,
+                      color: _ink,
+                      weight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -717,26 +699,20 @@ class _CandidateInterviewHistoryScreenState
                       radius: 18,
                       backgroundColor: _blue.withValues(alpha: .12),
                       foregroundColor: _blue,
-                      child: const Text(
-                        'AI',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
+                      child: Text('AI', style: AppType.overline.style(context)),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'SkillSense Interview Agent',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: AppType.bodySm.style(context),
                           ),
                           Text(
                             'Automated interviewer',
-                            style: TextStyle(fontSize: 12.5, color: _mute),
+                            style: AppType.caption.style(context, color: _mute),
                           ),
                         ],
                       ),
@@ -777,13 +753,15 @@ class _CandidateInterviewHistoryScreenState
                               'applicationId': entry.interview.applicationId,
                             },
                           ),
-                    style: CandidateButtonStyle.primary(FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF285FD0),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(0, 44),
-                      shape: const StadiumBorder(),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                    )),
+                    style: CandidateButtonStyle.primary(
+                      FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF285FD0),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 44),
+                        shape: const StadiumBorder(),
+                        textStyle: AppType.button.style(context),
+                      ),
+                    ),
                     child: Text(
                       entry.interrupted && entry.report == null
                           ? 'Go to interview lobby'
@@ -844,12 +822,7 @@ class _CandidateInterviewHistoryScreenState
       const SizedBox(height: 3),
       SelectableText(
         fact.$2,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: _ink,
-        ),
+        style: AppType.bodySm.style(context, color: _ink),
       ),
     ],
   );
@@ -872,12 +845,7 @@ class _CandidateInterviewHistoryScreenState
         children: [
           Text(
             date?.day.toString().padLeft(2, '0') ?? '–',
-            style: const TextStyle(
-              fontFamily: 'Space Grotesk',
-              fontSize: 21,
-              fontWeight: FontWeight.w600,
-              height: 1,
-            ),
+            style: AppType.h2.style(context),
           ),
           if (month != null) _eyebrow(month),
         ],
@@ -908,11 +876,7 @@ class _CandidateInterviewHistoryScreenState
           Center(
             child: Text(
               score?.round().toString() ?? '–',
-              style: const TextStyle(
-                fontFamily: 'Space Grotesk',
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppType.h4.style(context),
             ),
           ),
         ],
@@ -932,26 +896,14 @@ class _CandidateInterviewHistoryScreenState
       children: [
         Icon(icon, size: 13, color: color),
         const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
-        ),
+        Text(label, style: AppType.caption.style(context, color: color)),
       ],
     ),
   );
 
   Widget _eyebrow(String label) => Text(
     label.toUpperCase(),
-    style: TextStyle(
-      fontSize: 10,
-      letterSpacing: 1,
-      fontWeight: FontWeight.w700,
-      color: _mute,
-    ),
+    style: AppType.overline.style(context, color: _mute),
   );
 
   Widget _empty(String message) => _card(

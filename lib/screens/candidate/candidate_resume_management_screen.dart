@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -13,7 +14,6 @@ import '../../widgets/candidate_mobile_search.dart';
 import '../../widgets/candidate_scaffold.dart';
 import '../../widgets/global_search.dart';
 import '../../widgets/notification_unread_scope.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../models/resume_detail.dart';
 import '../../services/resume_manager.dart';
@@ -120,13 +120,10 @@ class _CandidateResumeManagementScreenState
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.themeSurface(Colors.white),
-        title: Text(
-          'Delete this resume?',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-        ),
+        title: Text('Delete this resume?', style: AppType.body.style(context)),
         content: Text(
           'Are you sure you want to delete "${resume['filename']}"?',
-          style: GoogleFonts.inter(),
+          style: AppType.body.style(context),
         ),
         actions: [
           TextButton(
@@ -137,7 +134,8 @@ class _CandidateResumeManagementScreenState
             ),
             child: Text(
               'Cancel',
-              style: GoogleFonts.inter(
+              style: AppType.button.style(
+                context,
                 color: CandidateButtonStyle.secondaryText,
               ),
             ),
@@ -150,7 +148,10 @@ class _CandidateResumeManagementScreenState
             ),
             child: Text(
               'Yes, delete',
-              style: GoogleFonts.inter(color: CandidateButtonStyle.error),
+              style: AppType.button.style(
+                context,
+                color: CandidateButtonStyle.error,
+              ),
             ),
           ),
         ],
@@ -229,11 +230,7 @@ class _CandidateResumeManagementScreenState
         behavior: SnackBarBehavior.floating,
         content: Text(
           'Resume "${resume['filename']}" deleted.',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppType.caption.style(context, color: Colors.white),
         ),
       ),
     );
@@ -659,13 +656,7 @@ class _CandidateResumeManagementScreenState
                       children: [
                         Text(
                           'Add your resume',
-                          style: _resumeText(
-                            context,
-                            30,
-                            weight: FontWeight.w700,
-                            height: 1.2,
-                            spacing: -.6,
-                          ),
+                          style: _resumeText(context, AppType.h1),
                         ),
                         const SizedBox(height: 6),
                         ConstrainedBox(
@@ -674,9 +665,8 @@ class _CandidateResumeManagementScreenState
                             'Upload it once. We read it, pull out your skills, roles and experience, and use them to match you with the right jobs.',
                             style: _resumeText(
                               context,
-                              15,
+                              AppType.body,
                               color: _resumeMuted,
-                              height: 1.5,
                             ),
                           ),
                         ),
@@ -747,7 +737,11 @@ class _CandidateResumeManagementScreenState
                     Expanded(
                       child: Text(
                         'Private to you. Recruiters only see it when you apply.',
-                        style: _resumeText(context, 13, color: _resumeMuted),
+                        style: _resumeText(
+                          context,
+                          AppType.caption,
+                          color: _resumeMuted,
+                        ),
                       ),
                     ),
                   ],
@@ -787,16 +781,16 @@ class _CandidateResumeManagementScreenState
                     children: [
                       Text(
                         _stagedFilename,
-                        style: _resumeText(
-                          context,
-                          15,
-                          weight: FontWeight.w600,
-                        ),
+                        style: _resumeText(context, AppType.h4),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         '${_resumeFileType(_stagedFilename)} · $_stagedFilesize',
-                        style: _resumeText(context, 13, color: _resumeMuted),
+                        style: _resumeText(
+                          context,
+                          AppType.caption,
+                          color: _resumeMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -884,7 +878,7 @@ class _CandidateResumeManagementScreenState
                 ? 'Still processing — this can take a moment.'
                 : 'Usually takes 3 to 6 seconds',
             textAlign: TextAlign.center,
-            style: _resumeText(context, 13, color: _resumeMuted),
+            style: _resumeText(context, AppType.caption, color: _resumeMuted),
           ),
         ],
       ],
@@ -913,7 +907,7 @@ class _CandidateResumeManagementScreenState
                   Expanded(
                     child: Text(
                       'Your resumes',
-                      style: _resumeText(context, 16, weight: FontWeight.w600),
+                      style: _resumeText(context, AppType.h4),
                     ),
                   ),
                   if (!_isLoadingList && _listError == null)

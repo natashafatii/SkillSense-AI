@@ -309,10 +309,7 @@ class _ResumeTimeline extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (entry.title.isNotEmpty)
-                          Text(
-                            entry.title,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
+                          Text(entry.title, style: AppType.h4.style(context)),
                         Wrap(
                           spacing: 8,
                           runSpacing: 2,
@@ -376,7 +373,7 @@ class _ProjectsCard extends StatelessWidget {
                             project.title.isEmpty
                                 ? 'Untitled project'
                                 : project.title,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            style: AppType.h4.style(context),
                           ),
                           if (project.description.isNotEmpty)
                             Padding(
@@ -576,11 +573,11 @@ class _ProgressItem extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
+          style: AppType.body.style(
+            context,
             color: done || active || rejected
                 ? context.themeForeground(_ink)
                 : context.themeForeground(_muted),
-            fontWeight: FontWeight.w600,
           ),
         ),
         if (date case final date?)
@@ -739,13 +736,7 @@ class _CopyId extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label, style: _labelStyle(context)),
-            SelectableText(
-              value,
-              style: const TextStyle(
-                fontFamily: 'JetBrains Mono',
-                fontSize: 11,
-              ),
-            ),
+            SelectableText(value, style: AppType.numeric.style(context)),
           ],
         ),
       ),

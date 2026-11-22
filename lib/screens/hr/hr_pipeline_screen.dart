@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import '../application_screening_screen.dart';
 import 'package:skillsense_ai/widgets/recruiter_button_style.dart';
@@ -7,9 +8,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../dashboard/command_deck_screen.dart' show GridPainter;
 import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/page_heading_style.dart';
 import '../../widgets/applicant_avatar_image.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/application.dart';
 import '../../models/job.dart';
@@ -411,14 +410,11 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                               job.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.spaceGrotesk(
+                              style: AppType.h4.style(
+                                context,
                                 color: context.themeForeground(
                                   const Color(0xFF17233B),
                                 ),
-                                fontSize: 13,
-                                fontWeight: current
-                                    ? FontWeight.w700
-                                    : FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -426,11 +422,11 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                               '${job.location} · ${job.jobType.value}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(
+                              style: AppType.caption.style(
+                                context,
                                 color: context.themeForeground(
-                                  const Color(0xFF8290AB),
+                                  TypographyColors.secondary,
                                 ),
-                                fontSize: 11,
                               ),
                             ),
                           ],
@@ -490,7 +486,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                 job?.title ?? 'Applicant pipeline',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: pageHeadingStyle(context),
+                style: context.text.headlineLarge,
               ),
             ),
             const SizedBox(width: 5),
@@ -504,10 +500,10 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
       ),
       const SizedBox(height: 4),
       Text(
-        '${_applications.length} applicants',
-        style: GoogleFonts.inter(
-          color: context.themeForeground(const Color(0xFF64748B)),
-          fontSize: 13,
+        applicantCountLabel(_applications.length),
+        style: AppType.caption.style(
+          context,
+          color: context.themeForeground(TypographyColors.secondary),
         ),
       ),
     ],
@@ -536,10 +532,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
         style: RecruiterButtonStyle.primary(
           FilledButton.styleFrom(
             backgroundColor: const Color(0xFF3B5AF1),
-            textStyle: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
+            textStyle: AppType.button.style(context),
           ),
         ),
       ),
@@ -588,9 +581,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                         Expanded(
                           child: Text(
                             _error!,
-                            style: GoogleFonts.inter(
+                            style: AppType.caption.style(
+                              context,
                               color: Colors.red,
-                              fontSize: 13,
                             ),
                           ),
                         ),
@@ -666,11 +659,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                   Text(
                     compact ? 'No candidates yet' : 'No candidates in pipeline',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
+                    style: AppType.h3.style(
+                      context,
                       color: context.themeForeground(const Color(0xFF17233B)),
-                      fontSize: compact ? 15 : 18,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: compact ? -0.02 : -0.025,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -683,10 +674,11 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                           ? 'Create a role to track applicants across interview stages.'
                           : 'Create a role or post a job listing to start receiving applicants and tracking them across interview stages.',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        color: context.themeForeground(const Color(0xFF8190A8)),
-                        fontSize: compact ? 11 : 12.5,
-                        height: 1.65,
+                      style: AppType.caption.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                     ),
                   ),
@@ -728,10 +720,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                       ).pushNamed('/recruiter/create-role'),
                       child: Text(
                         'Create a role',
-                        style: GoogleFonts.inter(
+                        style: AppType.button.style(
+                          context,
                           color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -742,9 +733,11 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                     Text(
                       'Active job listings automatically populate the applicant pipeline',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        color: context.themeForeground(const Color(0xFF94A3B8)),
-                        fontSize: 10.5,
+                      style: AppType.caption.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                     ),
                   ],
@@ -836,10 +829,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                     '$stage · ${apps.length}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
+                    style: AppType.caption.style(
+                      context,
                       color: context.themeForeground(const Color(0xFF27344C)),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -860,19 +852,16 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                       Icon(
                         Icons.group_outlined,
                         size: 24,
-                        color: context.themeForeground(
-                          const Color(0xFF64748B),
-                        ),
+                        color: context.themeForeground(const Color(0xFF64748B)),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'No candidates yet',
-                        style: GoogleFonts.inter(
+                        style: AppType.caption.style(
+                          context,
                           color: context.themeForeground(
-                            const Color(0xFF64748B),
+                            TypographyColors.secondary,
                           ),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -907,9 +896,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
           child: Center(
             child: Text(
               '+ $more more',
-              style: GoogleFonts.inter(
-                color: context.themeForeground(const Color(0xFF7D8BA6)),
-                fontSize: 12,
+              style: AppType.caption.style(
+                context,
+                color: context.themeForeground(TypographyColors.secondary),
               ),
             ),
           ),
@@ -961,10 +950,9 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                     child: ApplicantAvatarImage(
                       imageUrl: app.candidateProfileImageUrl,
                       initials: initials,
-                      initialsStyle: GoogleFonts.inter(
+                      initialsStyle: AppType.caption.style(
+                        context,
                         color: const Color(0xFF3F5BC9),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -982,9 +970,8 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                               name,
                               maxLines: 1,
                               softWrap: false,
-                              style: GoogleFonts.inter(
-                                fontSize: compact ? 12 : 13,
-                                fontWeight: FontWeight.w600,
+                              style: AppType.caption.style(
+                                context,
                                 color: context.themeForeground(
                                   const Color(0xFF27344C),
                                 ),
@@ -1002,10 +989,10 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
                               '${scored ? 'Scored' : 'Applied'} ${_timeAgo(date)}',
                               maxLines: 1,
                               softWrap: false,
-                              style: GoogleFonts.inter(
-                                fontSize: compact ? 10.5 : 11.5,
+                              style: AppType.caption.style(
+                                context,
                                 color: context.themeForeground(
-                                  const Color(0xFF64748B),
+                                  TypographyColors.secondary,
                                 ),
                               ),
                             ),
@@ -1055,9 +1042,8 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
           ),
           Text(
             score.round().toString(),
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
+            style: AppType.caption.style(
+              context,
               color: context.themeForeground(const Color(0xFF27344C)),
             ),
           ),
@@ -1135,14 +1121,7 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
       color: color.withValues(alpha: 0.11),
       borderRadius: BorderRadius.circular(4),
     ),
-    child: Text(
-      label,
-      style: GoogleFonts.inter(
-        color: color,
-        fontSize: 9,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
+    child: Text(label, style: AppType.caption.style(context, color: color)),
   );
 }
 

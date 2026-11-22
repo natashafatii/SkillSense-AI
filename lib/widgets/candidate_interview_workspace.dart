@@ -1,6 +1,8 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:async';
+import 'live_monitor.dart';
 import 'dart:math' as math;
-import 'dart:ui' show FontFeature, ImageFilter;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
@@ -169,7 +171,6 @@ class _CandidateInterviewWorkspaceState
       brightness: _roomVisible
           ? Brightness.light
           : Theme.of(context).brightness,
-      fontFamily: 'Inter',
       scaffoldBackgroundColor: _roomVisible
           ? _roomBackground
           : context.themeCanvas(const Color(0xFFF3F6FA)),
@@ -189,11 +190,7 @@ class _CandidateInterviewWorkspaceState
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
+            textStyle: AppType.button.style(context),
           ),
         ),
       ),
@@ -220,57 +217,57 @@ class _CandidateInterviewWorkspaceState
             children: [
               const GreenGradientBackground(),
               SafeArea(
-            child: Builder(
-              builder: (context) => _roomVisible
-                  ? _interviewRoom(context)
-                  : Column(
-                      children: [
-                        _header(
-                          context,
-                          MediaQuery.sizeOf(context).width < 460,
-                        ),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final mobile = constraints.maxWidth < 760;
-                              final padding = EdgeInsets.fromLTRB(
-                                mobile ? 18 : 36,
-                                mobile ? 24 : 28,
-                                mobile ? 18 : 36,
-                                28,
-                              );
-                              return MobileEdgeShadowWrapper(
-                                child: SingleChildScrollView(
-                                  padding: padding,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      minHeight: mobile
-                                          ? 0
-                                          : padding
-                                                .deflateSize(
-                                                  constraints.biggest,
-                                                )
-                                                .height,
-                                    ),
-                                    child: Center(
+                child: Builder(
+                  builder: (context) => _roomVisible
+                      ? _interviewRoom(context)
+                      : Column(
+                          children: [
+                            _header(
+                              context,
+                              MediaQuery.sizeOf(context).width < 460,
+                            ),
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final mobile = constraints.maxWidth < 760;
+                                  final padding = EdgeInsets.fromLTRB(
+                                    mobile ? 18 : 36,
+                                    mobile ? 24 : 28,
+                                    mobile ? 18 : 36,
+                                    28,
+                                  );
+                                  return MobileEdgeShadowWrapper(
+                                    child: SingleChildScrollView(
+                                      padding: padding,
                                       child: ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 1260,
+                                        constraints: BoxConstraints(
+                                          minHeight: mobile
+                                              ? 0
+                                              : padding
+                                                    .deflateSize(
+                                                      constraints.biggest,
+                                                    )
+                                                    .height,
                                         ),
-                                        child: lifecycle.isCurrent
-                                            ? _completion(context, mobile)
-                                            : _signedOut(context),
+                                        child: Center(
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 1260,
+                                            ),
+                                            child: lifecycle.isCurrent
+                                                ? _completion(context, mobile)
+                                                : _signedOut(context),
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-            ),
+                ),
               ),
             ],
           ),
@@ -324,7 +321,7 @@ class _CandidateInterviewWorkspaceState
       children: [
         SvgPicture.asset('assets/images/logo.svg', width: compact ? 20 : 26),
         const SizedBox(width: 7),
-        Text('SkillSense', style: _title(context, compact ? 14 : 18)),
+        Text('SkillSense', style: _title(context, AppType.bodyLg)),
       ],
     );
     final badges = Wrap(
@@ -419,10 +416,9 @@ class _CandidateInterviewWorkspaceState
                       : _live
                       ? 'You’re connected'
                       : 'Settle in before you begin',
-                  style: TextStyle(
+                  style: AppType.caption.style(
+                    context,
                     color: context.themeForeground(_ink),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -437,11 +433,12 @@ class _CandidateInterviewWorkspaceState
                       ? publisher.notice
                       : _live
                       ? 'Keep this tab open and your camera in position during the conversation.'
+                      : liveMonitorEnabled && lifecycle.videoRequired
+                      ? 'Your assigned recruiter may watch your camera and listen to both speakers during the interview.'
                       : 'Choose a quiet place, check your camera, and join when you’re ready.',
-                  style: TextStyle(
+                  style: AppType.caption.style(
+                    context,
                     color: context.themeForeground(_muted),
-                    height: 1.6,
-                    fontSize: 12,
                   ),
                 ),
               ],
@@ -528,12 +525,7 @@ class _CandidateInterviewWorkspaceState
             minimumSize: Size(mobile ? 48 : 0, 48),
             padding: EdgeInsets.symmetric(horizontal: mobile ? 0 : 20),
             backgroundColor: const Color(0xFFD03E50),
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
-            ),
+            textStyle: AppType.button.style(context),
             foregroundColor: Colors.white,
             shape: const StadiumBorder(),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -714,13 +706,13 @@ class _CandidateInterviewWorkspaceState
             Text(
               title,
               textAlign: TextAlign.center,
-              style: _title(context, mobile ? 30 : 38),
+              style: _title(context, AppType.display),
             ),
             const SizedBox(height: 14),
             Text(
               description,
               textAlign: TextAlign.center,
-              style: TextStyle(color: muted, fontSize: 15, height: 1.55),
+              style: AppType.body.style(context, color: muted),
             ),
             const SizedBox(height: 22),
             Container(
@@ -815,7 +807,7 @@ class _CandidateInterviewWorkspaceState
               Text(
                 'No scores or hiring decisions are shown while analysis is pending.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: muted, fontSize: 11, height: 1.5),
+                style: AppType.caption.style(context, color: muted),
               ),
             ],
           ],
@@ -846,19 +838,17 @@ class _CandidateInterviewWorkspaceState
           children: [
             Text(
               title,
-              style: TextStyle(
+              style: AppType.h4.style(
+                context,
                 color: context.themeForeground(_ink),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 5),
             Text(
               subtitle,
-              style: TextStyle(
+              style: AppType.caption.style(
+                context,
                 color: context.themeForeground(_muted),
-                fontSize: 12,
-                height: 1.4,
               ),
             ),
           ],
@@ -879,7 +869,10 @@ class _CandidateInterviewWorkspaceState
     collapsedShape: const Border(),
     title: Text(
       _wrapping ? 'Session details' : 'Connection details',
-      style: TextStyle(color: context.themeForeground(_muted), fontSize: 12),
+      style: AppType.caption.style(
+        context,
+        color: context.themeForeground(_muted),
+      ),
     ),
     children: [
       Padding(
@@ -889,18 +882,17 @@ class _CandidateInterviewWorkspaceState
           children: [
             SelectableText(
               'Session reference: ${widget.interviewId}',
-              style: TextStyle(
+              style: AppType.caption.style(
+                context,
                 color: context.themeForeground(_muted),
-                fontSize: 11,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               lifecycle.notice,
-              style: TextStyle(
+              style: AppType.caption.style(
+                context,
                 color: context.themeForeground(_muted),
-                fontSize: 11,
-                height: 1.6,
               ),
             ),
             if (completionActions != null) ...[
@@ -911,10 +903,9 @@ class _CandidateInterviewWorkspaceState
                     : lifecycle.snapshot?.reportReady == true
                     ? 'Behavioral analysis is available to your recruiter.'
                     : 'Behavioral analysis is processing or unavailable.',
-                style: TextStyle(
+                style: AppType.caption.style(
+                  context,
                   color: context.themeForeground(_muted),
-                  fontSize: 11,
-                  height: 1.6,
                 ),
               ),
               completionActions,
@@ -923,10 +914,9 @@ class _CandidateInterviewWorkspaceState
               const SizedBox(height: 8),
               Text(
                 publisher.notice,
-                style: TextStyle(
+                style: AppType.caption.style(
+                  context,
                   color: context.themeForeground(_muted),
-                  fontSize: 11,
-                  height: 1.6,
                 ),
               ),
               Wrap(
@@ -973,10 +963,9 @@ class _CandidateInterviewWorkspaceState
         const SizedBox(height: 16),
         Text(
           'Your account session changed',
-          style: TextStyle(
+          style: AppType.h3.style(
+            context,
             color: context.themeForeground(_ink),
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 12),
@@ -1013,21 +1002,13 @@ class _CandidateInterviewWorkspaceState
     ),
     child: child,
   );
-  TextStyle _title(BuildContext context, double size) => TextStyle(
-    fontFamily: 'Inter',
-    color: context.themeForeground(_ink),
-    fontSize: size,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -1.1,
-    height: 1.2,
-  );
+  TextStyle _title(BuildContext context, AppType type) =>
+      type.style(context, color: context.themeForeground(_ink));
   Widget _eyebrow(BuildContext context, String text) => Text(
     text,
-    style: TextStyle(
+    style: AppType.caption.style(
+      context,
       color: context.themeForeground(_muted),
-      fontSize: 10,
-      letterSpacing: 1.9,
-      fontWeight: FontWeight.w700,
     ),
   );
   Widget _tag(
@@ -1054,10 +1035,9 @@ class _CandidateInterviewWorkspaceState
           child: Text(
             text,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
+            style: AppType.caption.style(
+              context,
               color: context.themeForeground(color),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
             ),
           ),
         ),

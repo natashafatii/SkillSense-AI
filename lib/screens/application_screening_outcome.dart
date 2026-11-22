@@ -85,9 +85,9 @@ class _ScreeningOutcome extends StatelessWidget {
           const SizedBox(width: 8),
           Flexible(
             child: _copy(
+              context,
               'Assessment ${pending ? 'processing' : _label(evidence?.status, 'pending').toLowerCase()}',
-              size: 12,
-              weight: 600,
+              type: AppType.badge,
             ),
           ),
         ],
@@ -123,16 +123,15 @@ class _ScreeningOutcome extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: ScreeningStyle.title()),
+              Text(title, style: ScreeningStyle.title(context)),
               const SizedBox(height: 4),
-              _copy(description, size: 13),
+              _copy(context, description, type: AppType.caption),
             ],
           ),
         ),
         if (width > 640) ...[const SizedBox(width: 12), status],
       ],
     );
-    final scoreSize = width <= 640 ? 38.0 : 44.0;
     final value = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -141,22 +140,21 @@ class _ScreeningOutcome extends StatelessWidget {
             children: [
               TextSpan(
                 text: score == null ? '—' : _number(score!),
-                style: ScreeningStyle.text(
-                  scoreSize,
-                  weight: 800,
-                  height: 1,
-                  spacing: -.045 * scoreSize,
-                ),
+                style: ScreeningStyle.text(context, AppType.body),
               ),
               TextSpan(
                 text: '  / 100',
-                style: ScreeningStyle.text(13, weight: 600, color: _muted),
+                style: ScreeningStyle.text(
+                  context,
+                  AppType.caption,
+                  color: _muted,
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 6),
-        _copy('Screening match', size: 12, weight: 600),
+        _copy(context, 'Screening match', type: AppType.caption),
       ],
     );
     final gauge = _ScreeningGauge(score: score, threshold: threshold);
@@ -288,19 +286,17 @@ class _ScreeningGauge extends StatelessWidget {
                                   TextSpan(
                                     text: 'Threshold ',
                                     style: ScreeningStyle.text(
-                                      11,
-                                      weight: 500,
+                                      context,
+                                      AppType.caption,
                                       color: const Color(0xccffffff),
-                                      height: 1.2,
                                     ),
                                   ),
                                   TextSpan(
                                     text: _number(threshold!),
                                     style: ScreeningStyle.text(
-                                      11,
-                                      weight: 700,
+                                      context,
+                                      AppType.caption,
                                       color: Colors.white,
-                                      height: 1.2,
                                     ),
                                   ),
                                 ],
@@ -321,10 +317,10 @@ class _ScreeningGauge extends StatelessWidget {
             children: [
               for (final tick in ['0', '25', '50', '75', '100'])
                 _copy(
+                  context,
                   tick,
-                  size: 11,
-                  weight: 600,
                   color: const Color(0xff5b6a86),
+                  type: AppType.caption,
                 ),
             ],
           ),
@@ -335,17 +331,17 @@ class _ScreeningGauge extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _copy(label, size: 12, weight: 600),
+                _copy(context, label, type: AppType.caption),
                 if (note.isNotEmpty)
                   _copy(
+                    context,
                     note,
-                    size: 12,
-                    weight: 700,
                     color: delta == null
                         ? _muted
                         : delta < 0
                         ? const Color(0xff334a7a)
                         : _green,
+                    type: AppType.caption,
                   ),
               ],
             ),

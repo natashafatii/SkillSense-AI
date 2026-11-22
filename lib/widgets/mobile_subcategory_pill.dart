@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 
@@ -35,10 +36,7 @@ class MobileSubcategoryPill extends StatelessWidget {
         ),
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        textStyle: TextStyle(
-          fontSize: 12,
-          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-        ),
+        textStyle: AppType.button.style(context),
       ),
       child: Text(label, maxLines: 1),
     ),

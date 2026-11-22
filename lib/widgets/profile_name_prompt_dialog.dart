@@ -1,6 +1,6 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 import '../services/auth_service.dart';
 
@@ -68,22 +68,22 @@ class _ProfileNamePromptDialogState extends State<ProfileNamePromptDialog> {
             children: [
               Text(
                 'Complete your profile',
-                style: GoogleFonts.spaceGrotesk(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                style: AppType.h2.style(
+                  context,
                   color: context.themeForeground(AppColors.textDark),
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Please enter your name to continue.',
-                style: GoogleFonts.publicSans(
-                  fontSize: 14,
+                style: AppType.bodySm.style(
+                  context,
                   color: context.themeForeground(AppColors.textGrey),
                 ),
               ),
               const SizedBox(height: 24),
               TextFormField(
+                style: AppType.body.style(context),
                 controller: _firstNameController,
                 textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
@@ -97,6 +97,7 @@ class _ProfileNamePromptDialogState extends State<ProfileNamePromptDialog> {
               ),
               const SizedBox(height: 16),
               TextFormField(
+                style: AppType.body.style(context),
                 controller: _lastNameController,
                 textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
@@ -112,10 +113,7 @@ class _ProfileNamePromptDialogState extends State<ProfileNamePromptDialog> {
                 const SizedBox(height: 16),
                 Text(
                   _error!,
-                  style: GoogleFonts.publicSans(
-                    color: Colors.red,
-                    fontSize: 13,
-                  ),
+                  style: AppType.caption.style(context, color: Colors.red),
                 ),
               ],
               const SizedBox(height: 24),
@@ -128,7 +126,8 @@ class _ProfileNamePromptDialogState extends State<ProfileNamePromptDialog> {
                         : () => Navigator.of(context).pop(),
                     child: Text(
                       'Skip for now',
-                      style: GoogleFonts.publicSans(
+                      style: AppType.button.style(
+                        context,
                         color: context.themeForeground(AppColors.textGrey),
                       ),
                     ),

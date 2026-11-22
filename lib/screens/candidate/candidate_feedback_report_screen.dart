@@ -1,6 +1,7 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../../widgets/candidate_feedback_dashboard.dart';
 import '../../widgets/candidate_feedback_visuals.dart';
 import '../../models/candidate_feedback.dart';
@@ -42,8 +43,6 @@ class _CandidateFeedbackReportScreenState
   String? _selectedInterviewId;
   final _practised = <(String, int), Set<String>>{};
   final _reportAnchor = GlobalKey();
-  final _search = TextEditingController();
-  final _searchFocus = FocusNode();
 
   @override
   void initState() {
@@ -181,8 +180,6 @@ class _CandidateFeedbackReportScreenState
   void dispose() {
     _request++;
     _refresh?.cancel();
-    _search.dispose();
-    _searchFocus.dispose();
     interviewMediaRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     SessionScope.invalidations.removeListener(_clearSession);
@@ -200,48 +197,23 @@ class _CandidateFeedbackReportScreenState
           brightness: Theme.of(context).brightness,
         ),
       ),
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-              _searchFocus.requestFocus,
-          const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
-              _searchFocus.requestFocus,
-        },
-        child: Focus(
-          autofocus: true,
-          child: CandidateScaffold(
-            currentRoute: '/candidate/feedback-report',
-            body: SafeArea(
-              child: Column(
-                children: [
-                  RecruiterTopBar(
-                    pageTitle: 'Feedback',
-                    candidate: true,
-                    showTrailingButton: true,
-                    trailingIcon: Icons.refresh_rounded,
-                    trailingTooltip: 'Refresh feedback',
-                    onTrailingTap: () {
-                      if (!_loading) _load(keepVisible: true);
-                    },
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                    child: TextField(
-                      controller: _search,
-                      focusNode: _searchFocus,
-                      onChanged: (_) => setState(() {}),
-                      decoration: const InputDecoration(
-                        hintText: 'Search feedback',
-                        prefixIcon: Icon(Icons.search_rounded),
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  Expanded(child: FeedbackBackdrop(child: _body())),
-                ],
+      child: CandidateScaffold(
+        currentRoute: '/candidate/feedback-report',
+        body: SafeArea(
+          child: Column(
+            children: [
+              RecruiterTopBar(
+                pageTitle: 'Feedback',
+                candidate: true,
+                showTrailingButton: true,
+                trailingIcon: Icons.refresh_rounded,
+                trailingTooltip: 'Refresh feedback',
+                onTrailingTap: () {
+                  if (!_loading) _load(keepVisible: true);
+                },
               ),
-            ),
+              Expanded(child: FeedbackBackdrop(child: _body())),
+            ],
           ),
         ),
       ),
@@ -377,8 +349,7 @@ class _CandidateFeedbackReportScreenState
     return ChoiceChip(
       label: Text(label),
       labelStyle: palette.text(
-        size: 14,
-        weight: selected ? FontWeight.w600 : FontWeight.w500,
+        type: AppType.bodySm,
         color: selected ? palette.accent : palette.ink,
       ),
       labelPadding: const EdgeInsets.symmetric(horizontal: 6),
@@ -455,7 +426,7 @@ class _CandidateFeedbackReportScreenState
                       ? Icon(Icons.remove, size: 13, color: palette.meta)
                       : Text(
                           score.round().toString(),
-                          style: palette.number(size: 14),
+                          style: palette.number(type: AppType.numeric),
                         ),
                 ),
                 const SizedBox(width: 14),
@@ -465,11 +436,7 @@ class _CandidateFeedbackReportScreenState
                     children: [
                       Text(
                         row.roleTitle ?? date ?? 'Interview attempt',
-                        style: palette.text(
-                          size: 15,
-                          weight: FontWeight.w600,
-                          height: 1.35,
-                        ),
+                        style: palette.text(type: AppType.h4),
                       ),
                       const SizedBox(height: 4),
                       Wrap(
@@ -611,7 +578,6 @@ class _CandidateFeedbackReportScreenState
         if (row.roleTitle case final role?) role,
         if (date != null) date.replaceAll(' ', '\u00a0'),
       ].join(' · '),
-      searchQuery: _search.text,
       practised: _practised[key] ?? const {},
       onPractised: (id, value) {
         setState(() {
@@ -661,7 +627,7 @@ class _CandidateFeedbackReportScreenState
                 Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: palette.text(size: 20, weight: FontWeight.w600),
+                  style: palette.text(type: AppType.h3),
                 ),
                 if (description != null) ...[
                   const SizedBox(height: 8),
@@ -702,7 +668,7 @@ class _CandidateFeedbackReportScreenState
         expandedAlignment: Alignment.centerLeft,
         title: Text(
           report == null ? 'Attempt details' : 'Report details',
-          style: palette.text(size: 15, weight: FontWeight.w700),
+          style: palette.text(type: AppType.h4),
         ),
         children: [
           if (report != null && released != null) ...[

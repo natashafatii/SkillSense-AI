@@ -1,14 +1,20 @@
 part of 'candidate_home_screen.dart';
 
 class _HomeColors {
-  const _HomeColors(this.dark);
+  const _HomeColors(this.dark, this.typeStep);
+
+  final TypeStep typeStep;
+
+  TextStyle text(AppType type, {Color? color}) =>
+      type.at(typeStep, color: color ?? ink);
 
   final bool dark;
   Color get canvas => dark ? const Color(0xff0a111f) : const Color(0xfff4f6fb);
   Color get card => dark ? const Color(0xff111a2c) : Colors.white;
   Color get ink => dark ? const Color(0xffeef2f9) : const Color(0xff0f172a);
   Color get body => dark ? const Color(0xffb4bfd1) : const Color(0xff46566e);
-  Color get muted => dark ? const Color(0xffa0aec3) : const Color(0xff62738e);
+  Color get muted =>
+      dark ? const Color(0xffa0aec3) : TypographyColors.secondary;
   Color get border => dark ? const Color(0xff26334a) : const Color(0xffe3e8f0);
   Color get track => dark ? const Color(0xff26334a) : const Color(0xffdfe5ee);
   Color get teal => dark ? const Color(0xff2fc4a6) : const Color(0xff0fb89b);
@@ -24,22 +30,6 @@ class _HomeColors {
   Color get amberSoft =>
       dark ? const Color(0xff33260e) : const Color(0xfffff3dc);
 }
-
-TextStyle _homeText(
-  double size, {
-  Color? color,
-  FontWeight weight = FontWeight.w400,
-  bool display = false,
-  double spacing = 0,
-  double height = 1.42,
-}) => TextStyle(
-  fontFamily: display ? 'Space Grotesk' : 'Inter',
-  color: color,
-  fontSize: size,
-  fontWeight: weight,
-  letterSpacing: spacing,
-  height: height,
-);
 
 class _HomeDashboard extends StatelessWidget {
   const _HomeDashboard({
@@ -98,18 +88,27 @@ class _HomeDashboard extends StatelessWidget {
   List<({String label, bool complete})> _profileReadinessItems() {
     final current = profile;
     if (current == null) return const [];
-    final fullName = [current.user.firstName, current.user.lastName]
-        .where((part) => (part ?? '').trim().isNotEmpty)
-        .join(' ')
-        .trim();
+    final fullName = [
+      current.user.firstName,
+      current.user.lastName,
+    ].where((part) => (part ?? '').trim().isNotEmpty).join(' ').trim();
     return [
       (label: 'Full name', complete: fullName.isNotEmpty),
       (label: 'Email address', complete: current.user.email.trim().isNotEmpty),
       (label: 'Add a phone number', complete: current.phone.trim().isNotEmpty),
       (label: 'Add a location', complete: current.location.trim().isNotEmpty),
-      (label: 'Add a LinkedIn link', complete: current.linkedinUrl.trim().isNotEmpty),
-      (label: 'Add a GitHub link', complete: current.githubUrl.trim().isNotEmpty),
-      (label: 'Add a portfolio link', complete: current.portfolioUrl.trim().isNotEmpty),
+      (
+        label: 'Add a LinkedIn link',
+        complete: current.linkedinUrl.trim().isNotEmpty,
+      ),
+      (
+        label: 'Add a GitHub link',
+        complete: current.githubUrl.trim().isNotEmpty,
+      ),
+      (
+        label: 'Add a portfolio link',
+        complete: current.portfolioUrl.trim().isNotEmpty,
+      ),
     ];
   }
 
@@ -204,7 +203,7 @@ class _HomeDashboard extends StatelessWidget {
           onboarding
               ? 'Welcome to SkillSense${first.isEmpty ? '' : ', $first'}'
               : '$dayPart${first.isEmpty ? '' : ', $first'}',
-          style: pageHeadingStyle(context),
+          style: context.text.headlineLarge,
         ),
       ),
       Text(
@@ -217,7 +216,7 @@ class _HomeDashboard extends StatelessWidget {
             : decisionCount > 0
             ? 'You have $decisionCount ${decisionCount == 1 ? 'decision' : 'decisions'} ready to review.'
             : 'Track your applications and explore open roles.',
-        style: _homeText(14, color: colors.body),
+        style: colors.text(AppType.bodySm, color: colors.body),
       ),
     ], gap: 4);
   }
@@ -260,19 +259,15 @@ class _HomeDashboard extends StatelessWidget {
                         backgroundColor: Colors.white,
                         child: Text(
                           '${index + 1}',
-                          style: _homeText(
-                            12,
+                          style: colors.text(
+                            AppType.caption,
                             color: const Color(0xff0a6b57),
-                            weight: FontWeight.w700,
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Flexible(
-                        child: Text(
-                          label,
-                          style: _homeText(13, weight: FontWeight.w500),
-                        ),
+                        child: Text(label, style: colors.text(AppType.caption)),
                       ),
                     ],
                   ),
@@ -297,7 +292,7 @@ class _HomeDashboard extends StatelessWidget {
             _featureTitle('No upcoming interviews', compact),
             Text(
               'When a recruiter invites you, your interview shows up here with a countdown and a one-tap way to join.',
-              style: _homeText(14, color: colors.body, height: 1.55),
+              style: colors.text(AppType.numeric, color: colors.body),
             ),
           ], gap: 7);
           final browse = _button(
@@ -364,11 +359,7 @@ class _HomeDashboard extends StatelessWidget {
             if (company?.isNotEmpty == true) company!,
             'AI-guided video interview',
           ].join(' · '),
-          style: _homeText(
-            14,
-            color: const Color(0xddffffff),
-            weight: FontWeight.w500,
-          ),
+          style: colors.text(AppType.bodySm, color: Colors.white),
         ),
         if (local != null)
           Padding(
@@ -402,17 +393,13 @@ class _HomeDashboard extends StatelessWidget {
               children: [
                 Text(
                   next.isFlexible ? 'Start by · Time remaining' : 'Starts in',
-                  style: _homeText(
-                    12,
-                    color: const Color(0xddffffff),
-                    weight: FontWeight.w600,
-                  ),
+                  style: colors.text(AppType.caption, color: Colors.white),
                 ),
                 Text(
                   '${minutes ~/ 1440}d ${minutes ~/ 60 % 24}h ${minutes % 60}m',
                   key: const Key('candidate-home-interview-countdown'),
                   textAlign: TextAlign.center,
-                  style: _homeText(18, weight: FontWeight.w700, spacing: -.3),
+                  style: colors.text(AppType.metric),
                 ),
               ],
             ),
@@ -429,15 +416,7 @@ class _HomeDashboard extends StatelessWidget {
 
   Widget _featureTitle(String text, bool compact) => Semantics(
     header: true,
-    child: Text(
-      text,
-      style: _homeText(
-        compact ? 21 : 24,
-        weight: FontWeight.w700,
-        spacing: -.5,
-        height: 1.2,
-      ),
-    ),
+    child: Text(text, style: colors.text(AppType.h2)),
   );
 
   Widget _eyebrow(String text, {bool featured = false, bool dot = false}) =>
@@ -456,11 +435,9 @@ class _HomeDashboard extends StatelessWidget {
           Expanded(
             child: Text(
               text.toUpperCase(),
-              style: _homeText(
-                featured ? 12 : 11,
-                color: featured ? const Color(0xe0ffffff) : colors.muted,
-                spacing: 1.1,
-                weight: FontWeight.w700,
+              style: colors.text(
+                AppType.overline,
+                color: featured ? Colors.white : colors.muted,
               ),
             ),
           ),
@@ -470,11 +447,9 @@ class _HomeDashboard extends StatelessWidget {
   Widget _interviewMeta(IconData icon, String label) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(icon, size: 17, color: const Color(0xddffffff)),
+      Icon(icon, size: 17, color: Colors.white),
       const SizedBox(width: 8),
-      Flexible(
-        child: Text(label, style: _homeText(13, weight: FontWeight.w500)),
-      ),
+      Flexible(child: Text(label, style: colors.text(AppType.caption))),
     ],
   );
 
@@ -573,7 +548,7 @@ class _HomeDashboard extends StatelessWidget {
                           : _profileComplete
                           ? 'Your saved profile is complete.'
                           : 'Complete your profile so recruiters can reach you.'),
-                  style: _homeText(13, color: colors.body, height: 1.55),
+                  style: colors.text(AppType.caption, color: colors.body),
                 ),
               ], gap: 4),
             ),
@@ -609,11 +584,7 @@ class _HomeDashboard extends StatelessWidget {
                 ),
                 child: Text(
                   '+$moreIncomplete more',
-                  style: _homeText(
-                    12.5,
-                    color: colors.tealInk,
-                    weight: FontWeight.w600,
-                  ),
+                  style: colors.text(AppType.button, color: colors.tealInk),
                 ),
               ),
             ),
@@ -655,7 +626,7 @@ class _HomeDashboard extends StatelessWidget {
                   Text(
                     '$completion%',
                     key: const Key('candidate-profile-strength-value'),
-                    style: _homeText(19, weight: FontWeight.w700, height: 1.1),
+                    style: colors.text(AppType.h3),
                   ),
                 ],
               ),
@@ -688,9 +659,7 @@ class _HomeDashboard extends StatelessWidget {
             color: complete ? colors.mint : null,
           ),
           child: Icon(
-            complete
-                ? Icons.check_rounded
-                : Icons.radio_button_unchecked,
+            complete ? Icons.check_rounded : Icons.radio_button_unchecked,
             size: complete ? 14 : 19,
             color: complete ? colors.tealInk : colors.muted,
           ),
@@ -699,10 +668,9 @@ class _HomeDashboard extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: _homeText(
-              14,
+            style: colors.text(
+              AppType.bodySm,
               color: complete ? colors.body : colors.ink,
-              weight: complete ? FontWeight.w500 : FontWeight.w600,
             ),
           ),
         ),
@@ -717,11 +685,7 @@ class _HomeDashboard extends StatelessWidget {
             ),
             child: Text(
               'Add',
-              style: _homeText(
-                13.5,
-                color: colors.tealInk,
-                weight: FontWeight.w600,
-              ),
+              style: colors.text(AppType.button, color: colors.tealInk),
             ),
           ),
       ],
@@ -809,14 +773,14 @@ class _HomeDashboard extends StatelessWidget {
           app.jobTitle,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: _homeText(14.5, weight: FontWeight.w600),
+          style: colors.text(AppType.h4),
         ),
       if (app.jobCompany.trim().isNotEmpty)
         Text(
           app.jobCompany,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: _homeText(13, color: colors.muted),
+          style: colors.text(AppType.caption, color: colors.muted),
         ),
     ], gap: 0);
     final badge = ConstrainedBox(
@@ -834,7 +798,7 @@ class _HomeDashboard extends StatelessWidget {
                   ? 'See your result'
                   : 'Awaiting decision',
               textAlign: TextAlign.end,
-              style: _homeText(12.5, color: colors.muted),
+              style: colors.text(AppType.caption, color: colors.muted),
             ),
           ],
         ],
@@ -944,10 +908,9 @@ class _HomeDashboard extends StatelessWidget {
               Text(
                 label,
                 textAlign: TextAlign.center,
-                style: _homeText(
-                  11,
+                style: colors.text(
+                  AppType.caption,
                   color: index <= step ? colors.ink : colors.muted,
-                  weight: index <= step ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
             ],
@@ -975,7 +938,7 @@ class _HomeDashboard extends StatelessWidget {
         else if (jobs.isEmpty)
           Text(
             'No open jobs to display.',
-            style: _homeText(13, color: colors.muted),
+            style: colors.text(AppType.caption, color: colors.muted),
           )
         else
           _stack([
@@ -995,7 +958,7 @@ class _HomeDashboard extends StatelessWidget {
             children: [
               Text(
                 'Upload your resume to see matches.',
-                style: _homeText(12, color: colors.muted),
+                style: colors.text(AppType.caption, color: colors.muted),
               ),
               _link('Upload resume', onResumes),
             ],
@@ -1044,14 +1007,17 @@ class _HomeDashboard extends StatelessWidget {
                       job.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _homeText(14.5, weight: FontWeight.w600),
+                      style: colors.text(AppType.h4),
                     ),
                     if (job.recruiterCompany.trim().isNotEmpty)
                       Text(
                         job.recruiterCompany,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _homeText(13, color: colors.muted),
+                        style: colors.text(
+                          AppType.caption,
+                          color: colors.muted,
+                        ),
                       ),
                     if (tags.isNotEmpty)
                       Padding(
@@ -1075,7 +1041,10 @@ class _HomeDashboard extends StatelessWidget {
                                   tag,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: _homeText(12, color: colors.body),
+                                  style: colors.text(
+                                    AppType.caption,
+                                    color: colors.body,
+                                  ),
                                 ),
                               ),
                           ],
@@ -1099,10 +1068,7 @@ class _HomeDashboard extends StatelessWidget {
 
   Widget _title(String text) => Semantics(
     header: true,
-    child: Text(
-      text,
-      style: _homeText(16, weight: FontWeight.w600, height: 1.25),
-    ),
+    child: Text(text, style: colors.text(AppType.h4)),
   );
 
   Widget _heading(String title, String action, VoidCallback onPressed) => Row(
@@ -1120,7 +1086,7 @@ class _HomeDashboard extends StatelessWidget {
           padding: const EdgeInsets.only(left: 8),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           foregroundColor: colors.blue,
-          textStyle: _homeText(12, weight: FontWeight.w600),
+          textStyle: colors.text(AppType.button),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1151,7 +1117,7 @@ class _HomeDashboard extends StatelessWidget {
       shape: white
           ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
           : const StadiumBorder(),
-      textStyle: _homeText(13, weight: FontWeight.w700),
+      textStyle: colors.text(AppType.button),
     );
     return FilledButton(
       onPressed: callback,
@@ -1180,7 +1146,7 @@ class _HomeDashboard extends StatelessWidget {
       text,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
-      style: _homeText(12, color: ink, weight: FontWeight.w700),
+      style: colors.text(AppType.caption, color: ink),
     ),
   );
 
@@ -1202,13 +1168,13 @@ class _HomeDashboard extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: _homeText(15, weight: FontWeight.w600),
+              style: colors.text(AppType.h4),
             ),
             const SizedBox(height: 4),
             Text(
               body,
               textAlign: TextAlign.center,
-              style: _homeText(13, color: colors.body),
+              style: colors.text(AppType.caption, color: colors.body),
             ),
             const SizedBox(height: 10),
             action,
@@ -1219,7 +1185,10 @@ class _HomeDashboard extends StatelessWidget {
   Widget _error(String message) => Row(
     children: [
       Expanded(
-        child: Text(message, style: _homeText(13, color: colors.body)),
+        child: Text(
+          message,
+          style: colors.text(AppType.caption, color: colors.body),
+        ),
       ),
       _link('Retry', onRetry),
     ],
@@ -1253,7 +1222,7 @@ class _HomeDashboard extends StatelessWidget {
       ),
       child: Material(
         color: colors.card,
-        textStyle: _homeText(14, color: colors.ink),
+        textStyle: colors.text(AppType.bodySm, color: colors.ink),
         shape: RoundedRectangleBorder(
           borderRadius: radius,
           side: BorderSide(color: colors.border),

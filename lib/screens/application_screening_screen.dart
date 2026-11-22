@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:flutter/services.dart';
 import '../models/resume_detail.dart';
 import '../models/screening_assessment.dart';

@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../constants/adaptive_colors.dart';
@@ -11,7 +12,6 @@ import '../../services/job_service.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/page_heading_style.dart';
 part 'analytics_overview.dart';
 
 const _edge = Color(0xFFDFE6F2),
@@ -219,20 +219,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         : '${((durations[(durations.length - 1) ~/ 2] + durations[durations.length ~/ 2]) / 2).toStringAsFixed(1)} days';
   }
 
-  TextStyle _style(
-    double size, {
-    Color color = _text,
-    bool bold = false,
-    bool display = false,
-  }) => TextStyle(
-    fontFamily: display ? 'Space Grotesk' : 'Inter',
-    fontSize: size,
-    height: 1.3,
-    color: context.themeForeground(color),
-    fontWeight: bold
-        ? (display ? FontWeight.w700 : FontWeight.w600)
-        : FontWeight.w400,
-  );
+  TextStyle _style(AppType type, {Color color = _text}) =>
+      type.style(context, color: context.themeForeground(color));
   String _date(DateTime d) =>
       '${d.day} ${const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.month - 1]}';
   void _clearDetails() {
@@ -265,7 +253,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(_error!, style: _style(13)),
+                          Text(_error!, style: _style(AppType.caption)),
                           TextButton(
                             onPressed: _load,
                             child: const Text('Retry'),
@@ -285,158 +273,147 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _content(bool mobile) => SingleChildScrollView(
-    child: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1450),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            (MediaQuery.sizeOf(context).width * .04).clamp(16.0, 52.0),
-            27,
-            (MediaQuery.sizeOf(context).width * .04).clamp(16.0, 52.0),
-            52,
-          ),
-          child: LayoutBuilder(
-            builder: (context, box) {
-              final narrow = box.maxWidth < 690;
-              final completed =
-                  _injected?.interviewsRun ??
-                  _attempts.where(_completed).length;
-              final booked = _attempts.length;
-              final heading = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Recruiting analytics',
-                    style: pageHeadingStyle(context),
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        (MediaQuery.sizeOf(context).width * .04).clamp(16.0, 52.0),
+        27,
+        (MediaQuery.sizeOf(context).width * .04).clamp(16.0, 52.0),
+        52,
+      ),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final narrow = box.maxWidth < 690;
+          final completed =
+              _injected?.interviewsRun ?? _attempts.where(_completed).length;
+          final booked = _attempts.length;
+          final heading = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Recruiting analytics', style: context.text.headlineLarge),
+              const SizedBox(height: 8),
+              Text(
+                '${_date(_start)}–${_date(_end.subtract(const Duration(days: 1)))} ${_end.subtract(const Duration(days: 1)).year}',
+                style: _style(AppType.caption, color: _muted),
+              ),
+            ],
+          );
+          final filters = Row(
+            children: [
+              Expanded(
+                child: _filter<String>(
+                  'Job',
+                  _job == null
+                      ? 'All jobs'
+                      : _jobs.firstWhere((j) => j.id == _job).title,
+                  Icons.work_outline,
+                  [
+                    const PopupMenuItem(value: '', child: Text('All jobs')),
+                    for (final j in _jobs)
+                      PopupMenuItem(value: j.id, child: Text(j.title)),
+                  ],
+                  (v) => setState(() {
+                    _job = v == '' ? null : v;
+                    _clearDetails();
+                  }),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _filter<int>(
+                  'Date range',
+                  'Last $_weeks weeks',
+                  Icons.calendar_today_outlined,
+                  [
+                    for (final w in [2, 4, 8])
+                      PopupMenuItem(value: w, child: Text('Last $w weeks')),
+                  ],
+                  (v) => setState(() {
+                    _weeks = v;
+                    _clearDetails();
+                  }),
+                ),
+              ),
+            ],
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (box.maxWidth < 1000) ...[
+                heading,
+                const SizedBox(height: 13),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(width: 396, child: filters),
+                ),
+              ] else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(child: heading),
+                    SizedBox(width: 396, child: filters),
+                  ],
+                ),
+              const SizedBox(height: 19),
+              _grid(box.maxWidth, narrow ? 2 : 4, [
+                _kpi(
+                  'Applications received',
+                  '${_funnel.firstOrNull?.count ?? 0}',
+                  'Applications in this period',
+                  Icons.people_outline,
+                ),
+                _kpi(
+                  'Interviews completed',
+                  '$completed',
+                  'Completed interview attempts',
+                  Icons.mic_none,
+                ),
+                _kpi(
+                  'Interview completion',
+                  booked == 0 ? '—' : '${(completed / booked * 100).round()}%',
+                  '$completed of $booked booked',
+                  Icons.check_circle_outline,
+                  highlight: true,
+                ),
+                _kpi(
+                  'Median time to decision',
+                  _median,
+                  'Application to first post-interview decision',
+                  Icons.schedule,
+                ),
+              ]),
+              const SizedBox(height: 14),
+              if (narrow) ...[
+                _pipeline(),
+                const SizedBox(height: 14),
+                _activity(),
+              ] else
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(flex: 100, child: _pipeline()),
+                      const SizedBox(width: 14),
+                      Expanded(flex: 115, child: _activity()),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${_date(_start)}–${_date(_end.subtract(const Duration(days: 1)))} ${_end.subtract(const Duration(days: 1)).year}',
-                    style: _style(13, color: _muted),
-                  ),
-                ],
-              );
-              final filters = Row(
-                children: [
-                  Expanded(
-                    child: _filter<String>(
-                      'Job',
-                      _job == null
-                          ? 'All jobs'
-                          : _jobs.firstWhere((j) => j.id == _job).title,
-                      Icons.work_outline,
-                      [
-                        const PopupMenuItem(value: '', child: Text('All jobs')),
-                        for (final j in _jobs)
-                          PopupMenuItem(value: j.id, child: Text(j.title)),
-                      ],
-                      (v) => setState(() {
-                        _job = v == '' ? null : v;
-                        _clearDetails();
-                      }),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _filter<int>(
-                      'Date range',
-                      'Last $_weeks weeks',
-                      Icons.calendar_today_outlined,
-                      [
-                        for (final w in [2, 4, 8])
-                          PopupMenuItem(value: w, child: Text('Last $w weeks')),
-                      ],
-                      (v) => setState(() {
-                        _weeks = v;
-                        _clearDetails();
-                      }),
-                    ),
-                  ),
-                ],
-              );
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (box.maxWidth < 1000) ...[
-                    heading,
-                    const SizedBox(height: 13),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: SizedBox(width: 396, child: filters),
-                    ),
-                  ] else
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(child: heading),
-                        SizedBox(width: 396, child: filters),
-                      ],
-                    ),
-                  const SizedBox(height: 19),
-                  _grid(box.maxWidth, narrow ? 2 : 4, [
-                    _kpi(
-                      'Applications received',
-                      '${_funnel.firstOrNull?.count ?? 0}',
-                      'Applications in this period',
-                      Icons.people_outline,
-                    ),
-                    _kpi(
-                      'Interviews completed',
-                      '$completed',
-                      'Completed interview attempts',
-                      Icons.mic_none,
-                    ),
-                    _kpi(
-                      'Interview completion',
-                      booked == 0
-                          ? '—'
-                          : '${(completed / booked * 100).round()}%',
-                      '$completed of $booked booked',
-                      Icons.check_circle_outline,
-                      highlight: true,
-                    ),
-                    _kpi(
-                      'Median time to decision',
-                      _median,
-                      'Application to first post-interview decision',
-                      Icons.schedule,
-                    ),
-                  ]),
-                  const SizedBox(height: 14),
-                  if (narrow) ...[
-                    _pipeline(),
-                    const SizedBox(height: 14),
-                    _activity(),
-                  ] else
-                    IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(flex: 100, child: _pipeline()),
-                          const SizedBox(width: 14),
-                          Expanded(flex: 115, child: _activity()),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 14),
-                  if (box.maxWidth < 850) ...[
-                    _roles(),
-                    const SizedBox(height: 14),
-                    _distribution(),
-                  ] else
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: _roles()),
-                        const SizedBox(width: 14),
-                        Expanded(child: _distribution()),
-                      ],
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
+                ),
+              const SizedBox(height: 14),
+              if (box.maxWidth < 850) ...[
+                _roles(),
+                const SizedBox(height: 14),
+                _distribution(),
+              ] else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _roles()),
+                    const SizedBox(width: 14),
+                    Expanded(child: _distribution()),
+                  ],
+                ),
+            ],
+          );
+        },
       ),
     ),
   );
@@ -466,12 +443,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(caption, style: _style(11, color: _muted)),
+                Text(caption, style: _style(AppType.caption, color: _muted)),
                 Text(
                   value,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: _style(13, bold: true),
+                  style: _style(AppType.caption),
                 ),
               ],
             ),
@@ -558,7 +535,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               Expanded(
                 child: Text(
                   label,
-                  style: _style(12, color: _muted, bold: true),
+                  style: _style(AppType.caption, color: _muted),
                 ),
               ),
               const SizedBox(width: 4),
@@ -566,15 +543,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ],
           ),
           const SizedBox(height: 7),
-          Text(
-            value,
-            style: _style(
-              34,
-              bold: true,
-            ).copyWith(height: 1.14, letterSpacing: -1.2),
-          ),
+          Text(value, style: _style(AppType.metric)),
           const SizedBox(height: 8),
-          Text(note, style: _style(12, color: _muted).copyWith(height: 1.45)),
+          Text(note, style: _style(AppType.caption, color: _muted)),
         ],
       ),
     ),
@@ -600,18 +571,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: _style(
-                        18,
-                        bold: true,
-                        display: true,
-                      ).copyWith(letterSpacing: -.45, height: 1.15),
-                    ),
+                    Text(title, style: _style(AppType.h3)),
                     const SizedBox(height: 5),
                     Text(
                       subtitle,
-                      style: _style(12, color: _muted).copyWith(height: 1.45),
+                      style: _style(AppType.caption, color: _muted),
                     ),
                   ],
                 ),
@@ -648,7 +612,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       border: Border.all(color: context.themeOutline(_edge)),
       borderRadius: BorderRadius.circular(9),
     ),
-    child: Text(text, style: _style(12, color: _muted).copyWith(height: 1.55)),
+    child: Text(text, style: _style(AppType.caption, color: _muted)),
   );
   Widget _pipeline() {
     final steps = _funnel;
@@ -666,7 +630,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: Text(
                   'Count',
                   textAlign: TextAlign.right,
-                  style: _style(11, color: _muted),
+                  style: _style(AppType.numeric, color: _muted),
                 ),
               ),
               const SizedBox(width: 8),
@@ -675,7 +639,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: Text(
                   'From prior',
                   textAlign: TextAlign.right,
-                  style: _style(11, color: _muted),
+                  style: _style(AppType.caption, color: _muted),
                 ),
               ),
             ],
@@ -694,7 +658,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   children: [
                     SizedBox(
                       width: 90,
-                      child: Text(stage.label, style: _style(12, bold: true)),
+                      child: Text(stage.label, style: _style(AppType.caption)),
                     ),
                     Expanded(
                       child: ClipRRect(
@@ -713,7 +677,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       child: Text(
                         '${stage.count}',
                         textAlign: TextAlign.right,
-                        style: _style(12, bold: true),
+                        style: _style(AppType.numeric),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -724,7 +688,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             ? '—'
                             : '${(stage.count / steps[index - 1].count * 100).round()}%',
                         textAlign: TextAlign.right,
-                        style: _style(12, color: _muted, bold: true),
+                        style: _style(AppType.numeric, color: _muted),
                       ),
                     ),
                   ],
@@ -802,7 +766,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ),
       ),
       const SizedBox(width: 5),
-      Text(text, style: _style(11, color: _muted)),
+      Text(text, style: _style(AppType.caption, color: _muted)),
     ],
   );
   Widget _plot(
@@ -828,7 +792,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   for (final n in [maximum, maximum ~/ 2, 0])
-                    Text('$n', style: _style(11, color: _muted)),
+                    Text('$n', style: _style(AppType.caption, color: _muted)),
                 ],
               ),
             ),
@@ -889,7 +853,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                   child: Center(
                                     child: Text(
                                       bin.$1,
-                                      style: _style(10, color: _muted),
+                                      style: _style(
+                                        AppType.caption,
+                                        color: _muted,
+                                      ),
                                       maxLines: 1,
                                     ),
                                   ),
@@ -942,9 +909,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               columnSpacing: 14,
               headingRowHeight: 32,
               dataRowMinHeight: 55,
-              dataRowMaxHeight: 55,
-              headingTextStyle: _style(11, color: _muted, bold: true),
-              dataTextStyle: _style(12, bold: true),
+              dataRowMaxHeight: double.infinity,
+              headingTextStyle: _style(AppType.caption, color: _muted),
+              dataTextStyle: _style(AppType.caption),
               dividerThickness: .6,
               columns: const [
                 DataColumn(label: Text('Job')),
@@ -975,7 +942,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 _job = null;
                 _clearDetails();
               }),
-              child: Text('Show all jobs', style: _style(11, color: _accent)),
+              child: Text(
+                'Show all jobs',
+                style: _style(AppType.button, color: _accent),
+              ),
             ),
     );
   }
@@ -991,21 +961,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         DataCell(
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 230),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  j.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: _style(13, bold: true),
-                ),
-                Text(
-                  '${DateTime.now().difference(j.createdAt).inDays}d open',
-                  style: _style(12, color: _muted),
-                ),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    j.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _style(AppType.h4),
+                  ),
+                  Text(
+                    '${DateTime.now().difference(j.createdAt).inDays}d open',
+                    style: _style(AppType.caption, color: _muted),
+                  ),
+                ],
+              ),
             ),
           ),
           onTap: () => setState(() {
@@ -1023,7 +996,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               const SizedBox(width: 6),
               Text(
                 pending > 0 ? '$pending awaiting' : 'Up to date',
-                style: _style(12, color: _muted),
+                style: _style(AppType.caption, color: _muted),
               ),
             ],
           ),

@@ -47,6 +47,8 @@ class InterviewLifecycleController extends ChangeNotifier {
     if (initialSnapshot != null) _apply(initialSnapshot);
     SessionScope.invalidations.addListener(_logout);
   }
+  void Function(bool completing)? beforeLocalMediaStop;
+
   final InterviewSessionIdentity identity;
   final InterviewMediaController media;
   final CandidatePublisherController publisher;
@@ -654,8 +656,7 @@ class InterviewLifecycleController extends ChangeNotifier {
     _pollTimer?.cancel();
     if (!isCurrent ||
         _paused ||
-        (_snapshot?.completed == true &&
-            _snapshot?.reportReady == true)) {
+        (_snapshot?.completed == true && _snapshot?.reportReady == true)) {
       return;
     }
     if (_state == InterviewLifecycleState.live && !_finishWanted) {
@@ -770,6 +771,9 @@ class InterviewLifecycleController extends ChangeNotifier {
   }
 
   void _localStop() {
+    beforeLocalMediaStop?.call(
+      _finishWanted || _snapshot?.audioEndedAt != null,
+    );
     _microphoneMuted = false;
     _transcript = const [];
     _agentTurn = false;

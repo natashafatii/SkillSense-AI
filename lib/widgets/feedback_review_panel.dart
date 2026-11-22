@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../models/recruitment_evidence.dart';
@@ -96,6 +97,7 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
               ),
               const SizedBox(height: 16),
               TextField(
+                style: AppType.body.style(context),
                 controller: reason,
                 maxLength: 2000,
                 maxLines: 3,
@@ -199,10 +201,7 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
                   children: [
                     Text(
                       'Version ${f.revision.value}',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: AppType.h4.style(context),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -227,15 +226,14 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
                             : f.error?.isNotEmpty == true
                             ? 'NOT PREPARED'
                             : f.status,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                        style: AppType.badge.style(
+                          context,
                           color: context.themeForeground(
                             f.error?.isNotEmpty == true
                                 ? const Color(0xFFA52F43)
                                 : f.releasedAt != null && f.retractedAt == null
                                 ? const Color(0xFF067A63)
-                                : const Color(0xFF3D4A63),
+                                : TypographyColors.secondary,
                           ),
                         ),
                       ),
@@ -347,6 +345,7 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
                     f.releasedAt == null &&
                     f.retractedAt == null) ...[
                   TextField(
+                    style: AppType.body.style(context),
                     controller: summary,
                     maxLength: 2000,
                     decoration: const InputDecoration(
@@ -354,6 +353,7 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
                     ),
                   ),
                   TextField(
+                    style: AppType.body.style(context),
                     controller: suggestions,
                     maxLines: 5,
                     decoration: const InputDecoration(
@@ -421,6 +421,7 @@ class _FeedbackReviewPanelState extends State<FeedbackReviewPanel> {
           ),
         if (editing != null)
           TextField(
+            style: AppType.body.style(context),
             controller: reason,
             maxLength: 2000,
             onChanged: (_) => setState(() {}),

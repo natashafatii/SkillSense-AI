@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:skillsense_ai/widgets/pointer_gesture_detector.dart';
 import '../../widgets/mobile_edge_shadow_wrapper.dart';
@@ -6,7 +7,6 @@ import '../../widgets/candidate_button_style.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/candidate_side_nav.dart';
 import '../../widgets/green_gradient_background.dart';
@@ -398,13 +398,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               size: 28,
             ),
             const SizedBox(width: 10),
-            Text(
-              'Resume parsing complete',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            Text('Resume parsing complete', style: AppType.h4.style(context)),
           ],
         ),
         content: Column(
@@ -413,9 +407,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           children: [
             Text(
               'Your resume was parsed. Any displayed match data came from the API.',
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: context.themeForeground(const Color(0xFF64748B)),
+              style: AppType.caption.style(
+                context,
+                color: context.themeForeground(TypographyColors.secondary),
               ),
             ),
             const SizedBox(height: 16),
@@ -438,11 +432,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       child: Center(
                         child: Text(
                           '$score%',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
+                          style: AppType.h4.style(context, color: Colors.white),
                         ),
                       ),
                     ),
@@ -455,18 +445,15 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                           score == null
                               ? 'Match score unavailable'
                               : 'Match score',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: AppType.bodySm.style(context),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Matched ${matchedSkills.length} required skills.',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
+                          style: AppType.caption.style(
+                            context,
                             color: context.themeForeground(
-                              const Color(0xFF64748B),
+                              TypographyColors.secondary,
                             ),
                           ),
                         ),
@@ -491,10 +478,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
             },
             child: Text(
               'View My Applications',
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+              style: AppType.button.style(context, color: Colors.white),
             ),
           ),
         ],
@@ -539,6 +523,38 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     final Color cardBg = context.themeSurface(Colors.white);
     final Color cardBorder = context.themeOutline(const Color(0xFFE2E8F0));
 
+    final workspace = Column(
+      children: [
+        RecruiterTopBar(pageTitle: 'Job detail', candidate: true),
+        Expanded(
+          child: MobileEdgeShadowWrapper(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.only(
+                left: isMobile ? 16 : 24,
+                right: isMobile ? 16 : 24,
+                top: 16,
+                bottom: isMobile ? 164 : 32,
+              ),
+              child: isMobile
+                  ? _buildMobileLayout(
+                      textPrimary,
+                      textSecondary,
+                      cardBg,
+                      cardBorder,
+                    )
+                  : _buildWebLayout(
+                      textPrimary,
+                      textSecondary,
+                      cardBg,
+                      cardBorder,
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
+
     return Scaffold(
       backgroundColor: bgBase,
       body: Stack(
@@ -579,53 +595,12 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
             child: Column(
               children: [
                 Expanded(
-                  child: Row(
-                    children: [
-                      // Left Rail (Web Only)
-                      if (!isMobile)
-                        const CandidateSideNav(
+                  child: isMobile
+                      ? workspace
+                      : CandidateSideNav(
                           currentRoute: '/candidate/job-detail',
+                          workspace: workspace,
                         ),
-
-                      // Content Area
-                      Expanded(
-                        child: Column(
-                          children: [
-                            RecruiterTopBar(
-                              pageTitle: 'Job detail',
-                              candidate: true,
-                            ),
-                            Expanded(
-                              child: MobileEdgeShadowWrapper(
-                                child: SingleChildScrollView(
-                                  physics: const BouncingScrollPhysics(),
-                                  padding: EdgeInsets.only(
-                                    left: isMobile ? 16 : 24,
-                                    right: isMobile ? 16 : 24,
-                                    top: 16,
-                                    bottom: isMobile ? 164 : 32,
-                                  ),
-                                  child: isMobile
-                                      ? _buildMobileLayout(
-                                          textPrimary,
-                                          textSecondary,
-                                          cardBg,
-                                          cardBorder,
-                                        )
-                                      : _buildWebLayout(
-                                          textPrimary,
-                                          textSecondary,
-                                          cardBg,
-                                          cardBorder,
-                                        ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -805,10 +780,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                 child: Center(
                   child: Text(
                     initials,
-                    style: GoogleFonts.inter(
+                    style: AppType.h4.style(
+                      context,
                       color: AppColors.dashboardTeal.withValues(alpha: 0.8),
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
@@ -821,12 +795,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                 children: [
                   Text(
                     _job?.title ?? 'Job unavailable',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: textPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.025,
-                    ),
+                    style: AppType.h3.style(context, color: textPrimary),
                   ),
                   PointerGestureDetector(
                     onTap: () => _showCompanyTooltip(context),
@@ -834,10 +803,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       _job == null
                           ? ''
                           : '${_job!.recruiterCompany.isNotEmpty ? '${_job!.recruiterCompany} · ' : ''}${_job!.location} · $salary · posted $timeAgo',
-                      style: GoogleFonts.inter(
+                      style: AppType.caption.style(
+                        context,
                         color: textSecondary,
-                        fontSize: isMobile ? 12 : 13,
-                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -875,10 +843,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       ),
       child: Text(
         text,
-        style: GoogleFonts.inter(
-          color: context.themeForeground(const Color(0xFF64748B)),
-          fontSize: 11.5,
-          fontWeight: FontWeight.w500,
+        style: AppType.caption.style(
+          context,
+          color: context.themeForeground(TypographyColors.secondary),
         ),
       ),
     );
@@ -890,21 +857,17 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       children: [
         Text(
           'ABOUT THE ROLE',
-          style: GoogleFonts.spaceGrotesk(
-            color: context.themeForeground(const Color(0xFF64748B)),
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
+          style: AppType.overline.style(
+            context,
+            color: context.themeForeground(TypographyColors.secondary),
           ),
         ),
         const SizedBox(height: 12),
-        Text(
-          _job?.description ?? _jobError ?? 'Job unavailable.',
-          style: GoogleFonts.inter(
-            color: context.themeForeground(const Color(0xFF475569)),
-            fontSize: 14,
-            height: 1.6,
-            fontWeight: FontWeight.w400,
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: Text(
+            _job?.description ?? _jobError ?? 'Job unavailable.',
+            style: context.secondaryBody,
           ),
         ),
       ],
@@ -932,11 +895,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         if (hasReqs) ...[
           Text(
             'REQUIREMENTS',
-            style: GoogleFonts.spaceGrotesk(
-              color: context.themeForeground(const Color(0xFF64748B)),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
+            style: AppType.overline.style(
+              context,
+              color: context.themeForeground(TypographyColors.secondary),
             ),
           ),
           const SizedBox(height: 12),
@@ -949,22 +910,21 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   children: [
                     Text(
                       '•  ',
-                      style: GoogleFonts.inter(
-                        color: context.themeForeground(const Color(0xFF94A3B8)),
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                      style: AppType.bodySm.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                     ),
                     Expanded(
                       child: Text(
                         req,
-                        style: GoogleFonts.inter(
+                        style: AppType.bodySm.style(
+                          context,
                           color: context.themeForeground(
-                            const Color(0xFF475569),
+                            TypographyColors.secondary,
                           ),
-                          fontSize: 14,
-                          height: 1.5,
-                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
@@ -978,11 +938,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         if (hasSkills) ...[
           Text(
             'SKILLS REQUIRED',
-            style: GoogleFonts.spaceGrotesk(
-              color: context.themeForeground(const Color(0xFF64748B)),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
+            style: AppType.overline.style(
+              context,
+              color: context.themeForeground(TypographyColors.secondary),
             ),
           ),
           const SizedBox(height: 12),
@@ -1010,12 +968,11 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                         ),
                         child: Text(
                           skill,
-                          style: GoogleFonts.inter(
+                          style: AppType.caption.style(
+                            context,
                             color: context.themeForeground(
                               const Color(0xFF334155),
                             ),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       );
@@ -1103,26 +1060,22 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                       children: [
                         Text(
                           hasScore ? '${score.round()}' : '—',
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
+                          style: AppType.h1.style(
+                            context,
                             color: hasScore
                                 ? textPrimary
                                 : context.themeForeground(
-                                    const Color(0xFF94A3B8),
+                                    TypographyColors.secondary,
                                   ),
-                            height: 1.0,
                           ),
                         ),
                         Text(
                           'MATCH',
-                          style: GoogleFonts.inter(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
+                          style: AppType.overline.style(
+                            context,
                             color: context.themeForeground(
-                              const Color(0xFF94A3B8),
+                              TypographyColors.secondary,
                             ),
-                            letterSpacing: 1.0,
                           ),
                         ),
                       ],
@@ -1133,10 +1086,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               const SizedBox(height: 16),
               Text(
                 hasScore ? 'Match score' : 'Match unavailable',
-                style: GoogleFonts.inter(
+                style: AppType.bodySm.style(
+                  context,
                   color: hasScore ? textPrimary : textSecondary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
               if (!hasScore)
@@ -1144,7 +1096,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   _hasUploadedResume == false
                       ? 'Upload a resume to apply. Match scores are available after application screening.'
                       : 'Match scores are available after a successful screening assessment of your application.',
-                  style: GoogleFonts.inter(color: textSecondary, fontSize: 12),
+                  style: AppType.caption.style(context, color: textSecondary),
                 ),
               const SizedBox(height: 20),
 
@@ -1183,10 +1135,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                               : (_hasUploadedResume == true
                                     ? 'Apply with default resume'
                                     : 'Apply with a resume')),
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13.5,
-                    ),
+                    style: AppType.button.style(context),
                   ),
                 ),
               ),
@@ -1194,7 +1143,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                 const SizedBox(height: 10),
                 Text(
                   _applicationStateMessage!,
-                  style: GoogleFonts.inter(fontSize: 12),
+                  style: AppType.caption.style(context),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -1202,10 +1151,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
 
               Text(
                 'Applying starts AI screening immediately',
-                style: GoogleFonts.inter(
-                  color: context.themeForeground(const Color(0xFF64748B)),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w500,
+                style: AppType.caption.style(
+                  context,
+                  color: context.themeForeground(TypographyColors.secondary),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -1284,11 +1232,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               children: [
                 Text(
                   'Why you match',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: AppType.h4.style(context, color: textPrimary),
                 ),
               ],
             ),
@@ -1307,11 +1251,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   Text(
                     'Upload a resume to see why you match',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      color: textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: AppType.caption.style(context, color: textSecondary),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
@@ -1337,10 +1277,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                     icon: const Icon(Icons.add, size: 16),
                     label: Text(
                       'Upload resume',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: AppType.caption.style(context),
                     ),
                   ),
                 ],
@@ -1380,11 +1317,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                 _isPollingResume
                     ? 'Parsing your resume…'
                     : 'Resume parsing is taking longer than expected.',
-                style: GoogleFonts.inter(
-                  color: textSecondary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: AppType.bodySm.style(context, color: textSecondary),
               ),
             ),
             if (!_isPollingResume)
@@ -1410,11 +1343,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           children: [
             Text(
               'We couldn\'t parse your resume — try re-uploading a text-based PDF.',
-              style: GoogleFonts.inter(
-                color: Colors.redAccent,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppType.caption.style(context, color: Colors.redAccent),
             ),
             const SizedBox(height: 8),
             TextButton(
@@ -1433,9 +1362,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               },
               child: Text(
                 'Manage resumes',
-                style: GoogleFonts.inter(
+                style: AppType.button.style(
+                  context,
                   color: CandidateButtonStyle.deepTeal,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -1454,11 +1383,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         ),
         child: Text(
           'Unable to load required skills. Reopen this job to try again.',
-          style: GoogleFonts.inter(
-            color: textSecondary,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
+          style: AppType.bodySm.style(context, color: textSecondary),
         ),
       );
     }
@@ -1494,11 +1419,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
             children: [
               Text(
                 'Why you match',
-                style: GoogleFonts.spaceGrotesk(
-                  color: textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: AppType.h4.style(context, color: textPrimary),
               ),
             ],
           ),
@@ -1509,11 +1430,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           // MATCHED
           Text(
             'MATCHED · ${matched.length}',
-            style: GoogleFonts.spaceGrotesk(
-              color: context.themeForeground(const Color(0xFF94A3B8)),
-              fontSize: 11.5,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
+            style: AppType.caption.style(
+              context,
+              color: context.themeForeground(TypographyColors.secondary),
             ),
           ),
           const SizedBox(height: 12),
@@ -1533,10 +1452,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   child: Chip(
                     label: Text(
                       '$m ✓',
-                      style: GoogleFonts.inter(
+                      style: AppType.caption.style(
+                        context,
                         color: context.themeForeground(const Color(0xFF10B981)),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11.5,
                       ),
                     ),
                     backgroundColor: context.themeSurface(
@@ -1556,11 +1474,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           // MISSING
           Text(
             'MISSING · ${missing.length}',
-            style: GoogleFonts.spaceGrotesk(
-              color: context.themeForeground(const Color(0xFF94A3B8)),
-              fontSize: 11.5,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
+            style: AppType.caption.style(
+              context,
+              color: context.themeForeground(TypographyColors.secondary),
             ),
           ),
           const SizedBox(height: 12),
@@ -1582,10 +1498,11 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                   child: Chip(
                     label: Text(
                       m,
-                      style: GoogleFonts.inter(
-                        color: context.themeForeground(const Color(0xFF64748B)),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11.5,
+                      style: AppType.caption.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                     ),
                     backgroundColor: context.themeSurface(
@@ -1605,10 +1522,9 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           // Coaching note
           Text(
             'Missing skills lower your match by ~5 points — worth naming in your first answer.',
-            style: GoogleFonts.inter(
-              color: context.themeForeground(const Color(0xFF64748B)),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+            style: AppType.caption.style(
+              context,
+              color: context.themeForeground(TypographyColors.secondary),
             ),
           ),
         ],
@@ -1649,7 +1565,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         duration: const Duration(seconds: 2),
         content: Text(
           message,
-          style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+          style: AppType.caption.style(context, color: Colors.white),
         ),
       ),
     );
@@ -1938,9 +1854,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
             const SizedBox(width: 12),
             Text(
               'Parsing your resume...',
-              style: GoogleFonts.inter(
-                color: context.themeForeground(const Color(0xFF64748B)),
-                fontWeight: FontWeight.w500,
+              style: AppType.body.style(
+                context,
+                color: context.themeForeground(TypographyColors.secondary),
               ),
             ),
           ],
@@ -1956,11 +1872,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
           children: [
             Text(
               'We couldn\'t parse your resume — try re-uploading a text-based PDF.',
-              style: GoogleFonts.inter(
-                color: Colors.redAccent,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppType.caption.style(context, color: Colors.redAccent),
             ),
             TextButton(
               onPressed: () {
@@ -1972,9 +1884,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
               ),
               child: Text(
                 'Manage resumes',
-                style: GoogleFonts.inter(
+                style: AppType.button.style(
+                  context,
                   color: CandidateButtonStyle.deepTeal,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -1992,11 +1904,9 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
       padding: const EdgeInsets.only(top: 24, bottom: 12),
       child: Text(
         title,
-        style: GoogleFonts.spaceGrotesk(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: context.themeForeground(const Color(0xFF64748B)),
-          letterSpacing: 0.5,
+        style: AppType.h4.style(
+          context,
+          color: context.themeForeground(TypographyColors.secondary),
         ),
       ),
     );
@@ -2012,13 +1922,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
             children: skills
                 .map(
                   (s) => Chip(
-                    label: Text(
-                      s,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    label: Text(s, style: AppType.caption.style(context)),
                     backgroundColor: context.themeSurface(
                       const Color(0xFFF1F5F9),
                     ),
@@ -2038,17 +1942,16 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                 children: [
                   Text(
                     '${e['title']} — ${e['company']}',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: AppType.h4.style(context),
                   ),
                   if (e['duration'] != null)
                     Text(
                       '${e['duration']}',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: context.themeForeground(const Color(0xFF64748B)),
+                      style: AppType.caption.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                     ),
                   if (e['description'] != null)
@@ -2056,7 +1959,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
                         '${e['description']}',
-                        style: GoogleFonts.inter(fontSize: 13, height: 1.5),
+                        style: AppType.caption.style(context),
                       ),
                     ),
                 ],
@@ -2072,18 +1975,14 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${e['degree']}',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text('${e['degree']}', style: AppType.bodySm.style(context)),
                   Text(
                     '${e['institution']} ${e['year'] != null ? '(${e['year']})' : ''}',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: context.themeForeground(const Color(0xFF64748B)),
+                    style: AppType.caption.style(
+                      context,
+                      color: context.themeForeground(
+                        TypographyColors.secondary,
+                      ),
                     ),
                   ),
                 ],
@@ -2099,13 +1998,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
             children: certifications
                 .map(
                   (c) => Chip(
-                    label: Text(
-                      c,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    label: Text(c, style: AppType.caption.style(context)),
                     backgroundColor: context.themeSurface(
                       const Color(0xFFF1F5F9),
                     ),
@@ -2145,20 +2038,16 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     children: [
                       Text(
                         'Apply to ${widget.jobTitle}',
-                        style: GoogleFonts.spaceGrotesk(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: AppType.h2.style(context),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         widget.companyInfo,
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
+                        style: AppType.bodySm.style(
+                          context,
                           color: context.themeForeground(
-                            const Color(0xFF64748B),
+                            TypographyColors.secondary,
                           ),
-                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -2184,11 +2073,11 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                 children: [
                   Text(
                     'RESUME',
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: context.themeForeground(const Color(0xFF64748B)),
-                      letterSpacing: 0.5,
+                    style: AppType.overline.style(
+                      context,
+                      color: context.themeForeground(
+                        TypographyColors.secondary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -2203,7 +2092,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                   else if (_resumes.isEmpty)
                     Text(
                       'No resumes found. Please upload one first.',
-                      style: GoogleFonts.inter(color: Colors.red),
+                      style: AppType.body.style(context, color: Colors.red),
                     )
                   else
                     ..._resumes.map((r) {
@@ -2233,19 +2122,16 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                               activeColor: const Color(0xFF10B981),
                               title: Text(
                                 r['filename'].toString(),
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
+                                style: AppType.bodySm.style(context),
                               ),
                               subtitle: Text(
                                 isDefault
                                     ? 'Default · $cov% coverage'
                                     : '$cov% coverage',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
+                                style: AppType.caption.style(
+                                  context,
                                   color: context.themeForeground(
-                                    const Color(0xFF64748B),
+                                    TypographyColors.secondary,
                                   ),
                                 ),
                               ),
@@ -2258,22 +2144,25 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                   const SizedBox(height: 24),
                   Text(
                     'COVER NOTE · OPTIONAL',
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: context.themeForeground(const Color(0xFF64748B)),
-                      letterSpacing: 0.5,
+                    style: AppType.overline.style(
+                      context,
+                      color: context.themeForeground(
+                        TypographyColors.secondary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    style: AppType.body.style(context),
                     controller: _noteController,
                     maxLines: 3,
                     decoration: InputDecoration(
                       hintText: 'Add a short note for the recruiter...',
-                      hintStyle: GoogleFonts.inter(
-                        color: context.themeForeground(const Color(0xFF94A3B8)),
-                        fontSize: 14,
+                      hintStyle: AppType.caption.style(
+                        context,
+                        color: context.themeForeground(
+                          TypographyColors.secondary,
+                        ),
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -2338,12 +2227,11 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                     Expanded(
                       child: Text(
                         'Applying starts automated screening immediately — no surprise steps after this.',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
+                        style: AppType.caption.style(
+                          context,
                           color: context.themeForeground(
-                            const Color(0xFF64748B),
+                            TypographyColors.secondary,
                           ),
-                          height: 1.4,
                         ),
                       ),
                     ),
@@ -2370,8 +2258,8 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                         ),
                         child: Text(
                           'Cancel',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.bold,
+                          style: AppType.button.style(
+                            context,
                             color: CandidateButtonStyle.secondaryText,
                           ),
                         ),
@@ -2397,7 +2285,7 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
                         ),
                         child: Text(
                           'Submit application',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                          style: AppType.button.style(context),
                         ),
                       ),
                     ),

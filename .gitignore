@@ -98,3 +98,7 @@ test/*
 !test/interview_ended_rejoin_test.dart
 
 .vscode/
+!test/live_monitor_test.dart
+!test/workspace_rail_layout_test.dart
+!test/command_deck_loading_test.dart
+!test/web_console_regressions_test.dart

@@ -47,9 +47,29 @@ class NotificationService {
   }
 
   static Future<int> unreadCount({Dio? client}) async {
+    final generation = SessionScope.generation;
     try {
       final dio = client ?? await ApiClient.getInstance();
-      final response = await dio.get('/notifications/unread-count/');
+      Future<Response<dynamic>> fetch({bool refresh = false}) => dio.get(
+        '/notifications/unread-count/',
+        options: Options(
+          extra: {
+            'sessionGeneration': generation,
+            if (refresh) 'refreshSessionToken': true,
+          },
+        ),
+      );
+
+      Response<dynamic> response;
+      try {
+        response = await fetch();
+      } on DioException catch (error) {
+        if (error.response?.statusCode != 401 ||
+            generation != SessionScope.generation) {
+          rethrow;
+        }
+        response = await fetch(refresh: true);
+      }
       final count = (response.data as Map)['unread_count'];
       if (count is! int || count < 0) {
         throw const FormatException('Invalid unread count.');

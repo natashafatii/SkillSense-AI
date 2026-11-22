@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import 'mobile_nav_tab.dart';
@@ -152,7 +153,8 @@ class _CandidateMobileNavState extends State<CandidateMobileNav> {
                                           label: item.$1,
                                           selected:
                                               widget.currentRoute == item.$2,
-                                          accent: const Color(0xFF00AD87),
+                                          accent:
+                                              TypographyColors.candidateAccent,
                                           onPressed: () => _navigate(item.$2),
                                         ),
                                       ),
@@ -228,7 +230,7 @@ class _CandidateMobileNavState extends State<CandidateMobileNav> {
                                     : _tabIcons[index],
                                 label: _tabLabels[index],
                                 selected: selected == index,
-                                accent: const Color(0xFF00AD87),
+                                accent: TypographyColors.candidateAccent,
                                 menuOpen: _expanded != null,
                               ),
                             ),

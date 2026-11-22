@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import '../../widgets/phone_country_picker.dart';
 import '../../widgets/country_code_phone_field.dart';
 import '../../widgets/theme_switcher.dart';
@@ -9,7 +10,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -236,12 +236,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     Color? foreground,
   ]) => Text(
     sharedInitials?.isNotEmpty == true ? sharedInitials! : _avatarInitials,
-    style: _style(
-      c,
-      fontSize,
-      weight: FontWeight.w700,
-      color: foreground ?? c.accent,
-    ),
+    style: _style(c, AppType.body, color: foreground ?? c.accent),
   );
 
   Widget _profileAvatar(_Palette c, double size, double fontSize) {
@@ -573,7 +568,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
           );
           return AlertDialog(
             backgroundColor: c.surface,
-            title: Text('Use this photo?', style: _style(c, 18)),
+            title: Text('Use this photo?', style: _style(c, AppType.bodyLg)),
             content: SizedBox(
               width: 220,
               child: Center(
@@ -616,7 +611,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         backgroundColor: c.surface,
         content: Text(
           'Remove your profile photo? Your initials will be shown instead.',
-          style: _style(c, 15),
+          style: _style(c, AppType.body),
         ),
         actions: [
           TextButton(
@@ -796,17 +791,8 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
 
   _Palette _palette(BuildContext context) =>
       _Palette(Theme.of(context).brightness == Brightness.dark);
-  TextStyle _style(
-    _Palette c,
-    double size, {
-    FontWeight weight = FontWeight.w400,
-    Color? color,
-  }) => GoogleFonts.plusJakartaSans(
-    fontSize: size,
-    fontWeight: weight,
-    height: 1.55,
-    color: color ?? c.text,
-  );
+  TextStyle _style(_Palette c, AppType type, {Color? color}) =>
+      type.style(context, color: color ?? c.text);
 
   Widget _button(
     _Palette c,
@@ -840,10 +826,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-          textStyle: GoogleFonts.plusJakartaSans(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: AppType.button.style(context),
         ),
         active: primary,
       ),
@@ -864,15 +847,13 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
   Widget _heading(_Palette c, String title, [String? note]) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Flexible(
-        child: Text(title, style: _style(c, 16, weight: FontWeight.w600)),
-      ),
+      Flexible(child: Text(title, style: _style(c, AppType.h4))),
       if (note != null)
         Flexible(
           child: Text(
             note,
             textAlign: TextAlign.end,
-            style: _style(c, 13, color: c.text3),
+            style: _style(c, AppType.caption, color: c.text3),
           ),
         ),
     ],
@@ -898,12 +879,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
           TextSpan(text: text),
         ],
       ),
-      style: _style(
-        c,
-        12.5,
-        weight: FontWeight.w600,
-        color: success ? c.success : c.text2,
-      ),
+      style: _style(c, AppType.caption, color: success ? c.success : c.text2),
     ),
   );
 
@@ -913,7 +889,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     surface: c.surface2,
     border: c.border,
     foreground: c.text2,
-    labelStyle: _style(c, 13, weight: FontWeight.w500),
+    labelStyle: _style(c, AppType.bodySm),
     onSelected: (country) {
       setState(() {
         _phoneCountry = country;
@@ -1166,12 +1142,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                       ),
                       child: Text(
                         '${(progress * 100).round()}%',
-                        style: _style(
-                          c,
-                          11,
-                          weight: FontWeight.w700,
-                          color: c.success,
-                        ),
+                        style: _style(c, AppType.caption, color: c.success),
                       ),
                     ),
                   ),
@@ -1186,15 +1157,14 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
             children: [
               Text(
                 name.isEmpty ? 'Recruiter profile' : name,
-                style: _style(
-                  c,
-                  narrow ? 22 : 26,
-                  weight: FontWeight.w800,
-                ).copyWith(height: 1.2),
+                style: _style(c, AppType.h1),
               ),
               if (description.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text(description, style: _style(c, 13.5, color: c.text2)),
+                Text(
+                  description,
+                  style: _style(c, AppType.bodySm, color: c.text2),
+                ),
               ],
               const SizedBox(height: 10),
               Wrap(
@@ -1220,7 +1190,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         minimumSize: const Size(0, 40),
         padding: const EdgeInsets.symmetric(horizontal: 18),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        textStyle: _style(c, 13.5, weight: FontWeight.w700),
+        textStyle: _style(c, AppType.button),
       ),
       child: const Text('Edit profile'),
     );
@@ -1285,8 +1255,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                       _tabs[index],
                       style: _style(
                         c,
-                        13.5,
-                        weight: FontWeight.w600,
+                        AppType.bodySm,
                         color: _tab == index ? c.text : c.text3,
                       ),
                     ),
@@ -1317,7 +1286,10 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
             children: [
               Expanded(
                 flex: 2,
-                child: Text(label, style: _style(c, 13, color: c.text3)),
+                child: Text(
+                  label,
+                  style: _style(c, AppType.caption, color: c.text3),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1328,7 +1300,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                     Text(
                       value.trim().isEmpty ? 'Not provided' : value,
                       textAlign: TextAlign.end,
-                      style: _style(c, 13.5, weight: FontWeight.w700),
+                      style: _style(c, AppType.bodySm),
                     ),
                     if (googleVerified)
                       Text.rich(
@@ -1346,7 +1318,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                           ],
                         ),
                         textAlign: TextAlign.end,
-                        style: _style(c, 11.5, color: c.success),
+                        style: _style(c, AppType.caption, color: c.success),
                       ),
                   ],
                 ),
@@ -1399,7 +1371,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                 focusGlowSpread: 1,
                 focusGlowOpacity: .07,
                 label: label,
-                labelStyle: _style(c, 12, color: c.text3),
+                labelStyle: _style(c, AppType.bodySm, color: c.text3),
                 onCountryChanged: (country) {
                   _phoneCountry = phoneCountries.firstWhere(
                     (option) =>
@@ -1417,38 +1389,42 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                 },
               )
             : TextField(
-          key: ValueKey('recruiter-inline-$key'),
-          controller: _editController,
-          focusNode: _editFocus,
-          enabled: !_saving,
-          keyboardType: isPhone ? TextInputType.phone : TextInputType.text,
-          inputFormatters: isPhone ? _phoneFormatters() : null,
-          onChanged: (_) {
-            if (_editError != null) setState(() => _editError = null);
-          },
-          onSubmitted: (_) => _save(),
-          style: _style(c, 13.5),
-          decoration: InputDecoration(
-            labelText: label,
-            isDense: true,
-            filled: true,
-            fillColor: c.field,
-            prefixIcon: isPhone ? _phonePrefix(c) : null,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 10,
-            ),
-            border: OutlineInputBorder(borderRadius: radius),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: radius,
-              borderSide: BorderSide(color: c.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: radius,
-              borderSide: BorderSide(color: c.accent.withValues(alpha: .62)),
-            ),
-          ),
-        ),
+                key: ValueKey('recruiter-inline-$key'),
+                controller: _editController,
+                focusNode: _editFocus,
+                enabled: !_saving,
+                keyboardType: isPhone
+                    ? TextInputType.phone
+                    : TextInputType.text,
+                inputFormatters: isPhone ? _phoneFormatters() : null,
+                onChanged: (_) {
+                  if (_editError != null) setState(() => _editError = null);
+                },
+                onSubmitted: (_) => _save(),
+                style: _style(c, AppType.body),
+                decoration: InputDecoration(
+                  labelText: label,
+                  isDense: true,
+                  filled: true,
+                  fillColor: c.field,
+                  prefixIcon: isPhone ? _phonePrefix(c) : null,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                  border: OutlineInputBorder(borderRadius: radius),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: radius,
+                    borderSide: BorderSide(color: c.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: radius,
+                    borderSide: BorderSide(
+                      color: c.accent.withValues(alpha: .62),
+                    ),
+                  ),
+                ),
+              ),
       ),
     );
     return Column(
@@ -1493,7 +1469,10 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
           const SizedBox(height: 6),
           Semantics(
             liveRegion: true,
-            child: Text(error, style: _style(c, 12, color: c.error)),
+            child: Text(
+              error,
+              style: _style(c, AppType.caption, color: c.error),
+            ),
           ),
         ],
       ],
@@ -1535,14 +1514,11 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Preferences & security',
-            style: _style(c, 16, weight: FontWeight.w700),
-          ),
+          Text('Preferences & security', style: _style(c, AppType.h4)),
           const SizedBox(height: 4),
           Text(
             'Appearance, sign-in and account controls.',
-            style: _style(c, 12.5, color: c.text3),
+            style: _style(c, AppType.caption, color: c.text3),
           ),
           const SizedBox(height: 12),
           _preferenceRow(
@@ -1555,7 +1531,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
               border: c.border,
               foreground: c.text,
               inactiveForeground: c.text2,
-              labelStyle: _style(c, 12.5, weight: FontWeight.w600),
+              labelStyle: _style(c, AppType.bodySm),
               horizontalPadding: 12,
             ),
           ),
@@ -1568,13 +1544,13 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
               onPressed: email.isEmpty ? null : _manageGoogleAccount,
               style: TextButton.styleFrom(
                 foregroundColor: c.accent,
-                textStyle: _style(c, 13, weight: FontWeight.w700),
+                textStyle: _style(c, AppType.button),
               ),
               child: const Text('Manage'),
             ),
           ),
           const SizedBox(height: 22),
-          Text('Account', style: _style(c, 16, weight: FontWeight.w700)),
+          Text('Account', style: _style(c, AppType.h4)),
           const SizedBox(height: 10),
           _accountAction(c, 'Download workspace data'),
           const SizedBox(height: 9),
@@ -1597,9 +1573,9 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         final details = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: _style(c, 14, weight: FontWeight.w700)),
+            Text(title, style: _style(c, AppType.h4)),
             const SizedBox(height: 2),
-            Text(subtitle, style: _style(c, 12.5, color: c.text3)),
+            Text(subtitle, style: _style(c, AppType.caption, color: c.text3)),
           ],
         );
         if (constraints.maxWidth < 420) {
@@ -1648,7 +1624,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
       side: BorderSide(color: destructive ? Colors.transparent : c.border),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-      textStyle: _style(c, 13.5, weight: FontWeight.w600),
+      textStyle: _style(c, AppType.button),
     ),
     child: Row(
       children: [
@@ -1706,7 +1682,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
               const SizedBox(height: 12),
               Text(
                 '${(progress * 100).round()}% complete',
-                style: _style(c, 13, color: c.success, weight: FontWeight.w700),
+                style: _style(c, AppType.caption, color: c.success),
               ),
               const SizedBox(height: 8),
               ClipRRect(
@@ -1738,7 +1714,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                       Expanded(
                         child: Text(
                           step['label'].toString(),
-                          style: _style(c, 13, weight: FontWeight.w600),
+                          style: _style(c, AppType.caption),
                         ),
                       ),
                       if (step['complete'] != true && step['id'] == 'calendar')
@@ -1817,12 +1793,12 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                   ),
                 Expanded(
                   child: DefaultTextStyle(
-                    style: _style(c, 13.5),
+                    style: _style(c, AppType.bodySm),
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final horizontal = mobile ? 16.0 : 32.0;
                         final width = (constraints.maxWidth - horizontal * 2)
-                            .clamp(0.0, 1366.0)
+                            .clamp(0.0, double.infinity)
                             .toDouble();
                         final wide = width >= 820;
                         final sticky = wide && constraints.maxHeight >= 590;
@@ -1936,7 +1912,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                         ),
                         child: Text(
                           _mobileToast!,
-                          style: _style(c, 13.5, color: c.bg),
+                          style: _style(c, AppType.bodySm, color: c.bg),
                         ),
                       ),
                     ),

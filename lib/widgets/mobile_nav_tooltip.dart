@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 
@@ -118,13 +119,9 @@ class _MobileNavTooltipState extends State<MobileNavTooltip>
                         ),
                         child: Text(
                           widget.message,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            height: 1.2,
-                            fontWeight: FontWeight.w600,
-                            decoration: TextDecoration.none,
-                          ),
+                          style: AppType.caption
+                              .style(context, color: Colors.white)
+                              .copyWith(decoration: TextDecoration.none),
                         ),
                       ),
                       const CustomPaint(

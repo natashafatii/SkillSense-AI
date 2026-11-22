@@ -12,13 +12,9 @@ const _warning = Color(0xFF925C12);
 const _negative = Color(0xFFC43737);
 const _gap = 20.0;
 TextStyle _mutedStyle(BuildContext context) =>
-    TextStyle(color: context.themeForeground(_muted), fontSize: 13);
-const _headingStyle = TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
-TextStyle _labelStyle(BuildContext context) => TextStyle(
-  fontSize: 12,
-  fontWeight: FontWeight.w600,
-  color: context.themeForeground(_muted),
-);
+    AppType.caption.style(context, color: context.themeForeground(_muted));
+TextStyle _labelStyle(BuildContext context) =>
+    AppType.caption.style(context, color: context.themeForeground(_muted));
 
 String _candidateName(Application app) {
   final name = app.candidateName?.trim();
@@ -100,7 +96,7 @@ class _SectionHeading extends StatelessWidget {
     crossAxisAlignment: WrapCrossAlignment.center,
     alignment: WrapAlignment.spaceBetween,
     children: [
-      Text(title, style: _headingStyle, semanticsLabel: title),
+      Text(title, style: context.text.titleLarge, semanticsLabel: title),
       if (detail case final detail?) Text(detail, style: _mutedStyle(context)),
     ],
   );
@@ -188,10 +184,9 @@ class _Tag extends StatelessWidget {
     ),
     child: Text(
       text,
-      style: TextStyle(
+      style: AppType.caption.style(
+        context,
         color: color ?? context.themeForeground(_muted),
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
       ),
     ),
   );
@@ -260,7 +255,7 @@ class _MatchCard extends StatelessWidget {
     final breakdown = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('Screening breakdown', style: _headingStyle),
+        Text('Screening breakdown', style: context.text.titleLarge),
         const SizedBox(height: 12),
         if (fit.evaluated) ...[
           if (fit.total > 0)
@@ -425,12 +420,7 @@ class _ScoreGauge extends StatelessWidget {
                           fit: BoxFit.scaleDown,
                           child: Text(
                             value == null ? '—' : _percent(value),
-                            style: const TextStyle(
-                              fontFamily: 'Space Grotesk',
-                              fontSize: 41,
-                              height: 1.12,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: AppType.display.style(context),
                           ),
                         ),
                       ),
@@ -589,7 +579,7 @@ class _EvidenceNote extends StatelessWidget {
       children: [
         Text(
           title.toUpperCase(),
-          style: _labelStyle(context).copyWith(color: color, letterSpacing: .5),
+          style: _labelStyle(context).copyWith(color: color),
         ),
         const SizedBox(height: 4),
         if (lines.isEmpty) Text(empty, style: _mutedStyle(context)),

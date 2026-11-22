@@ -1,3 +1,4 @@
+import 'job.dart' show normalizeJobTitle;
 import 'api_contract.dart';
 import 'screening_assessment.dart';
 import 'recruitment_evidence.dart';
@@ -123,7 +124,7 @@ class Application {
       candidate: json['candidate'] as String? ?? '',
       candidateEmail: json['candidate_email'] as String? ?? '',
       job: json['job'] as String? ?? '',
-      jobTitle: json['job_title'] as String? ?? '',
+      jobTitle: normalizeJobTitle(json['job_title'] as String? ?? ''),
       jobCompany: json['job_company'] as String? ?? '',
       resumeId: json['resume_id'] as String?,
       coverNote: json['cover_note'] as String?,

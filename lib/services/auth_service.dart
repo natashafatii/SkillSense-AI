@@ -62,6 +62,15 @@ class AuthService {
   static Future<String?> getSessionToken() async =>
       isAuthenticated ? instance.getSessionToken() : null;
 
+  static Future<String?> refreshSessionToken() async {
+    if (!isAuthenticated) return null;
+    final service = instance;
+    if (service case final SessionTokenRefreshService refreshable) {
+      return refreshable.refreshSessionToken();
+    }
+    return service.getSessionToken();
+  }
+
   static void _emit(bool authenticated) {
     if (_published == authenticated) return;
     _published = authenticated;

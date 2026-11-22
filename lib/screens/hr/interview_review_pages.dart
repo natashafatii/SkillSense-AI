@@ -51,10 +51,7 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
     storageId: 'inspection-$title',
     tilePadding: EdgeInsets.zero,
     childrenPadding: EdgeInsets.zero,
-    title: Text(
-      title,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-    ),
+    title: Text(title, style: AppType.h4.style(context)),
     children: [child],
   );
 
@@ -71,9 +68,8 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
       child: DropdownButtonFormField<String>(
         key: ValueKey('$label-$value-${r.interview?.id}'),
         initialValue: value ?? (compare ? '' : null),
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 13,
+        style: AppType.caption.style(
+          context,
           color: context.themeForeground(const Color(0xFF16213A)),
         ),
         isExpanded: true,
@@ -114,10 +110,7 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
         runSpacing: 12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          const Text(
-            'Evaluation',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-          ),
+          Text('Evaluation', style: AppType.h4.style(context)),
           picker('Revision', selected?.id, false),
           picker('Compare', comparison?.id, true),
           _pill('Score ${percent(selected?.score)}', const Color(0xFF3D4A63)),
@@ -149,7 +142,7 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
       height: paneHeight,
       badge: Text(
         '${selected?.answers.length ?? 0} questions',
-        style: const TextStyle(fontSize: 13),
+        style: AppType.caption.style(context),
       ),
       children: [
         if (selected == null)
@@ -286,17 +279,17 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
         leading: ReviewQuestionBadge(category: question?.category ?? ''),
         title: Text(
           question?.text ?? 'Frozen question ${answer.questionId}',
-          style: const TextStyle(fontSize: 13, height: 1.45),
+          style: AppType.caption.style(context),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               '${answer.scoreOutOfTen?.toStringAsFixed(1) ?? '—'}/10',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+              style: AppType.numeric.style(
+                context,
                 color: context.themeForeground(color),
+                weight: FontWeight.w600,
               ),
             ),
             const SizedBox(width: 8),
@@ -342,10 +335,7 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
                         ),
                         child: Text(
                           text,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: AppType.caption.style(context),
                         ),
                       ),
                   ],
@@ -368,9 +358,9 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
     height: height,
     badge: _pill('In use', _reviewBlue),
     children: [
-      const Text(
+      Text(
         'Scores are based on the frozen transcript. Pick another version if it looks wrong.',
-        style: TextStyle(fontSize: 13, height: 1.6),
+        style: AppType.caption.style(context),
       ),
       // Retains selection, comparison, pinning and version-aware reevaluation.
       const SizedBox(height: 14),
@@ -388,18 +378,14 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
           color: context.themeSurface(const Color(0xFFEAF0FF)),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Row(
+        child: Row(
           children: [
             Icon(Icons.info_outline, size: 16, color: Color(0xFF264AA8)),
             SizedBox(width: 10),
             Expanded(
               child: Text(
                 'The report already sent to the candidate stays as it is. New drafts do not replace it unless you release them.',
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.5,
-                  color: Color(0xFF264AA8),
-                ),
+                style: AppType.caption.style(context, color: Color(0xFF264AA8)),
               ),
             ),
           ],
@@ -415,6 +401,11 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
           'Feedback history',
           height: height == null ? null : height - 56,
           children: [
+            if (r.interview case final interview?)
+              InterviewReplayPanel(
+                key: ValueKey(interview.id),
+                interviewId: interview.id,
+              ),
             if (r.feedback.isEmpty) const Text('No feedback prepared.'),
             for (final report in r.feedback) ...[
               if (report.retractedAt != null)
@@ -493,23 +484,17 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
                     if (source != null) _pill(source, color),
                     Text(
                       time,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF5F6C85),
+                      style: AppType.caption.style(
+                        context,
+                        color: TypographyColors.secondary,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Text(title, style: AppType.h4.style(context)),
                 const SizedBox(height: 3),
-                Text(detail, style: const TextStyle(fontSize: 13, height: 1.5)),
+                Text(detail, style: AppType.caption.style(context)),
               ],
             ),
           ),
@@ -538,9 +523,9 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
               Expanded(
                 child: Text(
                   row.$1,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF5F6C85),
+                  style: AppType.caption.style(
+                    context,
+                    color: TypographyColors.secondary,
                   ),
                 ),
               ),
@@ -548,10 +533,7 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
               Expanded(
                 child: SelectableText(
                   row.$2,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppType.caption.style(context),
                 ),
               ),
             ],
@@ -599,7 +581,7 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
                 score.error == 'EVALUATION_UNAVAILABLE'
                     ? 'Combined scoring requires a complete evaluation. ${evaluation?.assessedCount ?? 0} of ${evaluation?.questionCount ?? 0} questions assessed.'
                     : score.explanation,
-                style: const TextStyle(fontSize: 12, height: 1.5),
+                style: AppType.caption.style(context),
               ),
             ),
           _inspection(
@@ -660,7 +642,7 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
       _reviewCard(
         'Score history',
         height: cardHeight,
-        badge: const Text('Past evaluations', style: TextStyle(fontSize: 13)),
+        badge: Text('Past evaluations', style: AppType.caption.style(context)),
         children: [
           if (r.scores.history.isEmpty)
             const Text('No score history available.'),
@@ -672,9 +654,9 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
               ('Total', percent(item.status == 'COMPLETE' ? item.score : null)),
             ]),
           const SizedBox(height: 14),
-          const Text(
+          Text(
             'Earlier scores are kept for reference and never edited.',
-            style: TextStyle(fontSize: 13, height: 1.5),
+            style: AppType.caption.style(context),
           ),
         ],
       ),
@@ -706,13 +688,7 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    filter.$2,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: Text(filter.$2, style: AppType.caption.style(context)),
                 ),
               ),
           ],

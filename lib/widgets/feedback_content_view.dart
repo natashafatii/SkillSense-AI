@@ -1,3 +1,4 @@
+import 'package:skillsense_ai/theme/app_typography.dart';
 import 'package:flutter/material.dart';
 import '../models/candidate_feedback.dart';
 
@@ -10,7 +11,7 @@ class FeedbackContentView extends StatelessWidget {
     final c = content;
     Widget heading(String text) => Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 8),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
+      child: Text(text, style: AppType.body.style(context)),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
