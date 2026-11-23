@@ -90,7 +90,6 @@ class _ReportCommandBar extends StatelessWidget {
   const _ReportCommandBar({
     required this.palette,
     required this.candidate,
-    required this.compact,
     required this.mobile,
     required this.section,
     this.onSection,
@@ -99,7 +98,7 @@ class _ReportCommandBar extends StatelessWidget {
 
   final _ReportPalette palette;
   final String? candidate;
-  final bool compact, mobile;
+  final bool mobile;
   final int section;
   final ValueChanged<int>? onSection;
   final VoidCallback? onBack;
@@ -114,164 +113,36 @@ class _ReportCommandBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context
-        .dependOnInheritedWidgetOfExactType<AppThemeScope>()
-        ?.notifier;
-    final style = AppType.overline.style(context, color: palette.muted);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.rail,
-        border: Border(bottom: BorderSide(color: palette.border)),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 12 : 24,
-          vertical: 5,
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Row(
-            children: [
-              if (onBack != null)
-                IconButton(
-                  tooltip: 'Back to applicants',
-                  onPressed: onBack,
-                  icon: Icon(
-                    Icons.arrow_back_rounded,
-                    size: 17,
-                    color: palette.ink,
-                  ),
-                ),
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    style: style,
+    final sectionMenu = !mobile && onSection != null
+        ? PopupMenuButton<int>(
+            tooltip: 'Jump to report section',
+            initialValue: section,
+            onSelected: onSection,
+            icon: _ReportGlyph(_ReportIcon.overview, color: palette.muted),
+            itemBuilder: (context) => [
+              for (final (index, (label, icon)) in _sections.indexed)
+                PopupMenuItem(
+                  value: index,
+                  child: Row(
                     children: [
-                      if (!compact)
-                        TextSpan(
-                          text: [
-                            'PIPELINE',
-                            if (candidate != null) candidate!.toUpperCase(),
-                            '',
-                          ].join('  /  '),
-                        ),
-                      TextSpan(
-                        text: 'REPORT',
-                        style: TextStyle(color: palette.ink),
-                      ),
+                      _ReportGlyph(icon, color: palette.muted),
+                      const SizedBox(width: 8),
+                      Text(label),
                     ],
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (!mobile && onSection != null)
-                PopupMenuButton<int>(
-                  tooltip: 'Jump to report section',
-                  initialValue: section,
-                  onSelected: onSection,
-                  icon: _ReportGlyph(
-                    _ReportIcon.overview,
-                    color: palette.muted,
-                  ),
-                  itemBuilder: (context) => [
-                    for (final (index, (label, icon)) in _sections.indexed)
-                      PopupMenuItem(
-                        value: index,
-                        child: Row(
-                          children: [
-                            _ReportGlyph(icon, color: palette.muted),
-                            const SizedBox(width: 8),
-                            Text(label),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              NotificationUnreadScope(
-                builder: (context, count) => IconButton(
-                  key: const Key('recruiter-top-bell'),
-                  tooltip: 'Notifications',
-                  onPressed: () => Navigator.of(
-                    context,
-                  ).pushNamed('/recruiter/notifications'),
-                  icon: Badge(
-                    isLabelVisible: count > 0,
-                    child: _ReportGlyph(
-                      _ReportIcon.bell,
-                      size: 18,
-                      color: palette.muted,
-                    ),
-                  ),
-                ),
-              ),
-              if (mobile)
-                IconButton(
-                  key: const Key('recruiter-top-profile'),
-                  tooltip: 'User profile',
-                  onPressed: () =>
-                      Navigator.of(context).pushNamed('/recruiter/profile'),
-                  icon: _ReportGlyph(
-                    _ReportIcon.person,
-                    color: palette.muted,
-                    size: 18,
-                  ),
-                ),
-              if (theme != null)
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: palette.field,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: palette.border),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(3),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final (dark, label) in [
-                          (true, 'Night'),
-                          (false, 'Daylight'),
-                        ])
-                          Semantics(
-                            selected: dark == palette.dark,
-                            child: TextButton(
-                              onPressed: () => theme.select(
-                                dark ? ThemeMode.dark : ThemeMode.light,
-                              ),
-                              style: TextButton.styleFrom(
-                                foregroundColor: dark == palette.dark
-                                    ? palette.accent
-                                    : palette.muted,
-                                backgroundColor: dark == palette.dark
-                                    ? palette.soft
-                                    : null,
-                                textStyle: _reportDisplay(
-                                  context,
-                                  AppType.button,
-                                ).copyWith(fontWeight: FontWeight.w600),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: compact ? 5 : 8,
-                                  vertical: 5,
-                                ),
-                                minimumSize: const Size(0, 24),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                              child: Text(label),
-                            ),
-                          ),
-                      ],
-                    ),
                   ),
                 ),
             ],
-          ),
-        ),
-      ),
+          )
+        : null;
+    return RecruiterTopBar(
+      pageTitle: 'Candidate report',
+      breadcrumbSegments: [
+        'Pipeline',
+        if (candidate != null) candidate!,
+        'Candidate report',
+      ],
+      onBackTap: onBack,
+      desktopAccessory: sectionMenu,
     );
   }
 }

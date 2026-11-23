@@ -63,8 +63,8 @@ class _ScreeningOutcome extends StatelessWidget {
     final status = Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
       decoration: BoxDecoration(
-        color: ScreeningStyle.soft,
-        border: Border.all(color: _line),
+        color: ScreeningStyle.softColor(context),
+        border: Border.all(color: ScreeningStyle.outline(context)),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Row(
@@ -102,10 +102,10 @@ class _ScreeningOutcome extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: failed
-                ? ScreeningStyle.rose
+                ? ScreeningStyle.fill(context, ScreeningStyle.rose)
                 : verified
-                ? ScreeningStyle.mint
-                : ScreeningStyle.review,
+                ? ScreeningStyle.fill(context, ScreeningStyle.mint)
+                : ScreeningStyle.fill(context, ScreeningStyle.review),
             borderRadius: BorderRadius.circular(11),
           ),
           child: ScreeningIcon(
@@ -174,12 +174,19 @@ class _ScreeningOutcome extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(22, 16, 22, 14),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xfff5f8ff), ScreeningStyle.pale],
+                  colors: Theme.of(context).brightness == Brightness.dark
+                      ? [
+                          Theme.of(context).colorScheme.surfaceContainerHigh,
+                          ScreeningStyle.surface(context),
+                        ]
+                      : [Color(0xfff5f8ff), ScreeningStyle.pale],
                 ),
-                border: Border.all(color: ScreeningStyle.tint),
+                border: Border.all(
+                  color: ScreeningStyle.fill(context, ScreeningStyle.tint),
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: width <= 900

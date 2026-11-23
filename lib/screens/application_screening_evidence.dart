@@ -78,8 +78,10 @@ class _RequirementEvidenceState extends State<_RequirementEvidence> {
                     final segment = Container(
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
-                        color: ScreeningStyle.soft,
-                        border: Border.all(color: _line),
+                        color: ScreeningStyle.softColor(context),
+                        border: Border.all(
+                          color: ScreeningStyle.outline(context),
+                        ),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Wrap(
@@ -104,7 +106,7 @@ class _RequirementEvidenceState extends State<_RequirementEvidence> {
                                       ? _blue
                                       : _muted,
                                   backgroundColor: _filter == index
-                                      ? Colors.white
+                                      ? ScreeningStyle.surface(context)
                                       : Colors.transparent,
                                   minimumSize: const Size(0, 28),
                                   padding: const EdgeInsets.symmetric(
@@ -285,7 +287,9 @@ class _RequirementCard extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: ok ? ScreeningStyle.mint : ScreeningStyle.review,
+              color: ok
+                  ? ScreeningStyle.fill(context, ScreeningStyle.mint)
+                  : ScreeningStyle.fill(context, ScreeningStyle.review),
             ),
             child: ScreeningIcon(
               ok ? ScreeningGlyph.check : ScreeningGlyph.info,
@@ -321,7 +325,7 @@ class _RequirementCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
               decoration: BoxDecoration(
-                color: ScreeningStyle.review,
+                color: ScreeningStyle.fill(context, ScreeningStyle.review),
                 borderRadius: BorderRadius.circular(99),
               ),
               child: _copy(context, 'Needs review', type: AppType.caption),
@@ -332,8 +336,8 @@ class _RequirementCard extends StatelessWidget {
     if (!ok) return _DashedCard(radius: 12, child: body);
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _line),
+        color: ScreeningStyle.surface(context),
+        border: Border.all(color: ScreeningStyle.outline(context)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: body,
@@ -351,7 +355,7 @@ class _DashedCard extends StatelessWidget {
     foregroundPainter: _DashBorder(radius),
     child: DecoratedBox(
       decoration: BoxDecoration(
-        color: ScreeningStyle.canvas,
+        color: ScreeningStyle.fill(context, ScreeningStyle.canvas),
         borderRadius: BorderRadius.circular(radius),
       ),
       child: Padding(padding: const EdgeInsets.all(1), child: child),
@@ -467,7 +471,9 @@ class _ScreeningHistory extends StatelessWidget {
                           height: 12,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: index == 0 ? _accent : Colors.white,
+                            color: index == 0
+                                ? _accent
+                                : ScreeningStyle.surface(context),
                             border: Border.all(
                               color: index == 0
                                   ? _accent

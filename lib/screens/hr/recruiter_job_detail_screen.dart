@@ -1000,42 +1000,6 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
     ],
   );
 
-  Widget _mobileTopBar() => Container(
-    height: 58,
-    decoration: BoxDecoration(
-      color: context.themeSurface(Colors.white),
-      border: Border(bottom: BorderSide(color: context.themeOutline(_edge))),
-    ),
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    child: Row(
-      children: [
-        IconButton(
-          tooltip: 'Back',
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.of(context).canPop()
-              ? Navigator.of(context).pop()
-              : Navigator.of(context).pushNamed('/recruiter/job-listings'),
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            'Job detail',
-            style: AppType.h3.style(
-              context,
-              color: context.themeForeground(_ink),
-            ),
-          ),
-        ),
-        IconButton(
-          tooltip: 'Notifications',
-          icon: const Icon(Icons.notifications_none_rounded),
-          onPressed: () =>
-              Navigator.of(context).pushNamed('/recruiter/notifications'),
-        ),
-      ],
-    ),
-  );
-
   Widget _mobileDock() => const RecruiterMobileNav(
     currentRoute: '/recruiter/job-detail',
     margin: EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -1050,14 +1014,23 @@ class _RecruiterJobDetailScreenState extends State<RecruiterJobDetailScreen> {
       backgroundColor: Colors.transparent,
       body: Column(
         children: [
-          mobile
-              ? _mobileTopBar()
-              : const RecruiterTopBar(
-                  pageTitle: 'Job detail',
-                  breadcrumbSegments: ['Jobs', 'Job detail'],
-                  showTrailingButton: true,
-                  trailingIcon: Icons.settings_outlined,
-                ),
+          RecruiterTopBar(
+            pageTitle: 'Job detail',
+            breadcrumbSegments: const ['Jobs', 'Job detail'],
+            onBackTap: mobile
+                ? () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    } else {
+                      Navigator.of(context).pushNamed(
+                        '/recruiter/job-listings',
+                      );
+                    }
+                  }
+                : null,
+            showTrailingButton: !mobile,
+            trailingIcon: Icons.settings_outlined,
+          ),
           Expanded(
             child: MobileEdgeShadowWrapper(
               child: _loading

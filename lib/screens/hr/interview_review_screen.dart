@@ -9,7 +9,7 @@ import '../../services/api_exception.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../services/session_scope.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
-import '../../widgets/interview_review_top_bar.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'recruitment_review_screen.dart' show RecruitmentReviewScreen;
 
 class InterviewReviewScreen extends StatefulWidget {
@@ -596,8 +596,8 @@ class _InterviewReviewScreenState extends State<InterviewReviewScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            InterviewReviewTopBar(
-              onRefresh: loading || notFound || token.isCancelled ? null : load,
+            RecruiterTopBar(
+              pageTitle: 'Interview review',
             ),
             Expanded(
               child: LayoutBuilder(

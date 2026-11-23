@@ -214,7 +214,9 @@ class _DeckColors {
   LinearGradient get hero => LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: const [Color(0xFF4D7BFA), Color(0xFF2E4FE0), Color(0xFF5A4FE6)],
+    colors: dark
+        ? const [Color(0xFF31507C), Color(0xFF344E87), Color(0xFF464777)]
+        : const [Color(0xFF4D7BFA), Color(0xFF2E4FE0), Color(0xFF5A4FE6)],
     stops: const [0, .6, 1],
   );
 

@@ -28,6 +28,10 @@ class RecruiterTopBar extends StatelessWidget {
     this.onBellTap,
     this.onMobileTitleTap,
     this.onTrailingTap,
+    this.onBackTap,
+    this.onRefreshTap,
+    this.showRefreshButton = false,
+    this.actionAccessory,
     this.trailingTooltip = 'Workspace settings',
     this.hasUnread = false,
     this.useExactUnread = false,
@@ -43,7 +47,6 @@ class RecruiterTopBar extends StatelessWidget {
     this.mobileTitle,
     this.showTrailingButton = false,
     this.mobileBreakpoint = 900,
-    this.profileReference = false,
     this.desktopAccessory,
   });
 
@@ -56,6 +59,10 @@ class RecruiterTopBar extends StatelessWidget {
   final VoidCallback? onBellTap;
   final VoidCallback? onMobileTitleTap;
   final VoidCallback? onTrailingTap;
+  final VoidCallback? onBackTap;
+  final VoidCallback? onRefreshTap;
+  final bool showRefreshButton;
+  final Widget? actionAccessory;
   final String trailingTooltip;
   final bool hasUnread;
   final bool useExactUnread;
@@ -71,7 +78,6 @@ class RecruiterTopBar extends StatelessWidget {
   final String? mobileTitle;
   final bool showTrailingButton;
   final double mobileBreakpoint;
-  final bool profileReference;
   final Widget? desktopAccessory;
 
   @override
@@ -113,6 +119,22 @@ class RecruiterTopBar extends StatelessWidget {
     void openSettings() => Navigator.of(
       context,
     ).pushNamed(candidate ? '/candidate/profile' : '/recruiter/profile');
+    void openSearch() {
+      if (onSearchTap != null) {
+        onSearchTap!();
+      } else if (candidate) {
+        showCandidateMobileSearch(context);
+      } else {
+        showDialog<String>(
+          context: context,
+          builder: (_) => GlobalSearchDialog(candidate: false, dark: dark),
+        ).then((route) {
+          if (route != null && context.mounted) {
+            Navigator.of(context).pushNamed(route);
+          }
+        });
+      }
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -139,9 +161,7 @@ class RecruiterTopBar extends StatelessWidget {
           child: ClipRect(
             child: Container(
               height: 58,
-              padding: EdgeInsets.symmetric(
-                horizontal: profileReference ? 32 : 22,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 22),
               decoration: BoxDecoration(
                 color: surface.withValues(alpha: .92),
                 gradient: compact
@@ -156,7 +176,32 @@ class RecruiterTopBar extends StatelessWidget {
               ),
               child: Row(
                 children: [
+                  if (!compact && onBackTap != null) ...[
+                    _iconButton(
+                      key: const Key('recruiter-top-back'),
+                      icon: Icons.arrow_back_rounded,
+                      label: 'Back',
+                      color: text2,
+                      field: field,
+                      edge: edge,
+                      onTap: onBackTap,
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   if (compact) ...[
+                    if (onBackTap != null) ...[
+                      _iconButton(
+                        key: const Key('recruiter-top-back'),
+                        icon: Icons.arrow_back_rounded,
+                        label: 'Back',
+                        color: text2,
+                        field: field,
+                        edge: edge,
+                        onTap: onBackTap,
+                        prominent: true,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     SvgPicture.asset(
                       'assets/images/logo.svg',
                       width: 26,
@@ -189,8 +234,7 @@ class RecruiterTopBar extends StatelessWidget {
                             else
                               breadcrumbText(i),
                           ],
-                          if (desktopAccessory != null &&
-                              constraints.maxWidth >= 1030) ...[
+                          if (desktopAccessory != null) ...[
                             const SizedBox(width: 16),
                             desktopAccessory!,
                           ],
@@ -212,9 +256,7 @@ class RecruiterTopBar extends StatelessWidget {
                               ),
                             ),
                     ),
-                  if (showSearch &&
-                      compact &&
-                      (candidate || onSearchTap != null))
+                  if (showSearch && compact)
                     _iconButton(
                       key: const Key('recruiter-top-search'),
                       icon: Icons.search_rounded,
@@ -222,23 +264,17 @@ class RecruiterTopBar extends StatelessWidget {
                       color: text2,
                       field: field,
                       edge: edge,
-                      onTap:
-                          onSearchTap ??
-                          (candidate
-                              ? () => showCandidateMobileSearch(context)
-                              : null),
+                      onTap: openSearch,
                       prominent: true,
                     )
                   else if (showSearch && !compact)
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       width: (constraints.maxWidth * .36).clamp(160.0, 300.0),
-                      height: profileReference ? 36 : 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         color: field,
-                        borderRadius: BorderRadius.circular(
-                          profileReference ? 8 : 11,
-                        ),
+                        borderRadius: BorderRadius.circular(11),
                         border: Border.all(
                           color: searchFocused ? accent : edge,
                           width: searchFocused ? 1.5 : 1,
@@ -263,7 +299,7 @@ class RecruiterTopBar extends StatelessWidget {
                             prefixIcon: Icon(
                               Icons.search_rounded,
                               color: text3,
-                              size: profileReference ? 18 : 12,
+                              size: 12,
                             ),
                             prefixIconConstraints: const BoxConstraints(
                               minWidth: 32,
@@ -308,7 +344,7 @@ class RecruiterTopBar extends StatelessWidget {
                     label: 'Notifications',
                     color: bellActive ? accent : text2,
                     field: compact
-                        ? Colors.white
+                        ? context.themeSurface(Colors.white)
                         : bellActive
                         ? accent.withValues(alpha: .10)
                         : field,
@@ -317,6 +353,23 @@ class RecruiterTopBar extends StatelessWidget {
                     onTap: onBellTap ?? openNotifications,
                     prominent: compact,
                   ),
+                  if (showRefreshButton) ...[
+                    SizedBox(width: compact ? 8 : 10),
+                    _iconButton(
+                      key: const Key('recruiter-top-refresh'),
+                      icon: Icons.refresh_rounded,
+                      label: 'Refresh',
+                      color: text2,
+                      field: field,
+                      edge: edge,
+                      onTap: onRefreshTap,
+                      prominent: compact,
+                    ),
+                  ],
+                  if (actionAccessory != null) ...[
+                    SizedBox(width: compact ? 8 : 10),
+                    actionAccessory!,
+                  ],
                   if (compact) ...[
                     const SizedBox(width: 8),
                     if (candidate)

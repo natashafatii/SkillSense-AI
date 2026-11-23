@@ -99,9 +99,10 @@ extension _CompactInterviewReview on _RecruitmentReviewScreenState {
               style: ScreeningStyle.text(context, AppType.caption),
               child: Column(
                 children: [
-                  ScreeningCommandBar(
-                    section: 'Interview review',
-                    onSearch: () => _jumpReview(review),
+                  RecruiterTopBar(
+                    pageTitle: 'Interview review',
+                    dark: theme.brightness == Brightness.dark,
+                    onSearchTap: () => _jumpReview(review),
                   ),
                   if (controller.loading || controller.busy)
                     const LinearProgressIndicator(

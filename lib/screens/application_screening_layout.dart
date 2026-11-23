@@ -280,7 +280,7 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
           height: 42,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: ScreeningStyle.tint,
+            color: ScreeningStyle.fill(context, ScreeningStyle.tint),
             borderRadius: BorderRadius.circular(13),
           ),
           child: _copy(context, initials, color: _blue, type: AppType.bodySm),
@@ -393,7 +393,7 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
     final app = widget.app;
     final evidence = app?.screening;
     return Scaffold(
-      backgroundColor: ScreeningStyle.canvas,
+      backgroundColor: context.themeCanvas(ScreeningStyle.canvas),
       body: CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.keyK, meta: true): _search,
@@ -409,9 +409,9 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                 style: ScreeningStyle.text(context, AppType.caption),
                 child: Column(
                   children: [
-                    ScreeningCommandBar(
-                      onSearch: _search,
-                      section: 'Application screening',
+                    RecruiterTopBar(
+                      pageTitle: 'Application screening',
+                      onSearchTap: _search,
                     ),
                     if (widget.busy)
                       const LinearProgressIndicator(
@@ -428,10 +428,7 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                             children: [
                               Text(
                                 'Screening evidence',
-                                style: ScreeningStyle.text(
-                                  context,
-                                  AppType.body,
-                                ),
+                                style: context.text.headlineLarge,
                               ),
                               if (app != null) ...[
                                 const SizedBox(height: 4),
@@ -467,22 +464,39 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                                         ? null
                                         : () => _showApplication(app, evidence),
                                     style: TextButton.styleFrom(
-                                      foregroundColor: _muted,
-                                      minimumSize: const Size(0, 28),
-                                      padding: EdgeInsets.zero,
+                                      foregroundColor:
+                                          ScreeningStyle.foreground(
+                                            context,
+                                            _muted,
+                                          ),
+                                      backgroundColor: ScreeningStyle.surface(
+                                        context,
+                                      ),
+                                      side: BorderSide(
+                                        color: ScreeningStyle.outline(context),
+                                      ),
+                                      shape: const StadiumBorder(),
+                                      minimumSize: const Size(0, 38),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
                                       tapTargetSize:
                                           MaterialTapTargetSize.shrinkWrap,
                                       textStyle: ScreeningStyle.text(
                                         context,
                                         AppType.button,
-                                      ),
+                                      ).copyWith(fontWeight: FontWeight.w600),
                                     ),
-                                    child: const Row(
+                                    child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         ScreeningIcon(
                                           ScreeningGlyph.back,
-                                          color: _muted,
+                                          color: ScreeningStyle.foreground(
+                                            context,
+                                            _muted,
+                                          ),
                                         ),
                                         SizedBox(width: 6),
                                         Text('Back to application'),
@@ -640,8 +654,10 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                             height: 34,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: _line),
+                              color: ScreeningStyle.surface(context),
+                              border: Border.all(
+                                color: ScreeningStyle.outline(context),
+                              ),
                               borderRadius: BorderRadius.circular(7),
                             ),
                             child: const ScreeningIcon(
@@ -924,8 +940,10 @@ class _ScreeningWorkspaceState extends State<_ScreeningWorkspace> {
                       vertical: 14,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: _line),
+                      color: ScreeningStyle.surface(context),
+                      border: Border.all(
+                        color: ScreeningStyle.outline(context),
+                      ),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
