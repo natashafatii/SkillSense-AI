@@ -1101,42 +1101,39 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               const SizedBox(height: 20),
 
               // Apply Button
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: CandidateButtonStyle.teal.withValues(alpha: 0.22),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
+              ElevatedButton(
+                style: CandidateButtonStyle.primaryColors(
+                  ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.dashboardTeal,
+                    shadowColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 44),
+                    shape: const StadiumBorder(),
+                  ).copyWith(
+                    backgroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.disabled)
+                          ? context.themeSurface(CandidateButtonStyle.edge)
+                          : AppColors.dashboardTeal,
                     ),
-                  ],
+                    foregroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.disabled)
+                          ? CandidateButtonStyle.secondaryText
+                          : Colors.white,
+                    ),
+                  ),
                 ),
-                child: ElevatedButton(
-                  style: CandidateButtonStyle.primary(
-                    ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.dashboardTeal,
-                      shadowColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 44),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                  onPressed: _isApplied || _isSubmitting || _job == null
-                      ? null
-                      : _applyJob,
-                  child: Text(
-                    _isApplied
-                        ? 'Applied'
-                        : (_isSubmitting
-                              ? 'Submitting...'
-                              : (_hasUploadedResume == true
-                                    ? 'Apply with default resume'
-                                    : 'Apply with a resume')),
-                    style: AppType.button.style(context),
-                  ),
+                onPressed: _isApplied || _isSubmitting || _job == null
+                    ? null
+                    : _applyJob,
+                child: Text(
+                  _isApplied
+                      ? 'Applied'
+                      : (_isSubmitting
+                            ? 'Submitting...'
+                            : (_hasUploadedResume == true
+                                  ? 'Apply with default resume'
+                                  : 'Apply with a resume')),
+                  style: AppType.button.style(context),
                 ),
               ),
               if (_applicationStateMessage != null) ...[

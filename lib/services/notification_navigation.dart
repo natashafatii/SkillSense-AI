@@ -5,6 +5,7 @@ import '../screens/application_screening_screen.dart';
 import '../screens/hr/recruitment_review_screen.dart';
 import '../screens/hr/schedule_interview_screen.dart';
 import '../screens/candidate/candidate_feedback_report_screen.dart';
+import '../widgets/recruiter_scaffold.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
 import 'session_scope.dart';
@@ -134,8 +135,12 @@ Future<void> openNotification(
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                ScheduleInterviewScreen(applicationId: l.application!.value),
+            builder: (_) => RecruiterScaffold(
+              currentRoute: '/recruiter/schedule-interview',
+              body: ScheduleInterviewScreen(
+                applicationId: l.application!.value,
+              ),
+            ),
           ),
         );
       case NotificationDestination.review:

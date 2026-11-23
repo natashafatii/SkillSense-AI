@@ -115,48 +115,59 @@ extension _RankingsView on _RankingsScreenState {
           ? const RecruiterMobileNav(currentRoute: '/recruiter/rankings')
           : null,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, bounds) {
-            final inset = (bounds.maxWidth * .02).clamp(16.0, 32.0);
-            final wide =
-                bounds.maxWidth > 1000 &&
-                bounds.maxHeight >= 600 &&
-                MediaQuery.textScalerOf(context).scale(14) <= 18;
-            final content = <Widget>[
-              _pageHead(bounds.maxWidth - inset * 2),
-              const SizedBox(height: 16),
-              if (_loading) const LinearProgressIndicator(minHeight: 2),
-              if (_error != null)
-                _message('Unable to load rankings', _error!, retry: true)
-              else if (!_loading && _jobs.isEmpty)
-                _message(
-                  'No jobs available',
-                  'Create a job to start reviewing applicants.',
-                )
-              else ...[
-                _stats(bounds.maxWidth - inset * 2),
-                const SizedBox(height: 16),
-                if (wide)
-                  Expanded(child: _panes(filled: true))
-                else
-                  _panes(filled: false),
-              ],
-            ];
-            return Padding(
-              padding: EdgeInsets.symmetric(horizontal: inset, vertical: 20),
-              child: wide
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: content,
-                    )
-                  : SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: content,
-                      ),
+        child: Column(
+          children: [
+            const RecruiterTopBar(pageTitle: 'Applicant Rankings'),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, bounds) {
+                  final inset = (bounds.maxWidth * .02).clamp(16.0, 32.0);
+                  final wide =
+                      bounds.maxWidth > 1000 &&
+                      bounds.maxHeight >= 600 &&
+                      MediaQuery.textScalerOf(context).scale(14) <= 18;
+                  final content = <Widget>[
+                    _pageHead(bounds.maxWidth - inset * 2),
+                    const SizedBox(height: 16),
+                    if (_loading)
+                      const LinearProgressIndicator(minHeight: 2),
+                    if (_error != null)
+                      _message('Unable to load rankings', _error!, retry: true)
+                    else if (!_loading && _jobs.isEmpty)
+                      _message(
+                        'No jobs available',
+                        'Create a job to start reviewing applicants.',
+                      )
+                    else ...[
+                      _stats(bounds.maxWidth - inset * 2),
+                      const SizedBox(height: 16),
+                      if (wide)
+                        Expanded(child: _panes(filled: true))
+                      else
+                        _panes(filled: false),
+                    ],
+                  ];
+                  return Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: inset,
+                      vertical: 20,
                     ),
-            );
-          },
+                    child: wide
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: content,
+                          )
+                        : SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: content,
+                            ),
+                          ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     ),

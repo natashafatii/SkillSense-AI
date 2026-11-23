@@ -25,6 +25,36 @@ abstract final class ScreeningStyle {
   static const red = Color(0xffc8374d);
   static const rose = Color(0xfffbe9ec);
 
+  static Color surface(BuildContext context) =>
+      Theme.of(context).colorScheme.surface;
+
+  static Color outline(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+      ? Theme.of(context).colorScheme.outlineVariant.withValues(alpha: .62)
+      : line;
+
+  static Color softColor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+      ? Theme.of(context).colorScheme.surfaceContainerHigh
+      : soft;
+
+  static Color fill(BuildContext context, Color light) {
+    if (Theme.of(context).brightness != Brightness.dark) return light;
+    if (light == canvas) return Theme.of(context).scaffoldBackgroundColor;
+    if (light == Colors.white) return surface(context);
+    if ({soft, pale, tint, review, mint, rose}.contains(light)) {
+      return softColor(context);
+    }
+    return light;
+  }
+
+  static Color foreground(BuildContext context, Color light) {
+    if (Theme.of(context).brightness != Brightness.dark) return light;
+    if (light == ink) return Theme.of(context).colorScheme.onSurface;
+    if (light == muted) return Theme.of(context).colorScheme.onSurfaceVariant;
+    return light;
+  }
+
   static double gutter(double width) => (width * .02).clamp(14, 32);
   static double inset(BuildContext context) =>
       MediaQuery.sizeOf(context).width <= 640 ? 14 : 20;
@@ -33,7 +63,7 @@ abstract final class ScreeningStyle {
     BuildContext context,
     AppType type, {
     Color color = ink,
-  }) => type.style(context, color: color);
+  }) => type.style(context, color: foreground(context, color));
 
   static TextStyle title(BuildContext context, [AppType type = AppType.h3]) =>
       text(context, type);
@@ -43,13 +73,13 @@ abstract final class ScreeningStyle {
         hintText: hint,
         hintStyle: text(context, AppType.caption, color: muted),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: surface(context),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: line),
+          borderSide: BorderSide(color: outline(context)),
         ),
       );
 }
@@ -88,7 +118,7 @@ class ScreeningIcon extends StatelessWidget {
       width: size,
       height: size,
       colorFilter: ColorFilter.mode(
-        color ?? ScreeningStyle.ink,
+        color ?? ScreeningStyle.foreground(context, ScreeningStyle.ink),
         BlendMode.srcIn,
       ),
     );
@@ -106,17 +136,26 @@ class ScreeningPanel extends StatelessWidget {
     child: Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: tint ? null : const Color(0xf2ffffff),
+        color: tint ? null : ScreeningStyle.surface(context),
         gradient: tint
-            ? const LinearGradient(
+            ? LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [ScreeningStyle.pale, Colors.white],
-                stops: [0, .55],
+                colors: Theme.of(context).brightness == Brightness.dark
+                    ? [
+                        Theme.of(context).colorScheme.surfaceContainerHigh,
+                        ScreeningStyle.surface(context),
+                      ]
+                    : [ScreeningStyle.pale, Colors.white],
+                stops: const [0, .55],
               )
             : null,
         border: Border.all(
-          color: tint ? ScreeningStyle.tint : const Color(0xbfdce1ee),
+          color: Theme.of(context).brightness == Brightness.dark
+              ? ScreeningStyle.outline(context)
+              : tint
+              ? ScreeningStyle.tint
+              : const Color(0xbfdce1ee),
         ),
         borderRadius: BorderRadius.circular(14),
       ),
@@ -250,7 +289,7 @@ class ScreeningButton extends StatelessWidget {
       ScreeningButtonKind.primary => Colors.white,
       ScreeningButtonKind.link => ScreeningStyle.blue,
       ScreeningButtonKind.danger => ScreeningStyle.red,
-      _ => ScreeningStyle.ink,
+      _ => ScreeningStyle.foreground(context, ScreeningStyle.ink),
     };
     final radius = BorderRadius.circular(10);
     return Opacity(
@@ -259,7 +298,7 @@ class ScreeningButton extends StatelessWidget {
         width: stretch ? double.infinity : null,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: link || primary ? null : Colors.white,
+            color: link || primary ? null : ScreeningStyle.surface(context),
             gradient: primary
                 ? const LinearGradient(
                     begin: Alignment.topLeft,
@@ -274,7 +313,7 @@ class ScreeningButton extends StatelessWidget {
                         ? ScreeningStyle.navy
                         : danger
                         ? const Color(0xfff1c4cb)
-                        : ScreeningStyle.line,
+                        : ScreeningStyle.outline(context),
                   ),
             borderRadius: radius,
             boxShadow: link
@@ -358,11 +397,11 @@ class ScreeningDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Dialog(
     insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
-    backgroundColor: Colors.white,
+    backgroundColor: ScreeningStyle.surface(context),
     surfaceTintColor: Colors.transparent,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(18),
-      side: const BorderSide(color: ScreeningStyle.line),
+      side: BorderSide(color: ScreeningStyle.outline(context)),
     ),
     child: ConstrainedBox(
       constraints: BoxConstraints(
@@ -433,9 +472,11 @@ class ScreeningCommandBar extends StatelessWidget {
       final width = MediaQuery.sizeOf(context).width;
       final compact = width <= 640;
       return DecoratedBox(
-        decoration: const BoxDecoration(
-          color: Color(0xd1ffffff),
-          border: Border(bottom: BorderSide(color: Color(0xe6dce1ee))),
+        decoration: BoxDecoration(
+          color: ScreeningStyle.surface(context).withValues(alpha: .92),
+          border: Border(
+            bottom: BorderSide(color: ScreeningStyle.outline(context)),
+          ),
         ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 49),
@@ -475,6 +516,7 @@ class ScreeningCommandBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
                 _button(
+                  context,
                   'Search or jump to a section',
                   compact ? 40 : 260,
                   onSearch,
@@ -510,8 +552,10 @@ class ScreeningCommandBar extends StatelessWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: ScreeningStyle.soft,
-                              border: Border.all(color: _line),
+                              color: ScreeningStyle.softColor(context),
+                              border: Border.all(
+                                color: ScreeningStyle.outline(context),
+                              ),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -530,6 +574,7 @@ class ScreeningCommandBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 _button(
+                  context,
                   'Notifications',
                   34,
                   () => Navigator.of(
@@ -569,17 +614,22 @@ class ScreeningCommandBar extends StatelessWidget {
     },
   );
 
-  Widget _button(String label, double width, VoidCallback tap, Widget child) =>
-      Tooltip(
+  Widget _button(
+    BuildContext context,
+    String label,
+    double width,
+    VoidCallback tap,
+    Widget child,
+  ) => Tooltip(
         message: label,
         child: SizedBox(
           width: width,
           height: 34,
           child: Material(
-            color: Colors.white,
+            color: ScreeningStyle.surface(context),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: _line),
+              side: BorderSide(color: ScreeningStyle.outline(context)),
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(onTap: tap, child: child),

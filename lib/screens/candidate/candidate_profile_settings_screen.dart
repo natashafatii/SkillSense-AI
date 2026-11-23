@@ -1736,8 +1736,13 @@ class _CandidateProfileSettingsScreenState
       OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: c.accent,
-          side: BorderSide(color: c.accentBorder),
+          foregroundColor: c.dark ? const Color(0xFF72E6C8) : c.accent,
+          backgroundColor: c.dark ? const Color(0xFF15332F) : null,
+          overlayColor: c.accent.withValues(alpha: c.dark ? .14 : .06),
+          side: BorderSide(
+            color: c.dark ? const Color(0xFF287A68) : c.accentBorder,
+            width: c.dark ? 1.2 : 1,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),

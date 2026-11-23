@@ -337,24 +337,33 @@ class _CandidateNotificationsScreenState
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Notifications',
-                  style: AppType.h1.style(context, color: textPrimary),
-                ),
-                if (unread > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      '$unread unread',
-                      style: AppType.caption.style(
-                        context,
-                        color: textSecondary,
-                      ),
+                if (isMobile) ...[
+                  _mobileBackButton(context),
+                  const SizedBox(width: 10),
+                ],
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Notifications',
+                      style: AppType.h1.style(context, color: textPrimary),
                     ),
-                  ),
+                    if (unread > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '$unread unread',
+                          style: AppType.caption.style(
+                            context,
+                            color: textSecondary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
             if (unread > 0)
@@ -429,6 +438,37 @@ class _CandidateNotificationsScreenState
       ],
     );
   }
+
+  void _backFromNotifications() {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      navigator.pushReplacementNamed('/candidate/home');
+    }
+  }
+
+  Widget _mobileBackButton(BuildContext context) => Tooltip(
+    message: 'Back',
+    child: InkWell(
+      onTap: _backFromNotifications,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: context.themeSurface(Colors.white),
+          border: Border.all(color: context.themeOutline(const Color(0xFFE2E8F0))),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          Icons.arrow_back_rounded,
+          size: 19,
+          color: context.themeForeground(const Color(0xFF475569)),
+        ),
+      ),
+    ),
+  );
 
   // ── GROUP CARD (TODAY / EARLIER) ─────────────────────────────────────────────
   Widget _buildGroupCard({

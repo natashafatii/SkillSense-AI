@@ -1,4 +1,5 @@
 import 'package:skillsense_ai/theme/app_typography.dart';
+import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/services.dart';
 import '../models/resume_detail.dart';
 import '../models/screening_assessment.dart';
@@ -18,7 +19,6 @@ import '../services/resume_service.dart';
 import '../services/session_scope.dart';
 import '../services/auth_service.dart';
 import '../widgets/question_preparation_panel.dart';
-import 'hr/schedule_interview_screen.dart';
 import '../widgets/candidate_scaffold.dart';
 import 'candidate/widgets/candidate_application_summary.dart';
 
@@ -280,15 +280,9 @@ class _ApplicationScreeningScreenState
   }
 
   Future<void> _openScreeningSchedule(Application app) async {
-    await showDialog<void>(
-      context: context,
-      barrierColor: const Color(0x800b1730),
-      barrierDismissible: false,
-      builder: (_) => ScheduleInterviewScreen(
-        jobId: app.job,
-        applicationId: app.id,
-        compactScreening: true,
-      ),
+    await Navigator.of(context).pushNamed(
+      '/recruiter/schedule-interview',
+      arguments: {'jobId': app.job, 'applicationId': app.id},
     );
     if (mounted) _load();
   }

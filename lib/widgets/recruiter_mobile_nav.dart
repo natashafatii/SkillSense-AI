@@ -40,15 +40,9 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
   final _link = LayerLink();
   int? _expanded;
   static const _tabLabels = ['Overview', 'Pipeline', 'Interviews', 'Workspace'];
-  static const _profile = RecruiterDestination(
-    'Profile & settings',
-    '/recruiter/profile',
-  );
 
-  List<RecruiterDestination> _destinations(int index) => [
-    if (index == recruiterSections.length - 1) _profile,
-    ...recruiterSections[index].items,
-  ];
+  List<RecruiterDestination> _destinations(int index) =>
+      recruiterSections[index].items;
 
   int? get _active {
     final route = switch (widget.currentRoute) {
@@ -70,6 +64,15 @@ class _RecruiterMobileNavState extends State<RecruiterMobileNav> {
 
   void _select(int index) {
     FocusManager.instance.primaryFocus?.unfocus();
+    final destinations = _destinations(index);
+    if (index == recruiterSections.length - 1 && destinations.length == 1) {
+      _close();
+      final route = destinations.single.route;
+      if (widget.currentRoute != route) {
+        Navigator.of(context).pushNamed(route);
+      }
+      return;
+    }
     if (_expanded == index) {
       _close();
     } else {

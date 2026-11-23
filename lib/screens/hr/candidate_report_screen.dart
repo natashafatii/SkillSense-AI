@@ -21,9 +21,9 @@ import '../../services/recruitment_workflow_service.dart';
 import '../../services/resume_download.dart';
 import '../../services/resume_service.dart';
 import '../../services/session_scope.dart';
-import '../../widgets/notification_unread_scope.dart';
 import '../../widgets/question_preparation_panel.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
+import '../../widgets/recruiter_top_bar.dart';
 import 'recruitment_review_screen.dart';
 import 'schedule_interview_screen.dart';
 
@@ -591,7 +591,6 @@ class _CandidateReportScreenState extends State<CandidateReportScreen> {
         _ReportCommandBar(
           palette: palette,
           candidate: app == null ? null : _candidateName(app),
-          compact: viewport <= 480,
           mobile: mobile,
           section: _section,
           onSection: app != null ? _jumpToSection : null,

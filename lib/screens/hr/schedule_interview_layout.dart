@@ -83,14 +83,11 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
             style: _type(AppType.bodyLg, color: _ink),
             child: Column(
               children: [
-                if (compact)
-                  _mobileBreadcrumb(gutter)
-                else
-                  RecruiterTopBar(
-                    pageTitle: 'Schedule interview',
-                    dark: _dark,
-                    breadcrumbSegments: const ['Recruitment', 'Interviews'],
-                  ),
+                RecruiterTopBar(
+                  pageTitle: 'Schedule interview',
+                  dark: _dark,
+                  breadcrumbSegments: const ['Recruitment', 'Interviews'],
+                ),
                 Expanded(
                   child: SingleChildScrollView(
                     key: const Key('schedule-scroll'),
@@ -177,43 +174,6 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
             : null,
       );
     },
-  );
-
-  Widget _mobileBreadcrumb(double gutter) => Container(
-    height: 62,
-    padding: EdgeInsets.symmetric(horizontal: gutter),
-    alignment: AlignmentDirectional.centerStart,
-    decoration: BoxDecoration(
-      color: _dark ? _surface : const Color(0xFFFCFDFF),
-      border: Border(
-        top: BorderSide(
-          color: _dark ? _edge : const Color(0xFF363541),
-          width: 4,
-        ),
-        bottom: BorderSide(color: _edge),
-      ),
-    ),
-    child: Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: 'Recruitment',
-            style: TextStyle(color: _dark ? _muted : const Color(0xFF546589)),
-          ),
-          TextSpan(
-            text: '  /  ',
-            style: TextStyle(color: context.secondaryTextColor),
-          ),
-          const TextSpan(text: 'Interviews'),
-        ],
-      ),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: _type(
-        AppType.caption,
-        color: _dark ? _ink : const Color(0xFF26253A),
-      ),
-    ),
   );
 
   Widget _pageHeading(double width, bool split) {
@@ -606,6 +566,14 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
       firstDate: today,
       lastDate: DateTime(9999, 12, 31),
       helpText: _dateField,
+      builder: (context, child) {
+        final inherited = MediaQuery.of(context);
+        final scale = inherited.textScaler.scale(1);
+        return MediaQuery(
+          data: inherited.copyWith(textScaler: TextScaler.linear(scale)),
+          child: child!,
+        );
+      },
     );
     if (day == null || !mounted || job != _jobId || _error != null) return;
     _updateSchedule(() {
