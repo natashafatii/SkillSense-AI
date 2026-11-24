@@ -40,8 +40,10 @@ class WebCameraAdapter extends CameraAdapter {
   final bool _coverPreview;
   late final JSFunction _visibility, _pageHide;
   web.MediaStream? _camera, _microphone;
+  web.PermissionStatus? _cameraPermission;
   final web.HTMLVideoElement _video = web.HTMLVideoElement();
-  web.MediaStreamTrack? get monitorTrack => cameraReady ? _camera!.getVideoTracks().toDart.first : null;
+  web.MediaStreamTrack? get monitorTrack =>
+      cameraReady ? _camera!.getVideoTracks().toDart.first : null;
   web.HTMLVideoElement? _preview;
   List<CameraDevice> _cameras = const [];
   String? _selected;
@@ -145,11 +147,11 @@ class WebCameraAdapter extends CameraAdapter {
       if (tracks.isEmpty) throw const MediaFailure(MediaFailureCode.notFound);
       for (final track in tracks) {
         track.onended = ((web.Event _) {
-          if (_current(generation)) _interrupt(MediaFailureCode.interrupted);
+          if (_current(generation)) _interruptCamera();
         }).toJS;
         // Muting means reliable sampling is unavailable. Require explicit restart.
         track.onmute = ((web.Event _) {
-          if (_current(generation)) _interrupt(MediaFailureCode.interrupted);
+          if (_current(generation)) _interruptCamera();
         }).toJS;
       }
       _video
@@ -183,6 +185,9 @@ class WebCameraAdapter extends CameraAdapter {
       _ready = true;
       _selected = tracks.first.getSettings().deviceId;
       _attachPreview();
+      if (cameraInterruptionPromptsEnabled) {
+        unawaited(_watchCameraPermission(generation));
+      }
       // Enumeration is optional; a failed list must not invalidate a usable camera.
       try {
         await refreshCameras();
@@ -300,6 +305,11 @@ class WebCameraAdapter extends CameraAdapter {
     final generation = _generation;
     final canvas = web.HTMLCanvasElement();
     try {
+      if (!await _waitForVideoFrame() ||
+          !_current(generation) ||
+          !cameraReady) {
+        return null;
+      }
       final (width, height) = limits.dimensions(
         _video.videoWidth,
         _video.videoHeight,
@@ -342,11 +352,57 @@ class WebCameraAdapter extends CameraAdapter {
     }
   }
 
+  Future<bool> _waitForVideoFrame() async {
+    // A live track can leave its last image on screen after playback stalls.
+    // Wait for presentation, since an unmoving scene can have identical pixels.
+    if (!_video.hasProperty('requestVideoFrameCallback'.toJS).toDart) {
+      return true;
+    }
+    final presented = Completer<void>();
+    final callback = _video.requestVideoFrameCallback(
+      (() => presented.complete()).toJS,
+    );
+    try {
+      await presented.future.timeout(const Duration(milliseconds: 250));
+      return true;
+    } on TimeoutException {
+      return false;
+    } finally {
+      _video.cancelVideoFrameCallback(callback);
+    }
+  }
+
   void _interrupt(MediaFailureCode code) {
     if (_disposed) return;
     stop();
     _interruption = MediaFailure(code);
     notifyListeners();
+  }
+
+  void _interruptCamera() => _interrupt(
+    _cameraPermission?.state == 'denied'
+        ? MediaFailureCode.denied
+        : MediaFailureCode.interrupted,
+  );
+
+  Future<void> _watchCameraPermission(int generation) async {
+    try {
+      final permission = await web.window.navigator.permissions
+          .query({'name': 'camera'}.jsify()! as JSObject)
+          .toDart;
+      if (!_current(generation)) return;
+      _cameraPermission = permission;
+      void check() {
+        if (_current(generation) && permission.state == 'denied') {
+          _interruptCamera();
+        }
+      }
+
+      permission.onchange = ((web.Event _) => check()).toJS;
+      check();
+    } catch (_) {
+      // Track interruption still handles browsers without a camera permission query.
+    }
   }
 
   @override
@@ -361,6 +417,8 @@ class WebCameraAdapter extends CameraAdapter {
     _generation++;
     _ready = false;
     _interruption = null;
+    _cameraPermission?.onchange = null;
+    _cameraPermission = null;
     _release(_camera);
     stopMicrophone();
     _camera = null;

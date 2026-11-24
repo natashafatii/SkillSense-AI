@@ -72,6 +72,8 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
   List<Map<String, dynamic>> _setup = [];
   bool _setupInvalid = false;
   bool _connectingCalendar = false;
+  bool _exportingWorkspace = false;
+  bool _deletingAccount = false;
   String _firstName = '';
   String _lastName = '';
   String? _profileImageUrl;
@@ -927,9 +929,13 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
 
   void _readWorkspaceSetup(Map<String, dynamic> profile) {
     final steps = profile['workspace_setup'];
+    final calendarConnected = profile['calendar_connected'] == true;
     _setupInvalid = false;
     if (steps == null || (steps is List && steps.isEmpty)) {
-      _setup = _defaultWorkspaceSetup(useProfile: steps == null);
+      _setup = _defaultWorkspaceSetup(
+        useProfile: steps == null,
+        calendarConnected: calendarConnected,
+      );
       return;
     }
     if (steps is! List ||
@@ -948,6 +954,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
 
   List<Map<String, dynamic>> _defaultWorkspaceSetup({
     bool useProfile = false,
+    bool calendarConnected = false,
   }) => [
     {
       'id': 'account',
@@ -967,7 +974,13 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       'label': 'Add company details',
       'complete': useProfile && _company.isNotEmpty,
     },
-    {'id': 'calendar', 'label': 'Connect your calendar', 'complete': false},
+    {
+      'id': 'calendar',
+      'label': calendarConnected
+          ? 'Google Calendar connected'
+          : 'Connect your calendar',
+      'complete': calendarConnected,
+    },
   ];
 
   Future<void> _connectCalendar() async {
@@ -993,7 +1006,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         builder: (dialogContext) => AlertDialog(
           title: const Text('Connect Google Calendar'),
           content: const Text(
-            'Authorize Calendar access in Google, then return here and refresh Workspace setup.',
+            'Allow SkillSense to read your Google Calendar availability, then return here to check the connection.',
           ),
           actions: [
             TextButton(
@@ -1069,7 +1082,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
         final message = switch (error.response?.statusCode) {
           404 || 405 =>
             'Calendar connection is unavailable on this server. Contact your workspace administrator.',
-          400 =>
+          400 || 503 =>
             'Google Calendar could not start. Ask your workspace administrator to check the calendar configuration.',
           401 =>
             'Your session expired. Sign in again to connect Google Calendar.',
@@ -1551,9 +1564,22 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
           const SizedBox(height: 22),
           Text('Account', style: _style(c, AppType.h4)),
           const SizedBox(height: 10),
-          _accountAction(c, 'Download workspace data'),
+          _accountAction(
+            c,
+            _exportingWorkspace
+                ? 'Preparing download…'
+                : 'Download workspace data',
+            _exportingWorkspace || _deletingAccount ? null : _downloadWorkspace,
+          ),
           const SizedBox(height: 9),
-          _accountAction(c, 'Delete account', destructive: true),
+          _accountAction(
+            c,
+            _deletingAccount ? 'Deleting account…' : 'Delete account',
+            _deletingAccount || _exportingWorkspace
+                ? null
+                : _confirmDeleteAccount,
+            destructive: true,
+          ),
           const SizedBox(height: 10),
         ],
       ),
@@ -1594,28 +1620,96 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
     ),
   );
 
+  Future<void> _downloadWorkspace() async {
+    setState(() => _exportingWorkspace = true);
+    try {
+      await ProfileService.downloadRecruiterWorkspace();
+    } catch (_) {
+      if (mounted) _toast('Could not download workspace data. Try again.');
+    } finally {
+      if (mounted) setState(() => _exportingWorkspace = false);
+    }
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    var confirmation = '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Delete account?'),
+          scrollable: true,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This permanently deletes your sign-in, removes your personal profile details, and closes your published jobs. Existing hiring records are retained.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Type DELETE to confirm',
+                ),
+                autocorrect: false,
+                onChanged: (value) =>
+                    setDialogState(() => confirmation = value),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              onPressed: confirmation == 'DELETE'
+                  ? () => Navigator.pop(dialogContext, true)
+                  : null,
+              child: const Text('Delete account'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    final userId = AuthService.currentUserId;
+    setState(() => _deletingAccount = true);
+    try {
+      await ProfileService.deleteRecruiterAccount();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _deletingAccount = false);
+        final detail = error is ApiException
+            ? (error.fieldErrors?['detail'])
+            : null;
+        _toast(
+          detail?.toString() ??
+              'Could not confirm account deletion. Try again.',
+        );
+      }
+      return;
+    }
+    try {
+      await AuthService.signOutAfterAccountDeletion(userId);
+    } finally {
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+      }
+    }
+  }
+
   Widget _accountAction(
     _Palette c,
-    String label, {
+    String label,
+    VoidCallback? action, {
     bool destructive = false,
   }) => OutlinedButton(
-    onPressed: () => showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(label),
-        content: Text(
-          destructive
-              ? 'Account deletion is not available in SkillSense yet.'
-              : 'Workspace data export is not available in SkillSense yet.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    ),
+    onPressed: action,
     style: OutlinedButton.styleFrom(
       backgroundColor: destructive ? c.error.withValues(alpha: .09) : c.surface,
       foregroundColor: destructive ? c.error : c.text,
@@ -1740,7 +1834,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
       const SizedBox(height: 14),
       OutlinedButton.icon(
         key: const Key('recruiter-profile-sign-out'),
-        onPressed: _signingOut ? null : _signOut,
+        onPressed: _signingOut || _deletingAccount ? null : _signOut,
         style: OutlinedButton.styleFrom(
           foregroundColor: c.text,
           backgroundColor: c.surface,

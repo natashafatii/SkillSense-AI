@@ -26,6 +26,7 @@ class RetellCredential {
     : callId = requireInterviewIdentity(json['call_id']),
       accessToken = requireJsonString(json, 'access_token'),
       transport = requireJsonString(json, 'transport'),
+      monitorAudio = json['monitor_audio'] == true,
       expiresAt =
           voiceDate(json, 'expires_at') ??
           (throw const FormatException('Missing credential expiry.')),
@@ -46,6 +47,7 @@ class RetellCredential {
     }
   }
   final String callId, accessToken, transport;
+  final bool monitorAudio;
   final List<Map<String, Object?>> iceServers;
   static List<Map<String, Object?>> _iceServers(Object? value) {
     if (value == null) return const [];
@@ -91,6 +93,7 @@ class RetellCredential {
     if (url != null) 'url': url,
     'sampleRate': 24000,
     'emitRawAudioSamples': false,
+    if (monitorAudio) 'monitorAudio': true,
   };
   @override
   String toString() => 'RetellCredential(<redacted>)';
@@ -120,6 +123,7 @@ class VoiceSessionSnapshot {
         'revision': analysis['revision'],
         'video_required': videoRequired,
         'video_sealed': sealed,
+        'live_monitor_available': voice['live_monitor_available'],
         // Video sealing alone is not an instruction to end live voice.
         'finish_requested':
             voice['audio_ended_at'] != null || voice['status'] == 'DONE',
@@ -147,6 +151,7 @@ class VoiceSessionSnapshot {
       revision = source.revision,
       videoRequired = source.videoRequired,
       videoSealed = source.videoSealed,
+      liveMonitorAvailable = source.liveMonitorAvailable,
       finishRequested = source.finishRequested,
       interviewStatus = source.interviewStatus,
       workflowState = source.workflowState,
@@ -179,6 +184,7 @@ class VoiceSessionSnapshot {
        revision = _revision(json),
        videoRequired = voiceBool(json, 'video_required'),
        videoSealed = voiceBool(json, 'video_sealed'),
+       liveMonitorAvailable = json['live_monitor_available'] == true,
        finishRequested = voiceBool(json, 'finish_requested'),
        interviewStatus = requireJsonString(json, 'interview_status'),
        workflowState = json['workflow_state']?.toString() ?? 'UNKNOWN',
@@ -232,6 +238,7 @@ class VoiceSessionSnapshot {
   final InterviewSessionIdentity identity;
   final int revision;
   final bool videoRequired, videoSealed, reportReady, finishRequested;
+  final bool liveMonitorAvailable;
   final String interviewStatus, workflowState;
   final String conversationOutcome;
   final DateTime? audioEndedAt;

@@ -3,6 +3,8 @@ import '../../models/interview_analysis_contract.dart';
 import '../../models/voice/voice_contract.dart';
 import '../api_client.dart';
 import '../api_exception.dart';
+import 'voice_start_preflight_stub.dart'
+    if (dart.library.io) 'voice_start_preflight_native.dart';
 
 /// Bind only backend-frozen URLs. There are no production guesses for missing routes.
 class VoiceLifecycleBindings {
@@ -169,6 +171,7 @@ class VoiceLifecycleBackend {
     CancelToken? cancelToken,
   }) async {
     _require();
+    ensureVoiceStartSupported();
     if (!bindings!.candidateStartAuthorized) {
       throw const VoiceContractUnavailable(
         'Candidate voice start is disabled by configuration.',
@@ -202,6 +205,7 @@ class VoiceLifecycleBackend {
       'call_id': join['call_id'],
       'access_token': join['access_token'],
       'transport': join['transport'],
+      'monitor_audio': snapshot.liveMonitorAvailable,
       'ice_servers': join['ice_servers'],
       'expires_at': DateTime.fromMillisecondsSinceEpoch(
         expires,

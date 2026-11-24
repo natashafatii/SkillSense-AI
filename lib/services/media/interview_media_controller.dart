@@ -7,11 +7,14 @@ import 'camera_adapter_factory.dart';
 
 enum DeviceCheckState { notChecked, checking, ready, stopped, failed }
 
+enum CameraPreviewNotice { interrupted, permissionRequired, recovered }
+
 /// Owns local devices only. Voice/socket/report state stay in the F1 controller.
 class InterviewMediaController extends ChangeNotifier {
   InterviewMediaController({
     CameraAdapter? adapter,
     bool keepAliveInBackground = false,
+    this.interruptionPrompts = cameraInterruptionPromptsEnabled,
   }) : adapter = adapter ?? createCameraAdapter(),
        _account = SessionScope.generation {
     this.adapter.keepAliveInBackground = keepAliveInBackground;
@@ -28,6 +31,7 @@ class InterviewMediaController extends ChangeNotifier {
     SessionScope.invalidations.addListener(_logout);
   }
   final CameraAdapter adapter;
+  final bool interruptionPrompts;
   late final BoundedFrameSampler sampler;
   final int _account;
   bool _disposed = false, _invalid = false, voiceOwnsMicrophone = false;
@@ -35,6 +39,9 @@ class InterviewMediaController extends ChangeNotifier {
   DeviceCheckState camera = DeviceCheckState.notChecked;
   DeviceCheckState microphone = DeviceCheckState.notChecked;
   MediaFailure? cameraError, microphoneError;
+  CameraPreviewNotice? _cameraPreviewNotice;
+  CameraPreviewNotice? get cameraPreviewNotice => _cameraPreviewNotice;
+  Timer? _cameraRecoveryTimer;
   String? sampleNotice;
   bool _sampleBusy = false;
   bool get isCurrent =>
@@ -60,12 +67,22 @@ class InterviewMediaController extends ChangeNotifier {
         throw const MediaFailure(MediaFailureCode.interrupted);
       }
       camera = DeviceCheckState.ready;
+      if (_cameraPreviewNotice == CameraPreviewNotice.interrupted ||
+          _cameraPreviewNotice == CameraPreviewNotice.permissionRequired) {
+        _cameraPreviewNotice = CameraPreviewNotice.recovered;
+        _cameraRecoveryTimer?.cancel();
+        _cameraRecoveryTimer = Timer(const Duration(seconds: 4), () {
+          _cameraPreviewNotice = null;
+          if (isCurrent) notifyListeners();
+        });
+      }
     } catch (error) {
       if (!isCurrent || generation != _generation) return;
       camera = DeviceCheckState.failed;
       cameraError = error is MediaFailure
           ? error
           : const MediaFailure(MediaFailureCode.unknown);
+      _noteCameraIssue(cameraError?.code);
     }
     if (isCurrent) notifyListeners();
   }
@@ -146,8 +163,19 @@ class InterviewMediaController extends ChangeNotifier {
       cameraError =
           adapter.interruption ??
           const MediaFailure(MediaFailureCode.interrupted);
+      _noteCameraIssue(cameraError?.code);
     }
     notifyListeners();
+  }
+
+  void _noteCameraIssue(MediaFailureCode? code) {
+    if (!interruptionPrompts) return;
+    _cameraRecoveryTimer?.cancel();
+    _cameraPreviewNotice = switch (code) {
+      MediaFailureCode.denied => CameraPreviewNotice.permissionRequired,
+      MediaFailureCode.interrupted => CameraPreviewNotice.interrupted,
+      _ => null,
+    };
   }
 
   /// Used on cancellation, handoff, finish, backgrounding, navigation and logout.
@@ -155,6 +183,8 @@ class InterviewMediaController extends ChangeNotifier {
   void stop({bool notify = true}) {
     _generation++;
     sampler.stop();
+    _cameraRecoveryTimer?.cancel();
+    _cameraPreviewNotice = null;
     adapter.stop();
     camera = DeviceCheckState.stopped;
     microphone = DeviceCheckState.notChecked;

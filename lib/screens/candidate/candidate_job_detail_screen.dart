@@ -29,7 +29,7 @@ class CandidateJobDetailScreen extends StatefulWidget {
   final String jobId;
   final Future<Job> Function(String id)? loadJob;
   final Future<List<JobSkill>> Function(String id)? loadJobSkills;
-  final Future<ResumeDetail?> Function()? loadActiveResume;
+  final bool chooseResumeOnOpen;
   final Future<List<Map<String, dynamic>>> Function()? loadApplyResumes;
   final Future<ResumeDetail> Function(String id)? loadApplyResumeDetail;
   final Future<(String, Uint8List)?> Function()? pickResume;
@@ -48,7 +48,7 @@ class CandidateJobDetailScreen extends StatefulWidget {
     required this.jobId,
     this.loadJob,
     this.loadJobSkills,
-    this.loadActiveResume,
+    this.chooseResumeOnOpen = false,
     this.loadApplyResumes,
     this.loadApplyResumeDetail,
     this.pickResume,
@@ -71,8 +71,11 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
 
   ResumeDetail? _resumeDetail;
   bool _isPollingResume = false;
-  bool? _hasUploadedResume;
-  bool _isLoadingResume = true;
+  bool _isChoosingResume = false;
+  bool _isLoadingResume = false;
+  bool _resumeLoadFailed = false;
+  ({String id, String filename, bool stored})? _selectedResume;
+  int _resumeRequest = 0;
   bool _isLoadingSkills = true;
   List<JobSkill>? _jobSkills;
   bool _skillsFailed = false;
@@ -100,8 +103,10 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     _isLoadingSkills = true;
     _resumeDetail = null;
     _isPollingResume = false;
-    _hasUploadedResume = null;
-    _isLoadingResume = true;
+    _resumeRequest++;
+    _selectedResume = null;
+    _isLoadingResume = false;
+    _resumeLoadFailed = false;
     _jobError = null;
     _isLoadingJob = true;
     _isApplied = false;
@@ -133,44 +138,93 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       }
     }
 
+    if (!mounted || request != _jobRequest || _job == null) return;
+    if (widget.loadJobSkills != null) {
+      unawaited(_loadJobSkills(jobId, request));
+    } else {
+      setState(() {
+        _jobSkills = _job!.jobSkills;
+        _isLoadingSkills = false;
+      });
+    }
+    if (widget.chooseResumeOnOpen && _canApply) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && request == _jobRequest && _canApply) {
+          _chooseResume();
+        }
+      });
+    }
+  }
+
+  bool get _canApply => _job?.isActive == true && !_isApplied && !_isSubmitting;
+
+  List<String> get _requiredSkills {
+    final structured = _jobSkills ?? _job?.jobSkills ?? const <JobSkill>[];
+    return {
+      ...structured
+          .where((skill) => skill.isRequired)
+          .map((skill) => skill.skillName),
+      ...?_job?.skillsRequired,
+    }.toList();
+  }
+
+  Future<void> _chooseResume() async {
+    if (_isChoosingResume) return;
+    final jobRequest = _jobRequest;
+    _isChoosingResume = true;
     try {
-      final detail =
-          await (widget.loadActiveResume?.call() ??
-              ResumeService.ensureActiveDetailCached());
-      bool? hasUploadedResume = detail != null ? true : null;
-      if (detail == null) {
-        if (widget.loadActiveResume != null) {
-          hasUploadedResume = false;
-        } else {
-          try {
-            hasUploadedResume = (await ResumeService.listResumes()).isNotEmpty;
-          } catch (_) {
-            // Keep resume presence unknown when the API cannot confirm it.
-          }
+      final selection =
+          await showDialog<({String id, String filename, bool stored})>(
+            context: context,
+            builder: (_) => _MatchResumePicker(
+              loadResumes: widget.loadApplyResumes ?? ResumeService.listResumes,
+              selectedId: _selectedResume?.id,
+            ),
+          );
+      if (!mounted || jobRequest != _jobRequest || selection == null) return;
+      _selectedResume = selection;
+      unawaited(_loadComparisonResume());
+    } finally {
+      _isChoosingResume = false;
+    }
+  }
+
+  Future<void> _loadComparisonResume() async {
+    final selection = _selectedResume;
+    if (selection == null) return;
+    final request = ++_resumeRequest;
+    setState(() {
+      _resumeDetail = null;
+      _isLoadingResume = true;
+      _isPollingResume = false;
+      _resumeLoadFailed = false;
+    });
+    try {
+      if (selection.stored && widget.loadApplyResumeDetail == null) {
+        try {
+          await ResumeService.retryParsing(selection.id);
+        } on ApiException catch (error) {
+          // Another request may already have queued this resume.
+          if (error.statusCode != 409) rethrow;
         }
       }
-      if (mounted && request == _jobRequest && jobId == widget.jobId) {
-        setState(() {
-          _resumeDetail = detail;
-          _hasUploadedResume = hasUploadedResume;
-          _isLoadingResume = false;
-        });
-        if (detail != null && _needsParsing(detail)) {
-          _pollActiveResume(detail.id, request);
-        }
-        if (detail != null) {
-          _loadJobSkills(jobId, request);
-        } else {
-          setState(() => _isLoadingSkills = false);
-        }
+      final detail =
+          await (widget.loadApplyResumeDetail?.call(selection.id) ??
+              ResumeService.getResumeDetail(selection.id, refresh: true));
+      if (!mounted || request != _resumeRequest) return;
+      setState(() {
+        _resumeDetail = detail;
+        _isLoadingResume = false;
+      });
+      if (_needsParsing(detail)) {
+        unawaited(_pollComparisonResume(selection.id, request));
       }
     } catch (_) {
-      if (mounted && request == _jobRequest && jobId == widget.jobId) {
-        setState(() {
-          _isLoadingResume = false;
-          _isLoadingSkills = false;
-        });
-      }
+      if (!mounted || request != _resumeRequest) return;
+      setState(() {
+        _isLoadingResume = false;
+        _resumeLoadFailed = true;
+      });
     }
   }
 
@@ -195,23 +249,24 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     }
   }
 
-  Future<void> _pollActiveResume(String id, int request) async {
+  Future<void> _pollComparisonResume(String id, int request) async {
     if (_isPollingResume) return;
     setState(() => _isPollingResume = true);
     final elapsed = Stopwatch()..start();
     try {
       while (mounted &&
-          request == _jobRequest &&
+          request == _resumeRequest &&
           _resumeDetail?.id == id &&
           _needsParsing(_resumeDetail!) &&
           elapsed.elapsed < const Duration(seconds: 90)) {
         await Future.delayed(const Duration(seconds: 2));
-        if (!mounted || request != _jobRequest) return;
+        if (!mounted || request != _resumeRequest) return;
         try {
           final detail =
               await (widget.pollResume?.call(id) ??
+                  widget.loadApplyResumeDetail?.call(id) ??
                   ResumeService.getResumeDetail(id, refresh: true));
-          if (mounted && request == _jobRequest && _resumeDetail?.id == id) {
+          if (mounted && request == _resumeRequest && _resumeDetail?.id == id) {
             setState(() => _resumeDetail = detail);
           }
         } catch (_) {
@@ -219,7 +274,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         }
       }
     } finally {
-      if (mounted && request == _jobRequest) {
+      if (mounted && request == _resumeRequest) {
         setState(() => _isPollingResume = false);
       }
     }
@@ -229,7 +284,12 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
   // exists. Parsing a resume alone does not establish a score for every job.
 
   void _applyJob() {
-    _showApplyModal();
+    if (!_canApply) return;
+    if (_selectedResume == null) {
+      _chooseResume();
+    } else {
+      _showApplyModal();
+    }
   }
 
   void _showApplyModal() {
@@ -249,6 +309,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
       jobTitle: _job!.title,
       companyInfo:
           '${_job!.recruiterCompany} · ${_job!.location} · ${_job!.salaryLabel}',
+      initialResumeId: _selectedResume?.id,
       loadResumes: widget.loadApplyResumes,
       loadResumeDetail: widget.loadApplyResumeDetail,
       isMobile: isMobile,
@@ -380,7 +441,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     final match = JobSkillMatch.cached(
       jobId: widget.jobId,
       resumeId: detail.id,
-      jobSkills: _jobSkills?.map((skill) => skill.skillName).toList() ?? [],
+      jobSkills: _requiredSkills,
       resumeSkills: detail.skills ?? [],
     );
     final matchedSkills = match.matched;
@@ -653,7 +714,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                 textSecondary,
                 cardBg,
                 cardBorder,
-                false,
               ),
             ],
           ),
@@ -682,13 +742,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         const SizedBox(height: 16),
         _buildMatchPanel(textPrimary, textSecondary, cardBg, cardBorder),
         const SizedBox(height: 16),
-        _buildWhyYouMatchPanel(
-          textPrimary,
-          textSecondary,
-          cardBg,
-          cardBorder,
-          true,
-        ),
+        _buildWhyYouMatchPanel(textPrimary, textSecondary, cardBg, cardBorder),
         const SizedBox(height: 16),
         _buildDescriptionTextSection(textPrimary, textSecondary),
         const SizedBox(height: 16),
@@ -883,9 +937,8 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
         <String>[];
 
     final bool hasReqs = reqs.isNotEmpty;
-    final bool hasSkills =
-        _job != null &&
-        (_job!.skillsRequired.isNotEmpty || _job!.jobSkills.isNotEmpty);
+    final requiredSkills = _requiredSkills;
+    final hasSkills = requiredSkills.isNotEmpty;
 
     if (!hasReqs && !hasSkills) return const SizedBox.shrink();
 
@@ -947,37 +1000,28 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children:
-                (_job!.jobSkills.isNotEmpty
-                        ? _job!.jobSkills.map((s) => s.skillName).toList()
-                        : _job!.skillsRequired)
-                    .map((skill) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: context.themeSurface(const Color(0xFFF8FAFC)),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: context.themeOutline(
-                              const Color(0xFFE2E8F0),
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          skill,
-                          style: AppType.caption.style(
-                            context,
-                            color: context.themeForeground(
-                              const Color(0xFF334155),
-                            ),
-                          ),
-                        ),
-                      );
-                    })
-                    .toList(),
+            children: requiredSkills.map((skill) {
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: context.themeSurface(const Color(0xFFF8FAFC)),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: context.themeOutline(const Color(0xFFE2E8F0)),
+                  ),
+                ),
+                child: Text(
+                  skill,
+                  style: AppType.caption.style(
+                    context,
+                    color: context.themeForeground(const Color(0xFF334155)),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ],
       ],
@@ -1093,9 +1137,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               ),
               if (!hasScore)
                 Text(
-                  _hasUploadedResume == false
-                      ? 'Upload a resume to apply. Match scores are available after application screening.'
-                      : 'Match scores are available after a successful screening assessment of your application.',
+                  'Match scores are available after application screening.',
                   style: AppType.caption.style(context, color: textSecondary),
                 ),
               const SizedBox(height: 20),
@@ -1121,19 +1163,17 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                           : Colors.white,
                     ),
                   ),
-                ),
-                onPressed: _isApplied || _isSubmitting || _job == null
-                    ? null
-                    : _applyJob,
-                child: Text(
-                  _isApplied
-                      ? 'Applied'
-                      : (_isSubmitting
-                            ? 'Submitting...'
-                            : (_hasUploadedResume == true
-                                  ? 'Apply with default resume'
-                                  : 'Apply with a resume')),
-                  style: AppType.button.style(context),
+                  onPressed: _canApply ? _applyJob : null,
+                  child: Text(
+                    _isApplied
+                        ? 'Applied'
+                        : (_isSubmitting
+                              ? 'Submitting...'
+                              : _selectedResume == null
+                              ? 'Apply with a resume'
+                              : 'Continue to application'),
+                    style: AppType.button.style(context),
+                  ),
                 ),
               ),
               if (_applicationStateMessage != null) ...[
@@ -1178,354 +1218,172 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
     );
   }
 
-  // ── WHY MATCH PANEL COMPONENT ──────────────────────────────────────────────
   Widget _buildWhyYouMatchPanel(
     Color textPrimary,
     Color textSecondary,
     Color cardBg,
     Color cardBorder,
-    bool isMobile,
   ) {
-    if (_isLoadingResume || _isLoadingJob || _isLoadingSkills) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cardBorder, width: 1.5),
-        ),
-        child: const Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(
-                AppColors.dashboardTeal,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (_resumeDetail == null) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cardBorder, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Why you match',
-                  style: AppType.h4.style(context, color: textPrimary),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Center(
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.upload_file_rounded,
-                    size: 48,
-                    color: context
-                        .themeForeground(const Color(0xFF94A3B8))
-                        .withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Upload a resume to see why you match',
-                    textAlign: TextAlign.center,
-                    style: AppType.caption.style(context, color: textSecondary),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    style: CandidateButtonStyle.primary(
-                      ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.dashboardTeal,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              const CandidateResumeManagementScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.add, size: 16),
-                    label: Text(
-                      'Upload resume',
-                      style: AppType.caption.style(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_needsParsing(_resumeDetail!)) {
-      final resumeId = _resumeDetail!.id;
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cardBorder, width: 1.5),
-        ),
-        child: Row(
-          children: [
-            if (_isPollingResume) ...[
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    AppColors.dashboardTeal,
-                  ),
-                  strokeWidth: 2,
-                ),
-              ),
-              const SizedBox(width: 16),
-            ],
-            Expanded(
-              child: Text(
-                _isPollingResume
-                    ? 'Parsing your resume…'
-                    : 'Resume parsing is taking longer than expected.',
-                style: AppType.bodySm.style(context, color: textSecondary),
-              ),
-            ),
-            if (!_isPollingResume)
-              TextButton(
-                onPressed: () => _pollActiveResume(resumeId, _jobRequest),
-                child: const Text('Check status'),
-              ),
-          ],
-        ),
-      );
-    }
-
-    if (_resumeDetail!.isFailed) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cardBorder, width: 1.5),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'We couldn\'t parse your resume — try re-uploading a text-based PDF.',
-              style: AppType.caption.style(context, color: Colors.redAccent),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 0),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CandidateResumeManagementScreen(),
-                  ),
-                );
-              },
-              child: Text(
-                'Manage resumes',
-                style: AppType.button.style(
-                  context,
-                  color: CandidateButtonStyle.deepTeal,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_skillsFailed || _jobSkills == null) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cardBorder, width: 1.5),
-        ),
-        child: Text(
-          'Unable to load required skills. Reopen this job to try again.',
-          style: AppType.bodySm.style(context, color: textSecondary),
-        ),
-      );
-    }
-
-    final match = JobSkillMatch.cached(
-      jobId: widget.jobId,
-      resumeId: _resumeDetail!.id,
-      jobSkills: _jobSkills!.map((skill) => skill.skillName).toList(),
-      resumeSkills: _resumeDetail!.skills ?? const [],
-    );
-    final matched = match.matched;
-    final missing = match.missing;
-
+    final selection = _selectedResume;
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: cardBorder, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          Text(
+            'Why you match',
+            style: AppType.h4.style(context, color: textPrimary),
+          ),
+          if (selection != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              selection.filename,
+              style: AppType.bodySm.style(context, color: textSecondary),
+            ),
+          ],
+          const SizedBox(height: 12),
+          ..._buildSkillComparison(textSecondary, cardBorder),
+          Wrap(
+            spacing: 8,
             children: [
-              Text(
-                'Why you match',
-                style: AppType.h4.style(context, color: textPrimary),
+              TextButton(
+                onPressed: _chooseResume,
+                child: Text(
+                  selection == null ? 'Choose a resume' : 'Change resume',
+                ),
               ),
+              if (selection == null || _resumeDetail?.isFailed == true)
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const CandidateResumeManagementScreen(),
+                    ),
+                  ),
+                  child: const Text('Manage resumes'),
+                ),
             ],
-          ),
-          const SizedBox(height: 16),
-          Divider(color: cardBorder, height: 1, thickness: 1),
-          const SizedBox(height: 16),
-
-          // MATCHED
-          Text(
-            'MATCHED · ${matched.length}',
-            style: AppType.caption.style(
-              context,
-              color: context.themeForeground(TypographyColors.secondary),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: matched.map((m) {
-              return Tooltip(
-                message: 'Found in your parsed resume.',
-                preferBelow: false,
-                child: PointerGestureDetector(
-                  onTap: () {
-                    if (isMobile) {
-                      _showChipToast('Matched skill: $m found in resume');
-                    }
-                  },
-                  child: Chip(
-                    label: Text(
-                      '$m ✓',
-                      style: AppType.caption.style(
-                        context,
-                        color: context.themeForeground(const Color(0xFF10B981)),
-                      ),
-                    ),
-                    backgroundColor: context.themeSurface(
-                      const Color(0xFFECFDF5),
-                    ),
-                    side: BorderSide(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-
-          // MISSING
-          Text(
-            'MISSING · ${missing.length}',
-            style: AppType.caption.style(
-              context,
-              color: context.themeForeground(TypographyColors.secondary),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: missing.map((m) {
-              return Tooltip(
-                message: 'Not found in your resume.',
-                preferBelow: false,
-                child: PointerGestureDetector(
-                  onTap: () {
-                    if (isMobile) {
-                      _showChipToast(
-                        'Missing skill: $m not detected in resume',
-                      );
-                    }
-                  },
-                  child: Chip(
-                    label: Text(
-                      m,
-                      style: AppType.caption.style(
-                        context,
-                        color: context.themeForeground(
-                          TypographyColors.secondary,
-                        ),
-                      ),
-                    ),
-                    backgroundColor: context.themeSurface(
-                      const Color(0xFFF1F5F9),
-                    ),
-                    side: BorderSide(color: cardBorder),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 20),
-          Divider(color: cardBorder, height: 1, thickness: 1),
-          const SizedBox(height: 12),
-
-          // Coaching note
-          Text(
-            'Missing skills lower your match by ~5 points — worth naming in your first answer.',
-            style: AppType.caption.style(
-              context,
-              color: context.themeForeground(TypographyColors.secondary),
-            ),
           ),
         ],
       ),
+    );
+  }
+
+  List<Widget> _buildSkillComparison(Color textSecondary, Color cardBorder) {
+    Text message(String value) =>
+        Text(value, style: AppType.bodySm.style(context, color: textSecondary));
+
+    final detail = _resumeDetail;
+    if (_selectedResume == null) {
+      return [
+        message('Choose a resume to compare with this job’s required skills.'),
+      ];
+    }
+    if (_isLoadingResume || _isLoadingSkills) {
+      return [
+        const LinearProgressIndicator(),
+        const SizedBox(height: 8),
+        message('Loading skill comparison…'),
+      ];
+    }
+    if (_resumeLoadFailed) {
+      return [
+        message('Unable to load the selected resume.'),
+        TextButton(
+          onPressed: _loadComparisonResume,
+          child: const Text('Try again'),
+        ),
+      ];
+    }
+    if (detail == null) return [];
+    if (detail.isFailed) {
+      return [message('Skills could not be extracted from this resume.')];
+    }
+    if (_needsParsing(detail) || detail.status == ResumeStatus.stored) {
+      return [
+        message(
+          _isPollingResume
+              ? 'Parsing your resume…'
+              : 'This resume’s skills are still unavailable.',
+        ),
+        if (!_isPollingResume)
+          TextButton(
+            onPressed: _loadComparisonResume,
+            child: const Text('Check status'),
+          ),
+      ];
+    }
+    if (_skillsFailed) {
+      return [
+        message(
+          'Unable to load required skills. Reopen this job to try again.',
+        ),
+      ];
+    }
+    final match = JobSkillMatch.cached(
+      jobId: widget.jobId,
+      resumeId: detail.id,
+      jobSkills: _requiredSkills,
+      resumeSkills: detail.skills ?? const [],
+    );
+    if (match.matched.isEmpty && match.missing.isEmpty) {
+      return [message('This job has no listed required skills.')];
+    }
+    return [
+      _buildSkillGroup('MATCHED', match.matched, cardBorder, matched: true),
+      const SizedBox(height: 12),
+      _buildSkillGroup('MISSING', match.missing, cardBorder, matched: false),
+    ];
+  }
+
+  Widget _buildSkillGroup(
+    String label,
+    List<String> skills,
+    Color cardBorder, {
+    required bool matched,
+  }) {
+    const green = Color(0xFF047857);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$label · ${skills.length}',
+          style: AppType.caption.style(
+            context,
+            color: context.themeForeground(TypographyColors.secondary),
+          ),
+        ),
+        if (skills.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final skill in skills)
+                Chip(
+                  label: Text(
+                    matched ? '$skill ✓' : skill,
+                    style: AppType.caption.style(
+                      context,
+                      color: matched ? context.themeForeground(green) : null,
+                    ),
+                  ),
+                  backgroundColor: context.themeSurface(
+                    matched ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9),
+                  ),
+                  side: BorderSide(
+                    color: matched ? green.withValues(alpha: 0.2) : cardBorder,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 
@@ -1549,21 +1407,6 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
             child: const Text('Close'),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showChipToast(String message) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF334155),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-        content: Text(
-          message,
-          style: AppType.caption.style(context, color: Colors.white),
-        ),
       ),
     );
   }
@@ -1653,9 +1496,136 @@ class GridPainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
+class _MatchResumePicker extends StatefulWidget {
+  const _MatchResumePicker({
+    required this.loadResumes,
+    required this.selectedId,
+  });
+
+  final Future<List<Map<String, dynamic>>> Function() loadResumes;
+  final String? selectedId;
+
+  @override
+  State<_MatchResumePicker> createState() => _MatchResumePickerState();
+}
+
+class _MatchResumePickerState extends State<_MatchResumePicker> {
+  late Future<List<Map<String, dynamic>>> _resumes;
+
+  @override
+  void initState() {
+    super.initState();
+    _resumes = widget.loadResumes();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final navigator = Navigator.of(context);
+    return AlertDialog(
+      constraints: const BoxConstraints(maxWidth: 600),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: context.themeSurface(Colors.white),
+      scrollable: true,
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Which resume do you want to match?',
+              style: AppType.h2.style(context),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Close',
+            onPressed: () => navigator.pop(),
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 550,
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: _resumes,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Unable to load your resumes.'),
+                  TextButton(
+                    onPressed: () =>
+                        setState(() => _resumes = widget.loadResumes()),
+                    child: const Text('Try again'),
+                  ),
+                ],
+              );
+            }
+            final resumes = snapshot.data!;
+            if (resumes.isEmpty) {
+              return const Text(
+                'Upload a resume in My resumes to compare your skills.',
+              );
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final resume in resumes) _resumeTile(context, resume),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _resumeTile(BuildContext context, Map<String, dynamic> resume) {
+    final id = resume['id'].toString();
+    final filename = (resume['filename'] ?? resume['file_name'] ?? 'Resume')
+        .toString();
+    final selected = widget.selectedId == id;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: context.themeSurface(
+          selected ? const Color(0xFFF0FDF4) : Colors.white,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+          ),
+        ),
+        child: ListTile(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          selected: selected,
+          leading: Icon(
+            selected
+                ? Icons.radio_button_checked
+                : Icons.radio_button_unchecked,
+          ),
+          title: Text(filename, style: AppType.bodySm.style(context)),
+          onTap: () => Navigator.of(context).pop((
+            id: id,
+            filename: filename,
+            stored:
+                ResumeStatus.fromString(resume['status']?.toString() ?? '') ==
+                ResumeStatus.stored,
+          )),
+        ),
+      ),
+    );
+  }
+}
+
 class _ApplyModalWidget extends StatefulWidget {
   final String jobTitle;
   final String companyInfo;
+  final String? initialResumeId;
   final Future<List<Map<String, dynamic>>> Function()? loadResumes;
   final Future<ResumeDetail> Function(String id)? loadResumeDetail;
   final void Function(
@@ -1670,6 +1640,7 @@ class _ApplyModalWidget extends StatefulWidget {
   const _ApplyModalWidget({
     required this.jobTitle,
     required this.companyInfo,
+    this.initialResumeId,
     this.loadResumes,
     this.loadResumeDetail,
     required this.onSubmit,
@@ -1718,11 +1689,10 @@ class _ApplyModalWidgetState extends State<_ApplyModalWidget> {
         _resumes = resumes;
         _isLoadingResumes = false;
         if (_resumes.isNotEmpty) {
-          final def = _resumes.firstWhere(
-            (r) => r['active'] == true,
-            orElse: () => _resumes.first,
-          );
-          _selectedResumeId = def['id'].toString();
+          final initialId = widget.initialResumeId;
+          if (_resumes.any((resume) => resume['id'].toString() == initialId)) {
+            _selectedResumeId = initialId;
+          }
         }
       });
       if (_selectedResumeId != null) {

@@ -15,6 +15,7 @@ import '../../services/job_service.dart';
 import '../../services/resume_service.dart';
 import '../../widgets/candidate_side_nav.dart';
 import '../../widgets/green_gradient_background.dart';
+import 'candidate_job_detail_route.dart';
 import 'widgets/candidate_job_card.dart';
 
 class CandidateJobFeedScreen extends StatefulWidget {
@@ -376,7 +377,7 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
                   isMobile: isMobile,
                   isHot: index == 0,
                   hasUploadedResume: _hasUploadedResume ?? false,
-                  onApply: () => _openJobDetail(job.title, job.id),
+                  onApply: () => _openJobDetail(job.id),
                 );
               }
 
@@ -573,11 +574,12 @@ class _CandidateJobFeedScreenState extends State<CandidateJobFeedScreen> {
     );
   }
 
-  Future<void> _openJobDetail(String title, String jobId) async {
+  Future<void> _openJobDetail(String jobId) async {
     if (_jobs.any((job) => job.id == jobId && job.hasApplied)) return;
-    await Navigator.of(
-      context,
-    ).pushNamed('/candidate/jobs/${Uri.encodeComponent(jobId)}');
+    await Navigator.of(context).pushNamed(
+      '/candidate/jobs/${Uri.encodeComponent(jobId)}',
+      arguments: CandidateJobDetailIntent.apply,
+    );
     if (mounted) await _loadJobs();
   }
 

@@ -24,6 +24,7 @@ class _InterviewReplayPanelState extends State<InterviewReplayPanel> {
   web.HTMLVideoElement? _video;
   String? _source;
   String _state = 'loading';
+  String? _reason;
   bool _busy = false, _errorRetried = false;
   num _position = 0;
   bool _resume = false, _restoring = false;
@@ -71,24 +72,38 @@ class _InterviewReplayPanelState extends State<InterviewReplayPanel> {
       final state = data['state'] as String;
       final rawUrl = data['url'] as String?;
       final uri = rawUrl == null ? null : Uri.tryParse(rawUrl);
-      final source = uri?.scheme == 'https' ? rawUrl : null;
+      final source =
+          uri != null &&
+              uri.scheme == 'https' &&
+              uri.host.isNotEmpty &&
+              uri.userInfo.isEmpty &&
+              !uri.hasFragment
+          ? rawUrl
+          : null;
       final ttl = data['expires_in'] as int?;
       final gaps = data['gaps'] as List? ?? const [];
       setState(() {
         _state = state;
         _gaps = gaps.whereType<Map<String, dynamic>>().toList();
+        _reason = data['reason'] as String?;
+        if (source != null && ttl != null && ttl > 0) {
+          _source = source;
+        } else {
+          _clearSource();
+        }
       });
-      if (source != null && ttl != null) {
-        _source = source;
+      if (source != null && ttl != null && ttl > 0) {
         _replaceSource();
-        if (ttl > 20) {
-          _refresh = Timer(Duration(seconds: ttl - 15), () {
-            _errorRetried = false;
-            unawaited(_load());
-          });
+        if (ttl > 1) {
+          _refresh = Timer(
+            Duration(seconds: ttl > 20 ? ttl - 15 : ttl - 1),
+            () {
+              _errorRetried = false;
+              unawaited(_load());
+            },
+          );
         }
       } else {
-        _clearSource();
         if (state == 'processing' || state == 'recording') {
           _refresh = Timer(const Duration(seconds: 15), _load);
         }
@@ -98,9 +113,16 @@ class _InterviewReplayPanelState extends State<InterviewReplayPanel> {
       final status = error.response?.statusCode;
       if (status == 401 || status == 403 || status == 404) {
         _clearSource();
-        setState(() => _state = 'unavailable');
+        setState(() {
+          _state = 'unavailable';
+          _reason = 'access_unavailable';
+        });
       } else {
-        setState(() => _state = 'connection_error');
+        setState(() {
+          _state = 'connection_error';
+          final data = error.response?.data;
+          _reason = data is Map ? data['reason'] as String? : null;
+        });
       }
     } catch (_) {
       if (_current) setState(() => _state = 'connection_error');
@@ -225,7 +247,11 @@ class _InterviewReplayPanelState extends State<InterviewReplayPanel> {
                 ),
             ],
             if (_state == 'connection_error') ...[
-              const Text('Replay could not be loaded.'),
+              Text(
+                _reason == 'storage_unavailable'
+                    ? 'Replay storage is temporarily unavailable.'
+                    : 'Replay could not be loaded.',
+              ),
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton(
@@ -243,7 +269,20 @@ class _InterviewReplayPanelState extends State<InterviewReplayPanel> {
                 'processing' => 'Replay is being processed.',
                 'failed' => 'Replay processing failed.',
                 'expired' => 'This replay has expired.',
-                _ => 'Replay is unavailable.',
+                _ => switch (_reason) {
+                  'camera_recording_missing' || 'no_verified_video' =>
+                    'No camera recording was saved for this attempt.',
+                  'playback_disabled' => 'Replay playback is disabled.',
+                  'capture_not_started' => 'Camera recording has not started.',
+                  'audio_pending' ||
+                  'audio_host_unconfigured' ||
+                  'audio_origin_unavailable' =>
+                    'Replay could not retrieve the interview audio.',
+                  'alignment_unverified' =>
+                    'The audio and camera recording could not be synchronized.',
+                  'access_unavailable' => 'Replay access is unavailable.',
+                  _ => 'Replay is unavailable.',
+                },
               }),
           ],
         ),

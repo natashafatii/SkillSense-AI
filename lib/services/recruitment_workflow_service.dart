@@ -75,6 +75,39 @@ class RecruitmentWorkflowService {
     ),
   );
 
+  Future<({Uri? uri, String? reason})> recordingAccess(
+    String interviewId, {
+    CancelToken? cancelToken,
+  }) async {
+    final result = await request(
+      '/interviews/${requireInterviewIdentity(interviewId)}/recording-access/',
+      cancelToken: cancelToken,
+    );
+    return (
+      uri: InterviewRecording.recordingUri(result['recording_url']),
+      reason: result['reason'] as String?,
+    );
+  }
+
+  Future<({Uri? uri, String state})> replayAccess(
+    String interviewId, {
+    CancelToken? cancelToken,
+  }) async {
+    final result = await request(
+      '/interviews/${requireInterviewIdentity(interviewId)}/replay/',
+      cancelToken: cancelToken,
+    );
+    final state = result['state'] as String;
+    return (
+      uri:
+          const {'ready', 'partial'}.contains(state) &&
+              (result['expires_in'] as int? ?? 0) > 0
+          ? InterviewRecording.recordingUri(result['url'])
+          : null,
+      state: state,
+    );
+  }
+
   Future<RecruiterReportResult> interviewBehavior(
     InterviewSessionIdentity identity, {
     CancelToken? cancelToken,
@@ -88,6 +121,41 @@ class RecruitmentWorkflowService {
       throw StateError('Session changed.');
     }
     return result;
+  }
+
+  Future<InterviewSessionIdentity?> resolveInterviewSession(
+    String interviewId, {
+    CancelToken? cancelToken,
+  }) async {
+    // Compatibility with servers that predate interview_session_id on the
+    // recruiter interview resource. Only consume the identity from this read.
+    final data = await request(
+      '/interviews/${requireInterviewIdentity(interviewId)}/voice-session/',
+      cancelToken: cancelToken,
+    );
+    final sessionId = data['interview_session_id'];
+    return sessionId == null
+        ? null
+        : InterviewSessionIdentity(
+            interviewId: interviewId,
+            sessionId: requireInterviewIdentity(sessionId),
+          );
+  }
+
+  Future<InterviewSessionIdentity?> behavioralSession(
+    RecruiterInterview interview, {
+    CancelToken? cancelToken,
+  }) async {
+    final sessionId = interview.sessionId;
+    if (sessionId != null) {
+      return InterviewSessionIdentity(
+        interviewId: interview.id,
+        sessionId: sessionId,
+      );
+    }
+    return interview.hasSessionIdentityField
+        ? null
+        : await resolveInterviewSession(interview.id, cancelToken: cancelToken);
   }
 
   Future<Json> request(

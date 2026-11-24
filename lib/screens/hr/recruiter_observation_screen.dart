@@ -34,19 +34,33 @@ class RecruiterObservationScreen extends StatelessWidget {
 
 /// This guard also protects direct navigation, outside the named-route guard.
 class RecruiterObservationView extends StatelessWidget {
-  const RecruiterObservationView({super.key, required this.target});
+  const RecruiterObservationView({
+    super.key,
+    required this.target,
+    this.liveMonitorStatus,
+  });
   final RecruiterObservationTarget target;
+  final String? liveMonitorStatus;
   @override
   Widget build(BuildContext context) => RoleGuard(
     inline: true,
     allowedRoles: const ['RECRUITER'],
-    child: _ObservationBody(key: ValueKey(target.key), target: target),
+    child: _ObservationBody(
+      key: ValueKey(target.key),
+      target: target,
+      liveMonitorStatus: liveMonitorStatus,
+    ),
   );
 }
 
 class _ObservationBody extends StatefulWidget {
-  const _ObservationBody({super.key, required this.target});
+  const _ObservationBody({
+    super.key,
+    required this.target,
+    required this.liveMonitorStatus,
+  });
   final RecruiterObservationTarget target;
+  final String? liveMonitorStatus;
   @override
   State<_ObservationBody> createState() => _ObservationBodyState();
 }
@@ -117,8 +131,29 @@ class _ObservationBodyState extends State<_ObservationBody>
         'Interview ${widget.target.identity.interviewId} · Session ${widget.target.identity.sessionId}',
       ),
       Text('Application ${widget.target.applicationId}'),
-      if (liveMonitorEnabled && _visible)
-        LiveMonitor(sessionId: widget.target.identity.sessionId),
+      if (_visible && widget.liveMonitorStatus != null) ...[
+        const SizedBox(height: 12),
+        if (liveMonitorSupported && widget.liveMonitorStatus == 'available')
+          LiveMonitor(sessionId: widget.target.identity.sessionId)
+        else
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.videocam_off_outlined),
+              title: const Text('Live playback unavailable'),
+              subtitle: Text(switch (widget.liveMonitorStatus) {
+                'monitor_unavailable' =>
+                  'Live monitoring is disabled on this server.',
+                'relay_unavailable' =>
+                  'The server needs a configured media relay.',
+                'session_not_publishable' =>
+                  'This session is not sharing live video.',
+                'available' => 'Open this page in a supported web browser.',
+                _ => 'Live playback availability could not be confirmed.',
+              }),
+            ),
+          ),
+        const SizedBox(height: 12),
+      ],
       RecruiterObservationPanel(controller: _controller),
     ],
   );

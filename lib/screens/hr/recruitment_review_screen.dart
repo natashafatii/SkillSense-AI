@@ -59,34 +59,43 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
   int _tab = 0;
   String _historyFilter = 'all';
   CancelToken? _checklistRequest;
-  String? _checklistAttempt;
+  (String, String?, bool)? _checklistAttempt;
   RecruiterReportResult? _checklistReport;
   bool _checklistLoading = false;
 
-  Future<void> _loadChecklist(String? id, {bool refresh = false}) async {
-    if (!refresh && _checklistAttempt == id) return;
+  Future<void> _loadChecklist(
+    RecruiterInterview? interview, {
+    bool refresh = false,
+  }) async {
+    final attempt = interview == null
+        ? null
+        : (
+            interview.id,
+            interview.sessionId,
+            interview.hasSessionIdentityField,
+          );
+    if (!refresh && _checklistAttempt == attempt) return;
     _checklistRequest?.cancel();
-    _checklistAttempt = id;
+    _checklistAttempt = attempt;
     final token = _checklistRequest = CancelToken();
     setState(() {
       _checklistReport = null;
-      _checklistLoading = id != null;
+      _checklistLoading = interview != null;
     });
-    if (id == null) return;
+    if (interview == null) return;
     try {
-      final recording = await controller.service.interviewRecording(
-        id,
+      final identity = await controller.service.behavioralSession(
+        interview,
         cancelToken: token,
       );
-      if (token.isCancelled || recording.sessionId == null) return;
+      if (token.isCancelled || identity == null) return;
       final report = await controller.service.interviewBehavior(
-        InterviewSessionIdentity(
-          interviewId: id,
-          sessionId: recording.sessionId!,
-        ),
+        identity,
         cancelToken: token,
       );
-      if (mounted && !token.isCancelled) {
+      if (mounted &&
+          !token.isCancelled &&
+          report.sessionId == identity.sessionId) {
         setState(() => _checklistReport = report);
       }
     } catch (_) {
@@ -109,7 +118,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
   void _refresh() {
     setState(() => _dashboardRefresh++);
     controller.refresh();
-    _loadChecklist(controller.review?.interview?.id, refresh: true);
+    _loadChecklist(controller.review?.interview, refresh: true);
   }
 
   @override
@@ -132,7 +141,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       overrideReason.clear();
     }
     if (mounted) {
-      _loadChecklist(controller.review?.interview?.id);
+      _loadChecklist(controller.review?.interview);
       setState(() {});
     }
   }
@@ -1903,6 +1912,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
         r.latestEvaluation?.coverage;
     final weights = score?.weights;
     final answers = r.latestEvaluation?.assessedCount;
+    final extracted = r.latestEvaluation?.extractedCount ?? 0;
     final metrics = _metrics(r);
     final interviewScore = metrics[1].$2;
     final weightSplit = ['match', 'interview', 'behavioral']
@@ -1918,7 +1928,8 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
           : 'Resume vs role · weight ${weight('match')}',
       [
         if (answers != null)
-          '$answers answers${interviewScore == null ? '' : ', average ${(interviewScore / 10).toStringAsFixed(1)} / 10'}',
+          '$answers scored${interviewScore == null ? '' : ', average ${(interviewScore / 10).toStringAsFixed(1)} / 10'}',
+        if (extracted > (answers ?? 0)) '$extracted linked answers',
         if (weights?['interview'] != null) 'weight ${weight('interview')}',
       ].join(' · '),
       if (weightSplit.isNotEmpty) 'Weighted $weightSplit' else '',
@@ -2108,7 +2119,7 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
             'disabled' => 'Disabled',
             _ => 'Unavailable',
           };
-    final expression = report?.snapshot.expressionStatus;
+    final expressionMeasured = report?.hasMeasuredExpressions == true;
     final entries = [
       (
         'Evaluation ready',
@@ -2120,21 +2131,19 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       ),
       ('Answer coverage', percent(coverage, ratio: true), coverage == 1, 2),
       (
-        'Proctoring flags',
+        'Camera observations',
         report == null
             ? availability
-            : '${report.episodes.length}${report.episodesTruncated ? '+' : ''} events',
-        report != null && report.episodes.isEmpty,
+            : report.isFinal
+            ? 'Final report'
+            : 'Interim report',
+        false,
         1,
       ),
       (
-        'Emotion timeline (FER)',
-        expression == 'disabled'
-            ? 'Not collected'
-            : expression == null
-            ? availability
-            : _displayStatus(expression),
-        report?.expressionPercentages.isNotEmpty == true,
+        'Facial expressions',
+        expressionMeasured ? 'Measured' : 'Disabled',
+        expressionMeasured,
         1,
       ),
       (

@@ -24,9 +24,11 @@ enum PublisherState {
   terminal,
 }
 
+enum CameraFrameNotice { poorQuality, noFace, recovered }
+
 class PublisherPolicy {
   PublisherPolicy({
-    this.maxRetries = 5,
+    this.maxRetries = 6,
     this.baseBackoff = const Duration(milliseconds: 500),
     this.maxBackoff = const Duration(seconds: 15),
     this.recoveryWindow = const Duration(seconds: 60),
@@ -102,6 +104,11 @@ class CandidatePublisherController extends ChangeNotifier {
   PublisherSocket? _socket;
   CancelToken? _request;
   Timer? _retryTimer, _handshakeTimer, _ackTimer, _leaseTimer, _heartbeatTimer;
+  Timer? _cameraNoticeTimer;
+  CameraFrameNotice? _cameraFrameNotice;
+  CameraFrameNotice? _cameraRecoveryPending;
+  CameraFrameNotice? get cameraFrameNotice => _cameraFrameNotice;
+  final Map<CameraFrameNotice, DateTime> _lastCameraWarning = {};
   DateTime? _lastPong;
   DateTime? _readySince;
   DateTime? _outageStarted, _deadline;
@@ -120,7 +127,7 @@ class CandidatePublisherController extends ChangeNotifier {
     'peak_buffered_bytes': _peakBufferedBytes,
   };
   PublisherState get state => _state;
-  bool _renewing = false;
+  bool _renewing = false, _hadReadyConnection = false;
   bool get needsAttention =>
       _state == PublisherState.terminal ||
       _state == PublisherState.unavailable ||
@@ -167,6 +174,7 @@ class CandidatePublisherController extends ChangeNotifier {
     }
     _active = true;
     _renewing = false;
+    _hadReadyConnection = false;
     _retries = 0;
     _outageStarted = null;
     unawaited(_attempt());
@@ -241,7 +249,13 @@ class CandidatePublisherController extends ChangeNotifier {
     } on ApiException catch (error) {
       if (!_current(epoch)) return;
       final status = error.statusCode;
-      if (status != null && status >= 400 && status < 500) {
+      if (status == 429) {
+        _recover(
+          epoch,
+          'The video ticket service is busy.',
+          minimumDelay: error.retryAfter ?? const Duration(seconds: 4),
+        );
+      } else if (status != null && status >= 400 && status < 500) {
         _terminal(switch (status) {
           401 =>
             'Your sign-in could not authorize frame transport. Sign in again.',
@@ -253,8 +267,6 @@ class CandidatePublisherController extends ChangeNotifier {
           409 =>
             'This session cannot accept a publisher right now. Check for another active interview tab.',
           410 => 'This session is no longer eligible for frame publishing.',
-          429 =>
-            'The video ticket limit was reached after connection attempts. Wait for unused tickets to expire, then reconnect video. Check the backend WebSocket origin and server configuration if this repeats.',
           _ =>
             'The ticket service rejected this session request (HTTP $status).',
         });
@@ -310,13 +322,19 @@ class CandidatePublisherController extends ChangeNotifier {
           utf8.encode(raw).length > policy.maxIncomingBytes) {
         throw const FormatException('Invalid publisher event.');
       }
+      final json = requireJsonObject(jsonDecode(raw));
       final message = AnalysisMessage.parse(
-        jsonDecode(raw),
+        json,
         negotiatedVersion: 1,
         purpose: SocketPurpose.publisher,
         sessionId: identity.sessionId,
       );
-      if (jsonDecode(raw)['type'] == 'pong') _lastPong = _now();
+      if (json['type'] == 'pong') {
+        _lastPong = _now();
+        if (_ready?.cameraFeedback == true) {
+          _updateCameraFeedback(json['camera_feedback']);
+        }
+      }
       if (message is ReadyMessage) {
         _onReady(epoch, message);
       } else if (message is AckMessage) {
@@ -337,11 +355,15 @@ class CandidatePublisherController extends ChangeNotifier {
             _terminal(
               'This session is no longer eligible for frame publishing.',
             );
+          case 'connection_limit':
+            _recover(
+              epoch,
+              _renewing
+                  ? 'Waiting for a video connection slot to become available.'
+                  : 'The video connection limit was reached.',
+            );
           case 'publisher_conflict':
-            if (_renewing) {
-              // The replacement handshake can beat cleanup of our old socket.
-              // Give fenced server cleanup one bounded retry; never take over
-              // another publisher or bypass server authorization.
+            if (_renewing || _hadReadyConnection) {
               _recover(
                 epoch,
                 'Waiting for the previous video connection to close.',
@@ -379,13 +401,16 @@ class CandidatePublisherController extends ChangeNotifier {
       throw const FormatException('Invalid connection generation.');
     }
     final expiry = ready.authorizationExpiresAt;
-    if (ready.maxWidth == null ||
-        ready.maxHeight == null ||
-        expiry == null ||
-        expiry.difference(_now()) <= policy.renewAhead) {
+    if (ready.maxWidth == null || ready.maxHeight == null || expiry == null) {
       throw const FormatException(
         'Publisher limits and lease must be explicit.',
       );
+    }
+    _hadReadyConnection = true;
+    _lastGeneration = ready.connectionGeneration;
+    if (expiry.difference(_now()) <= policy.renewAhead) {
+      _recover(epoch, 'The video credential needs renewal.');
+      return;
     }
     final limits = CaptureLimits.fromReady(
       ready,
@@ -395,7 +420,6 @@ class CandidatePublisherController extends ChangeNotifier {
     _ready = ready;
     _renewing = false;
     _readySince = _now();
-    _lastGeneration = ready.connectionGeneration;
     _nextSequence = 0;
     _pendingSequence = null;
     final localCap = _now().add(policy.maxLease);
@@ -422,7 +446,11 @@ class CandidatePublisherController extends ChangeNotifier {
       // Heartbeats never renew the authorization lease or enqueue behind frames.
       if ((socket.bufferedAmount ?? 0) == 0) {
         try {
-          socket.send('{"type":"ping"}');
+          socket.send(
+            ready.cameraFeedback
+                ? '{"type":"ping","camera_feedback":true}'
+                : '{"type":"ping"}',
+          );
         } catch (_) {
           _recover(epoch, 'Frame transport heartbeat failed.');
         }
@@ -430,7 +458,7 @@ class CandidatePublisherController extends ChangeNotifier {
     });
     _publish(
       PublisherState.ready,
-      'Frame transport ready. No analysis result is implied.',
+      'Frame transport is ready and waiting for the first admission.',
     );
     if (!_current(epoch)) return;
     media.sampler.start(
@@ -524,11 +552,55 @@ class CandidatePublisherController extends ChangeNotifier {
       socket.send(payload);
       _peakBufferedBytes = max(_peakBufferedBytes, socket.bufferedAmount ?? 0);
       _sent++;
-      if (_current(epoch)) {
-        _publish(PublisherState.ready, 'Video connected.');
-      }
     } catch (_) {
       _recover(epoch, 'Frame transport could not send.');
+    }
+  }
+
+  void _showCameraNotice(CameraFrameNotice? notice) {
+    final changed = notice != _cameraFrameNotice;
+    _cameraFrameNotice = notice;
+    _cameraNoticeTimer?.cancel();
+    if (notice != null) {
+      _cameraNoticeTimer = Timer(
+        Duration(seconds: notice == CameraFrameNotice.recovered ? 4 : 7),
+        () => _showCameraNotice(null),
+      );
+    }
+    if (changed && !_disposed) notifyListeners();
+  }
+
+  void _updateCameraFeedback(Object? feedback) {
+    if (!media.cameraReady) {
+      _showCameraNotice(null);
+      return;
+    }
+    final warning = switch (feedback) {
+      'poor_quality' => CameraFrameNotice.poorQuality,
+      'no_face' => CameraFrameNotice.noFace,
+      _ => null,
+    };
+    if (warning != null) {
+      if (warning != _cameraFrameNotice) {
+        final now = _now();
+        final last = _lastCameraWarning[warning];
+        if (last != null &&
+            now.difference(last) < const Duration(seconds: 20)) {
+          _showCameraNotice(null);
+          return;
+        }
+        _lastCameraWarning[warning] = now;
+      }
+      _cameraRecoveryPending = warning;
+      _showCameraNotice(warning);
+    } else if ((feedback == 'face_visible' &&
+            _cameraRecoveryPending == CameraFrameNotice.noFace) ||
+        ((feedback == 'usable' || feedback == 'face_visible') &&
+            _cameraRecoveryPending == CameraFrameNotice.poorQuality)) {
+      _cameraRecoveryPending = null;
+      _showCameraNotice(CameraFrameNotice.recovered);
+    } else if (feedback != 'usable' && feedback != 'face_visible') {
+      _showCameraNotice(null);
     }
   }
 
@@ -555,20 +627,23 @@ class CandidatePublisherController extends ChangeNotifier {
       }
       _publish(
         PublisherState.ready,
-        'Frame admitted for processing. It has not been confirmed analyzed.',
+        'The server accepted the latest camera sample for processing.',
       );
     } else {
       _serverDropped++;
       _publish(
         PublisherState.ready,
-        'The server dropped a frame; no analysis result is implied.',
+        'The server dropped the latest camera sample.',
       );
     }
   }
 
-  void _recover(int epoch, String reason) {
+  void _recover(
+    int epoch,
+    String reason, {
+    Duration minimumDelay = Duration.zero,
+  }) {
     if (!_current(epoch)) return;
-    _renewing = false;
     _clearConnection();
     if (!media.cameraReady) {
       pause();
@@ -587,9 +662,10 @@ class CandidatePublisherController extends ChangeNotifier {
       policy.baseBackoff.inMilliseconds * (1 << _retries),
     );
     final random = _jitter().clamp(0.0, 1.0);
-    final delay = Duration(
+    final backoff = Duration(
       milliseconds: max(1, (ceiling * (.5 + .5 * random)).round()),
     );
+    final delay = minimumDelay > backoff ? minimumDelay : backoff;
     if (elapsed + delay >= policy.recoveryWindow) {
       _terminal(
         'Frame transport recovery stopped. Check your connection and retry explicitly.',
@@ -610,6 +686,9 @@ class CandidatePublisherController extends ChangeNotifier {
 
   void _clearConnection() {
     _epoch++;
+    _cameraNoticeTimer?.cancel();
+    _cameraFrameNotice = null;
+    _cameraRecoveryPending = null;
     _retryTimer?.cancel();
     _handshakeTimer?.cancel();
     _ackTimer?.cancel();
@@ -645,6 +724,7 @@ class CandidatePublisherController extends ChangeNotifier {
 
   void pause({bool notify = true}) {
     _active = false;
+    _lastCameraWarning.clear();
     _clearConnection();
     _state = PublisherState.paused;
     _notice =
@@ -653,12 +733,14 @@ class CandidatePublisherController extends ChangeNotifier {
   }
 
   void _mediaChanged() {
-    if (isCurrent && _active && !media.cameraReady) pause();
+    if (!isCurrent || media.cameraReady) return;
+    if (_active) pause();
   }
 
   void _logout() {
     _invalid = true;
     _active = false;
+    _lastCameraWarning.clear();
     _clearConnection();
     _lastTicket = null;
     _lastGeneration = null;

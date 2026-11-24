@@ -624,7 +624,14 @@ class AuthService {
   static String? get clerkFirstName => instance.firstName;
   static String? get clerkLastName => instance.lastName;
 
-  static Future<void> signOut([BuildContext? context]) async {
+  static Future<void> signOut([BuildContext? context]) => _endSession();
+
+  static Future<void> signOutAfterAccountDeletion(String? deletedUserId) async {
+    if (instance.userId != null && instance.userId != deletedUserId) return;
+    await _endSession(accountDeleted: true);
+  }
+
+  static Future<void> _endSession({bool accountDeleted = false}) async {
     if (_signingOut) throw StateError('Sign-out is already running.');
     _signingOut = true;
     final wasAuthOperation = _authOperation;
@@ -637,13 +644,15 @@ class AuthService {
     } catch (_) {
       // Some providers can end the session and then fail while notifying the
       // caller. Reflect the SDK's actual session state in that case.
-      if (!instance.isSignedIn) {
-        _invalidate();
-        expectedLoginRole = null;
-        _emit(false);
-        await _clearStoredUserSession();
+      if (!accountDeleted) {
+        if (!instance.isSignedIn) {
+          _invalidate();
+          expectedLoginRole = null;
+          _emit(false);
+          await _clearStoredUserSession();
+        }
+        rethrow;
       }
-      rethrow;
     } finally {
       _authOperation = wasAuthOperation;
       _signingOut = false;

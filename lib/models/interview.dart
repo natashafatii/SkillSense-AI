@@ -100,13 +100,17 @@ class Interview {
 /// Selected by the verified role, never by the presence of private JSON keys.
 class CandidateInterview extends Interview {
   final bool? videoRequired;
+  final bool liveMonitorAvailable;
 
   CandidateInterview.fromJson(Map<String, dynamic> json)
     : videoRequired = json['video_required'] as bool?,
+      liveMonitorAvailable = json['live_monitor_available'] == true,
       super.copy(Interview.fromJson(json));
 }
 
 class RecruiterInterview extends Interview {
+  final String? sessionId;
+  final bool hasSessionIdentityField;
   final List<InterviewQuestion> questions;
   final DateTime? createdAt;
   final String completionOutcome, evaluationStatus;
@@ -115,7 +119,9 @@ class RecruiterInterview extends Interview {
   @override
   final String questionFallbackReason;
   RecruiterInterview.fromJson(Map<String, dynamic> json)
-    : createdAt = ApiValue.instant(json['created_at']),
+    : sessionId = json['interview_session_id'] as String?,
+      hasSessionIdentityField = json.containsKey('interview_session_id'),
+      createdAt = ApiValue.instant(json['created_at']),
       questions = List.unmodifiable(
         (json['questions'] as List? ?? []).map(
           (q) =>

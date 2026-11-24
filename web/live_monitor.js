@@ -89,8 +89,12 @@ window.openSkillSenseMonitor = function(url, role, camera, voice, video, reconne
       peer.ontrack = ({track}) => {
         if (pc !== peer) return;
         stream.addTrack(track);
-        if (stream.getTracks().length === 2) video.play().catch(() => {
-          if (pc === peer) { clearTimeout(negotiation); report('enableSound'); }
+        if (stream.getTracks().length === 2) video.play().catch(async () => {
+          if (pc !== peer) return;
+          sound = false;
+          video.muted = true;
+          report('enableSound');
+          await video.play().catch(() => {});
         });
       };
     } else {
@@ -125,14 +129,20 @@ window.openSkillSenseMonitor = function(url, role, camera, voice, video, reconne
     } catch (_) { if (!closed && activeGeneration === generation) finish('reconnecting'); }
   };
   socket.onclose = event => finish(event.code === 4410 ? 'ended' :
-    event.code === 4401 ? 'renewing' : event.code === 4403 ? 'unavailable' : 'reconnecting');
+    event.code === 4401 ? 'renewing' : event.code === 4403 ? 'unavailable' :
+    event.code === 4409 && role === 'viewer' && !reconnect ? 'busy' : 'reconnecting');
   return {
     dispose() { finish('ended'); },
     async sound(enabled) {
       sound = enabled;
       if (video) {
         video.muted = !enabled;
-        try { await video.play(); return true; } catch (_) { return false; }
+        try { await video.play(); return true; } catch (_) {
+          sound = false;
+          video.muted = true;
+          await video.play().catch(() => {});
+          return false;
+        }
       }
       return false;
     }

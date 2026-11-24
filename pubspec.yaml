@@ -48,6 +48,9 @@ dependencies:
   video_player: ^2.10.1
   http: ^1.6.0
   http_parser: ^4.1.2
+  flutter_webrtc: 1.6.3
+  image: 4.12.0
+  path_provider: 2.1.5
 
 # Passkeys (used by Clerk) brings in ua_client_hints. Keep its native plugin
 # unchanged while using the local dart:js_interop web patch for Wasm builds.

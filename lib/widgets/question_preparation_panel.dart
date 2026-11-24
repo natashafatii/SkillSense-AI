@@ -36,12 +36,14 @@ class QuestionPreparationPanel extends StatefulWidget {
     this.application,
     this.previewBuilder,
     this.onSchedule,
+    this.useScreeningLayout = false,
   });
   final String applicationId;
   final Dio? client;
   final Application? application;
   final QuestionPreviewBuilder? previewBuilder;
   final VoidCallback? onSchedule;
+  final bool useScreeningLayout;
   final void Function(String? setId, int? revision) onApprovalChanged;
   @override
   State<QuestionPreparationPanel> createState() =>
@@ -61,6 +63,9 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
   int _resourceEpoch = 0;
   late final ForegroundPoller<Map<String, dynamic>> _poller;
   final int _session = SessionScope.generation;
+
+  bool get _useScreeningLayout =>
+      widget.useScreeningLayout || widget.onSchedule != null;
 
   Future<Map<String, dynamic>> _read([CancelToken? token]) async {
     final dio = widget.client ?? await ApiClient.getInstance();
@@ -234,7 +239,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
     final resourceEpoch = _resourceEpoch;
     final fields = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => _AddQuestionDialog(compact: widget.onSchedule != null),
+      builder: (_) => _AddQuestionDialog(compact: _useScreeningLayout),
     );
     if (!mounted ||
         resourceEpoch != _resourceEpoch ||
@@ -263,10 +268,8 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
     final resourceEpoch = _resourceEpoch;
     final fields = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => _AddQuestionDialog(
-        initial: question,
-        compact: widget.onSchedule != null,
-      ),
+      builder: (_) =>
+          _AddQuestionDialog(initial: question, compact: _useScreeningLayout),
     );
     if (!mounted ||
         resourceEpoch != _resourceEpoch ||
@@ -299,7 +302,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
         'Unedited generated and template questions will be archived. '
         'Manual questions and recruiter-edited wording are preserved. '
         'Review and approve the resulting revision again.';
-    final compact = widget.onSchedule != null;
+    final compact = _useScreeningLayout;
     final confirmed = await showDialog<bool>(
       context: context,
       barrierColor: compact ? const Color(0x800b1730) : null,
@@ -506,7 +509,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
         regenerate: canRegenerate ? _regenerate : null,
       );
     }
-    if (widget.onSchedule != null) {
+    if (_useScreeningLayout) {
       return _compactQuestions(
         state,
         label,
@@ -831,7 +834,7 @@ class _QuestionPreparationPanelState extends State<QuestionPreparationPanel> {
             context: context,
             builder: (_) => _AddQuestionDialog(
               initial: _unsavedAdd,
-              compact: widget.onSchedule != null,
+              compact: _useScreeningLayout,
             ),
           );
           if (edited != null && mounted) {

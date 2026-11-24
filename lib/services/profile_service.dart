@@ -6,6 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
 import 'session_scope.dart';
+import 'downloads/save_bytes_stub.dart'
+    if (dart.library.io) 'downloads/save_bytes_io.dart'
+    if (dart.library.js_interop) 'downloads/save_bytes_web.dart'
+    as downloads;
 
 /// Profile management service for Candidate and Recruiter profiles.
 class ProfileService {
@@ -218,6 +222,40 @@ class ProfileService {
   // ══════════════════════════════════════════════════════════════════════════
   // Recruiter Profile Endpoints (`/api/recruiters/profile/`)
   // ══════════════════════════════════════════════════════════════════════════
+
+  static Future<void> downloadRecruiterWorkspace() async {
+    final generation = SessionScope.generation;
+    final dio = await ApiClient.getInstance();
+    final response = await dio.get<List<int>>(
+      '/recruiters/workspace-export/',
+      options: Options(
+        responseType: ResponseType.bytes,
+        followRedirects: false,
+      ),
+    );
+    final bytes = response.data;
+    if (generation != SessionScope.generation) return;
+    if (bytes == null || bytes.isEmpty) {
+      throw StateError('Workspace export was empty.');
+    }
+    await downloads.saveBytes(
+      Uint8List.fromList(bytes),
+      'skillsense-workspace.json',
+      dialogTitle: 'Save workspace data',
+    );
+  }
+
+  static Future<void> deleteRecruiterAccount() async {
+    try {
+      final dio = await ApiClient.getInstance();
+      await dio.post<void>(
+        '/recruiters/account/delete/',
+        data: {'confirmation': 'DELETE'},
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
+    }
+  }
 
   /// Raw settings fields, including the newer inline-edit fields that are not
   /// represented by the legacy RecruiterProfile model.
