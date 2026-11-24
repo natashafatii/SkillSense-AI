@@ -314,9 +314,19 @@ class _CandidateSideNavState extends State<CandidateSideNav>
         // ── HEADER ──────────────────────────────────────────────────────
         _buildHeader(tealAccent),
 
-        const SizedBox(height: 16),
-
-        const SizedBox(height: 8),
+        const SizedBox(height: 20),
+        Divider(
+          height: 1,
+          thickness: 1,
+          indent: 14,
+          endIndent: 14,
+          color: context.themeOutline(
+            _isExpanded
+                ? const Color(0xFFE2E8F0)
+                : const Color(0xFFCBD5E1),
+          ),
+        ),
+        const SizedBox(height: 18),
 
         // ── DESTINATIONS LIST ──────────────────────────────────────────
         Expanded(
@@ -424,7 +434,8 @@ class _CandidateSideNavState extends State<CandidateSideNav>
         children: [
           if (_isExpanded) Expanded(child: _buildBrand()) else _buildBrand(),
 
-          if (_isExpanded)
+          if (_isExpanded) ...[
+            const SizedBox(width: 14),
             AppTooltip(
               message: 'Collapse sidebar',
               position: TooltipPosition.bottom,
@@ -451,39 +462,41 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                 ),
               ),
             ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildBrand() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
     children: [
       // Logo from Assets (matching HR screens)
-      SvgPicture.asset('assets/images/logo.svg', height: 32),
+      SvgPicture.asset('assets/images/logo.svg', height: 36),
 
       if (_isExpanded) ...[
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Flexible(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 'SkillSense',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppType.h4.style(
+                style: AppType.bodySm.style(
                   context,
                   color: context.themeForeground(TypographyColors.primary),
+                  weight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(height: 3),
               Text(
-                'CANDIDATE WORKSPACE',
+                'Candidate workspace',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppType.overline.style(
-                  context,
-                  color: context.themeForeground(TypographyColors.secondary),
-                ),
+                style: context.secondaryCaption,
               ),
             ],
           ),
@@ -874,9 +887,10 @@ class _CandidateSideNavState extends State<CandidateSideNav>
                     Expanded(
                       child: Text(
                         dest['label'],
-                        style: AppType.nav.style(
+                        style: AppType.overline.style(
                           context,
-                          color: context.primaryTextColor,
+                          color: context.secondaryTextColor,
+                          weight: FontWeight.w700,
                         ),
                       ),
                     ),

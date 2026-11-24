@@ -231,7 +231,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = MediaQuery.sizeOf(context).width < 760;
+    final mobile = MediaQuery.sizeOf(context).width < 900;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -242,7 +242,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               child: RecruiterTopBar(
                 pageTitle: 'Analytics',
                 breadcrumbSegments: ['Analytics'],
-                mobileBreakpoint: 760,
+                mobileBreakpoint: 900,
               ),
             ),
             Expanded(
@@ -423,41 +423,72 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     IconData icon,
     List<PopupMenuEntry<T>> items,
     ValueChanged<T> selected,
-  ) => PopupMenuButton<T>(
-    onSelected: selected,
-    itemBuilder: (_) => items,
-    tooltip: 'Filter by ${caption.toLowerCase()}',
-    child: Container(
-      constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: context.themeSurface(Colors.white),
-        border: Border.all(color: context.themeOutline(_edge)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          _icon(icon, 28),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(caption, style: _style(AppType.caption, color: _muted)),
-                Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: _style(AppType.caption),
-                ),
-              ],
+  ) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final menuSurface = dark ? const Color(0xFF111A2B) : Colors.white;
+    final menuText = dark ? const Color(0xFFE7ECF6) : _text;
+    return Theme(
+      data: Theme.of(context).copyWith(
+        hoverColor: dark
+            ? const Color(0xFF24334A)
+            : const Color(0xFFF1F5F9),
+        popupMenuTheme: PopupMenuThemeData(
+          color: menuSurface,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.black.withValues(alpha: dark ? .35 : .14),
+          elevation: dark ? 14 : 8,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: dark ? const Color(0xFF34445F) : _edge,
             ),
           ),
-          const Icon(Icons.keyboard_arrow_down, size: 15),
-        ],
+          textStyle: AppType.caption.style(context, color: menuText),
+        ),
       ),
-    ),
-  );
+      child: PopupMenuButton<T>(
+        onSelected: selected,
+        itemBuilder: (_) => items,
+        tooltip: 'Filter by ${caption.toLowerCase()}',
+        constraints: BoxConstraints(
+          minWidth: 220,
+          maxWidth: 320,
+          maxHeight: MediaQuery.sizeOf(context).height * .68,
+        ),
+        menuPadding: const EdgeInsets.symmetric(vertical: 6),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: context.themeSurface(Colors.white),
+            border: Border.all(color: context.themeOutline(_edge)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              _icon(icon, 28),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(caption, style: _style(AppType.caption, color: _muted)),
+                    Text(
+                      value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _style(AppType.caption),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.keyboard_arrow_down, size: 15),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
   Widget _icon(IconData icon, double size) => Container(
     width: size,
     height: size,

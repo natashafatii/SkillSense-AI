@@ -1,7 +1,6 @@
 import 'package:skillsense_ai/theme/app_typography.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../../widgets/candidate_feedback_dashboard.dart';
 import '../../widgets/candidate_feedback_visuals.dart';
 import '../../models/candidate_feedback.dart';
@@ -559,8 +558,6 @@ class _CandidateFeedbackReportScreenState
                         'Report content is unavailable.',
                     },
                   ),
-                  const SizedBox(height: 12),
-                  _details(row),
                 ],
               )
             : _dashboard(row, report),
@@ -590,7 +587,6 @@ class _CandidateFeedbackReportScreenState
           }
         });
       },
-      details: _details(row),
     );
   }
 
@@ -646,64 +642,4 @@ class _CandidateFeedbackReportScreenState
     );
   }
 
-  Widget _details(CandidateFeedback row) {
-    final palette = FeedbackPalette(context);
-    final localizations = MaterialLocalizations.of(context);
-    final report = row.report;
-    final released = report?.releasedAt.toLocal();
-    final ids =
-        'Interview: ${row.interviewId}\nApplication: ${row.applicationId}';
-    return FeedbackPanel(
-      child: ExpansionTile(
-        key: PageStorageKey('feedback-details-${row.interviewId}'),
-        shape: const Border(),
-        collapsedShape: const Border(),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-        minTileHeight: 44,
-        dense: true,
-        iconColor: palette.meta,
-        collapsedIconColor: palette.meta,
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        expandedCrossAxisAlignment: CrossAxisAlignment.start,
-        expandedAlignment: Alignment.centerLeft,
-        title: Text(
-          report == null ? 'Attempt details' : 'Report details',
-          style: palette.text(type: AppType.h4),
-        ),
-        children: [
-          if (report != null && released != null) ...[
-            Text(
-              'Revision ${report.revision} · Released ${localizations.formatMediumDate(released)} at '
-              '${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(released), alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context))}',
-              style: palette.caption(),
-            ),
-            for (final limitation in report.limitations)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(limitation, style: palette.prose()),
-              ),
-            if (report.questions.isEmpty)
-              Text(
-                'This report does not include individual question scores.',
-                style: palette.prose(),
-              ),
-            const SizedBox(height: 8),
-          ],
-          SelectionArea(child: Text(ids, style: palette.caption())),
-          TextButton.icon(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: ids));
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Attempt IDs copied')),
-                );
-              }
-            },
-            icon: const Icon(Icons.copy, size: 16),
-            label: const Text('Copy attempt IDs'),
-          ),
-        ],
-      ),
-    );
-  }
 }

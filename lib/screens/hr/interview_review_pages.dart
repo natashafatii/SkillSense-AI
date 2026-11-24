@@ -403,76 +403,94 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
     ],
   );
 
-  Widget _feedbackPage(RecruitmentReview r, double? height) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-        margin: const EdgeInsets.only(bottom: 14),
-        decoration: BoxDecoration(
-          color: context.themeSurface(const Color(0xFFEAF0FF)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline, size: 16, color: Color(0xFF264AA8)),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'The report already sent to the candidate stays as it is. New drafts do not replace it unless you release them.',
-                style: AppType.caption.style(context, color: Color(0xFF264AA8)),
-              ),
+  Widget _feedbackPage(RecruitmentReview r, double? height) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final noticeBackground = isDark
+        ? const Color(0xFF172640)
+        : const Color(0xFFEAF0FF);
+    final noticeForeground = isDark
+        ? const Color(0xFFB8CCFF)
+        : const Color(0xFF264AA8);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: noticeBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark
+                  ? const Color(0xFF2B4165)
+                  : const Color(0xFFD8E4FF),
             ),
-          ],
-        ),
-      ),
-      _columns(
-        FeedbackReviewPanel(
-          key: ValueKey('feedback-${r.application.id}-${r.interview?.id}'),
-          controller: controller,
-          availableHeight: height == null ? null : height - 56,
-        ),
-        _reviewCard(
-          'Feedback history',
-          height: height == null ? null : height - 56,
-          children: [
-            if (r.interview case final interview?)
-              InterviewReplayPanel(
-                key: ValueKey(interview.id),
-                interviewId: interview.id,
-              ),
-            if (r.feedback.isEmpty) const Text('No feedback prepared.'),
-            for (final report in r.feedback) ...[
-              if (report.retractedAt != null)
-                _timeline(
-                  'Report withdrawn from candidate',
-                  _scheduleTime(report.retractedAt),
-                  'Version ${report.revision.value} · Private reason recorded',
-                  _reviewAmber,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 17, color: noticeForeground),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'The report already sent to the candidate stays as it is. New drafts do not replace it unless you release them.',
+                  style: AppType.caption.style(
+                    context,
+                    color: noticeForeground,
+                  ),
                 ),
-              if (report.releasedAt != null)
-                _timeline(
-                  'Report sent to candidate',
-                  _scheduleTime(report.releasedAt),
-                  'Version ${report.revision.value}',
-                  _reviewTeal,
-                ),
-              _timeline(
-                report.error?.isNotEmpty == true
-                    ? 'Feedback could not be prepared'
-                    : 'Feedback prepared',
-                _scheduleTime(report.preparedAt),
-                'Version ${report.revision.value} · ${_displayStatus(report.status)}',
-                report.error?.isNotEmpty == true ? _reviewRed : _reviewBlue,
               ),
             ],
-          ],
+          ),
         ),
-        leftFlex: 13,
-        rightFlex: 10,
-      ),
-    ],
-  );
+        _columns(
+          FeedbackReviewPanel(
+            key: ValueKey('feedback-${r.application.id}-${r.interview?.id}'),
+            controller: controller,
+            availableHeight: height == null ? null : height - 56,
+          ),
+          _reviewCard(
+            'Feedback history',
+            height: height == null ? null : height - 56,
+            children: [
+              if (r.interview case final interview?)
+                InterviewReplayPanel(
+                  key: ValueKey(interview.id),
+                  interviewId: interview.id,
+                ),
+              if (r.feedback.isEmpty) const Text('No feedback prepared.'),
+              for (final report in r.feedback) ...[
+                if (report.retractedAt != null)
+                  _timeline(
+                    'Report withdrawn from candidate',
+                    _scheduleTime(report.retractedAt),
+                    'Version ${report.revision.value} · Private reason recorded',
+                    _reviewAmber,
+                  ),
+                if (report.releasedAt != null)
+                  _timeline(
+                    'Report sent to candidate',
+                    _scheduleTime(report.releasedAt),
+                    'Version ${report.revision.value}',
+                    _reviewTeal,
+                  ),
+                _timeline(
+                  report.error?.isNotEmpty == true
+                      ? 'Feedback could not be prepared'
+                      : 'Feedback prepared',
+                  _scheduleTime(report.preparedAt),
+                  'Version ${report.revision.value} · ${_displayStatus(report.status)}',
+                  report.error?.isNotEmpty == true ? _reviewRed : _reviewBlue,
+                ),
+              ],
+            ],
+          ),
+          leftFlex: 13,
+          rightFlex: 10,
+        ),
+      ],
+    );
+  }
 
   Widget _timeline(
     String title,

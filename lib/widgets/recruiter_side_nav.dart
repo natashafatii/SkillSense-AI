@@ -282,7 +282,8 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
             ),
             child: Icon(
               section.icon,
-              size: 19,
+              size: 20,
+              weight: 600,
               color: active && widget.glowSelected
                   ? Colors.white
                   : active
@@ -309,7 +310,8 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                 children: [
                   Icon(
                     section.icon,
-                    size: 14.5,
+                    size: 18,
+                    weight: 600,
                     color: context.themeForeground(_textSecondary),
                   ),
                   const SizedBox(width: 14),
@@ -377,6 +379,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
               Icon(
                 _destinationIcons[item.route],
                 size: 18,
+                weight: 600,
                 color: active
                     ? _accent
                     : context.themeForeground(_textSecondary),
@@ -551,10 +554,10 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
           children: [
             Padding(
               padding: EdgeInsets.fromLTRB(
-                _expanded ? 15 : 10,
-                _expanded ? 12 : 14,
-                _expanded ? 12 : 10,
-                _expanded ? 10 : 0,
+                _expanded ? 14 : 10,
+                14,
+                _expanded ? 14 : 10,
+                0,
               ),
               child: Row(
                 mainAxisAlignment: _expanded
@@ -564,8 +567,8 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                   if (widget.inDrawer)
                     SvgPicture.asset(
                       'assets/images/logo.svg',
-                      width: _expanded ? 28 : 24,
-                      height: _expanded ? 28 : 24,
+                      width: _expanded ? 36 : 24,
+                      height: _expanded ? 36 : 24,
                     )
                   else
                     AppTooltip(
@@ -582,13 +585,13 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                         }),
                         child: SvgPicture.asset(
                           'assets/images/logo.svg',
-                          width: _expanded ? 28 : 32,
-                          height: _expanded ? 28 : 32,
+                          width: 36,
+                          height: 36,
                         ),
                       ),
                     ),
                   if (_expanded) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -601,6 +604,7 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                               weight: FontWeight.w700,
                             ),
                           ),
+                          const SizedBox(height: 3),
                           Text(
                             'Recruiter workspace',
                             style: context.secondaryCaption,
@@ -609,7 +613,8 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                       ),
                     ),
                   ],
-                  if (_expanded && !widget.inDrawer)
+                  if (_expanded && !widget.inDrawer) ...[
+                    const SizedBox(width: 14),
                     AppTooltip(
                       message: 'Collapse sidebar',
                       position: TooltipPosition.bottom,
@@ -631,11 +636,33 @@ class _RecruiterSideNavState extends State<RecruiterSideNav> {
                         ),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),
 
-            if (!_expanded) const SizedBox(height: 24),
+            if (_expanded) ...[
+              const SizedBox(height: 20),
+              Divider(
+                height: 1,
+                thickness: 1,
+                indent: 14,
+                endIndent: 14,
+                color: context.themeOutline(_border),
+              ),
+              const SizedBox(height: 18),
+            ] else
+              ...[
+                const SizedBox(height: 20),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 14,
+                  endIndent: 14,
+                  color: context.themeOutline(const Color(0xFFCBD5E1)),
+                ),
+                const SizedBox(height: 18),
+              ],
             Expanded(
               child: ScrollConfiguration(
                 behavior: ScrollConfiguration.of(

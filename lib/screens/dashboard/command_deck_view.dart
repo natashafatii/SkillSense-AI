@@ -36,30 +36,46 @@ extension _DeckView on _CommandDeckScreenState {
         autofocus: true,
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          body: SafeArea(
-            bottom: !mobile,
-            child: Column(
-              children: [
-                RecruiterTopBar(
-                  pageTitle: 'Command deck',
-                  onSearchTap: () => _search(c),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      gutter,
-                      mobile ? 0 : 4,
-                      gutter,
-                      16,
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, bounds) =>
-                          _dashboard(c, mobile, bounds.maxWidth),
+          body: Stack(
+            children: [
+              if (c.dark)
+                const Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF1A2A43), Color(0xFF111827)],
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              SafeArea(
+                bottom: !mobile,
+                child: Column(
+                  children: [
+                    RecruiterTopBar(
+                      pageTitle: 'Command deck',
+                      onSearchTap: () => _search(c),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          gutter,
+                          16,
+                          gutter,
+                          16,
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, bounds) =>
+                              _dashboard(c, mobile, bounds.maxWidth),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           bottomNavigationBar: mobile ? _dock() : null,
         ),
@@ -492,11 +508,13 @@ extension _DeckView on _CommandDeckScreenState {
         return DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Color(0x992E63F0),
-                offset: Offset(0, 26),
-                blurRadius: 54,
+                color: c.dark
+                    ? const Color(0x66344E87)
+                    : const Color(0x992E63F0),
+                offset: Offset(0, c.dark ? 14 : 26),
+                blurRadius: c.dark ? 34 : 54,
                 spreadRadius: -26,
               ),
             ],

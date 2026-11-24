@@ -846,7 +846,7 @@ class _JobListingsScreenState extends State<JobListingsScreen> {
     return Material(
       color: context.themeSurface(Colors.white),
       child: InkWell(
-        hoverColor: const Color(0xFFF8FAFF),
+        hoverColor: context.themeSurface(const Color(0xFFF8FAFF)),
         onTap: _busyJobId != null
             ? null
             : () => _handleAction(job, _JobAction.view),
@@ -1286,16 +1286,18 @@ class _RecruiterNotificationsScreenState
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Colors.transparent,
-    body: Column(
-      children: [
-        RecruiterTopBar(
-          pageTitle: 'Notifications',
-          breadcrumbSegments: const ['Notifications'],
-          hasUnread: _unread > 0,
-          useExactUnread: true,
-        ),
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 900;
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Column(
+        children: [
+          RecruiterTopBar(
+            pageTitle: 'Notifications',
+            breadcrumbSegments: const ['Notifications'],
+            hasUnread: _unread > 0,
+            useExactUnread: true,
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(30, 24, 30, 8),
           child: Column(
@@ -1305,14 +1307,39 @@ class _RecruiterNotificationsScreenState
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: Text(
-                      'Notifications',
-                      style: AppType.h1.style(
-                        context,
-                        color: context.themeForeground(
-                          TypographyColors.primary,
+                    child: Row(
+                      children: [
+                        if (isMobile) ...[
+                          _mobileNotificationsBackButton(context),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Notifications',
+                                style: AppType.h1.style(
+                                  context,
+                                  color: context.themeForeground(
+                                    TypographyColors.primary,
+                                  ),
+                                ),
+                              ),
+                              if (_unread > 0)
+                                Text(
+                                  '$_unread unread',
+                                  style: AppType.caption.style(
+                                    context,
+                                    color: context.themeForeground(
+                                      TypographyColors.secondary,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                   Row(
@@ -1341,13 +1368,6 @@ class _RecruiterNotificationsScreenState
                     ],
                   ),
                 ],
-              ),
-              Text(
-                '$_unread unread',
-                style: AppType.caption.style(
-                  context,
-                  color: context.themeForeground(TypographyColors.secondary),
-                ),
               ),
             ],
           ),
@@ -1442,7 +1462,41 @@ class _RecruiterNotificationsScreenState
             ),
           ),
         ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  void _backFromNotifications() {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      navigator.pushReplacementNamed('/recruiter/command-deck');
+    }
+  }
+
+  Widget _mobileNotificationsBackButton(BuildContext context) => Tooltip(
+    message: 'Back',
+    child: InkWell(
+      onTap: _backFromNotifications,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: context.themeSurface(Colors.white),
+          border: Border.all(
+            color: context.themeOutline(const Color(0xFFE2E8F0)),
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          Icons.arrow_back_rounded,
+          size: 19,
+          color: context.themeForeground(const Color(0xFF475569)),
+        ),
+      ),
     ),
   );
 

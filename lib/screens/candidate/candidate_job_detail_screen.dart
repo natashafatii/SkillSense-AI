@@ -1143,27 +1143,24 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
               const SizedBox(height: 20),
 
               // Apply Button
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: CandidateButtonStyle.teal.withValues(alpha: 0.22),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
+              ElevatedButton(
+                style: CandidateButtonStyle.primaryColors(
+                  ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.dashboardTeal,
+                    shadowColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 44),
+                    shape: const StadiumBorder(),
+                  ).copyWith(
+                    backgroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.disabled)
+                          ? context.themeSurface(CandidateButtonStyle.edge)
+                          : AppColors.dashboardTeal,
                     ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  style: CandidateButtonStyle.primary(
-                    ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.dashboardTeal,
-                      shadowColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 44),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                    foregroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.disabled)
+                          ? CandidateButtonStyle.secondaryText
+                          : Colors.white,
                     ),
                   ),
                   onPressed: _canApply ? _applyJob : null,

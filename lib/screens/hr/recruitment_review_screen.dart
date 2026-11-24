@@ -10,7 +10,6 @@ import '../../services/recruitment_review_controller.dart';
 import '../../services/recruitment_workflow_service.dart';
 import '../../widgets/recruiter_scaffold.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import '../../widgets/interview_review_top_bar.dart';
 import '../../widgets/feedback_review_panel.dart';
 import '../../widgets/interview_replay_panel.dart';
 import '../../widgets/recruiter_interview_dashboard.dart';
@@ -2252,11 +2251,6 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
     final r = controller.review;
     if (widget.compactScreening) return _compactReview(r);
     final dashboard = widget.showInterviewDashboard;
-    final refreshAction = IconButton(
-      tooltip: 'Refresh review',
-      onPressed: controller.busy || controller.loading ? null : _refresh,
-      icon: const Icon(Icons.refresh),
-    );
     final theme = Theme.of(context);
     final content = Theme(
       data: theme.copyWith(
@@ -2347,26 +2341,18 @@ class _RecruitmentReviewScreenState extends State<RecruitmentReviewScreen> {
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: dashboard
-            ? null
-            : AppBar(
-                title: const Text('Recruiter evidence and decisions'),
-                actions: [refreshAction],
-              ),
         body: Column(
           children: [
-            if (dashboard)
-              SafeArea(
-                bottom: false,
-                child: InterviewReviewTopBar(
-                  onBack: () => Navigator.of(context).maybePop(),
-                  onRefresh: controller.busy || controller.loading
-                      ? null
-                      : _refresh,
-                ),
-              )
-            else
-              const RecruiterTopBar(pageTitle: 'Evidence review'),
+            RecruiterTopBar(
+              pageTitle: dashboard ? 'Interview review' : 'Evidence review',
+              onBackTap: dashboard
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              showRefreshButton: true,
+              onRefreshTap: controller.busy || controller.loading
+                  ? null
+                  : _refresh,
+            ),
             if (controller.loading || controller.busy)
               const LinearProgressIndicator(minHeight: 2),
             Expanded(

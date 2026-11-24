@@ -1106,8 +1106,7 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
 
   Widget _identity(_Palette c, bool narrow, double progress) {
     final name = _values['name']!.trim();
-    final position = _position.isEmpty ? 'Recruiter' : _position;
-    final description = _company.isEmpty ? position : '$position at $_company';
+    final description = _company;
     final timeZone = _timeZoneLabel;
     final identity = Row(
       children: [
@@ -1883,7 +1882,6 @@ class _RecruiterProfileScreenState extends State<RecruiterProfileScreen> {
                     ],
                     mobileBreakpoint: 900,
                     dark: c.dark,
-                    profileReference: true,
                   ),
                 Expanded(
                   child: DefaultTextStyle(

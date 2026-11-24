@@ -13,6 +13,7 @@ import '../../models/job.dart';
 import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
+import '../../widgets/recruiter_mobile_nav.dart';
 import '../../widgets/recruiter_top_bar.dart';
 import 'role_skill_picker.dart';
 
@@ -673,7 +674,13 @@ class _CreateRoleScreenState extends State<CreateRoleScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: SafeArea(top: false, child: _mobileActions()),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SafeArea(top: false, bottom: false, child: _mobileActions()),
+          const RecruiterMobileNav(currentRoute: '/recruiter/create-role'),
+        ],
+      ),
     );
   }
 
