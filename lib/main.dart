@@ -375,7 +375,11 @@ class SkillSenseApp extends StatelessWidget {
           );
           builder = RoleGuard(
             allowedRoles: const [EnvConfig.roleCandidate],
-            child: CandidateJobDetailRoute(arguments: id),
+            child: CandidateJobDetailRoute(
+              arguments: id,
+              chooseResumeOnOpen:
+                  settings.arguments == CandidateJobDetailIntent.apply,
+            ),
           );
         } else if (name.startsWith('/recruiter/jobs/') &&
             name.endsWith('/pipeline') &&

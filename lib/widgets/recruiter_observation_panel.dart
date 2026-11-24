@@ -2,6 +2,7 @@ import 'package:skillsense_ai/constants/adaptive_colors.dart';
 import 'package:flutter/material.dart';
 import '../models/interview_analysis_contract.dart';
 import '../services/recruiter_observation_controller.dart';
+import 'behavioral_signal_summary.dart';
 
 class RecruiterObservationPanel extends StatelessWidget {
   const RecruiterObservationPanel({super.key, required this.controller});
@@ -60,11 +61,17 @@ class RecruiterObservationPanel extends StatelessWidget {
                   ),
                 ],
               ),
-              if (snapshot == null)
-                const Text(
-                  'Evidence unavailable. No counts or percentages are assumed.',
-                )
-              else ...[
+              BehavioralSignalSummary(
+                report: report,
+                processing: controller.reportPending,
+              ),
+              for (final entry in controller.browserObservations.entries)
+                Text(
+                  '${entry.value['label']} · Coverage incomplete\n'
+                  'Coverage last confirmed ${entry.value['coverage_ended_at'] ?? 'unknown'}\n'
+                  '${(entry.value['events'] as List? ?? []).map((event) => "${event['state']} · ${event['received_at']}").join("\n")}',
+                ),
+              if (snapshot != null) ...[
                 Semantics(
                   liveRegion: true,
                   child: Text('Analysis: ${snapshot.status.name}'),
@@ -86,36 +93,12 @@ class RecruiterObservationPanel extends StatelessWidget {
                 const Text(
                   'Unknown or unusable observations are not evidence of absence. Frame counts are not elapsed time.',
                 ),
-                Text(
-                  'Centered during supported gaze duration (approximate): ${report?.centeredPercentage == null ? 'unavailable' : '${report!.centeredPercentage!.toStringAsFixed(1)}%'}',
-                ),
                 if (counts == null)
                   const Text('Frame accounting: unavailable for this revision.')
                 else
                   Text(
                     'Frames — received: ${counts.received}; admitted: ${counts.admitted}; processed: ${counts.processed}; dropped: ${counts.dropped}; superseded: ${counts.superseded}; failed: ${counts.failed}; expired: ${counts.expired}.',
                   ),
-                const SizedBox(height: 12),
-                Text(
-                  'Event totals and observed durations',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                if (snapshot.eventSummaries == null)
-                  const Text(
-                    'Cumulative event counts and durations were not provided. Recent timeline rows are not totals.',
-                  )
-                else if (snapshot.eventSummaries!.isEmpty)
-                  const Text(
-                    'The server supplied no event summary entries; no absence is inferred.',
-                  )
-                else
-                  for (final event in snapshot.eventSummaries!)
-                    Text(
-                      '${event.type}: ${event.eventCount?.toString() ?? 'unknown'} events; observed duration ${event.observedDurationSeconds == null ? 'unknown' : '${event.observedDurationSeconds!.toStringAsFixed(2)} seconds'}',
-                    ),
-                Text(
-                  'Expression analysis: ${_expression(snapshot.expressionStatus)}',
-                ),
                 const SizedBox(height: 12),
                 Text(
                   'Recent observation timeline',
@@ -163,14 +146,6 @@ class RecruiterObservationPanel extends StatelessWidget {
       );
     },
   );
-  static String _expression(String status) => switch (status) {
-    'disabled' => 'disabled; no expression measurement',
-    'unavailable' => 'unavailable; no expression measurement',
-    'processing' => 'processing; no result available',
-    'complete' =>
-      'measured by server; no expression summary is specified in this contract',
-    _ => 'unknown; no neutral expression is assumed',
-  };
   static String _statusMeaning(AnalysisState status) => switch (status) {
     AnalysisState.pending => 'Analysis has not started; evidence is not ready.',
     AnalysisState.processing =>

@@ -71,16 +71,22 @@ class RecruiterObservationController extends ChangeNotifier {
       _reading = false,
       _refreshAgain = false;
   int _epoch = 0, _attempts = 0;
-  Timer? _retry, _handshake, _lease, _poll, _readTimeout, _heartbeat;
+  Timer? _retry, _handshake, _lease, _poll, _heartbeat;
   DateTime? _lastPong;
   PublisherSocket? _socket;
   CancelToken? _http;
+  CancelToken? _reportRequest;
   String? _lastTicket;
   AnalysisSnapshot? _snapshot;
   BehavioralReport? _report;
+  JsonObject _browserObservations = const {};
+  JsonObject get browserObservations =>
+      authorized ? _browserObservations : const {};
   ObserverState _state = ObserverState.idle;
   String _notice = 'Observations have not been requested.';
   bool _truncated = false;
+  bool _reportPending = false;
+  bool get reportPending => authorized && _reportPending;
   bool get authorized =>
       !_disposed &&
       !_invalid &&
@@ -110,14 +116,23 @@ class RecruiterObservationController extends ChangeNotifier {
   }
 
   void _clear() {
+    _browserObservations = const {};
     _snapshot = null;
     _report = null;
+    _reportPending = false;
     _truncated = false;
     _lastTicket = null;
   }
 
   void start() {
-    if (_active || _disposed) return;
+    if (_disposed) return;
+    if (_active) {
+      if (authorized && connector.supported && _state == ObserverState.paused) {
+        _attempts = 0;
+        unawaited(_connect());
+      }
+      return;
+    }
     if (!authorized) {
       _clear();
       _emit();
@@ -132,6 +147,10 @@ class RecruiterObservationController extends ChangeNotifier {
     }
     _active = true;
     _attempts = 0;
+    _reportPending = _report == null;
+    _poll = Timer.periodic(pollInterval, (_) {
+      if (report?.isFinal != true) refresh();
+    });
     if (!connector.supported) {
       _state = ObserverState.unavailable;
       _notice =
@@ -191,12 +210,14 @@ class RecruiterObservationController extends ChangeNotifier {
       }
       _socket = socket;
     } on ApiException catch (error) {
-      _failure(epoch, error);
+      if ([401, 403, 404, 410].contains(error.statusCode) && _current(epoch)) {
+        _terminal('Observer access to this session is unavailable.');
+      } else {
+        _recover(epoch, 'Observer transport is unavailable.');
+      }
     } on FormatException {
       if (_current(epoch)) {
-        _terminal(
-          'Observer protocol or ticket is invalid. No observations are assumed.',
-        );
+        _recover(epoch, 'Observer protocol or ticket is invalid.');
       }
     } catch (_) {
       _recover(epoch, 'Observer connection could not be established.');
@@ -235,10 +256,10 @@ class RecruiterObservationController extends ChangeNotifier {
           () => _recover(epoch, 'Renewing observer authorization.'),
         );
         _state = ObserverState.live;
+        _attempts = 0;
         _notice = 'Subscribed. Recovering the latest authorized snapshot…';
         // Subscription is established before HTTP; updates can win the race.
         refresh();
-        _poll = Timer.periodic(pollInterval, (_) => refresh());
         _lastPong = DateTime.now();
         _heartbeat = Timer.periodic(const Duration(seconds: 5), (_) {
           if (!_current(epoch)) return;
@@ -263,12 +284,9 @@ class RecruiterObservationController extends ChangeNotifier {
           );
         }
         _apply(message.snapshot);
+        if (report == null) refresh();
       } else if (message is TransportErrorMessage) {
-        if ([
-          'access_denied',
-          'account_inactive',
-          'session_not_publishable',
-        ].contains(message.code)) {
+        if (['access_denied', 'account_inactive'].contains(message.code)) {
           _terminal('Observer permission or session availability changed.');
           return;
         }
@@ -294,13 +312,16 @@ class RecruiterObservationController extends ChangeNotifier {
     }
     final revision = _snapshot?.revision ?? -1;
     if (next.revision < revision) return;
+    if (_report?.isFinal == true && report?.isFinal == false) return;
     if (next.revision == revision && report == null) return;
     _truncated = next.observations.length > maxTimelineEntries;
     _snapshot = next.bounded(maxTimelineEntries);
     if (report != null) {
       _report = report.bounded(maxTimelineEntries);
+      _reportPending = false;
     } else if (_report?.snapshot.revision != next.revision) {
       _report = null;
+      _reportPending = true;
     }
     _notice = _ready
         ? 'Latest available revision received. Live delivery is reconciled with periodic snapshots.'
@@ -313,19 +334,25 @@ class RecruiterObservationController extends ChangeNotifier {
       _refreshAgain = true;
       return;
     }
-    final epoch = _epoch;
     _reading = true;
-    final token = _http ??= CancelToken();
-    _readTimeout = Timer(requestTimeout, () {
-      if (_current(epoch)) _recover(epoch, 'Snapshot refresh timed out.');
-    });
+    final token = _reportRequest = CancelToken();
+    bool current() => authorized && _active && identical(token, _reportRequest);
     unawaited(() async {
       try {
-        final result = await service.recruiterReport(
-          target.identity,
-          cancelToken: token,
-        );
-        if (!_current(epoch)) return;
+        final result = await service
+            .recruiterReport(target.identity, cancelToken: token)
+            .timeout(
+              requestTimeout,
+              onTimeout: () {
+                token.cancel();
+                throw TimeoutException('Behavioral report request timed out.');
+              },
+            );
+        if (!current()) return;
+        if (result.sessionId != target.identity.sessionId) {
+          throw const FormatException('Unexpected behavioral report session.');
+        }
+        _browserObservations = result.browserObservations;
         if (result.report == null) {
           // A pending HTTP read can race a newer live persisted revision.
           if (result.availability == 'pending' &&
@@ -334,30 +361,35 @@ class RecruiterObservationController extends ChangeNotifier {
           }
           _snapshot = null;
           _report = null;
-          _notice =
-              'Analysis availability: ${result.availability}. No evidence is assumed.';
+          _reportPending = result.availability == 'pending';
+          if (!_reportPending) {
+            _poll?.cancel();
+            ++_epoch;
+            _closeAttempt();
+            _state = ObserverState.unavailable;
+          }
+          _notice = switch (result.availability) {
+            'disabled' => 'Behavioral analysis is disabled for this session.',
+            'legacy_unverified' =>
+              'This older session has no verified behavioral report.',
+            _ => 'The behavioral report is pending.',
+          };
         } else {
           _apply(result.report!.snapshot, report: result.report);
         }
-        _attempts = 0;
         _emit();
       } on ApiException catch (error) {
-        _failure(epoch, error);
-      } on FormatException {
-        if (_current(epoch)) {
-          _recover(epoch, 'Invalid snapshot. Latest state is unverified.');
+        if (current() && [401, 403, 404, 409, 410].contains(error.statusCode)) {
+          _terminal('Behavioral report access to this session is unavailable.');
+        } else if (current()) {
+          _reportReadFailed();
         }
       } catch (_) {
-        if (_current(epoch)) {
-          _recover(
-            epoch,
-            'Snapshot unavailable; cached evidence is not current.',
-          );
-        }
+        if (current()) _reportReadFailed();
       } finally {
-        if (epoch == _epoch) {
+        if (current()) {
           _reading = false;
-          _readTimeout?.cancel();
+          _reportRequest = null;
           if (_refreshAgain) {
             _refreshAgain = false;
             refresh();
@@ -367,29 +399,18 @@ class RecruiterObservationController extends ChangeNotifier {
     }());
   }
 
-  void _failure(int epoch, ApiException error) {
-    if (!_current(epoch)) return;
-    if ([401, 403, 404, 409, 410].contains(error.statusCode)) {
-      _terminal(switch (error.statusCode) {
-        401 => 'Your sign-in could not authorize observations. Sign in again.',
-        403 => 'You do not have permission to observe this session.',
-        404 => 'This session is unavailable or is not visible to your account.',
-        _ => 'This session no longer permits observation.',
-      });
-    } else {
-      _recover(
-        epoch,
-        'Observation service unavailable. Retrying with a fresh ticket.',
-      );
-    }
+  void _reportReadFailed() {
+    _reportPending = false;
+    _notice = 'Behavioral report could not be refreshed.';
+    _emit();
   }
 
   void _recover(int epoch, String notice) {
     if (!_current(epoch)) return;
     ++_epoch;
     _closeAttempt();
+    if (report == null) refresh();
     if (_attempts >= maxRetries || !connector.supported) {
-      _active = false;
       _state = ObserverState.paused;
       _notice =
           '$notice Recovery limit reached. Reconnect explicitly; displayed evidence may be stale.';
@@ -415,8 +436,6 @@ class RecruiterObservationController extends ChangeNotifier {
     _retry?.cancel();
     _handshake?.cancel();
     _lease?.cancel();
-    _poll?.cancel();
-    _readTimeout?.cancel();
     _heartbeat?.cancel();
     _heartbeat = null;
     _lastPong = null;
@@ -425,6 +444,12 @@ class RecruiterObservationController extends ChangeNotifier {
     _socket?.close();
     _socket = null;
     _ready = false;
+  }
+
+  void _stopReportReads() {
+    _poll?.cancel();
+    _reportRequest?.cancel();
+    _reportRequest = null;
     _reading = false;
     _refreshAgain = false;
   }
@@ -433,6 +458,7 @@ class RecruiterObservationController extends ChangeNotifier {
     ++_epoch;
     _closeAttempt();
     _active = false;
+    _stopReportReads();
     _clear();
     _state = ObserverState.denied;
     _notice = notice;
@@ -441,6 +467,7 @@ class RecruiterObservationController extends ChangeNotifier {
 
   void pause({bool notify = true}) {
     _active = false;
+    _stopReportReads();
     ++_epoch;
     _closeAttempt();
     _state = ObserverState.paused;

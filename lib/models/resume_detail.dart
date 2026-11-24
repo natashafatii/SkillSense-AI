@@ -1,5 +1,6 @@
 /// Status of the resume parsing pipeline.
 enum ResumeStatus {
+  stored('STORED'),
   pending('PENDING'),
   parsed('PARSED'),
   failed('FAILED');

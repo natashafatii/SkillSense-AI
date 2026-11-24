@@ -11,12 +11,11 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_scope.dart';
-import '../../services/voice/voice_lifecycle_backend.dart';
+import '../../services/recruitment_workflow_service.dart';
 import '../../models/interview_analysis_contract.dart';
 import 'recruiter_observation_screen.dart';
 import '../../widgets/recruiter_top_bar.dart';
 
-const _background = Color(0xFFF5F7FC);
 const _field = Color(0xFFF8FAFE);
 const _edge = Color(0xFFE1E6F0);
 const _text = Color(0xFF16213A);
@@ -74,8 +73,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _route = ModalRoute.of(context);
-    if (widget.observationTarget != null ||
-        _initialLoadStarted ||
+    if (_initialLoadStarted ||
         _route?.isCurrent != true) {
       return;
     }
@@ -97,10 +95,9 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
   }
 
   Future<void> _load({bool silent = false}) async {
-    if (widget.observationTarget != null ||
-        _account != SessionScope.generation ||
+    if (_account != SessionScope.generation ||
         AuthService.getUserRole() == 'CANDIDATE' ||
-        _endpointNotFound ||
+        (silent && _endpointNotFound) ||
         !mounted ||
         _route?.isCurrent != true) {
       return;
@@ -115,16 +112,23 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
     try {
       final client = await ApiClient.getInstance();
       if (_requests.isCancelled) return;
+      final specificInterview = widget.observationTarget?.identity.interviewId;
       final sessions = <_LiveSession>[];
       for (var page = 1; page <= 100; page++) {
         if (!mounted || _route?.isCurrent != true) return;
         final response = await client.get(
-          '/interviews/',
-          queryParameters: {'status': 'LIVE', if (page > 1) 'page': page},
+          specificInterview == null
+              ? '/interviews/'
+              : '/interviews/$specificInterview/',
+          queryParameters: specificInterview == null
+              ? {'status': 'LIVE', if (page > 1) 'page': page}
+              : null,
           cancelToken: _requests,
         );
         final data = response.data;
-        final rows = data is List
+        final rows = specificInterview != null && data is Map
+            ? [data]
+            : data is List
             ? data
             : data is Map && data['results'] is List
             ? data['results'] as List
@@ -133,10 +137,18 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
               );
         for (final row in rows) {
           if (row is Map && row['status']?.toString().toUpperCase() == 'LIVE') {
-            sessions.add(_LiveSession.fromJson(row));
+            final session = _LiveSession.fromJson(row);
+            if (specificInterview == null || session.id == specificInterview) {
+              sessions.add(session);
+            }
           }
         }
-        if (data is! Map || data['next'] == null || data['next'] == '') break;
+        if (specificInterview != null ||
+            data is! Map ||
+            data['next'] == null ||
+            data['next'] == '') {
+          break;
+        }
       }
       if (!mounted ||
           requestId != _requestId ||
@@ -151,16 +163,16 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
       final index = selectedIndex >= 0
           ? selectedIndex
           : (sessions.isEmpty ? -1 : 0);
-      final voice = VoiceLifecycleBackend();
       if (index >= 0 &&
           sessions[index].target == null &&
           sessions[index].applicationId != null &&
-          voice.available) {
+          !sessions[index].hasSessionIdentityField) {
         try {
-          final identity = await voice.resolveSession(
-            sessions[index].id,
-            cancelToken: _requests,
-          );
+          final identity = await RecruitmentWorkflowService()
+              .resolveInterviewSession(
+                sessions[index].id,
+                cancelToken: _requests,
+              );
           if (!mounted ||
               requestId != _requestId ||
               _account != SessionScope.generation) {
@@ -174,6 +186,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
         }
       }
       setState(() {
+        _endpointNotFound = false;
         _sessions = sessions;
         _selectedId = sessions.any((session) => session.id == _selectedId)
             ? _selectedId
@@ -189,6 +202,10 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
         await AuthService.signOut(context);
         return;
       }
+      if (silent && _sessions.isNotEmpty &&
+          ![403, 404].contains(error.response?.statusCode)) {
+        return; // A discovery failure does not close an authorized player.
+      }
       if (error.response?.statusCode == 404) {
         if (!_endpointNotFound) {
           debugPrint(
@@ -199,10 +216,13 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
       }
       setState(() {
         _loading = false;
-        _error = 'Could not load live interviews.';
+        _error = widget.observationTarget != null
+            ? 'Could not load this live interview.'
+            : 'Could not load live interviews.';
       });
     } catch (_) {
       if (!mounted || requestId != _requestId) return;
+      if (silent && _sessions.isNotEmpty) return;
       setState(() {
         _loading = false;
         _error = 'Could not load live interviews.';
@@ -224,9 +244,6 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
       return const Scaffold(
         body: Center(child: Text('Recruiter access is required.')),
       );
-    }
-    if (widget.observationTarget != null) {
-      return RecruiterObservationScreen(target: widget.observationTarget!);
     }
     final mobile = _mobile;
     return Scaffold(
@@ -447,6 +464,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen> {
             RecruiterObservationView(
               key: ValueKey(session.target!.key),
               target: session.target!,
+              liveMonitorStatus: session.liveMonitorStatus,
             ),
           ],
         ],
@@ -461,14 +479,20 @@ class _LiveSession {
     required this.displayName,
     this.target,
     this.applicationId,
+    required this.liveMonitorStatus,
+    required this.hasSessionIdentityField,
   });
   final String id, displayName;
+  final String liveMonitorStatus;
   final String? applicationId;
   final RecruiterObservationTarget? target;
+  final bool hasSessionIdentityField;
   _LiveSession withIdentity(InterviewSessionIdentity identity) => _LiveSession(
     id: id,
     displayName: displayName,
     applicationId: applicationId,
+    liveMonitorStatus: liveMonitorStatus,
+    hasSessionIdentityField: hasSessionIdentityField,
     target: RecruiterObservationTarget(
       identity: identity,
       applicationId: applicationId!,
@@ -482,12 +506,15 @@ class _LiveSession {
                 (candidate is Map ? candidate['name'] : null))
             ?.toString()
             .trim();
-    // Required backend serializer addition; absent data stays unavailable.
     final sessionId = json['interview_session_id'];
     final applicationId = json['application'];
     return _LiveSession(
       id: id,
-      displayName: name == null || name.isEmpty ? 'Live interview' : name,
+      liveMonitorStatus: json['live_monitor_status']?.toString() ?? 'unknown',
+      hasSessionIdentityField: json.containsKey('interview_session_id'),
+      displayName: name == null || name.isEmpty
+          ? 'Interview ${id.split('-').first}'
+          : name,
       applicationId: applicationId == null
           ? null
           : requireInterviewIdentity(applicationId),

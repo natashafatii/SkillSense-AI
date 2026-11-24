@@ -88,6 +88,9 @@ class InterviewLifecycleController extends ChangeNotifier {
   String get notice => _notice;
   String? get dataError => _dataError;
   bool get agentTalking => _agentTalking;
+  bool _monitorAudioEnabled = false;
+  bool _monitorAudioReady = false;
+  bool get monitorAudioReady => _monitorAudioReady;
   List<LiveTranscriptTurn> _transcript = const [];
   bool _agentTurn = false;
   LiveInterviewExchange _exchange = (number: null, question: null, answer: '');
@@ -408,6 +411,7 @@ class InterviewLifecycleController extends ChangeNotifier {
           _emit();
         };
       }
+      _monitorAudioEnabled = credential.monitorAudio;
       await voice
           .start(credential, (event) => _voiceEvent(epoch, event))
           .bounded(this);
@@ -459,6 +463,7 @@ class InterviewLifecycleController extends ChangeNotifier {
             'Voice provider connected. Camera and frame transport remain independent.';
         _schedulePoll();
       case RetellVoiceEvent.audioReady:
+        _monitorAudioReady = _monitorAudioEnabled;
         _notice = 'Interview audio is ready.';
       case RetellVoiceEvent.agentStartedTalking:
         if (_state == InterviewLifecycleState.live) _agentTalking = true;
@@ -781,6 +786,8 @@ class InterviewLifecycleController extends ChangeNotifier {
     _voiceEpoch++;
     _joining = false;
     _agentTalking = false;
+    _monitorAudioEnabled = false;
+    _monitorAudioReady = false;
     final client = voice;
     if (client is RetellLiveTranscript) {
       (client as RetellLiveTranscript).onTranscript = null;

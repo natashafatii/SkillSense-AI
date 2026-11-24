@@ -186,6 +186,8 @@ class ObserverReadyMessage extends AnalysisMessage {
 }
 
 class ReadyMessage extends AnalysisMessage {
+  final bool gazeCalibration;
+  final bool cameraFeedback;
   final String connectionGeneration;
   final double targetFps;
   final int maxMessageBytes, maxJpegBytes, maxPixels;
@@ -196,7 +198,9 @@ class ReadyMessage extends AnalysisMessage {
   final String? frameOrientation;
 
   ReadyMessage.fromJson(JsonObject json)
-    : connectionGeneration = requireJsonString(json, 'connection_generation'),
+    : gazeCalibration = json['gaze_calibration'] == true,
+      cameraFeedback = json['camera_feedback'] == true,
+      connectionGeneration = requireJsonString(json, 'connection_generation'),
       targetFps = _fps(json),
       maxMessageBytes = _count(json, 'max_message_bytes', minimum: 1),
       maxJpegBytes = _count(json, 'max_jpeg_bytes', minimum: 1),
@@ -430,6 +434,7 @@ class AnalysisUpdate extends AnalysisMessage {
 
 class FrameCounts {
   final int received, admitted, processed, dropped, superseded, failed, expired;
+  final int? usable, unusable, unsupported;
   FrameCounts.fromJson(JsonObject json)
     : received = _count(json, 'received'),
       admitted = _count(json, 'admitted'),
@@ -437,18 +442,69 @@ class FrameCounts {
       dropped = _count(json, 'dropped'),
       superseded = _count(json, 'superseded'),
       failed = _count(json, 'failed'),
-      expired = _count(json, 'expired') {
+      expired = _count(json, 'expired'),
+      usable = json['usable_frames'] == null
+          ? null
+          : _count(json, 'usable_frames'),
+      unusable = json['unusable_frames'] == null
+          ? null
+          : _count(json, 'unusable_frames'),
+      unsupported = json['unsupported_frames'] == null
+          ? null
+          : _count(json, 'unsupported_frames') {
     if (received != admitted + dropped ||
-        processed + superseded + failed + expired > admitted) {
+        processed + superseded + failed + expired > admitted ||
+        (usable ?? 0) + (unusable ?? 0) + (unsupported ?? 0) > processed) {
       throw const FormatException('Invalid frame accounting.');
     }
   }
 }
 
+class CameraDiagnostics {
+  final DateTime? latestProcessedAt, latestUsableSampleAt;
+  final DateTime? latestGapStart, latestGapEnd;
+  final int gapCount;
+  final double gapSeconds;
+  final Map<String, int> dropReasons, terminalReasons;
+  final Map<String, int>? signalSamples;
+
+  CameraDiagnostics.fromJson(JsonObject json)
+    : latestProcessedAt = _optionalDate(json, 'latest_processed_at'),
+      latestUsableSampleAt = _optionalDate(json, 'latest_usable_sample_at'),
+      latestGapStart = _gapDate(json, 'start'),
+      latestGapEnd = _gapDate(json, 'end'),
+      gapCount = _count(json, 'gap_count'),
+      gapSeconds =
+          _nullableNumber(json, 'gap_seconds') ??
+          (throw const FormatException('Missing coverage gap duration.')),
+      dropReasons = _counts(json['drop_reasons']),
+      terminalReasons = _counts(json['terminal_reasons']),
+      signalSamples = json['signal_samples'] == null
+          ? null
+          : _counts(json['signal_samples']);
+
+  static DateTime? _optionalDate(JsonObject json, String key) =>
+      json[key] == null ? null : _date(json, key);
+
+  static DateTime? _gapDate(JsonObject json, String key) =>
+      json['latest_gap'] == null
+      ? null
+      : _date(requireJsonObject(json['latest_gap']), key);
+
+  static Map<String, int> _counts(Object? source) {
+    final json = requireJsonObject(source);
+    return Map.unmodifiable({
+      for (final key in json.keys) key: _count(json, key),
+    });
+  }
+}
+
 /// B6 envelopes may legitimately contain no report. Availability is not success.
 class RecruiterReportResult {
+  final JsonObject browserObservations;
   RecruiterReportResult.fromJson(JsonObject json, {required String sessionId})
-    : sessionId = _matchingSession(json, sessionId),
+    : browserObservations = _optionalObject(json['browser_observations']),
+      sessionId = _matchingSession(json, sessionId),
       availability = requireJsonString(json, 'availability'),
       revision = _count(json, 'revision'),
       report = json['report'] == null
@@ -540,6 +596,12 @@ class BehavioralEpisode {
 class BehavioralReport {
   final AnalysisSnapshot snapshot;
   final FrameCounts counts;
+  final CameraDiagnostics? cameraDiagnostics;
+  final bool isFinal, gazeUncalibrated;
+  final double? evidenceWindowSeconds, minimumEpisodeSeconds;
+  final Map<String, double?> knownSeconds, longestSupportedSeconds;
+  final JsonObject signalReview, signalDiagnostics;
+  final GazeMeasurement? gazeMeasurement;
   final double? centeredPercentage;
   final String? finalizationReason;
   final DateTime? finalizedAt;
@@ -548,9 +610,23 @@ class BehavioralReport {
   final bool episodesTruncated;
   final Map<String, double> expressionPercentages;
 
+  bool get hasMeasuredExpressions =>
+      snapshot.expressionStatus == 'complete' &&
+      expressionPercentages.values.any((value) => value > 0);
+
   BehavioralReport._bounded(BehavioralReport source, int limit)
     : snapshot = source.snapshot.bounded(limit),
       counts = source.counts,
+      cameraDiagnostics = source.cameraDiagnostics,
+      isFinal = source.isFinal,
+      gazeUncalibrated = source.gazeUncalibrated,
+      evidenceWindowSeconds = source.evidenceWindowSeconds,
+      minimumEpisodeSeconds = source.minimumEpisodeSeconds,
+      knownSeconds = source.knownSeconds,
+      longestSupportedSeconds = source.longestSupportedSeconds,
+      signalReview = source.signalReview,
+      signalDiagnostics = source.signalDiagnostics,
+      gazeMeasurement = source.gazeMeasurement,
       centeredPercentage = source.centeredPercentage,
       finalizationReason = source.finalizationReason,
       finalizedAt = source.finalizedAt,
@@ -567,6 +643,36 @@ class BehavioralReport {
         sessionId: sessionId,
       ),
       counts = FrameCounts.fromJson(requireJsonObject(json['coverage'])),
+      cameraDiagnostics = _cameraDiagnostics(
+        requireJsonObject(json['coverage']),
+      ),
+      isFinal = json['final'] == true || json['finalized_at'] != null,
+      gazeUncalibrated = (json['limitations'] as List? ?? const []).contains(
+        'gaze_not_calibrated',
+      ),
+      evidenceWindowSeconds = _nullableNumber(
+        requireJsonObject(json['coverage']),
+        'evidence_window_seconds',
+      ),
+      minimumEpisodeSeconds = _nullableNumber(
+        requireJsonObject(json['coverage']),
+        'minimum_episode_seconds',
+      ),
+      knownSeconds = _durationMap(
+        requireJsonObject(json['coverage'])['known_seconds'],
+      ),
+      longestSupportedSeconds = _durationMap(
+        requireJsonObject(json['coverage'])['longest_supported_seconds'],
+      ),
+      signalReview = _optionalObject(json['signal_review']),
+      signalDiagnostics = _optionalObject(
+        requireJsonObject(json['episodes'])['signal_diagnostics'],
+      ),
+      gazeMeasurement = json['gaze_measurement'] == null
+          ? null
+          : GazeMeasurement.fromJson(
+              requireJsonObject(json['gaze_measurement']),
+            ),
       centeredPercentage = _nullableNumber(json, 'gaze_centered_pct'),
       finalizationReason = json['reason'] == null
           ? null
@@ -600,6 +706,96 @@ class BehavioralReport {
       throw const FormatException('Invalid centered percentage for coverage.');
     }
   }
+  BehavioralSignal signal(String kind, String coverageKey) {
+    if (signalReview[kind] == false) {
+      return const BehavioralSignal(
+        BehavioralSignalState.unavailable,
+        null,
+        null,
+        null,
+      );
+    }
+    final seconds = knownSeconds[coverageKey];
+    final window = evidenceWindowSeconds;
+    final unknown = seconds == null || window == null
+        ? null
+        : (window - seconds).clamp(0.0, window).toDouble();
+    final total = snapshot.eventSummaries
+        ?.where((row) => row.type == kind)
+        .firstOrNull
+        ?.eventCount;
+    final span = longestSupportedSeconds[coverageKey];
+    final threshold = minimumEpisodeSeconds;
+    final unavailable =
+        snapshot.status == AnalysisState.failed ||
+        snapshot.status == AnalysisState.disabled ||
+        (coverageKey == 'gaze' &&
+            (gazeUncalibrated ||
+                (gazeMeasurement != null &&
+                    gazeMeasurement!.calibrationStatus != 'calibrated' &&
+                    (seconds ?? 0) == 0)));
+    final state = switch (total) {
+      _ when unavailable => BehavioralSignalState.unavailable,
+      final count? when count > 0 => BehavioralSignalState.eventsObserved,
+      0 when span != null && threshold != null && span >= threshold =>
+        BehavioralSignalState.measuredZero,
+      _ when !isFinal && (counts.usable ?? 0) == 0 =>
+        BehavioralSignalState.processing,
+      _ => BehavioralSignalState.insufficientCoverage,
+    };
+    return BehavioralSignal(state, total, seconds, unknown);
+  }
+}
+
+JsonObject _optionalObject(Object? value) =>
+    value == null ? const {} : Map.unmodifiable(requireJsonObject(value));
+
+class GazeMeasurement {
+  final String calibrationStatus;
+  final double? centeredSeconds, awaySeconds, unknownSeconds;
+
+  GazeMeasurement.fromJson(JsonObject json)
+    : calibrationStatus = requireJsonString(json, 'calibration_status'),
+      centeredSeconds = _nullableNumber(json, 'centered_seconds'),
+      awaySeconds = _nullableNumber(json, 'away_seconds'),
+      unknownSeconds = _nullableNumber(json, 'unknown_seconds');
+}
+
+enum BehavioralSignalState {
+  processing,
+  unavailable,
+  insufficientCoverage,
+  measuredZero,
+  eventsObserved,
+}
+
+class BehavioralSignal {
+  const BehavioralSignal(
+    this.state,
+    this.events,
+    this.knownSeconds,
+    this.unknownSeconds,
+  );
+
+  final BehavioralSignalState state;
+  final int? events;
+  final double? knownSeconds, unknownSeconds;
+}
+
+Map<String, double?> _durationMap(Object? raw) {
+  if (raw == null) return const {};
+  final json = requireJsonObject(raw);
+  return Map.unmodifiable({
+    for (final key in ['face', 'objects', 'gaze'])
+      key: _nullableNumber(json, key),
+  });
+}
+
+CameraDiagnostics? _cameraDiagnostics(JsonObject coverage) {
+  final value = coverage['camera_diagnostics'];
+  return value == null
+      ? null
+      : CameraDiagnostics.fromJson(requireJsonObject(value));
 }
 
 Map<String, double> _expressionPercentages(JsonObject expression) {

@@ -9,9 +9,11 @@ import 'package:video_player/video_player.dart';
 import '../models/interview_analysis_contract.dart';
 import '../models/recruitment_evidence.dart';
 import '../services/media/interview_media_route_observer.dart';
+import '../services/api_exception.dart';
 import '../services/recruitment_workflow_service.dart';
 import '../services/session_scope.dart';
 import 'screening_visuals.dart';
+import 'behavioral_signal_summary.dart';
 
 Color reviewAnswerScoreColor(double? score) => switch (score) {
   null => const Color(0xFF687893),
@@ -102,19 +104,24 @@ class _RecruiterInterviewDashboardState
   static const _green = Color(0xFF067A63);
 
   CancelToken? _request;
+  CancelToken? _reportRequest;
+  Timer? _reportPoll;
+  InterviewSessionIdentity? _reportIdentity;
   InterviewRecording? _recording;
   RecruiterReportResult? _behavior;
   VideoPlayerController? _player;
   bool _recordingLoading = true;
   bool _behaviorLoading = true;
   bool _recordingFailed = false;
+  String? _recordingFailureReason;
   bool _showRecording = false;
+  String? _videoReplayState;
   bool _behaviorFailed = false;
 
   @override
   void initState() {
     super.initState();
-    SessionScope.invalidations.addListener(_clear);
+    SessionScope.invalidations.addListener(_invalidate);
     _load();
   }
 
@@ -128,6 +135,8 @@ class _RecruiterInterviewDashboardState
 
   @override
   void didPushNext() {
+    _reportPoll?.cancel();
+    _reportRequest?.cancel();
     final player = _player;
     if (player?.value.isPlaying == true) {
       unawaited(_controlRecording(player!, player.pause));
@@ -135,32 +144,61 @@ class _RecruiterInterviewDashboardState
   }
 
   @override
+  void didPopNext() {
+    if (_behavior?.report?.isFinal != true) unawaited(_startReport());
+  }
+
+  @override
   void didUpdateWidget(RecruiterInterviewDashboard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.refreshVersion != widget.refreshVersion ||
-        oldWidget.review.interview?.id != widget.review.interview?.id) {
+    if (oldWidget.review.interview?.id != widget.review.interview?.id ||
+        oldWidget.review.interview?.sessionId !=
+            widget.review.interview?.sessionId ||
+        oldWidget.review.interview?.hasSessionIdentityField !=
+            widget.review.interview?.hasSessionIdentityField ||
+        oldWidget.service != widget.service) {
       _load();
+    } else if (oldWidget.refreshVersion != widget.refreshVersion) {
+      unawaited(_loadRecording());
+      unawaited(_startReport());
     }
   }
 
   bool _current(CancelToken token) => mounted && !token.isCancelled;
 
+  void _invalidate() => setState(_clear);
+
   void _clear() {
+    _clearRecording();
+    _reportRequest?.cancel();
+    _reportPoll?.cancel();
+    _reportIdentity = null;
+    _behavior = null;
+  }
+
+  void _clearRecording() {
     _request?.cancel();
     _player?.dispose();
     _player = null;
     _showRecording = false;
     _recording = null;
-    _behavior = null;
+    _recordingFailureReason = null;
+    _videoReplayState = null;
   }
 
-  Future<void> _load() async {
+  void _load() {
     _clear();
+    unawaited(_loadRecording());
+    unawaited(_startReport());
+  }
+
+  Future<void> _loadRecording() async {
+    _clearRecording();
     final token = _request = CancelToken();
     final id = widget.review.interview!.id;
     setState(() {
-      _recordingLoading = _behaviorLoading = true;
-      _recordingFailed = _behaviorFailed = false;
+      _recordingLoading = true;
+      _recordingFailed = false;
     });
 
     final InterviewRecording recording;
@@ -172,8 +210,8 @@ class _RecruiterInterviewDashboardState
     } catch (_) {
       if (_current(token)) {
         setState(() {
-          _recordingLoading = _behaviorLoading = false;
-          _recordingFailed = _behaviorFailed = true;
+          _recordingLoading = false;
+          _recordingFailed = true;
         });
       }
       return;
@@ -182,17 +220,64 @@ class _RecruiterInterviewDashboardState
     setState(() {
       _recording = recording;
       _recordingLoading = false;
-      _behaviorLoading = recording.sessionId != null;
     });
-    if (recording.sessionId case final sessionId?) {
-      await _loadBehavior(id, sessionId, token);
-    }
   }
 
-  Future<void> _openRecording({Duration? position}) async {
-    final uri = _recording?.uri;
+  Future<void> _openRecording({
+    Duration? position,
+    bool resume = false,
+    bool videoOnly = false,
+  }) async {
     final token = _request;
-    if (uri == null || token == null || !_current(token)) return;
+    if (token == null || !_current(token) || _recordingLoading) return;
+    setState(() {
+      _recordingLoading = true;
+      _recordingFailed = false;
+      _recordingFailureReason = null;
+    });
+    Uri? uri;
+    String? reason;
+    String? videoReplayState;
+    final interviewId = widget.review.interview!.id;
+    try {
+      final replay = await widget.service.replayAccess(
+        interviewId,
+        cancelToken: token,
+      );
+      uri = replay.uri;
+      videoReplayState = replay.state;
+    } catch (_) {
+      videoReplayState = 'connection_error';
+    }
+    if (!_current(token)) return;
+    if (uri == null && videoOnly) {
+      setState(() {
+        _recordingLoading = false;
+        _videoReplayState = videoReplayState;
+      });
+      return;
+    }
+    final hasVideo = uri != null;
+    if (!hasVideo) {
+      try {
+        final access = await widget.service.recordingAccess(
+          interviewId,
+          cancelToken: token,
+        );
+        uri = access.uri;
+        reason = access.reason;
+      } catch (_) {
+        reason = 'access_unavailable';
+      }
+    }
+    if (!_current(token)) return;
+    setState(() {
+      _recordingLoading = false;
+      _recordingFailed = uri == null;
+      _recordingFailureReason = reason;
+      _videoReplayState = videoReplayState;
+    });
+    if (uri == null) return;
 
     final player = VideoPlayerController.networkUrl(uri);
     final previousPlayer = _player;
@@ -210,9 +295,12 @@ class _RecruiterInterviewDashboardState
     }
     if (!_current(token) || _player != player) return;
     final seek = position != null && position <= player.value.duration;
-    setState(() => _showRecording = seek);
+    setState(() => _showRecording = hasVideo || seek);
     if (seek) {
       await _controlRecording(player, () => player.seekTo(position));
+    }
+    if (resume && _current(token) && _player == player) {
+      await _controlRecording(player, player.play);
     }
   }
 
@@ -237,17 +325,24 @@ class _RecruiterInterviewDashboardState
     }
   }
 
-  Future<void> _loadBehavior(
-    String id,
-    String sessionId,
-    CancelToken token,
-  ) async {
+  Future<void> _startReport() async {
+    _reportRequest?.cancel();
+    _reportPoll?.cancel();
+    final token = _reportRequest = CancelToken();
+    setState(() {
+      _behaviorLoading = _behavior == null;
+      _behaviorFailed = false;
+    });
     try {
-      final behavior = await widget.service.interviewBehavior(
-        InterviewSessionIdentity(interviewId: id, sessionId: sessionId),
-        cancelToken: token,
-      );
-      if (_current(token)) setState(() => _behavior = behavior);
+      final identity =
+          _reportIdentity ??
+          await widget.service.behavioralSession(
+            widget.review.interview!,
+            cancelToken: token,
+          );
+      if (!_current(token)) return;
+      _reportIdentity = identity;
+      if (identity != null) await _loadBehavior(identity, token);
     } catch (_) {
       if (_current(token)) setState(() => _behaviorFailed = true);
     } finally {
@@ -255,10 +350,58 @@ class _RecruiterInterviewDashboardState
     }
   }
 
+  Future<void> _loadBehavior(
+    InterviewSessionIdentity identity,
+    CancelToken token,
+  ) async {
+    var retry = false;
+    try {
+      final behavior = await widget.service.interviewBehavior(
+        identity,
+        cancelToken: token,
+      );
+      if (!_current(token)) return;
+      if (behavior.sessionId != identity.sessionId) {
+        throw const FormatException('Unexpected behavioral report session.');
+      }
+      setState(() {
+        final previousRevision = _behavior?.revision ?? -1;
+        final hasFinalReport = _behavior?.report?.isFinal == true;
+        if ((behavior.availability != 'pending' && behavior.report == null) ||
+            (behavior.revision >= previousRevision &&
+                (!hasFinalReport || behavior.report?.isFinal == true))) {
+          _behavior = behavior;
+        }
+        _behaviorFailed = false;
+      });
+      retry =
+          _behavior?.availability == 'pending' ||
+          _behavior?.report?.isFinal == false;
+    } on ApiException catch (error) {
+      if (!_current(token)) return;
+      retry = ![401, 403, 404, 409, 410].contains(error.statusCode);
+      setState(() {
+        if (!retry) _behavior = null;
+        _behaviorFailed = true;
+      });
+    } catch (_) {
+      if (_current(token)) {
+        setState(() => _behaviorFailed = true);
+      }
+    } finally {
+      if (_current(token)) setState(() => _behaviorLoading = false);
+    }
+    if (retry && _current(token)) {
+      _reportPoll = Timer(const Duration(seconds: 15), () {
+        if (_current(token)) unawaited(_loadBehavior(identity, token));
+      });
+    }
+  }
+
   @override
   void dispose() {
     interviewMediaRouteObserver.unsubscribe(this);
-    SessionScope.invalidations.removeListener(_clear);
+    SessionScope.invalidations.removeListener(_invalidate);
     _clear();
     super.dispose();
   }
@@ -338,7 +481,7 @@ class _RecruiterInterviewDashboardState
 
   bool _canOpenAt(_EvidenceAnswer answer) =>
       _player == null &&
-      _recording?.uri != null &&
+      (_recording?.uri != null || _recording?.endedAt != null) &&
       answer.timestamp != null &&
       answer.callId?.isNotEmpty == true &&
       answer.callId == _recording?.callId;
@@ -362,13 +505,18 @@ class _RecruiterInterviewDashboardState
 
     Widget contents(VideoPlayerValue? value) {
       final failed = _recordingFailed || value?.hasError == true;
-      final canLoad = _recording?.uri != null && player == null && !failed;
+      final canLoad =
+          (_recording?.endedAt != null || _recording?.uri != null) &&
+          player == null &&
+          !failed &&
+          !_recordingLoading;
       final ready = value?.isInitialized == true && !failed;
       final duration = ready && value!.duration > Duration.zero
           ? value.duration
           : _recording?.duration;
       final position = ready ? value!.position : null;
       final playing = ready && value!.isPlaying;
+      final hasVideo = ready && value!.size.width > 0 && value.size.height > 0;
       final showVideo =
           ready &&
           (_showRecording ||
@@ -379,11 +527,26 @@ class _RecruiterInterviewDashboardState
           ? 0.0
           : ((position?.inMilliseconds ?? 0) / milliseconds).clamp(0.0, 1.0);
       final message = failed
-          ? 'Could not load the recording.'
+          ? switch (_recordingFailureReason) {
+              'audio_pending' => 'Interview audio is not available yet.',
+              'audio_host_unconfigured' =>
+                'The recording host needs to be configured.',
+              'audio_origin_unavailable' =>
+                'The audio provider could not be reached.',
+              'access_unavailable' => 'Recording access could not be verified.',
+              _ => 'Could not load the recording.',
+            }
           : _recordingLoading || (player != null && !ready)
           ? 'Loading recording…'
+          : ready && !hasVideo
+          ? switch (_videoReplayState) {
+              'processing' ||
+              'recording' => 'Audio only. Video is still being prepared.',
+              'connection_error' => 'Audio only. Video could not be loaded.',
+              _ => 'Audio only. Video is unavailable for this attempt.',
+            }
           : ready
-          ? 'Recorded session. Press play or pick an answer.'
+          ? 'Video replay'
           : canLoad
           ? 'Recorded session. Load the recording or pick an answer.'
           : 'No recording available';
@@ -404,10 +567,7 @@ class _RecruiterInterviewDashboardState
       return Stack(
         fit: StackFit.expand,
         children: [
-          if (showVideo &&
-              value != null &&
-              value.size.width > 0 &&
-              value.size.height > 0)
+          if (showVideo && hasVideo)
             Center(
               child: AspectRatio(
                 aspectRatio: value.aspectRatio,
@@ -423,7 +583,11 @@ class _RecruiterInterviewDashboardState
                   children: [
                     if (ready || canLoad)
                       IconButton.filledTonal(
-                        tooltip: canLoad ? 'Load recording' : 'Play recording',
+                        tooltip: canLoad
+                            ? 'Load recording'
+                            : playing
+                            ? 'Pause recording'
+                            : 'Play recording',
                         style: IconButton.styleFrom(
                           backgroundColor: const Color(0xFF293143),
                           foregroundColor: Colors.white,
@@ -433,6 +597,8 @@ class _RecruiterInterviewDashboardState
                         icon: Icon(
                           canLoad
                               ? Icons.download_rounded
+                              : playing
+                              ? Icons.pause_rounded
                               : Icons.play_arrow_rounded,
                         ),
                       ),
@@ -445,14 +611,31 @@ class _RecruiterInterviewDashboardState
                         color: const Color(0xFFA7B7CF),
                       ),
                     ),
+                    if (ready &&
+                        !hasVideo &&
+                        const {
+                          'processing',
+                          'recording',
+                          'connection_error',
+                        }.contains(_videoReplayState))
+                      TextButton(
+                        onPressed: _recordingLoading
+                            ? null
+                            : () => _openRecording(
+                                position: position,
+                                resume: playing,
+                                videoOnly: true,
+                              ),
+                        child: const Text('Check for video'),
+                      ),
                     if (failed)
                       TextButton(
                         style: TextButton.styleFrom(
                           foregroundColor: const Color(0xFFCBDAF4),
                         ),
-                        onPressed: _recording?.uri == null
-                            ? _load
-                            : _openRecording,
+                        onPressed: _recording == null
+                            ? _loadRecording
+                            : () => _openRecording(position: value?.position),
                         child: const Text('Retry recording'),
                       ),
                   ],
@@ -477,6 +660,14 @@ class _RecruiterInterviewDashboardState
                         style: _eyebrow(context, const Color(0xFF9FACC6)),
                       ),
                     ),
+                    if (hasVideo && _videoReplayState == 'partial')
+                      const Padding(
+                        padding: EdgeInsets.only(right: 10),
+                        child: Text(
+                          'Partial video',
+                          style: TextStyle(color: Color(0xFFA7B7CF)),
+                        ),
+                      ),
                     if (duration != null)
                       Text(
                         _clock(duration),
@@ -640,30 +831,25 @@ class _RecruiterInterviewDashboardState
   }
 
   Widget _expressionPanel() {
-    final percentages =
-        _behavior?.report?.expressionPercentages ?? const <String, double>{};
+    final report = _behavior?.report;
     const colors = [
       Color(0xFFC5D0E3),
       Color(0xFF10B5A1),
       Color(0xFFE8AA42),
       Color(0xFF7192E8),
     ];
-    final measurements = percentages.entries.toList();
-    final status = _behavior?.report?.snapshot.expressionStatus;
-    final disabled =
-        status?.toLowerCase() == 'disabled' ||
-        _behavior?.availability == 'disabled';
+    final measurements = report?.hasMeasuredExpressions == true
+        ? report!.expressionPercentages.entries.toList()
+        : const <MapEntry<String, double>>[];
     return _section(
-      'Emotion timeline · FER',
-      badge: disabled ? _badge('DISABLED', neutral: true) : null,
+      'Facial expressions',
+      badge: measurements.isEmpty ? _badge('DISABLED', neutral: true) : null,
       children: [
         if (measurements.isEmpty)
           _evidenceNotice(
             Icons.sentiment_neutral_outlined,
-            disabled ? 'Not enabled for this report' : null,
-            disabled
-                ? 'FER is disabled, so no emotion data is shown.'
-                : _behaviorMessage(expression: true),
+            null,
+            'Facial expression analysis disabled',
           )
         else
           Padding(
@@ -908,23 +1094,52 @@ class _RecruiterInterviewDashboardState
     final events = [...?report?.episodes]
       ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
     return _section(
-      'Proctoring flags',
-      badge: report == null
+      'Camera observations',
+      badge: events.isEmpty
           ? null
           : _badge(
-              '${events.length}${report.episodesTruncated ? '+' : ''} EVENTS',
-              success: events.isEmpty,
-              warm: events.isNotEmpty,
+              '${events.length}${report!.episodesTruncated ? '+' : ''} EVENTS',
+              warm: true,
             ),
       children: [
-        if (events.isEmpty)
-          _evidenceNotice(
-            Icons.verified_user_outlined,
-            report == null ? null : 'No observed events',
-            report == null
-                ? _behaviorMessage()
-                : 'Nothing was flagged during this session.',
-            success: report != null,
+        for (final entry
+            in (_behavior?.browserObservations ?? const <String, dynamic>{})
+                .entries)
+          _row(
+            Text(
+              '${entry.value['label']} · Coverage incomplete\n'
+              'Coverage last confirmed ${entry.value['coverage_ended_at'] ?? 'unknown'}\n'
+              '${(entry.value['events'] as List? ?? []).map((event) => "${event['state']} · ${event['received_at']}").join("\n")}',
+            ),
+          ),
+        _row(
+          BehavioralSignalSummary(
+            report: report,
+            processing:
+                _behaviorLoading || _behavior?.availability == 'pending',
+          ),
+        ),
+        if (report != null && _behaviorFailed)
+          _row(const Text('The latest report revision could not be checked.')),
+        if (report == null &&
+            !_behaviorLoading &&
+            _behavior?.availability != 'pending')
+          _row(
+            Row(
+              children: [
+                Expanded(child: Text(_behaviorMessage())),
+                if (_behaviorFailed)
+                  TextButton(
+                    onPressed: _startReport,
+                    child: const Text('Retry report'),
+                  ),
+              ],
+            ),
+          ),
+        if (report?.cameraDiagnostics case final diagnostics?)
+          Material(
+            type: MaterialType.transparency,
+            child: _cameraCoverage(report!.counts, diagnostics),
           ),
         for (final event in events)
           _row(
@@ -944,6 +1159,63 @@ class _RecruiterInterviewDashboardState
       ],
     );
   }
+
+  Widget _cameraCoverage(FrameCounts counts, CameraDiagnostics diagnostics) {
+    String time(DateTime? value) =>
+        value == null ? 'Unknown' : value.toUtc().toIso8601String();
+    final samples = diagnostics.signalSamples;
+    return ExpansionTile(
+      title: const Text('Camera evidence coverage'),
+      subtitle: Text(
+        '${diagnostics.gapCount} coverage ${diagnostics.gapCount == 1 ? 'gap' : 'gaps'} · '
+        '${diagnostics.gapSeconds.toStringAsFixed(1)} seconds',
+      ),
+      expandedAlignment: Alignment.centerLeft,
+      expandedCrossAxisAlignment: CrossAxisAlignment.start,
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 11),
+      children: [
+        Text(
+          '${counts.received} received · ${counts.admitted} admitted · '
+          '${counts.processed} processed · ${counts.usable ?? 'Unknown'} usable',
+        ),
+        Text(
+          '${counts.dropped} dropped · ${counts.superseded} superseded · '
+          '${counts.failed} failed · ${counts.expired} expired',
+        ),
+        if ((counts.unusable ?? 0) > 0 || (counts.unsupported ?? 0) > 0)
+          Text(
+            '${counts.unusable ?? 'Unknown'} unusable images · '
+            '${counts.unsupported ?? 'Unknown'} unsupported results',
+          ),
+        Text(
+          'Latest processing completion  ${time(diagnostics.latestProcessedAt)}',
+        ),
+        Text('Latest usable sample  ${time(diagnostics.latestUsableSampleAt)}'),
+        if (diagnostics.latestGapStart != null)
+          Text(
+            'Latest gap  ${time(diagnostics.latestGapStart)} to '
+            '${time(diagnostics.latestGapEnd)}',
+          ),
+        if (diagnostics.dropReasons.isNotEmpty)
+          Text('Drops  ${_reasonCounts(diagnostics.dropReasons)}'),
+        if (diagnostics.terminalReasons.isNotEmpty)
+          Text(
+            'Worker outcomes  ${_reasonCounts(diagnostics.terminalReasons)}',
+          ),
+        if (samples?['phone_detected'] case final detected?)
+          Text(
+            'Phone detected in $detected samples '
+            '(${samples?['phone_at_entry_confidence']} at episode entry confidence).',
+          ),
+        if (samples?['no_face'] case final absent?)
+          Text('No face observed in $absent samples.'),
+      ],
+    );
+  }
+
+  static String _reasonCounts(Map<String, int> reasons) => reasons.entries
+      .map((entry) => '${entry.key.replaceAll('_', ' ')} (${entry.value})')
+      .join(' · ');
 
   Widget _evidenceNotice(
     IconData icon,
@@ -984,7 +1256,7 @@ class _RecruiterInterviewDashboardState
     ),
   );
 
-  String _behaviorMessage({bool expression = false}) {
+  String _behaviorMessage() {
     if (_behaviorLoading) return 'Loading behavioral report…';
     if (_behaviorFailed) return 'Behavioral report unavailable.';
     return switch (_behavior?.availability) {
@@ -992,12 +1264,7 @@ class _RecruiterInterviewDashboardState
       'disabled' => 'Behavioral analysis disabled.',
       'legacy_unverified' =>
         'Behavioral analysis unavailable for this interview.',
-      'ready' =>
-        expression
-            ? (_behavior?.report?.snapshot.expressionStatus == 'disabled'
-                  ? 'FER is disabled for this report.'
-                  : 'FER percentages unavailable.')
-            : 'No observed events reported.',
+      'ready' => 'Behavioral report available.',
       _ => 'No behavioral report available.',
     };
   }

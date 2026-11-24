@@ -17,14 +17,16 @@ class MonitorAttempt {
     release?.call();
   }
 
-  bool retry(void Function() join, {bool renewal = false}) {
+  bool retry(
+    void Function() join, {
+    bool renewal = false,
+    Duration minimumDelay = Duration.zero,
+  }) {
     cancel();
     if (!renewal) failures++;
     if (failures > 5) return false;
-    _retry = Timer(
-      renewal ? Duration.zero : Duration(seconds: failures * 2),
-      join,
-    );
+    final backoff = renewal ? Duration.zero : Duration(seconds: failures * 2);
+    _retry = Timer(minimumDelay > backoff ? minimumDelay : backoff, join);
     return true;
   }
 }

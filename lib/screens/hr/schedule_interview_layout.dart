@@ -8,10 +8,6 @@ const _person =
     '<circle cx="12" cy="8" r="3.5"/>'
     '<path d="M4.5 20v-1.5a5 5 0 0 1 5-5h5a5 5 0 0 1 5 5V20z"/>';
 const _info = '<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>';
-const _clipboard =
-    '<rect x="8" y="3" width="8" height="4" rx="1"/>'
-    '<path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M11 11h5m-5 5h5M8 11h.01M8 16h.01"/>';
-const _chevron = '<path d="m6 9 6 6 6-6"/>';
 const _check = '<path d="m4 12 5 5L20 6" stroke-width="3"/>';
 const _collapseArrow = '<path d="M6 9h12l-6 6z" fill="#000" stroke="none"/>';
 
@@ -1040,154 +1036,24 @@ extension _ScheduleInterviewLayout on _ScheduleInterviewScreenState {
 
   Widget _questionReview() {
     final application = _selectedApplication;
-    return _panel(
+    return KeyedSubtree(
       key: _reviewKey,
-      padding: EdgeInsets.zero,
       child: application == null
-          ? _questionAccordion(
-              caption: 'Available after you select a candidate',
+          ? const ScreeningPanel(
+              child: ScreeningHeading(
+                'Interview questions',
+                'Available after you select a candidate.',
+              ),
             )
           : QuestionPreparationPanel(
               key: ValueKey('${application.id}-$_questionReload'),
               application: application,
               applicationId: application.id,
               client: widget.questionClient,
+              useScreeningLayout: true,
               onApprovalChanged: (setId, revision) =>
                   _recordQuestionApproval(application.id, setId, revision),
-              previewBuilder:
-                  (
-                    _, {
-                    required draft,
-                    required error,
-                    required busy,
-                    required refresh,
-                    required edit,
-                    required regenerate,
-                  }) {
-                    final count = draft?.questions.length ?? 0;
-                    final approved = _canSchedule(application);
-                    final caption = approved
-                        ? '$count approved ${count == 1 ? 'question' : 'questions'}'
-                        : 'Question approval is required before sending.';
-                    return _questionAccordion(
-                      caption: caption,
-                      child: _questionPreview(
-                        draft,
-                        error,
-                        busy,
-                        refresh,
-                        edit,
-                        regenerate,
-                      ),
-                    );
-                  },
             ),
-    );
-  }
-
-  Widget _questionAccordion({required String caption, Widget? child}) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Semantics(
-        expanded: _reviewExpanded,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: child == null
-              ? null
-              : () => _updateSchedule(() => _reviewExpanded = !_reviewExpanded),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 21, vertical: 16),
-            child: Row(
-              children: [
-                _iconTile(_clipboard),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _heading('Review interview questions'),
-                      _body(caption),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 11),
-                RotatedBox(
-                  quarterTurns: _reviewExpanded ? 2 : 0,
-                  child: _icon(_chevron, color: _muted, size: 16),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      if (_reviewExpanded && child != null) ...[
-        Divider(height: 1, thickness: 1, color: _edge),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(21, 12, 21, 17),
-          child: child,
-        ),
-      ],
-    ],
-  );
-
-  Widget _questionPreview(
-    QuestionSet? draft,
-    String? error,
-    bool busy,
-    VoidCallback refresh,
-    VoidCallback? edit,
-    VoidCallback? regenerate,
-  ) {
-    final questions = draft?.questions ?? const <PreparedQuestion>[];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (busy) const LinearProgressIndicator(),
-        if (error != null)
-          Text(error, style: _type(AppType.bodySm, color: _colors.error)),
-        if (questions.isEmpty && !busy && error == null)
-          _body('No interview questions are ready yet.'),
-        for (final (index, question) in questions.indexed) ...[
-          if (index != 0) const SizedBox(height: 7),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${index + 1}. ',
-                style: _type(AppType.bodySm, color: _muted),
-              ),
-              Expanded(child: _body(question.text)),
-            ],
-          ),
-        ],
-        if (error != null || edit != null || regenerate != null)
-          Wrap(
-            spacing: 7,
-            children: [
-              if (edit != null)
-                TextButton(
-                  onPressed: edit,
-                  child: Text(
-                    draft?.generationStatus == 'NOT_REQUESTED'
-                        ? 'Prepare questions'
-                        : draft?.schedulable == true
-                        ? 'Edit questions'
-                        : 'Review and approve questions',
-                  ),
-                ),
-              if (regenerate != null)
-                TextButton(
-                  onPressed: regenerate,
-                  child: const Text('Regenerate'),
-                ),
-              if (error != null)
-                TextButton(
-                  onPressed: busy ? null : refresh,
-                  child: const Text('Refresh'),
-                ),
-            ],
-          ),
-      ],
     );
   }
 

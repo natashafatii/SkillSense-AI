@@ -137,11 +137,16 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
     final paneHeight = height == null
         ? null
         : (height - 80).clamp(540.0, double.infinity);
+    final transcript = selected != null && r.transcripts != null
+        ? selected.frozenTranscript(r.transcripts!)
+        : null;
+    final extraction = selected?.extraction;
+    final extractedAnswers = extraction?.questions ?? const <ExtractedAnswer>[];
     final answers = _reviewCard(
       'Answers and extracted evidence',
       height: paneHeight,
       badge: Text(
-        '${selected?.answers.length ?? 0} questions',
+        '${selected?.assessedCount ?? 0} scored · ${selected?.extractedCount ?? 0} linked answers',
         style: AppType.caption.style(context),
       ),
       children: [
@@ -150,11 +155,24 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
             'No evaluation available. Select a revision to inspect it.',
           ),
         if (selected != null && selected.answers.isEmpty)
-          Text(
-            selected.error.isEmpty
-                ? 'No scored answers available.'
-                : selected.error,
-          ),
+          Text(_evaluationMessage(selected)),
+        if (selected != null && selected.answers.isEmpty)
+          for (final answer in extractedAnswers)
+            ExpansionTile(
+              title: Text(
+                selected.questions
+                        .where((question) => question.id == answer.questionId)
+                        .firstOrNull
+                        ?.text ??
+                    'Question evidence',
+              ),
+              subtitle: Text(_displayStatus(answer.state)),
+              children: [
+                if (answer.askedTurnId case final asked?)
+                  turnLink(transcript, asked),
+                for (final id in answer.answerTurnIds) turnLink(transcript, id),
+              ],
+            ),
         if (selected != null)
           for (final answer in selected.answers)
             _answerEvidence(r, selected, answer),
@@ -184,10 +202,6 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
           ),
       ],
     );
-    final transcript = selected != null && r.transcripts != null
-        ? selected.frozenTranscript(r.transcripts!)
-        : null;
-    final extraction = selected?.extraction;
     final linked = <String>{
       for (final answer in extraction?.questions ?? <ExtractedAnswer>[]) ...[
         if (answer.askedTurnId != null) answer.askedTurnId!,
@@ -245,6 +259,27 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
       ],
     );
   }
+
+  String _evaluationMessage(
+    EvaluationRevision evaluation,
+  ) => switch (evaluation.error) {
+    'PROVIDER_BUSY' ||
+    'PROVIDER_RATE_LIMITED' ||
+    'PROVIDER_CONNECTION_FAILED' ||
+    'PROVIDER_UNAVAILABLE' =>
+      evaluation.pending
+          ? 'Grading is temporarily unavailable. A retry is scheduled.'
+          : 'Grading could not finish. You can review the extracted answers and request a rerun.',
+    'PROVIDER_MODEL_UNAVAILABLE' ||
+    'PROVIDER_REQUEST_REJECTED' ||
+    'PROVIDER_ACCESS_DENIED' ||
+    'PROVIDER_UNCONFIGURED' =>
+      'Grading needs an operator to correct the provider configuration.',
+    _ =>
+      evaluation.pending
+          ? 'Grading is pending.'
+          : 'No scored answers available.',
+  };
 
   Widget _answerEvidence(
     RecruitmentReview r,
@@ -545,6 +580,8 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
   Widget _historyPage(RecruitmentReview r, double? height) {
     final score = r.latestAttempt ? controller.currentScore : null;
     final evaluation = r.latestEvaluation;
+    final screening = r.latestAttempt ? _metrics(r).first.$2 : null;
+    final weights = r.latestAttempt ? r.scores.current?.weights : null;
     final report =
         r.feedback.where((report) => report.releasedAt != null).firstOrNull ??
         r.feedback.firstOrNull;
@@ -563,13 +600,13 @@ extension _InterviewReviewPages on _RecruitmentReviewScreenState {
         height: cardHeight,
         children: [
           _keyValues([
-            ('Screening', percent(score?.match)),
-            ('Interview', percent(score?.interview)),
+            ('Screening', percent(screening)),
+            ('Interview', percent(score?.interview ?? evaluation?.score)),
             (
               'Behavioral',
-              score?.weights['behavioral'] == 0
+              weights?['behavioral'] == 0
                   ? 'Excluded by policy'
-                  : percent(score?.weights['behavioral'], ratio: true),
+                  : percent(weights?['behavioral'], ratio: true),
             ),
             ('Combined score', percent(score?.publishedCombined)),
             ('Calculated', _scheduleTime(score?.completedAt)),

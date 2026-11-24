@@ -2,11 +2,19 @@ import 'package:flutter/material.dart';
 
 import 'candidate_job_detail_screen.dart';
 
+enum CandidateJobDetailIntent { apply }
+
 /// The named route needs the API job ID supplied by the caller.
 class CandidateJobDetailRoute extends StatelessWidget {
   final Object? arguments;
 
-  const CandidateJobDetailRoute({super.key, this.arguments});
+  final bool chooseResumeOnOpen;
+
+  const CandidateJobDetailRoute({
+    super.key,
+    this.arguments,
+    this.chooseResumeOnOpen = false,
+  });
 
   static String? jobIdFrom(Object? arguments) {
     if (arguments is! String) return null;
@@ -17,7 +25,12 @@ class CandidateJobDetailRoute extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final jobId = jobIdFrom(arguments);
-    if (jobId != null) return CandidateJobDetailScreen(jobId: jobId);
+    if (jobId != null) {
+      return CandidateJobDetailScreen(
+        jobId: jobId,
+        chooseResumeOnOpen: chooseResumeOnOpen,
+      );
+    }
     return Scaffold(
       body: Center(
         child: Column(

@@ -3,6 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../models/interview_analysis_contract.dart';
 
+const cameraInterruptionPromptsEnabled = bool.fromEnvironment(
+  'INTERVIEW_ANALYSIS_CAMERA_INTERRUPTION_PROMPTS_ENABLED',
+);
+
 enum MediaFailureCode {
   denied,
   notFound,

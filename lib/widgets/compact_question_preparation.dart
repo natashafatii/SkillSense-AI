@@ -27,7 +27,6 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
         _retryAt == null || !DateTime.now().isBefore(_retryAt!);
     final canRecover = !_busy && !_stale && !_reviewRequired && editableTime;
     final margin = ScreeningStyle.inset(context);
-    final width = MediaQuery.sizeOf(context).width;
     final notices = _draftNotices(questions, canChange);
     final hasNotice =
         notices.isNotEmpty || _error != null || _busy || !draftReady;
@@ -153,22 +152,24 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
               ),
             Padding(
               padding: EdgeInsets.fromLTRB(margin, 0, margin, 6),
-              child: width > 900
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: list),
-                        const SizedBox(width: 16),
-                        SizedBox(
-                          width: width <= 1100 ? 220 : 260,
-                          child: coverage,
-                        ),
-                      ],
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [list, const SizedBox(height: 14), coverage],
-                    ),
+              child: LayoutBuilder(
+                builder: (context, bounds) => bounds.maxWidth > 860
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: list),
+                          const SizedBox(width: 16),
+                          SizedBox(
+                            width: bounds.maxWidth <= 1060 ? 220 : 260,
+                            child: coverage,
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [list, const SizedBox(height: 14), coverage],
+                      ),
+              ),
             ),
             const SizedBox(height: 8),
             const Divider(height: 1, color: ScreeningStyle.line),
@@ -219,7 +220,7 @@ extension _CompactQuestions on _QuestionPreparationPanelState {
                               ? () => _command('approve')
                               : null,
                         ),
-                      if (approved && !frozen)
+                      if (approved && !frozen && widget.onSchedule != null)
                         ScreeningButton(
                           'Continue to scheduling',
                           kind: ScreeningButtonKind.primary,

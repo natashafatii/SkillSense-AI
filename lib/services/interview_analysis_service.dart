@@ -21,6 +21,7 @@ class InterviewAnalysisService {
     String sessionId,
     String action, {
     bool post = false,
+    bool refreshSessionToken = false,
     Object? data,
     CancelToken? cancelToken,
   }) async {
@@ -37,7 +38,10 @@ class InterviewAnalysisService {
         '/interview-sessions/$sessionId/$action/',
         data: data,
         cancelToken: cancelToken,
-        options: Options(method: post ? 'POST' : 'GET'),
+        options: Options(
+          method: post ? 'POST' : 'GET',
+          extra: refreshSessionToken ? {'refreshSessionToken': true} : null,
+        ),
       );
       return response.data;
     } on DioException catch (error) {
@@ -57,6 +61,7 @@ class InterviewAnalysisService {
         identity.sessionId,
         'ws-ticket',
         post: true,
+        refreshSessionToken: purpose == SocketPurpose.publisher,
         data: {'purpose': purpose.name},
         cancelToken: cancelToken,
       ),

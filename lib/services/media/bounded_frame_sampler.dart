@@ -63,8 +63,11 @@ class BoundedFrameSampler {
         if (_disposed ||
             generation != _generation ||
             !adapter.cameraReady ||
-            frame == null ||
             (canCapture != null && !canCapture())) {
+          return;
+        }
+        if (frame == null) {
+          onError?.call(const MediaFailure(MediaFailureCode.encoding));
           return;
         }
         if (!limits.accepts(frame)) {

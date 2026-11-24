@@ -28,7 +28,7 @@ class InterviewRecording {
       callId = json['retell_session_id'] as String?,
       startedAt = ApiValue.instant(json['started_at']),
       endedAt = ApiValue.instant(json['audio_ended_at'] ?? json['ended_at']),
-      uri = _recordingUri(json['recording_url']);
+      uri = recordingUri(json['recording_url']);
 
   Duration? get duration {
     final start = startedAt;
@@ -38,13 +38,14 @@ class InterviewRecording {
         : null;
   }
 
-  static Uri? _recordingUri(Object? value) {
+  static Uri? recordingUri(Object? value) {
     final uri = value is String ? Uri.tryParse(value) : null;
     return uri != null &&
             uri.scheme == 'https' &&
             uri.hasAuthority &&
             uri.host.isNotEmpty &&
-            uri.userInfo.isEmpty
+            uri.userInfo.isEmpty &&
+            !uri.hasFragment
         ? uri
         : null;
   }
@@ -217,6 +218,11 @@ class EvaluationRevision {
   bool get pending => const {'QUEUED', 'PROCESSING'}.contains(status);
   int get assessedCount =>
       answers.where((answer) => answer.scoreOutOfTen != null).length;
+  int get extractedCount =>
+      extraction?.questions
+          .where((answer) => answer.state == 'ANSWERED')
+          .length ??
+      0;
   int get questionCount =>
       questions.isNotEmpty ? questions.length : answers.length;
   bool get terminal =>

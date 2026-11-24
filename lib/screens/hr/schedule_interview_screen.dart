@@ -6,7 +6,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../models/application.dart';
 import '../../models/interview.dart';
 import '../../models/job.dart';
-import '../../models/question_set.dart';
 import '../../services/api_exception.dart';
 import '../../services/application_service.dart';
 import '../../services/auth_service.dart';
@@ -75,7 +74,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
   Color get _surface => _dark ? _colors.surface : Colors.white;
   Color get _blue => _dark ? _colors.primary : const Color(0xFF1A368A);
   final _reviewKey = GlobalKey();
-  bool _reviewExpanded = false;
   static const _recruiterOffset = Duration(hours: 5);
   static const _zone = 'Pakistan Standard Time · UTC+05:00';
 
@@ -159,7 +157,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _flexible = false;
       _notifyInApp = true;
       _notifyEmail = true;
-      _reviewExpanded = false;
     });
     for (final controller in _questionTexts.values) {
       controller.clear();
@@ -380,7 +377,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _selectedTime = null;
       _rowErrors.clear();
       _interview = null;
-      _reviewExpanded = false;
     });
     _loadAwaiting();
   }
@@ -472,7 +468,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
         _applicationId = null;
         _selectedDate = null;
         _selectedTime = null;
-        _reviewExpanded = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Interview invitation scheduled.')),
@@ -597,6 +592,7 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
           ? _colors.surfaceContainerHighest
           : const Color(0xFFF5F7FA);
       return MenuAnchor(
+        crossAxisUnconstrained: false,
         alignmentOffset: const Offset(0, 8),
         onOpen: () => _openDropdown.value = key,
         onClose: () {
@@ -620,7 +616,15 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
           ),
         ),
         menuChildren: [
-          for (final item in items)
+          for (final (index, item) in items.indexed) ...[
+            if (index > 0)
+              Divider(
+                height: 7,
+                thickness: 1,
+                indent: 12,
+                endIndent: 12,
+                color: _edge,
+              ),
             Semantics(
               selected: item.id == value,
               child: MenuItemButton(
@@ -664,29 +668,34 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                   children: [
                     Text(
                       item.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppType.h4.style(
+                      style: AppType.bodySm.style(
                         context,
                         color: item.id == value ? activeInk : _ink,
+                        weight: item.id == value
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                       ),
                     ),
-                    if (item.subtitle.trim().isNotEmpty)
+                    if (item.subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 3),
                       Text(
                         item.subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppType.h4.style(
+                        style: AppType.caption.style(
                           context,
                           color: item.id == value && !_dark
                               ? TypographyColors.secondary
                               : _muted,
+                          weight: FontWeight.w400,
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
             ),
+          ],
         ],
         builder: (context, controller, _) => ValueListenableBuilder<Key?>(
           valueListenable: _openDropdown,
@@ -736,8 +745,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
                     Expanded(
                       child: Text(
                         selected?.title ?? hint,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: _type(AppType.button),
                       ),
                     ),
@@ -760,17 +767,14 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
     final app = _selectedApplication;
     if (app == null) return;
     if (!_canSchedule(app)) {
-      setState(() => _reviewExpanded = true);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final reviewContext = _reviewKey.currentContext;
-        if (reviewContext != null) {
-          Scrollable.ensureVisible(
-            reviewContext,
-            duration: const Duration(milliseconds: 250),
-            alignment: 0.1,
-          );
-        }
-      });
+      final reviewContext = _reviewKey.currentContext;
+      if (reviewContext != null) {
+        await Scrollable.ensureVisible(
+          reviewContext,
+          duration: const Duration(milliseconds: 250),
+          alignment: 0.1,
+        );
+      }
       return;
     }
     await _confirmInvite();
@@ -841,7 +845,6 @@ class _ScheduleInterviewScreenState extends State<ScheduleInterviewScreen> {
       _approvedQuestionApplication = null;
       _approvedQuestionSet = null;
       _approvedQuestionRevision = null;
-      _reviewExpanded = false;
     });
   }
 

@@ -257,7 +257,11 @@ class _ApplicationScreeningScreenState
       }
       // Preserve the reason while refreshing; explicit review gates resubmission.
       await _load();
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) {
+        setState(
+          () => _error = error is ApiException ? error.message : '$error',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -15,6 +15,7 @@ import '../models/interview_analysis_contract.dart';
 import '../screens/admin/aurora_tokens.dart';
 import '../services/media/interview_media_controller.dart';
 import '../services/publisher/candidate_publisher_controller.dart';
+import 'browser_observations.dart';
 import '../services/voice/interview_lifecycle_controller.dart';
 
 part 'candidate_interview_room.dart';
@@ -153,6 +154,11 @@ class _CandidateInterviewWorkspaceState
   }
 
   bool get _completed => lifecycle.snapshot?.completed == true;
+  bool get _liveMonitorAvailable =>
+      liveMonitorSupported &&
+      lifecycle.videoRequired &&
+      (lifecycle.snapshot?.liveMonitorAvailable == true ||
+          lifecycle.interview?.interview.liveMonitorAvailable == true);
   bool get _wrapping =>
       _completed ||
       lifecycle.finishRequested ||
@@ -348,7 +354,13 @@ class _CandidateInterviewWorkspaceState
         children: [
           Row(
             children: [
-              Expanded(child: logo),
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: logo,
+                ),
+              ),
               if (!compact && progress != null)
                 SizedBox(width: 176, child: progress),
               Expanded(
@@ -433,7 +445,7 @@ class _CandidateInterviewWorkspaceState
                       ? publisher.notice
                       : _live
                       ? 'Keep this tab open and your camera in position during the conversation.'
-                      : liveMonitorEnabled && lifecycle.videoRequired
+                      : _liveMonitorAvailable
                       ? 'Your assigned recruiter may watch your camera and listen to both speakers during the interview.'
                       : 'Choose a quiet place, check your camera, and join when you’re ready.',
                   style: AppType.caption.style(
@@ -444,6 +456,43 @@ class _CandidateInterviewWorkspaceState
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cameraFeedbackNotice(BuildContext context) {
+    final preview = media.cameraPreviewNotice;
+    final message = switch (preview) {
+      CameraPreviewNotice.interrupted =>
+        'Camera interrupted. Check the connection and browser camera permission, then restart the camera.',
+      CameraPreviewNotice.permissionRequired =>
+        'Camera access is blocked. Allow camera access in browser site settings, then restart the camera.',
+      CameraPreviewNotice.recovered => 'Camera preview restored.',
+      null => switch (publisher.cameraFrameNotice) {
+        CameraFrameNotice.poorQuality =>
+          'The camera image has been hard to read. Use even lighting, reduce glare, and check that the lens is clear.',
+        CameraFrameNotice.noFace =>
+          'The camera hasn’t detected a face in recent usable samples. Check that your face is within the camera preview.',
+        CameraFrameNotice.recovered => 'Camera image recovered.',
+        null => null,
+      },
+    };
+    if (message == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        children: [
+          Semantics(
+            liveRegion: true,
+            child: Text(message, textAlign: TextAlign.center),
+          ),
+          if (preview == CameraPreviewNotice.interrupted ||
+              preview == CameraPreviewNotice.permissionRequired)
+            TextButton(
+              onPressed: media.busy ? null : _toggleRoomCamera,
+              child: const Text('Restart camera'),
+            ),
         ],
       ),
     );
@@ -497,13 +546,24 @@ class _CandidateInterviewWorkspaceState
           label: Text(_busy ? 'Connecting…' : 'Join interview'),
         );
 
-  void _toggleRoomCamera() {
+  Future<void> _toggleRoomCamera() async {
     if (_live && media.cameraReady) {
       setState(() => _hideSelfView = !_hideSelfView);
     } else if (media.cameraReady) {
       media.stop();
     } else {
-      media.requestCamera();
+      final currentMedia = media;
+      final currentPublisher = publisher;
+      await currentMedia.requestCamera();
+      if (mounted &&
+          identical(currentMedia, media) &&
+          identical(currentPublisher, publisher) &&
+          _live &&
+          lifecycle.videoRequired &&
+          currentMedia.cameraReady) {
+        setState(() => _hideSelfView = false);
+        currentPublisher.start();
+      }
     }
   }
 

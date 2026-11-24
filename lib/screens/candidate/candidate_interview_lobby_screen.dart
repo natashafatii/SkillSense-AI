@@ -889,7 +889,8 @@ class _CandidateInterviewLobbyScreenState
               ],
             ),
             const SizedBox(height: 4),
-            if (liveMonitorEnabled)
+            if (_interview case CandidateInterview(liveMonitorAvailable: true)
+                when liveMonitorSupported)
               const Text(
                 'During the interview your assigned recruiter may watch your camera and listen to you and the AI interviewer.',
               ),

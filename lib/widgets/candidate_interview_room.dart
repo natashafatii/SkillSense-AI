@@ -71,6 +71,11 @@ extension on _CandidateInterviewWorkspaceState {
               builder: (context, camera) => Stack(
                 fit: StackFit.expand,
                 children: [
+                  BrowserObservations(
+                    key: ValueKey(lifecycle.identity.sessionId),
+                    sessionId: lifecycle.identity.sessionId,
+                    active: _live,
+                  ),
                   Positioned.fromRect(
                     rect: Rect.lerp(
                       _previewOrigin,
@@ -91,7 +96,11 @@ extension on _CandidateInterviewWorkspaceState {
             height: 64,
             child: _roomHeader(context, mobile, focused, edge, size.width),
           ),
-          if (liveMonitorEnabled && _live && media.cameraReady)
+          if (liveMonitorSupported &&
+              lifecycle.snapshot?.liveMonitorAvailable == true &&
+              lifecycle.monitorAudioReady &&
+              _live &&
+              media.cameraReady)
             Positioned(
               top: 64,
               left: 12,
@@ -342,14 +351,17 @@ extension on _CandidateInterviewWorkspaceState {
                       child: _answer(context),
                     ),
                   ),
-                  if (!_live && liveMonitorEnabled && lifecycle.videoRequired)
+                  if (!_live && _liveMonitorAvailable)
                     const Text(
                       'Your assigned recruiter may watch your camera and listen to both speakers during this interview.',
                     ),
                   if (!_live) _audioAction(),
-                  if (media.cameraError case final failure?)
+                  if (_live && lifecycle.videoRequired)
+                    _cameraFeedbackNotice(context),
+                  if ((!_live || media.cameraPreviewNotice == null) &&
+                      media.cameraError != null)
                     Text(
-                      failure.message,
+                      media.cameraError!.message,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                       ),

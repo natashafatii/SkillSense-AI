@@ -1,16 +1,21 @@
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 import '../services/api_client.dart';
+import '../services/api_exception.dart';
 import '../services/monitor_attempt.dart';
 import '../services/media/camera_adapter_web.dart';
 import '../services/session_scope.dart';
 import '../services/voice/interview_lifecycle_controller.dart';
 import '../services/voice/retell_voice_client_web.dart';
 
-const liveMonitorEnabled = bool.fromEnvironment('LIVE_MONITOR_ENABLED');
+bool get liveMonitorSupported =>
+    web.window.isSecureContext &&
+    web.window.hasProperty('RTCPeerConnection'.toJS).toDart &&
+    web.window.hasProperty('openSkillSenseMonitor'.toJS).toDart;
 
 @JS('openSkillSenseMonitor')
 external _Connection _open(
@@ -37,17 +42,25 @@ class LiveMonitor extends StatefulWidget {
 }
 
 class _LiveMonitorState extends State<LiveMonitor> {
-  String status = 'waiting';
+  String status = 'idle';
   final attempts = MonitorAttempt();
   bool sound = false, joining = false;
   _Connection? connection;
 
-  web.HTMLVideoElement? video;
+  late final web.HTMLVideoElement? video;
   bool get viewer => widget.lifecycle == null;
 
   @override
   void initState() {
     super.initState();
+    video = viewer
+        ? (web.HTMLVideoElement()
+            ..muted = true
+            ..playsInline = true
+            ..style.width = '100%'
+            ..style.height = '100%'
+            ..setAttribute('aria-label', 'Live candidate video'))
+        : null;
     SessionScope.invalidations.addListener(_logout);
     if (!viewer) unawaited(join());
   }
@@ -82,7 +95,7 @@ class _LiveMonitorState extends State<LiveMonitor> {
       joining = true;
       status = attempts.failures == 0 ? 'connecting' : 'reconnecting';
     });
-    void update(String state) {
+    void update(String state, {Duration minimumDelay = Duration.zero}) {
       if (!mounted || attempt != attempts.epoch) return;
       setState(() => status = state == 'renewing' ? 'reconnecting' : state);
       if (state == 'live') attempts.failures = 0;
@@ -91,10 +104,16 @@ class _LiveMonitorState extends State<LiveMonitor> {
         if (!attempts.retry(
           () => join(reconnect: true),
           renewal: state == 'renewing',
+          minimumDelay: minimumDelay,
         )) {
           setState(() => status = 'unavailable');
         }
-      } else if (state == 'ended' || state == 'unavailable') {
+      } else if (const {
+        'ended',
+        'unavailable',
+        'busy',
+        'relayUnavailable',
+      }.contains(state)) {
         stop();
       }
     }
@@ -106,6 +125,7 @@ class _LiveMonitorState extends State<LiveMonitor> {
         '/interview-sessions/${widget.sessionId}/ws-ticket/',
         data: {'purpose': role},
         cancelToken: cancel,
+        options: Options(extra: {'refreshSessionToken': true}),
       );
       if (attempt != attempts.epoch) return;
       final path = '/ws/monitor/${widget.sessionId}/$role/';
@@ -137,13 +157,23 @@ class _LiveMonitorState extends State<LiveMonitor> {
     } on DioException catch (error) {
       final code = error.response?.statusCode;
       final body = error.response?.data;
-      update(
-        body is Map && body['error'] == 'session_not_publishable'
-            ? 'ended'
-            : [401, 403, 404, 409].contains(code)
-            ? 'unavailable'
-            : 'reconnecting',
-      );
+      if (code == 429) {
+        update(
+          'reconnecting',
+          minimumDelay:
+              ApiException.fromDioException(error).retryAfter ?? Duration.zero,
+        );
+      } else {
+        final reason = body is Map ? body['error'] : null;
+        update(switch (reason) {
+          'session_not_publishable' => 'ended',
+          'relay_unavailable' => 'relayUnavailable',
+          _ =>
+            [401, 403, 404, 409].contains(code)
+                ? 'unavailable'
+                : 'reconnecting',
+        });
+      }
     } catch (_) {
       update('unavailable');
     }
@@ -153,7 +183,7 @@ class _LiveMonitorState extends State<LiveMonitor> {
   void dispose() {
     SessionScope.invalidations.removeListener(_logout);
     stop();
-    video = null;
+    video?.remove();
     super.dispose();
   }
 
@@ -170,66 +200,94 @@ class _LiveMonitorState extends State<LiveMonitor> {
             )
           : const SizedBox.shrink();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Live monitor · ${status == 'enableSound' ? 'Playback paused' : status}',
-        ),
-        SizedBox(
-          height: 220,
-          child: HtmlElementView.fromTagName(
-            tagName: 'video',
-            onElementCreated: (element) {
-              if (!mounted) return;
-              video = element as web.HTMLVideoElement;
-              video!
-                ..muted = true
-                ..playsInline = true
-                ..style.width = '100%'
-                ..style.height = '100%';
-            },
-          ),
-        ),
-        Wrap(
+    final joined = joining || attempts.retryPending;
+    final message = switch (status) {
+      'waiting' => 'Waiting for the candidate’s camera and interview audio.',
+      'connecting' => 'Connecting to the live interview…',
+      'reconnecting' => 'Reconnecting to the live interview…',
+      'live' => sound ? 'Live with sound' : 'Live. Sound is muted.',
+      'enableSound' => 'Use Enable sound to resume audio playback.',
+      'busy' =>
+        'This interview already has a live viewer. Try again after they leave.',
+      'ended' => 'This session has stopped sharing live video.',
+      'relayUnavailable' => 'The server needs a configured media relay.',
+      'unavailable' =>
+        'Live playback could not connect. You can try joining again.',
+      _ => 'Join to watch the interview. Sound starts muted.',
+    };
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextButton(
-              onPressed: status == 'ended'
-                  ? null
-                  : () {
-                      if (joining || attempts.retryPending) {
-                        stop();
-                        setState(() => status = 'waiting');
-                      } else if (video != null) {
-                        attempts.failures = 0;
-                        join();
-                      }
-                    },
-              child: Text(
-                joining || attempts.retryPending
-                    ? 'Leave monitor'
-                    : 'Join monitor',
+            Text(
+              'Live interview',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Semantics(liveRegion: true, child: Text(message)),
+            const SizedBox(height: 12),
+            ColoredBox(
+              color: Colors.black,
+              child: SizedBox(
+                height: 250,
+                child: HtmlElementView.fromTagName(
+                  key: const ValueKey('live-interview-video'),
+                  tagName: 'div',
+                  onElementCreated: (element) {
+                    if (!mounted) return;
+                    final surface = element as web.HTMLElement
+                      ..style.width = '100%'
+                      ..style.height = '100%';
+                    surface.append(video!);
+                  },
+                ),
               ),
             ),
-            TextButton(
-              onPressed: connection == null
-                  ? null
-                  : () async {
-                      final attempt = attempts.epoch;
-                      final enabled = !sound;
-                      final ok = await connection!.sound(enabled).toDart;
-                      if (mounted && attempt == attempts.epoch) {
-                        setState(() {
-                          sound = enabled && ok.toDart;
-                          if (!ok.toDart) status = 'enableSound';
-                        });
-                      }
-                    },
-              child: Text(sound ? 'Mute sound' : 'Enable sound'),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton(
+                  onPressed: status == 'ended'
+                      ? null
+                      : () {
+                          if (joined) {
+                            stop();
+                            setState(() => status = 'idle');
+                          } else {
+                            attempts.failures = 0;
+                            unawaited(join());
+                          }
+                        },
+                  child: Text(
+                    joined ? 'Leave live interview' : 'Join live interview',
+                  ),
+                ),
+                TextButton(
+                  onPressed:
+                      connection == null ||
+                          !const {'live', 'enableSound'}.contains(status)
+                      ? null
+                      : () async {
+                          final attempt = attempts.epoch;
+                          final enabled = !sound;
+                          final ok = await connection!.sound(enabled).toDart;
+                          if (mounted && attempt == attempts.epoch) {
+                            setState(() {
+                              sound = enabled && ok.toDart;
+                              status = ok.toDart ? 'live' : 'enableSound';
+                            });
+                          }
+                        },
+                  child: Text(sound ? 'Mute sound' : 'Enable sound'),
+                ),
+              ],
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 }

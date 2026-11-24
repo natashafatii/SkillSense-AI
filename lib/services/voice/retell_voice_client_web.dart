@@ -64,7 +64,7 @@ class BrowserRetellVoiceClient
     );
     _bridge = bridge;
     try {
-      await bridge.start({...credential.toSdkOptions(), 'monitorAudio': const bool.fromEnvironment('LIVE_MONITOR_ENABLED')}.jsify()! as JSObject).toDart;
+      await bridge.start(credential.toSdkOptions().jsify()! as JSObject).toDart;
     } catch (_) {
       if (!_disposed && generation == _generation) {
         onEvent(RetellVoiceEvent.error);
