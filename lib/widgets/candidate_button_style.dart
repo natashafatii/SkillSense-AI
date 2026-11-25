@@ -14,7 +14,7 @@ class CandidateButtonStyle {
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
-    colors: [Color(0xFF0F766E), Color(0xFF115E59)],
+    colors: [teal, deepTeal],
   );
 
   /// Apply the shared green gradient to candidate primary actions.

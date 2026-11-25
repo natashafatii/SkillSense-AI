@@ -8,6 +8,7 @@ import '../../services/publisher/candidate_publisher_controller.dart';
 import '../../services/voice/interview_lifecycle_controller.dart';
 import '../../models/voice/voice_contract.dart';
 import '../../widgets/candidate_interview_workspace.dart';
+import '../../widgets/candidate_button_style.dart';
 import '../../services/media/interview_media_route_observer.dart';
 import '../../services/interview_analysis_service.dart';
 import '../../services/voice/voice_lifecycle_backend.dart';
@@ -125,6 +126,12 @@ class _CandidateInterviewSessionScreenState
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
+                style: CandidateButtonStyle.primary(
+                  FilledButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    shape: const StadiumBorder(),
+                  ),
+                ),
                 child: const Text('Acknowledge and record'),
               ),
             ],

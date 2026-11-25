@@ -9,6 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/gradient_background.dart';
+import '../../widgets/green_gradient_background.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import 'login_screen_web.dart';
@@ -389,6 +390,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isCandidate = _roleSwitcherSelection == 'candidate';
         if (constraints.maxWidth >= 900) {
           return LoginScreenWeb(
             title: _signInTitle,
@@ -427,8 +429,11 @@ class _LoginScreenState extends State<LoginScreen>
           backgroundColor: context.themeCanvas(AppColors.backgroundBase),
           body: Stack(
             children: [
-              // ── Same gradient background as WelcomeScreen & RoleSelectionScreen ──
-              const GradientBackground(),
+              // Candidate login follows the candidate workspace gradient on mobile.
+              if (isCandidate)
+                const GreenGradientBackground()
+              else
+                const GradientBackground(),
 
               // ── Scrollable content ──────────────────────────────────────────
               SafeArea(
@@ -750,49 +755,6 @@ class _LoginScreenState extends State<LoginScreen>
                                       const SizedBox(width: 12),
                                       Text(
                                         'Sign in with Google',
-                                        style: GoogleFonts.publicSans(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w500,
-                                          color: context.themeForeground(
-                                            AppColors.textDark,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-
-                              // ── Continue with Facebook ─────────────────────
-                              PointerGestureDetector(
-                                onTap: () =>
-                                    _snack(AppConstants.continueWithFacebook),
-                                child: Container(
-                                  height: 56,
-                                  decoration: BoxDecoration(
-                                    color: context.themeSurface(
-                                      AppColors.white,
-                                    ),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: context.themeOutline(
-                                        AppColors.socialBorder,
-                                      ),
-                                      width: 1.2,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      SvgPicture.asset(
-                                        'assets/icons/facebook.svg',
-                                        width: 24,
-                                        height: 24,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        AppConstants.continueWithFacebook,
                                         style: GoogleFonts.publicSans(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w500,

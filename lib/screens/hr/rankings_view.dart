@@ -178,49 +178,10 @@ extension _RankingsView on _RankingsScreenState {
       mainAxisSize: MainAxisSize.min,
       children: [
         Flexible(
-          child: Text('Applicant Rankings', style: context.text.headlineLarge),
-        ),
-        const SizedBox(width: 4),
-        PopupMenuButton<String>(
-          tooltip: 'Ranking options',
-          icon: Icon(Icons.more_horiz, size: 18, color: _muted),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 160),
-          onSelected: (value) {
-            if (value == 'refresh') {
-              if (_jobId != null) _loadCohort(_jobId!);
-            } else {
-              context
-                  .dependOnInheritedWidgetOfExactType<AppThemeScope>()
-                  ?.notifier
-                  ?.select(switch (value) {
-                    'dark' => ThemeMode.dark,
-                    'light' => ThemeMode.light,
-                    _ => ThemeMode.system,
-                  });
-            }
-          },
-          itemBuilder: (_) => [
-            const PopupMenuItem(
-              value: 'refresh',
-              child: Text('Refresh rankings'),
-            ),
-            if (context.dependOnInheritedWidgetOfExactType<AppThemeScope>() !=
-                null) ...[
-              const PopupMenuItem(
-                value: 'light',
-                child: Text('Light appearance'),
-              ),
-              const PopupMenuItem(
-                value: 'dark',
-                child: Text('Dark appearance'),
-              ),
-              const PopupMenuItem(
-                value: 'system',
-                child: Text('System appearance'),
-              ),
-            ],
-          ],
+          child: Text(
+            'Applicant Rankings',
+            style: context.text.headlineLarge,
+          ),
         ),
       ],
     );

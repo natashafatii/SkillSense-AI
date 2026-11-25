@@ -18,7 +18,6 @@ import '../../services/recruitment_workflow_service.dart';
 import '../../services/session_scope.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import '../../widgets/recruiter_top_bar.dart';
-import '../../services/app_theme_controller.dart';
 
 import 'recruitment_review_screen.dart';
 

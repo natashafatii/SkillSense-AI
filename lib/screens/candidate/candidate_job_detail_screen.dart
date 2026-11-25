@@ -1144,6 +1144,7 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
 
               // Apply Button
               ElevatedButton(
+                onPressed: _canApply ? _applyJob : null,
                 style: CandidateButtonStyle.primaryColors(
                   ElevatedButton.styleFrom(
                     backgroundColor: AppColors.dashboardTeal,
@@ -1163,17 +1164,16 @@ class _CandidateJobDetailScreenState extends State<CandidateJobDetailScreen> {
                           : Colors.white,
                     ),
                   ),
-                  onPressed: _canApply ? _applyJob : null,
-                  child: Text(
-                    _isApplied
-                        ? 'Applied'
-                        : (_isSubmitting
-                              ? 'Submitting...'
-                              : _selectedResume == null
-                              ? 'Apply with a resume'
-                              : 'Continue to application'),
-                    style: AppType.button.style(context),
-                  ),
+                ),
+                child: Text(
+                  _isApplied
+                      ? 'Applied'
+                      : (_isSubmitting
+                            ? 'Submitting...'
+                            : _selectedResume == null
+                            ? 'Apply with a resume'
+                            : 'Continue to application'),
+                  style: AppType.button.style(context),
                 ),
               ),
               if (_applicationStateMessage != null) ...[

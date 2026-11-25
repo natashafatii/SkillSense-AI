@@ -6,7 +6,6 @@ import '../../widgets/mobile_edge_shadow_wrapper.dart';
 import '../../widgets/recruiter_mobile_nav.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../dashboard/command_deck_screen.dart' show GridPainter;
 import '../../widgets/recruiter_top_bar.dart';
 import '../../widgets/applicant_avatar_image.dart';
 
@@ -549,16 +548,6 @@ class _HrPipelineScreenState extends State<HrPipelineScreen>
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Grid pattern overlay (Web Only)
-          if (!compact)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: GridPainter(
-                  color: context.themeOutline(const Color(0xFFE2E8F0)),
-                ),
-              ),
-            ),
-
           // Main workspace content
           SafeArea(
             bottom: false,
